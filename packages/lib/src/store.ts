@@ -157,6 +157,9 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
             role: clientState.profile.plan === "bba_team" ? "bba_team" : "client"
           }
         });
+        if (typeof document !== "undefined") {
+          document.cookie = "bba_auth=1; path=/; SameSite=Lax";
+        }
         return;
       }
     }
@@ -168,6 +171,9 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
         role: "client"
       }
     });
+    if (typeof document !== "undefined") {
+      document.cookie = "bba_auth=1; path=/; SameSite=Lax";
+    }
   },
 
   signUp: async (email, _password, profileInput) => {
@@ -187,6 +193,9 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
             role: clientState.profile.plan === "bba_team" ? "bba_team" : "client"
           }
         });
+        if (typeof document !== "undefined") {
+          document.cookie = "bba_auth=1; path=/; SameSite=Lax";
+        }
         return;
       }
     }
@@ -223,9 +232,15 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
       messages: [],
       onboardingSteps: buildDefaultSteps(clientId)
     });
+    if (typeof document !== "undefined") {
+      document.cookie = "bba_auth=1; path=/; SameSite=Lax";
+    }
   },
 
   signOut: () => {
+    if (typeof document !== "undefined") {
+      document.cookie = "bba_auth=; path=/; max-age=0";
+    }
     set({
       session: null
     });
