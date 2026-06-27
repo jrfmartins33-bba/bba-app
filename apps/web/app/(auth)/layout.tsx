@@ -9,11 +9,11 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           <div className="brand-lockup">
             <Image
               alt="BBA Brazil Business Advisory"
-              className="brand-logo"
-              height={56}
+              className="brand-logo brand-logo--auth"
+              height={112}
               priority
               src="/bba-logo.png"
-              width={56}
+              width={112}
             />
             <div>
               <strong>BBA App</strong>

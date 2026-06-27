@@ -900,6 +900,11 @@ button {
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
 }
 
+.brand-logo--auth {
+  height: 112px;
+  width: 112px;
+}
+
 .admin-table-wrap {
   overflow-x: auto;
 }
