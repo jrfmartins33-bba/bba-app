@@ -1,0 +1,87 @@
+"use client";
+
+import { LockKeyhole, LogIn, Mail } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
+import { signInWithEmail, useBbaStore } from "@bba/lib";
+import { Button } from "@bba/ui";
+
+export default function LoginPage() {
+  const router = useRouter();
+  const signIn = useBbaStore((state) => state.signIn);
+  const [email, setEmail] = useState("cliente@bbabrazil.com.br");
+  const [password, setPassword] = useState("bba-demo");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+
+    try {
+      const { error: authError } = await signInWithEmail(email, password);
+
+      if (authError) {
+        setBusy(false);
+        setError(authError.message);
+        return;
+      }
+
+      await signIn(email, password);
+      router.push("/dashboard");
+    } catch (caught) {
+      setBusy(false);
+      setError(caught instanceof Error ? caught.message : "Nao foi possivel entrar.");
+    }
+  };
+
+  return (
+    <form className="auth-form" onSubmit={handleSubmit}>
+      <h2>Entrar</h2>
+      {error ? <p className="form-error">{error}</p> : null}
+
+      <div className="field">
+        <label htmlFor="email">E-mail</label>
+        <input
+          autoComplete="email"
+          id="email"
+          onChange={(event) => setEmail(event.target.value)}
+          required
+          type="email"
+          value={email}
+        />
+      </div>
+
+      <div className="field">
+        <label htmlFor="password">Senha</label>
+        <input
+          autoComplete="current-password"
+          id="password"
+          onChange={(event) => setPassword(event.target.value)}
+          required
+          type="password"
+          value={password}
+        />
+      </div>
+
+      <Button
+        disabled={busy}
+        icon={busy ? <LockKeyhole size={18} /> : <LogIn size={18} />}
+        type="submit"
+      >
+        {busy ? "Entrando" : "Entrar no portal"}
+      </Button>
+
+      <p className="auth-form__footer">
+        Ainda nao tem cadastro? <Link href="/cadastro">Criar acesso</Link>
+      </p>
+
+      <p className="auth-form__footer">
+        <Mail size={14} /> O MVP abre com dados de demonstracao ate o Supabase
+        ser configurado.
+      </p>
+    </form>
+  );
+}

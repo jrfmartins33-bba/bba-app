@@ -1,0 +1,23 @@
+{
+  "name": "@bba/lib",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./auth": "./src/auth.ts",
+    "./chat": "./src/chat.ts",
+    "./mock-data": "./src/mock-data.ts",
+    "./queries": "./src/queries.ts",
+    "./store": "./src/store.ts",
+    "./supabase": "./src/supabase.ts",
+    "./types": "./src/types.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

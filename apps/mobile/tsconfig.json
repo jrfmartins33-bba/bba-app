@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@bba/config": ["../../packages/config/src/index.ts"],
+      "@bba/config/*": ["../../packages/config/src/*"],
+      "@bba/lib": ["../../packages/lib/src/index.ts"],
+      "@bba/lib/*": ["../../packages/lib/src/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  "exclude": ["node_modules"]
+}

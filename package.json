@@ -1,0 +1,19 @@
+{
+  "name": "bba-app",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo dev",
+    "dev:web": "pnpm --filter @bba/web dev",
+    "build": "turbo build",
+    "build:web": "pnpm --filter @bba/web build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "mobile": "pnpm --filter @bba/mobile start"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

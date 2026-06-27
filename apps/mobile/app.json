@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "BBA App",
+    "slug": "bba-app",
+    "scheme": "bbaapp",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "br.com.bbabrazil.app"
+    },
+    "android": {
+      "package": "br.com.bbabrazil.app"
+    },
+    "plugins": ["expo-router", "expo-notifications"],
+    "extra": {
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "@bba/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bba/config": "workspace:*",
+    "@bba/lib": "workspace:*",
+    "@bba/ui": "workspace:*",
+    "@hello-pangea/dnd": "^16.6.0",
+    "@supabase/supabase-js": "^2.49.1",
+    "lucide-react": "^0.468.0",
+    "next": "14.2.23",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "14.2.23",
+    "typescript": "^5.7.2"
+  }
+}
