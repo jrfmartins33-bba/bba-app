@@ -668,9 +668,29 @@ button {
 .tasks-page {
   display: grid;
   gap: 22px;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   height: calc(100vh - 128px);
   min-height: 0;
+}
+
+.task-modal {
+  align-items: center;
+  background: rgba(12, 31, 63, 0.32);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 18px;
+  position: fixed;
+  z-index: 30;
+}
+
+.task-modal__panel {
+  max-width: 760px;
+  width: min(100%, 760px);
+}
+
+.task-create--modal {
+  grid-template-columns: 1fr;
 }
 
 .tasks-board {

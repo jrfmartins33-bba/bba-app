@@ -25,6 +25,7 @@ export default function TarefasPage() {
   const updateTaskStatus = useBbaStore((state) => state.updateTaskStatus);
   const [search, setSearch] = useState("");
   const [tag, setTag] = useState("all");
+  const [showTaskForm, setShowTaskForm] = useState(false);
   const [newTask, setNewTask] = useState({
     title: "",
     tag: "",
@@ -68,6 +69,7 @@ export default function TarefasPage() {
       due_date: "",
       project_id: projects[0]?.id ?? ""
     });
+    setShowTaskForm(false);
   };
 
   return (
@@ -77,109 +79,130 @@ export default function TarefasPage() {
           <h1>Tarefas</h1>
           <p>Board operacional para acompanhar pendencias, responsaveis e prazos.</p>
         </div>
+        <Button
+          icon={<Plus size={17} />}
+          onClick={() => setShowTaskForm(true)}
+          type="button"
+        >
+          Nova tarefa
+        </Button>
       </section>
 
-      <Card className="span-12" title="Nova tarefa">
-        <form className="task-create" onSubmit={handleCreateTask}>
-          <div className="field">
-            <label htmlFor="task-title">Titulo</label>
-            <input
-              id="task-title"
-              onChange={(event) =>
-                setNewTask((current) => ({ ...current, title: event.target.value }))
-              }
-              required
-              value={newTask.title}
+      {showTaskForm ? (
+        <div className="task-modal" role="dialog" aria-modal="true" aria-label="Nova tarefa">
+          <Card
+            action={
+              <Button
+                onClick={() => setShowTaskForm(false)}
+                type="button"
+                variant="ghost"
+              >
+                Fechar
+              </Button>
+            }
+            className="task-modal__panel"
+            title="Nova tarefa"
+          >
+            <form className="task-create task-create--modal" onSubmit={handleCreateTask}>
+              <div className="field">
+                <label htmlFor="task-title">Titulo</label>
+                <input
+                  id="task-title"
+                  onChange={(event) =>
+                    setNewTask((current) => ({ ...current, title: event.target.value }))
+                  }
+                  required
+                  value={newTask.title}
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="task-project">Projeto</label>
+                <select
+                  id="task-project"
+                  onChange={(event) =>
+                    setNewTask((current) => ({ ...current, project_id: event.target.value }))
+                  }
+                  value={newTask.project_id}
+                >
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field">
+                <label htmlFor="task-tag">Tag</label>
+                <input
+                  id="task-tag"
+                  onChange={(event) =>
+                    setNewTask((current) => ({ ...current, tag: event.target.value }))
+                  }
+                  placeholder="Fiscal"
+                  value={newTask.tag}
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="task-due">Prazo</label>
+                <input
+                  id="task-due"
+                  onChange={(event) =>
+                    setNewTask((current) => ({ ...current, due_date: event.target.value }))
+                  }
+                  type="date"
+                  value={newTask.due_date}
+                />
+              </div>
+
+              <Button icon={<Plus size={17} />} type="submit">
+                Adicionar
+              </Button>
+            </form>
+          </Card>
+        </div>
+      ) : null}
+
+      <div className="task-toolbar" aria-label="Filtros de tarefas">
+        <div className="field">
+          <label htmlFor="search">Buscar</label>
+          <div style={{ position: "relative" }}>
+            <Search
+              aria-hidden="true"
+              size={16}
+              style={{ color: "#696969", left: 12, position: "absolute", top: 13 }}
             />
-          </div>
-
-          <div className="field">
-            <label htmlFor="task-project">Projeto</label>
-            <select
-              id="task-project"
-              onChange={(event) =>
-                setNewTask((current) => ({ ...current, project_id: event.target.value }))
-              }
-              value={newTask.project_id}
-            >
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="field">
-            <label htmlFor="task-tag">Tag</label>
             <input
-              id="task-tag"
-              onChange={(event) =>
-                setNewTask((current) => ({ ...current, tag: event.target.value }))
-              }
-              placeholder="Fiscal"
-              value={newTask.tag}
+              className="control-input"
+              id="search"
+              onChange={(event) => setSearch(event.target.value)}
+              style={{ paddingLeft: 36 }}
+              value={search}
             />
-          </div>
-
-          <div className="field">
-            <label htmlFor="task-due">Prazo</label>
-            <input
-              id="task-due"
-              onChange={(event) =>
-                setNewTask((current) => ({ ...current, due_date: event.target.value }))
-              }
-              type="date"
-              value={newTask.due_date}
-            />
-          </div>
-
-          <Button icon={<Plus size={17} />} type="submit">
-            Adicionar
-          </Button>
-        </form>
-      </Card>
-
-      <Card title="Filtros">
-        <div className="task-toolbar">
-          <div className="field">
-            <label htmlFor="search">Buscar</label>
-            <div style={{ position: "relative" }}>
-              <Search
-                aria-hidden="true"
-                size={16}
-                style={{ color: "#696969", left: 12, position: "absolute", top: 13 }}
-              />
-              <input
-                className="control-input"
-                id="search"
-                onChange={(event) => setSearch(event.target.value)}
-                style={{ paddingLeft: 36 }}
-                value={search}
-              />
-            </div>
-          </div>
-
-          <div className="field">
-            <label htmlFor="tag">Tag</label>
-            <select id="tag" onChange={(event) => setTag(event.target.value)} value={tag}>
-              <option value="all">Todas</option>
-              {tags.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="field">
-            <label>Resultado</label>
-            <span className="status-badge status-badge--in_progress">
-              <Filter size={13} /> {filteredTasks.length} tarefa(s)
-            </span>
           </div>
         </div>
-      </Card>
+
+        <div className="field">
+          <label htmlFor="tag">Tag</label>
+          <select id="tag" onChange={(event) => setTag(event.target.value)} value={tag}>
+            <option value="all">Todas</option>
+            {tags.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field">
+          <label>Resultado</label>
+          <span className="status-badge status-badge--in_progress">
+            <Filter size={13} /> {filteredTasks.length} tarefa(s)
+          </span>
+        </div>
+      </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
         <section className="tasks-board" aria-label="Board de tarefas">
