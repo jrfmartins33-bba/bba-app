@@ -4,7 +4,7 @@ import { LockKeyhole, LogIn, Mail } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { signInWithEmail, useBbaStore } from "@bba/lib";
+import { useBbaStore } from "@bba/lib";
 import { Button } from "@bba/ui";
 
 export default function LoginPage() {
@@ -21,14 +21,6 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const { error: authError } = await signInWithEmail(email, password);
-
-      if (authError) {
-        setBusy(false);
-        setError(authError.message);
-        return;
-      }
-
       await signIn(email, password);
       router.push("/dashboard");
     } catch (caught) {

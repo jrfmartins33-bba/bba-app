@@ -11,9 +11,9 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Button } from "@bba/ui";
-import { useBbaStore } from "@bba/lib";
+import { isSupabaseConfigured, useBbaStore } from "@bba/lib";
 
 const navItems = [
   { href: "/dashboard", label: "Painel Executivo", icon: LayoutDashboard },
@@ -30,6 +30,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const company = useBbaStore((state) => state.company);
   const tasks = useBbaStore((state) => state.tasks);
   const messages = useBbaStore((state) => state.messages);
+  const hydrateSession = useBbaStore((state) => state.hydrateSession);
   const signOut = useBbaStore((state) => state.signOut);
 
   const openTasks = tasks.filter((task) => task.status !== "done").length;
@@ -43,6 +44,31 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   };
 
   const isAdminArea = pathname.startsWith("/admin");
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      return;
+    }
+
+    let mounted = true;
+
+    void hydrateSession()
+      .then((authenticated) => {
+        if (mounted && !authenticated) {
+          router.replace("/login");
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          signOut();
+          router.replace("/login");
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [hydrateSession, router, signOut]);
 
   return (
     <div className="dashboard-shell">

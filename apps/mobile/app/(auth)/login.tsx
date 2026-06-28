@@ -11,7 +11,7 @@ import {
   View
 } from "react-native";
 import { BBA } from "@bba/config";
-import { signInWithEmail, useBbaStore } from "@bba/lib";
+import { useBbaStore } from "@bba/lib";
 
 export default function LoginScreen() {
   const signIn = useBbaStore((state) => state.signIn);
@@ -21,7 +21,6 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     setBusy(true);
-    await signInWithEmail(email, password);
     await signIn(email, password);
     setBusy(false);
     router.replace("/dashboard");

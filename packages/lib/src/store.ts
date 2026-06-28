@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import {
   demoChannels,
-  demoClientId,
   demoCompany,
   demoMessages,
   demoOnboardingSteps,
@@ -28,13 +27,14 @@ import type {
   Profile,
   Project,
   Task,
-  TaskStatus
+  TaskStatus,
+  UserRole
 } from "./types";
 
 type Session = {
   userId: string;
   email: string;
-  role: "client" | "bba_admin";
+  role: UserRole;
 };
 
 type BbaStore = {
@@ -46,6 +46,7 @@ type BbaStore = {
   channels: ChatChannel[];
   messages: Message[];
   onboardingSteps: OnboardingStep[];
+  hydrateSession: () => Promise<boolean>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, company: CompanyInput) => Promise<void>;
   signOut: () => void;
@@ -65,6 +66,64 @@ const createId = () => {
   }
 
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const demoState = {
+  profile: demoProfile,
+  company: demoCompany,
+  projects: demoProjects,
+  tasks: demoTasks,
+  channels: demoChannels,
+  messages: demoMessages,
+  onboardingSteps: demoOnboardingSteps
+};
+
+const emptyProfile: Profile = {
+  id: "",
+  full_name: "",
+  email: null,
+  role: "client",
+  company_id: null,
+  metadata: {},
+  created_at: "",
+  updated_at: ""
+};
+
+const emptyCompany: Company = {
+  id: "",
+  owner_id: "",
+  name: "",
+  cnpj: null,
+  tax_regime: null,
+  segment: null,
+  main_phone: null,
+  metadata: {},
+  created_at: "",
+  updated_at: ""
+};
+
+const signedOutState = isSupabaseConfigured
+  ? {
+      profile: emptyProfile,
+      company: emptyCompany,
+      projects: [],
+      tasks: [],
+      channels: [],
+      messages: [],
+      onboardingSteps: []
+    }
+  : demoState;
+
+const setAuthCookie = () => {
+  if (typeof document !== "undefined") {
+    document.cookie = "bba_auth=1; path=/; SameSite=Lax";
+  }
+};
+
+const clearAuthCookie = () => {
+  if (typeof document !== "undefined") {
+    document.cookie = "bba_auth=; path=/; max-age=0";
+  }
 };
 
 const buildDefaultSteps = (companyId: string): OnboardingStep[] =>
@@ -101,10 +160,10 @@ const buildDefaultChannels = (companyId: string): ChatChannel[] =>
     })
   );
 
-const buildFallbackCompany = (profile: Profile): Company => ({
+const buildAdminWorkspace = (profile: Profile): Company => ({
   id: profile.company_id ?? profile.id,
   owner_id: profile.id,
-  name: profile.full_name,
+  name: "BBA App",
   cnpj: null,
   tax_regime: null,
   segment: null,
@@ -132,7 +191,7 @@ const loadClientState = async (userId: string) => {
         .from("companies")
         .select("*")
         .eq("id", typedProfile.company_id)
-        .single()
+        .maybeSingle()
     : supabase
         .from("companies")
         .select("*")
@@ -146,13 +205,21 @@ const loadClientState = async (userId: string) => {
     throw companyError;
   }
 
-  const company = (companyData as Company | null) ?? buildFallbackCompany(typedProfile);
+  const company = companyData as Company | null;
+
+  if (!company && typedProfile.role !== "bba_admin") {
+    throw new Error(
+      "Perfil autenticado sem empresa vinculada. Verifique o company_id em profiles."
+    );
+  }
+
+  const activeCompany = company ?? buildAdminWorkspace(typedProfile);
 
   const [projects, tasks, channels, onboardingSteps] = await Promise.all([
-    fetchProjects(company.id),
-    fetchTasks(company.id),
-    fetchChannels(company.id),
-    fetchOnboardingSteps(company.id)
+    fetchProjects(activeCompany.id),
+    fetchTasks(activeCompany.id),
+    fetchChannels(activeCompany.id),
+    fetchOnboardingSteps(activeCompany.id)
   ]);
 
   const messageGroups = await Promise.all(
@@ -161,7 +228,7 @@ const loadClientState = async (userId: string) => {
 
   return {
     profile: typedProfile,
-    company,
+    company: activeCompany,
     projects: projects as Project[],
     tasks: tasks as Task[],
     channels: channels as ChatChannel[],
@@ -171,46 +238,73 @@ const loadClientState = async (userId: string) => {
 };
 
 export const useBbaStore = create<BbaStore>((set, get) => ({
-  session: {
-    userId: demoClientId,
-    email: "cliente@bbabrazil.com.br",
-    role: "client"
-  },
-  profile: demoProfile,
-  company: demoCompany,
-  projects: demoProjects,
-  tasks: demoTasks,
-  channels: demoChannels,
-  messages: demoMessages,
-  onboardingSteps: demoOnboardingSteps,
+  session: null,
+  ...signedOutState,
 
-  signIn: async (email) => {
+  hydrateSession: async () => {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
       const {
-        data: { user },
+        data: { session },
         error
-      } = await supabase.auth.getUser();
+      } = await supabase.auth.getSession();
 
       if (error) {
         throw error;
       }
 
-      if (user) {
-        const clientState = await loadClientState(user.id);
+      if (!session?.user) {
+        clearAuthCookie();
         set({
-          ...clientState,
-          session: {
-            userId: user.id,
-            email: user.email ?? email,
-            role: clientState.profile.role
-          }
+          session: null,
+          ...signedOutState
         });
-        if (typeof document !== "undefined") {
-          document.cookie = "bba_auth=1; path=/; SameSite=Lax";
-        }
-        return;
+        return false;
       }
+
+      const clientState = await loadClientState(session.user.id);
+      set({
+        ...clientState,
+        session: {
+          userId: session.user.id,
+          email: session.user.email ?? clientState.profile.email ?? "",
+          role: clientState.profile.role
+        }
+      });
+      setAuthCookie();
+      return true;
+    }
+
+    return false;
+  },
+
+  signIn: async (email, password) => {
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseClient();
+      const {
+        data: { user },
+        error
+      } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!user) {
+        throw new Error("Nao foi possivel iniciar a sessao no Supabase.");
+      }
+
+      const clientState = await loadClientState(user.id);
+      set({
+        ...clientState,
+        session: {
+          userId: user.id,
+          email: user.email ?? email,
+          role: clientState.profile.role
+        }
+      });
+      setAuthCookie();
+      return;
     }
 
     set({
@@ -220,9 +314,7 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
         role: "client"
       }
     });
-    if (typeof document !== "undefined") {
-      document.cookie = "bba_auth=1; path=/; SameSite=Lax";
-    }
+    setAuthCookie();
   },
 
   signUp: async (email, _password, companyInput) => {
@@ -242,9 +334,7 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
             role: clientState.profile.role
           }
         });
-        if (typeof document !== "undefined") {
-          document.cookie = "bba_auth=1; path=/; SameSite=Lax";
-        }
+        setAuthCookie();
         return;
       }
     }
@@ -298,17 +388,17 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
       messages: [],
       onboardingSteps: buildDefaultSteps(companyId)
     });
-    if (typeof document !== "undefined") {
-      document.cookie = "bba_auth=1; path=/; SameSite=Lax";
-    }
+    setAuthCookie();
   },
 
   signOut: () => {
-    if (typeof document !== "undefined") {
-      document.cookie = "bba_auth=; path=/; max-age=0";
+    if (isSupabaseConfigured) {
+      void getSupabaseClient().auth.signOut();
     }
+    clearAuthCookie();
     set({
-      session: null
+      session: null,
+      ...signedOutState
     });
   },
 
