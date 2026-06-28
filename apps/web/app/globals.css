@@ -516,8 +516,7 @@ button {
   color: var(--bba-muted);
 }
 
-.status-badge--doing,
-.status-badge--current,
+.status-badge--in_progress,
 .status-badge--active {
   background: rgba(185, 149, 79, 0.18);
   color: #77581f;
@@ -529,7 +528,8 @@ button {
   color: var(--bba-success);
 }
 
-.status-badge--paused {
+.status-badge--paused,
+.status-badge--cancelled {
   background: rgba(192, 57, 43, 0.1);
   color: var(--bba-danger);
 }
@@ -606,7 +606,7 @@ button {
   color: var(--bba-white);
 }
 
-.onboarding-step--current p {
+.onboarding-step--in_progress p {
   color: var(--bba-navy);
   font-weight: 700;
 }

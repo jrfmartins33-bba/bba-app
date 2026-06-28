@@ -11,9 +11,10 @@ import {
   View
 } from "react-native";
 import { BBA } from "@bba/config";
-import { teamAreaLabels, useBbaStore } from "@bba/lib";
+import { areaLabels, useBbaStore } from "@bba/lib";
 
 export default function ChatScreen() {
+  const profile = useBbaStore((state) => state.profile);
   const channels = useBbaStore((state) => state.channels);
   const messages = useBbaStore((state) => state.messages);
   const sendMessage = useBbaStore((state) => state.sendMessage);
@@ -46,7 +47,7 @@ export default function ChatScreen() {
                   channel.id === channelId ? styles.channelTextActive : undefined
                 ]}
               >
-                {teamAreaLabels[channel.team_area]}
+                {areaLabels[channel.area]}
               </Text>
             </Pressable>
           ))}
@@ -55,7 +56,7 @@ export default function ChatScreen() {
 
       <ScrollView contentContainerStyle={styles.messages}>
         {visibleMessages.map((message) => {
-          const client = message.sender_role === "client";
+          const client = message.sender_id === profile.id;
           return (
             <View
               key={message.id}
@@ -65,7 +66,7 @@ export default function ChatScreen() {
                 {client ? "Voce" : "Equipe BBA"}
               </Text>
               <Text style={[styles.bubbleText, client ? styles.bubbleTextClient : undefined]}>
-                {message.content}
+                {message.body}
               </Text>
             </View>
           );

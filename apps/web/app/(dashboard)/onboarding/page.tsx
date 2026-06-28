@@ -2,37 +2,42 @@
 
 import { Check, Save } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { type Regime, useBbaStore } from "@bba/lib";
+import { taxRegimeLabels, type TaxRegime, useBbaStore } from "@bba/lib";
 import { Button, Card, OnboardingProgress } from "@bba/ui";
 
-const regimes: Regime[] = ["MEI", "Simples", "LucroPresumido", "LucroReal"];
+const regimes: TaxRegime[] = [
+  "mei",
+  "simples_nacional",
+  "lucro_presumido",
+  "lucro_real"
+];
 
 export default function OnboardingPage() {
-  const profile = useBbaStore((state) => state.profile);
+  const company = useBbaStore((state) => state.company);
   const onboardingSteps = useBbaStore((state) => state.onboardingSteps);
-  const updateProfile = useBbaStore((state) => state.updateProfile);
+  const updateCompany = useBbaStore((state) => state.updateCompany);
   const completeStep = useBbaStore((state) => state.completeOnboardingStep);
   const [saved, setSaved] = useState(false);
   const [form, setForm] = useState({
-    name: profile.name,
-    cnpj: profile.cnpj ?? "",
-    regime: (profile.regime ?? "Simples") as Regime,
-    segmento: profile.segmento ?? "",
-    phone: profile.phone ?? ""
+    name: company.name,
+    cnpj: company.cnpj ?? "",
+    tax_regime: (company.tax_regime ?? "simples_nacional") as TaxRegime,
+    segment: company.segment ?? "",
+    main_phone: company.main_phone ?? ""
   });
 
   useEffect(() => {
     setForm({
-      name: profile.name,
-      cnpj: profile.cnpj ?? "",
-      regime: (profile.regime ?? "Simples") as Regime,
-      segmento: profile.segmento ?? "",
-      phone: profile.phone ?? ""
+      name: company.name,
+      cnpj: company.cnpj ?? "",
+      tax_regime: (company.tax_regime ?? "simples_nacional") as TaxRegime,
+      segment: company.segment ?? "",
+      main_phone: company.main_phone ?? ""
     });
-  }, [profile]);
+  }, [company]);
 
   const currentStep = useMemo(
-    () => onboardingSteps.find((step) => step.status === "current"),
+    () => onboardingSteps.find((step) => step.status === "in_progress"),
     [onboardingSteps]
   );
 
@@ -43,7 +48,7 @@ export default function OnboardingPage() {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    updateProfile(form);
+    updateCompany(form);
     setSaved(true);
   };
 
@@ -99,12 +104,14 @@ export default function OnboardingPage() {
                 <label htmlFor="regime">Regime tributario</label>
                 <select
                   id="regime"
-                  onChange={(event) => update("regime", event.target.value as Regime)}
-                  value={form.regime}
+                  onChange={(event) =>
+                    update("tax_regime", event.target.value as TaxRegime)
+                  }
+                  value={form.tax_regime}
                 >
                   {regimes.map((regime) => (
                     <option key={regime} value={regime}>
-                      {regime}
+                      {taxRegimeLabels[regime]}
                     </option>
                   ))}
                 </select>
@@ -114,8 +121,8 @@ export default function OnboardingPage() {
                 <label htmlFor="segmento">Segmento</label>
                 <input
                   id="segmento"
-                  onChange={(event) => update("segmento", event.target.value)}
-                  value={form.segmento}
+                  onChange={(event) => update("segment", event.target.value)}
+                  value={form.segment}
                 />
               </div>
             </div>
@@ -124,8 +131,8 @@ export default function OnboardingPage() {
               <label htmlFor="phone">Telefone principal</label>
               <input
                 id="phone"
-                onChange={(event) => update("phone", event.target.value)}
-                value={form.phone}
+                onChange={(event) => update("main_phone", event.target.value)}
+                value={form.main_phone}
               />
             </div>
 
@@ -143,5 +150,5 @@ export default function OnboardingPage() {
 }
 
 function StatusText() {
-  return <span className="status-badge status-badge--done">Salvo</span>;
+  return <span className="status-badge status-badge--completed">Salvo</span>;
 }

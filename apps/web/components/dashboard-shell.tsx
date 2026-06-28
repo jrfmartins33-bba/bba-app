@@ -27,13 +27,14 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const profile = useBbaStore((state) => state.profile);
+  const company = useBbaStore((state) => state.company);
   const tasks = useBbaStore((state) => state.tasks);
   const messages = useBbaStore((state) => state.messages);
   const signOut = useBbaStore((state) => state.signOut);
 
   const openTasks = tasks.filter((task) => task.status !== "done").length;
   const unread = messages.filter(
-    (message) => message.sender_role === "bba_team" && !message.read_at
+    (message) => message.sender_id !== profile.id
   ).length;
 
   const handleSignOut = () => {
@@ -86,8 +87,8 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             <strong>{unread}</strong>
           </div>
           <div>
-            <span>Plano</span>
-            <strong>{profile.plan}</strong>
+            <span>Perfil</span>
+            <strong>{profile.role === "bba_admin" ? "Admin" : "Cliente"}</strong>
           </div>
         </div>
       </aside>
@@ -96,7 +97,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         <header className="topbar">
           <div>
             <small>{isAdminArea ? "Equipe BBA" : "Cliente conectado"}</small>
-            <strong>{isAdminArea ? "Painel interno" : profile.name}</strong>
+            <strong>{isAdminArea ? "Painel interno" : company.name}</strong>
           </div>
           <Button
             aria-label="Sair"

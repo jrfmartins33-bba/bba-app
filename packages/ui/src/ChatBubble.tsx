@@ -1,11 +1,12 @@
 import type { Message } from "@bba/lib";
 
 type ChatBubbleProps = {
+  currentUserId: string;
   message: Message;
 };
 
-export function ChatBubble({ message }: ChatBubbleProps) {
-  const isClient = message.sender_role === "client";
+export function ChatBubble({ currentUserId, message }: ChatBubbleProps) {
+  const isClient = message.sender_id === currentUserId;
   const time = new Intl.DateTimeFormat("pt-BR", {
     hour: "2-digit",
     minute: "2-digit"
@@ -17,7 +18,7 @@ export function ChatBubble({ message }: ChatBubbleProps) {
         <span>{isClient ? "Voce" : "Equipe BBA"}</span>
         <time>{time}</time>
       </div>
-      <p>{message.content}</p>
+      <p>{message.body}</p>
     </article>
   );
 }

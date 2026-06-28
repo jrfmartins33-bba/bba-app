@@ -19,27 +19,29 @@ serve(async (req) => {
 
   const { data: team, error } = await supabase
     .from("profiles")
-    .select("id, expo_push_token")
-    .eq("plan", "bba_team")
-    .not("expo_push_token", "is", null);
+    .select("id, metadata")
+    .eq("role", "bba_admin");
 
   if (error) {
     return Response.json({ ok: false, error: error.message }, { headers: corsHeaders, status: 400 });
   }
 
   const tickets = await Promise.all(
-    (team ?? []).map((member) =>
-      fetch("https://exp.host/--/api/v2/push/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: member.expo_push_token,
-          title,
-          body,
-          sound: "default"
+    (team ?? [])
+      .map((member) => member.metadata?.expo_push_token)
+      .filter(Boolean)
+      .map((expoPushToken) =>
+        fetch("https://exp.host/--/api/v2/push/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: expoPushToken,
+            title,
+            body,
+            sound: "default"
+          })
         })
-      })
-    )
+      )
   );
 
   return Response.json(

@@ -6,6 +6,7 @@ import { useBbaStore } from "@bba/lib";
 
 export default function DashboardScreen() {
   const profile = useBbaStore((state) => state.profile);
+  const company = useBbaStore((state) => state.company);
   const tasks = useBbaStore((state) => state.tasks);
   const messages = useBbaStore((state) => state.messages);
   const onboardingSteps = useBbaStore((state) => state.onboardingSteps);
@@ -13,14 +14,14 @@ export default function DashboardScreen() {
   const openTasks = tasks.filter((task) => task.status !== "done").length;
   const doneTasks = tasks.filter((task) => task.status === "done").length;
   const unread = messages.filter(
-    (message) => message.sender_role === "bba_team" && !message.read_at
+    (message) => message.sender_id !== profile.id
   ).length;
-  const doneSteps = onboardingSteps.filter((step) => step.status === "done").length;
+  const doneSteps = onboardingSteps.filter((step) => step.status === "completed").length;
 
   return (
     <ScrollView contentContainerStyle={styles.content} style={styles.screen}>
       <Text style={styles.eyebrow}>Cliente</Text>
-      <Text style={styles.title}>{profile.name}</Text>
+      <Text style={styles.title}>{company.name}</Text>
 
       <View style={styles.metricGrid}>
         <Metric icon={<ClipboardList color={BBA.navy} size={20} />} label="Abertas" value={openTasks} />
@@ -45,8 +46,8 @@ export default function DashboardScreen() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Prioridades</Text>
-        {tasks
-          .filter((task) => task.status !== "done")
+          {tasks
+            .filter((task) => task.status !== "done")
           .slice(0, 3)
           .map((task) => (
             <View key={task.id} style={styles.row}>

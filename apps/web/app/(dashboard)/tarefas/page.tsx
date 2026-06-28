@@ -16,7 +16,7 @@ import {
 } from "@bba/lib";
 import { Button, Card, TaskCard } from "@bba/ui";
 
-const statuses: TaskStatus[] = ["todo", "doing", "done"];
+const statuses: TaskStatus[] = ["todo", "in_progress", "done"];
 
 export default function TarefasPage() {
   const projects = useBbaStore((state) => state.projects);
@@ -104,7 +104,7 @@ export default function TarefasPage() {
             >
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
-                  {project.title}
+                  {project.name}
                 </option>
               ))}
             </select>
@@ -174,7 +174,7 @@ export default function TarefasPage() {
 
           <div className="field">
             <label>Resultado</label>
-            <span className="status-badge status-badge--current">
+            <span className="status-badge status-badge--in_progress">
               <Filter size={13} /> {filteredTasks.length} tarefa(s)
             </span>
           </div>
@@ -211,7 +211,7 @@ export default function TarefasPage() {
                             <TaskCard
                               projectTitle={
                                 projects.find((project) => project.id === task.project_id)
-                                  ?.title
+                                  ?.name
                               }
                               task={task}
                             />

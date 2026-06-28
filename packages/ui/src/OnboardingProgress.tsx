@@ -5,7 +5,7 @@ type OnboardingProgressProps = {
 };
 
 export function OnboardingProgress({ steps }: OnboardingProgressProps) {
-  const done = steps.filter((step) => step.status === "done").length;
+  const done = steps.filter((step) => step.status === "completed").length;
   const percentage = Math.round((done / Math.max(steps.length, 1)) * 100);
 
   return (
@@ -21,7 +21,7 @@ export function OnboardingProgress({ steps }: OnboardingProgressProps) {
         {steps.map((step) => (
           <li key={step.id} className={`onboarding-step onboarding-step--${step.status}`}>
             <span>{step.step_number}</span>
-            <p>{step.step_title}</p>
+            <p>{step.title}</p>
           </li>
         ))}
       </ol>

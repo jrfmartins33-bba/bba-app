@@ -1,7 +1,14 @@
 import type { TaskStatus } from "@bba/lib";
 
 type StatusBadgeProps = {
-  status: TaskStatus | "active" | "paused" | "completed" | "pending" | "current";
+  status:
+    | TaskStatus
+    | "active"
+    | "paused"
+    | "cancelled"
+    | "completed"
+    | "pending"
+    | "in_progress";
   children: string;
 };
 

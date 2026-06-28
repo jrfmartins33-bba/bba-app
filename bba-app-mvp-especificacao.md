@@ -67,77 +67,89 @@ O BBA App é um portal de gestão para clientes da BBA Brazil, entregando visibi
 ```sql
 CREATE TABLE profiles (
   id          UUID PRIMARY KEY REFERENCES auth.users(id),
-  name        TEXT NOT NULL,
-  cnpj        TEXT UNIQUE,
-  regime      TEXT CHECK (regime IN ('MEI','Simples','LucroPresumido','LucroReal')),
-  segmento    TEXT,
-  phone       TEXT,
-  plan        TEXT DEFAULT 'essencial',
-  onboarding_step INTEGER DEFAULT 1,
-  created_at  TIMESTAMPTZ DEFAULT NOW()
+  full_name   TEXT NOT NULL,
+  role        TEXT CHECK (role IN ('client','bba_admin')) DEFAULT 'client',
+  company_id  UUID REFERENCES companies(id),
+  metadata    JSONB NOT NULL DEFAULT '{}',
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
-### 4.2 Tabela: `projects`
+### 4.2 Tabela: `companies`
+```sql
+CREATE TABLE companies (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id    UUID REFERENCES profiles(id),
+  name        TEXT NOT NULL,
+  cnpj        TEXT UNIQUE CHECK (cnpj ~ '^\d{14}$'),
+  tax_regime  TEXT CHECK (tax_regime IN ('mei','simples_nacional','lucro_presumido','lucro_real')),
+  segment     TEXT,
+  main_phone  TEXT,
+  metadata    JSONB NOT NULL DEFAULT '{}',
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 4.3 Tabela: `projects`
 ```sql
 CREATE TABLE projects (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id   UUID REFERENCES profiles(id),
-  title       TEXT NOT NULL,
+  company_id  UUID REFERENCES companies(id),
+  name        TEXT NOT NULL,
   description TEXT,
   status      TEXT CHECK (status IN ('active','paused','completed')),
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
-### 4.3 Tabela: `tasks`
+### 4.4 Tabela: `tasks`
 ```sql
 CREATE TABLE tasks (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id  UUID REFERENCES projects(id),
-  client_id   UUID REFERENCES profiles(id),
+  company_id  UUID REFERENCES companies(id),
   title       TEXT NOT NULL,
   description TEXT,
-  status      TEXT CHECK (status IN ('todo','doing','done')) DEFAULT 'todo',
+  status      TEXT CHECK (status IN ('todo','in_progress','done')) DEFAULT 'todo',
   tag         TEXT,
   due_date    DATE,
-  assigned_to UUID,  -- membro da equipe BBA
+  assigned_to UUID REFERENCES profiles(id),
   created_at  TIMESTAMPTZ DEFAULT NOW(),
   updated_at  TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
-### 4.4 Tabela: `chat_channels`
+### 4.5 Tabela: `chat_channels`
 ```sql
 CREATE TABLE chat_channels (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id   UUID REFERENCES profiles(id),
-  team_area   TEXT CHECK (team_area IN ('fiscal','financeiro','ti','rh','governanca')),
+  company_id  UUID REFERENCES companies(id),
+  area        bba_area,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
-### 4.5 Tabela: `messages`
+### 4.6 Tabela: `chat_messages`
 ```sql
-CREATE TABLE messages (
+CREATE TABLE chat_messages (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   channel_id  UUID REFERENCES chat_channels(id),
   sender_id   UUID REFERENCES auth.users(id),
-  sender_role TEXT CHECK (sender_role IN ('client','bba_team')),
-  content     TEXT NOT NULL,
-  read_at     TIMESTAMPTZ,
+  body        TEXT NOT NULL,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
-### 4.6 Tabela: `onboarding_steps`
+### 4.7 Tabela: `onboarding_steps`
 ```sql
 CREATE TABLE onboarding_steps (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id   UUID REFERENCES profiles(id),
+  company_id  UUID REFERENCES companies(id),
   step_number INTEGER NOT NULL,
-  step_title  TEXT NOT NULL,
-  status      TEXT CHECK (status IN ('pending','current','done')) DEFAULT 'pending',
+  title       TEXT NOT NULL,
+  status      TEXT CHECK (status IN ('pending','in_progress','completed')) DEFAULT 'pending',
   completed_at TIMESTAMPTZ
 );
 ```
@@ -150,23 +162,21 @@ CREATE TABLE onboarding_steps (
 -- Clientes só veem seus próprios dados
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "client_own_tasks" ON tasks
-  FOR ALL USING (client_id = auth.uid());
+CREATE POLICY "company_tasks_access" ON tasks
+  FOR ALL USING (company_id = get_my_company_id() OR is_bba_admin());
 
-CREATE POLICY "client_own_messages" ON messages
+CREATE POLICY "company_chat_messages_access" ON chat_messages
   FOR ALL USING (
     channel_id IN (
-      SELECT id FROM chat_channels WHERE client_id = auth.uid()
+      SELECT id FROM chat_channels WHERE company_id = get_my_company_id()
     )
+    OR is_bba_admin()
   );
 
--- Equipe BBA tem acesso a todos os clientes do seu plano
-CREATE POLICY "bba_team_access" ON tasks
+-- Admin BBA tem acesso operacional
+CREATE POLICY "bba_admin_access" ON tasks
   FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE id = auth.uid() AND plan = 'bba_team'
-    )
+    company_id = get_my_company_id() OR is_bba_admin()
   );
 ```
 
@@ -273,21 +283,25 @@ const onDragEnd = async (result: DropResult) => {
 import { serve } from 'https://deno.land/std/http/server.ts';
 
 serve(async (req) => {
-  const { client_id, title, body } = await req.json();
+  const { company_id, title, body } = await req.json();
   
   // Buscar token Expo do cliente
-  const { data: profile } = await supabase
+  const { data: profiles } = await supabase
     .from('profiles')
-    .select('expo_push_token')
-    .eq('id', client_id)
-    .single();
+    .select('metadata')
+    .eq('company_id', company_id)
+    .eq('role', 'client');
+
+  const expoPushToken = profiles
+    ?.map((profile) => profile.metadata?.expo_push_token)
+    .find(Boolean);
 
   // Enviar push via Expo
   await fetch('https://exp.host/--/api/v2/push/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      to: profile.expo_push_token,
+      to: expoPushToken,
       title,
       body,
       sound: 'default'

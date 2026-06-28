@@ -9,14 +9,15 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 import {
+  areaLabels,
   taskStatusLabels,
-  teamAreaLabels,
+  taxRegimeLabels,
   type TaskStatus,
   useBbaStore
 } from "@bba/lib";
 import { Card, StatusBadge } from "@bba/ui";
 
-const statusOrder: TaskStatus[] = ["todo", "doing", "done"];
+const statusOrder: TaskStatus[] = ["todo", "in_progress", "done"];
 
 const formatDate = (date?: string | null) =>
   date
@@ -29,6 +30,7 @@ const formatDate = (date?: string | null) =>
 
 export default function AdminPage() {
   const profile = useBbaStore((state) => state.profile);
+  const company = useBbaStore((state) => state.company);
   const projects = useBbaStore((state) => state.projects);
   const tasks = useBbaStore((state) => state.tasks);
   const channels = useBbaStore((state) => state.channels);
@@ -42,18 +44,20 @@ export default function AdminPage() {
       task.due_date &&
       new Date(`${task.due_date}T12:00:00`) < new Date()
   );
-  const unreadMessages = messages.filter(
-    (message) => message.sender_role === "bba_team" && !message.read_at
-  );
-  const doneSteps = onboardingSteps.filter((step) => step.status === "done").length;
+  const unreadMessages = messages.filter((message) => message.sender_id !== profile.id);
+  const doneSteps = onboardingSteps.filter(
+    (step) => step.status === "completed"
+  ).length;
 
   const clients = useMemo(
     () => [
       {
-        id: profile.id,
-        name: profile.name,
-        plan: profile.plan,
-        regime: profile.regime ?? "Nao informado",
+        id: company.id,
+        name: company.name,
+        role: profile.role === "bba_admin" ? "Admin" : "Cliente",
+        regime: company.tax_regime
+          ? taxRegimeLabels[company.tax_regime]
+          : "Nao informado",
         owner: "Fiscal",
         health: blockedTasks.length ? "Atencao" : "Saudavel",
         onboarding: Math.round((doneSteps / Math.max(onboardingSteps.length, 1)) * 100),
@@ -63,8 +67,8 @@ export default function AdminPage() {
       {
         id: "demo-client-2",
         name: "Fortaleza Digital Servicos",
-        plan: "pro",
-        regime: "LucroPresumido",
+        role: "Cliente",
+        regime: taxRegimeLabels.lucro_presumido,
         owner: "Financeiro",
         health: "Saudavel",
         onboarding: 80,
@@ -74,8 +78,8 @@ export default function AdminPage() {
       {
         id: "demo-client-3",
         name: "Norte Comercio Integrado",
-        plan: "essencial",
-        regime: "Simples",
+        role: "Cliente",
+        regime: taxRegimeLabels.simples_nacional,
         owner: "Governanca",
         health: "Atencao",
         onboarding: 45,
@@ -83,14 +87,22 @@ export default function AdminPage() {
         unread: 4
       }
     ],
-    [blockedTasks.length, doneSteps, onboardingSteps.length, openTasks.length, profile, unreadMessages.length]
+    [
+      blockedTasks.length,
+      company,
+      doneSteps,
+      onboardingSteps.length,
+      openTasks.length,
+      profile.role,
+      unreadMessages.length
+    ]
   );
 
   const projectTitleById = new Map(
-    projects.map((project) => [project.id, project.title])
+    projects.map((project) => [project.id, project.name])
   );
   const channelAreaById = new Map(
-    channels.map((channel) => [channel.id, teamAreaLabels[channel.team_area]])
+    channels.map((channel) => [channel.id, areaLabels[channel.area]])
   );
 
   const taskQueue = [...tasks].sort((a, b) => {
@@ -170,7 +182,7 @@ export default function AdminPage() {
               <thead>
                 <tr>
                   <th>Cliente</th>
-                  <th>Plano</th>
+                  <th>Perfil</th>
                   <th>Regime</th>
                   <th>Responsavel</th>
                   <th>Onboarding</th>
@@ -184,7 +196,7 @@ export default function AdminPage() {
                     <td>
                       <strong>{client.name}</strong>
                     </td>
-                    <td>{client.plan}</td>
+                    <td>{client.role}</td>
                     <td>{client.regime}</td>
                     <td>{client.owner}</td>
                     <td>
@@ -196,7 +208,7 @@ export default function AdminPage() {
                     <td>{client.openTasks + client.unread}</td>
                     <td>
                       <StatusBadge
-                        status={client.health === "Saudavel" ? "done" : "current"}
+                        status={client.health === "Saudavel" ? "done" : "in_progress"}
                       >
                         {client.health}
                       </StatusBadge>
@@ -217,7 +229,7 @@ export default function AdminPage() {
                 <div>
                   <strong>{task.title}</strong>
                   <span>
-                    {projectTitleById.get(task.project_id) ?? "Projeto BBA"} ·{" "}
+                    {projectTitleById.get(task.project_id ?? "") ?? "Projeto BBA"} -{" "}
                     {task.tag ?? "Geral"}
                   </span>
                 </div>
@@ -238,14 +250,14 @@ export default function AdminPage() {
               <article className="admin-message-row" key={message.id}>
                 <div className="task-card__topline">
                   <strong>{channelAreaById.get(message.channel_id) ?? "Canal BBA"}</strong>
-                  {message.read_at ? (
+                  {message.sender_id === profile.id ? (
                     <CheckCircle2 size={16} />
                   ) : (
                     <span className="unread-pill">nova</span>
                   )}
                 </div>
-                <p>{message.content}</p>
-                <span>{message.sender_role === "client" ? profile.name : "Equipe BBA"}</span>
+                <p>{message.body}</p>
+                <span>{message.sender_id === profile.id ? company.name : "Equipe BBA"}</span>
               </article>
             ))}
           </div>

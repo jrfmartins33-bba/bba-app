@@ -2,10 +2,11 @@
 
 import { Send, UsersRound } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { getUnreadMessages, teamAreaLabels, useBbaStore } from "@bba/lib";
+import { areaLabels, getUnreadMessages, useBbaStore } from "@bba/lib";
 import { Button, Card, ChatBubble } from "@bba/ui";
 
 export default function ChatPage() {
+  const profile = useBbaStore((state) => state.profile);
   const channels = useBbaStore((state) => state.channels);
   const messages = useBbaStore((state) => state.messages);
   const sendMessage = useBbaStore((state) => state.sendMessage);
@@ -54,7 +55,7 @@ export default function ChatPage() {
         <Card title="Areas">
           <div className="channel-list">
             {channels.map((channel) => {
-              const unread = getUnreadMessages(messages, channel.id);
+              const unread = getUnreadMessages(messages, channel.id, profile.id);
               return (
                 <button
                   className="channel-button"
@@ -65,7 +66,7 @@ export default function ChatPage() {
                 >
                   <span>
                     <UsersRound size={16} />
-                    {teamAreaLabels[channel.team_area]}
+                    {areaLabels[channel.area]}
                   </span>
                   {unread ? <strong className="unread-pill">{unread}</strong> : null}
                 </button>
@@ -78,7 +79,7 @@ export default function ChatPage() {
           <div className="chat-thread__header">
             <div>
               <h2>
-                {selectedChannel ? teamAreaLabels[selectedChannel.team_area] : "Canal"}
+                {selectedChannel ? areaLabels[selectedChannel.area] : "Canal"}
               </h2>
               <span>{channelMessages.length} mensagem(ns)</span>
             </div>
@@ -87,7 +88,11 @@ export default function ChatPage() {
           <div className="message-list">
             {channelMessages.length ? (
               channelMessages.map((message) => (
-                <ChatBubble key={message.id} message={message} />
+                <ChatBubble
+                  currentUserId={profile.id}
+                  key={message.id}
+                  message={message}
+                />
               ))
             ) : (
               <div className="empty-state">Nenhuma mensagem neste canal.</div>

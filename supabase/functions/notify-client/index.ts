@@ -11,19 +11,23 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const { client_id, title, body } = await req.json();
+  const { company_id, title, body } = await req.json();
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SECRET_KEY") ?? ""
   );
 
-  const { data: profile, error } = await supabase
+  const { data: profiles, error } = await supabase
     .from("profiles")
-    .select("expo_push_token")
-    .eq("id", client_id)
-    .single();
+    .select("metadata")
+    .eq("company_id", company_id)
+    .eq("role", "client");
 
-  if (error || !profile?.expo_push_token) {
+  const expoPushToken = profiles
+    ?.map((profile) => profile.metadata?.expo_push_token)
+    .find(Boolean);
+
+  if (error || !expoPushToken) {
     return Response.json(
       { ok: false, error: error?.message ?? "Cliente sem token Expo" },
       { headers: corsHeaders, status: 400 }
@@ -34,7 +38,7 @@ serve(async (req) => {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      to: profile.expo_push_token,
+      to: expoPushToken,
       title,
       body,
       sound: "default"

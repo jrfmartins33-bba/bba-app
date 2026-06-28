@@ -1,74 +1,106 @@
-export type Regime = "MEI" | "Simples" | "LucroPresumido" | "LucroReal";
-export type Plan = "essencial" | "pro" | "premium" | "bba_team";
-export type ProjectStatus = "active" | "paused" | "completed";
-export type TaskStatus = "todo" | "doing" | "done";
-export type TeamArea = "fiscal" | "financeiro" | "ti" | "rh" | "governanca";
-export type SenderRole = "client" | "bba_team";
-export type OnboardingStatus = "pending" | "current" | "done";
+export type TaxRegime =
+  | "mei"
+  | "simples_nacional"
+  | "lucro_presumido"
+  | "lucro_real";
+
+export type UserRole = "client" | "bba_admin";
+export type ProjectStatus = "active" | "paused" | "completed" | "cancelled";
+export type TaskStatus = "todo" | "in_progress" | "done";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type BbaArea = "fiscal" | "financeiro" | "rh" | "ti" | "governanca";
+export type OnboardingStatus = "pending" | "in_progress" | "completed";
 
 export type Profile = {
   id: string;
-  name: string;
-  cnpj?: string | null;
-  regime?: Regime | null;
-  segmento?: string | null;
-  phone?: string | null;
-  plan: Plan;
-  onboarding_step: number;
-  expo_push_token?: string | null;
+  full_name: string;
+  email?: string | null;
+  role: UserRole;
+  company_id?: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
+  updated_at: string;
 };
 
-export type ProfileInput = Pick<Profile, "name"> &
-  Partial<Pick<Profile, "cnpj" | "regime" | "segmento" | "phone" | "plan">>;
+export type Company = {
+  id: string;
+  owner_id: string;
+  name: string;
+  cnpj?: string | null;
+  tax_regime?: TaxRegime | null;
+  segment?: string | null;
+  main_phone?: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CompanyInput = Pick<Company, "name"> &
+  Partial<Pick<Company, "cnpj" | "tax_regime" | "segment" | "main_phone">>;
 
 export type Project = {
   id: string;
-  client_id: string;
-  title: string;
+  company_id: string;
+  name: string;
   description?: string | null;
+  area?: BbaArea | null;
   status: ProjectStatus;
+  responsible_id?: string | null;
+  due_date?: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
+  updated_at: string;
 };
 
 export type Task = {
   id: string;
-  project_id: string;
-  client_id: string;
+  company_id: string;
+  project_id?: string | null;
   title: string;
   description?: string | null;
   status: TaskStatus;
+  priority: TaskPriority;
+  area?: BbaArea | null;
   tag?: string | null;
   due_date?: string | null;
+  attachments_count: number;
+  created_by?: string | null;
   assigned_to?: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 };
 
 export type ChatChannel = {
   id: string;
-  client_id: string;
-  team_area: TeamArea;
+  company_id: string;
+  name: string;
+  area: BbaArea;
   created_at: string;
+  updated_at: string;
 };
 
 export type Message = {
   id: string;
   channel_id: string;
   sender_id: string;
-  sender_role: SenderRole;
-  content: string;
-  read_at?: string | null;
+  body: string;
   created_at: string;
 };
 
 export type OnboardingStep = {
   id: string;
-  client_id: string;
+  company_id: string;
   step_number: number;
-  step_title: string;
+  title: string;
+  description?: string | null;
   status: OnboardingStatus;
+  responsible_id?: string | null;
+  notes?: string | null;
   completed_at?: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
 };
 
 export type CreateTaskInput = {
@@ -76,6 +108,8 @@ export type CreateTaskInput = {
   title: string;
   description?: string;
   status?: TaskStatus;
+  priority?: TaskPriority;
+  area?: BbaArea;
   tag?: string;
   due_date?: string;
 };

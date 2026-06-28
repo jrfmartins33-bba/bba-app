@@ -1,7 +1,15 @@
+import { areaLabels } from "./queries";
 import { getSupabaseClient, isSupabaseConfigured } from "./supabase";
-import type { ProfileInput } from "./types";
+import type { BbaArea, CompanyInput } from "./types";
 
-export const createDefaultOnboardingSteps = async (clientId: string) => {
+const areas = ["fiscal", "financeiro", "ti", "rh", "governanca"] as const;
+
+const normalizeCnpj = (cnpj?: string | null) => {
+  const digits = cnpj?.replace(/\D/g, "") ?? "";
+  return digits || null;
+};
+
+export const createDefaultOnboardingSteps = async (companyId: string) => {
   if (!isSupabaseConfigured) {
     return { data: null, error: null };
   }
@@ -13,37 +21,36 @@ export const createDefaultOnboardingSteps = async (clientId: string) => {
     "Envio de documentos",
     "Validacao BBA",
     "Operacao assistida"
-  ].map((stepTitle, index) => ({
-    client_id: clientId,
+  ].map((title, index) => ({
+    company_id: companyId,
     step_number: index + 1,
-    step_title: stepTitle,
-    status: index === 0 ? "current" : "pending"
+    title,
+    status: index === 0 ? "in_progress" : "pending"
   }));
 
   return supabase
     .from("onboarding_steps")
-    .upsert(steps, { onConflict: "client_id,step_number", ignoreDuplicates: true });
+    .upsert(steps, { onConflict: "company_id,step_number", ignoreDuplicates: true });
 };
 
-export const createDefaultChatChannels = async (clientId: string) => {
+export const createDefaultChatChannels = async (companyId: string) => {
   if (!isSupabaseConfigured) {
     return { data: null, error: null };
   }
 
   const supabase = getSupabaseClient();
-  const channels = (["fiscal", "financeiro", "ti", "rh", "governanca"] as const).map(
-    (teamArea) => ({
-      client_id: clientId,
-      team_area: teamArea
-    })
-  );
+  const channels = areas.map((area: BbaArea) => ({
+    company_id: companyId,
+    name: areaLabels[area],
+    area
+  }));
 
   return supabase
     .from("chat_channels")
-    .upsert(channels, { onConflict: "client_id,team_area", ignoreDuplicates: true });
+    .upsert(channels, { onConflict: "company_id,area", ignoreDuplicates: true });
 };
 
-export const createInitialProject = async (clientId: string) => {
+export const createInitialProject = async (companyId: string) => {
   if (!isSupabaseConfigured) {
     return { data: null, error: null };
   }
@@ -52,7 +59,7 @@ export const createInitialProject = async (clientId: string) => {
   const { data: existing, error: existingError } = await supabase
     .from("projects")
     .select("id")
-    .eq("client_id", clientId)
+    .eq("company_id", companyId)
     .limit(1);
 
   if (existingError) {
@@ -64,8 +71,8 @@ export const createInitialProject = async (clientId: string) => {
   }
 
   return supabase.from("projects").insert({
-    client_id: clientId,
-    title: "Onboarding BBA",
+    company_id: companyId,
+    name: "Onboarding BBA",
     description: "Primeiro ciclo de implantacao e organizacao operacional.",
     status: "active"
   });
@@ -86,11 +93,11 @@ export const signInWithEmail = async (email: string, password: string) => {
 export const signUp = async (
   email: string,
   password: string,
-  profile: ProfileInput
+  company: CompanyInput
 ) => {
   if (!isSupabaseConfigured) {
     return {
-      data: { user: { email, profile } },
+      data: { user: { email, company } },
       error: null
     };
   }
@@ -100,7 +107,10 @@ export const signUp = async (
     email,
     password,
     options: {
-      data: profile
+      data: {
+        full_name: company.name,
+        role: "client"
+      }
     }
   });
 
@@ -108,36 +118,51 @@ export const signUp = async (
     return { data, error };
   }
 
+  const { data: createdCompany, error: companyError } = await supabase
+    .from("companies")
+    .insert({
+      owner_id: data.user.id,
+      name: company.name,
+      cnpj: normalizeCnpj(company.cnpj),
+      tax_regime: company.tax_regime ?? null,
+      segment: company.segment ?? null,
+      main_phone: company.main_phone ?? null
+    })
+    .select("id")
+    .single();
+
+  if (companyError || !createdCompany) {
+    return { data, error: companyError };
+  }
+
   const { error: profileError } = await supabase
     .from("profiles")
-    .upsert(
-      {
-        id: data.user.id,
-        ...profile,
-        plan: profile.plan ?? "essencial"
-      },
-      { onConflict: "id" }
-    );
+    .update({
+      company_id: createdCompany.id,
+      full_name: company.name,
+      email
+    })
+    .eq("id", data.user.id);
 
   if (profileError) {
     return { data, error: profileError };
   }
 
   const { error: onboardingError } = await createDefaultOnboardingSteps(
-    data.user.id
+    createdCompany.id
   );
 
   if (onboardingError) {
     return { data, error: onboardingError };
   }
 
-  const { error: channelError } = await createDefaultChatChannels(data.user.id);
+  const { error: channelError } = await createDefaultChatChannels(createdCompany.id);
 
   if (channelError) {
     return { data, error: channelError };
   }
 
-  const { error: projectError } = await createInitialProject(data.user.id);
+  const { error: projectError } = await createInitialProject(createdCompany.id);
 
   return { data, error: projectError };
 };

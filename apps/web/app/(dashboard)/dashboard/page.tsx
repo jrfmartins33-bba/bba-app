@@ -8,11 +8,12 @@ import {
   UserRoundCheck
 } from "lucide-react";
 import Link from "next/link";
-import { isSupabaseConfigured, taskStatusLabels, teamAreaLabels, useBbaStore } from "@bba/lib";
+import { areaLabels, isSupabaseConfigured, taskStatusLabels, useBbaStore } from "@bba/lib";
 import { Card, OnboardingProgress, StatusBadge, TaskCard } from "@bba/ui";
 
 export default function DashboardPage() {
   const profile = useBbaStore((state) => state.profile);
+  const company = useBbaStore((state) => state.company);
   const projects = useBbaStore((state) => state.projects);
   const tasks = useBbaStore((state) => state.tasks);
   const channels = useBbaStore((state) => state.channels);
@@ -22,7 +23,7 @@ export default function DashboardPage() {
   const openTasks = tasks.filter((task) => task.status !== "done");
   const doneTasks = tasks.filter((task) => task.status === "done");
   const unread = messages.filter(
-    (message) => message.sender_role === "bba_team" && !message.read_at
+    (message) => message.sender_id !== profile.id
   );
   const priorityTasks = [...openTasks]
     .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))
@@ -35,10 +36,10 @@ export default function DashboardPage() {
           <h1>Painel Executivo</h1>
           <p>
             Visao consolidada do onboarding, pendencias e comunicacoes ativas de{" "}
-            {profile.name}.
+            {company.name}.
           </p>
         </div>
-        <StatusBadge status={isSupabaseConfigured ? "active" : "current"}>
+        <StatusBadge status={isSupabaseConfigured ? "active" : "in_progress"}>
           {isSupabaseConfigured ? "Supabase ativo" : "Demo local"}
         </StatusBadge>
       </section>
@@ -109,7 +110,7 @@ export default function DashboardPage() {
               priorityTasks.map((task) => (
                 <TaskCard
                   key={task.id}
-                  projectTitle={projects.find((project) => project.id === task.project_id)?.title}
+                  projectTitle={projects.find((project) => project.id === task.project_id)?.name}
                   task={task}
                 />
               ))
@@ -126,7 +127,7 @@ export default function DashboardPage() {
             {projects.map((project) => (
               <article className="project-row" key={project.id}>
                 <div className="task-card__topline">
-                  <h3>{project.title}</h3>
+                  <h3>{project.name}</h3>
                   <StatusBadge status={project.status}>
                     {project.status === "active" ? "Ativo" : project.status}
                   </StatusBadge>
@@ -151,15 +152,14 @@ export default function DashboardPage() {
               const count = messages.filter(
                 (message) =>
                   message.channel_id === channel.id &&
-                  message.sender_role === "bba_team" &&
-                  !message.read_at
+                  message.sender_id !== profile.id
               ).length;
 
               return (
                 <article className="timeline-row" key={channel.id}>
                   <div className="task-card__topline">
                     <h3>
-                      <Network size={15} /> {teamAreaLabels[channel.team_area]}
+                      <Network size={15} /> {areaLabels[channel.area]}
                     </h3>
                     <span>{count ? `${count} nova(s)` : "Em dia"}</span>
                   </div>

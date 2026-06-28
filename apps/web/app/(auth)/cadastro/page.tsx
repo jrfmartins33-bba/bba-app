@@ -4,10 +4,20 @@ import { Building2, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { signUp as createSupabaseAccount, useBbaStore, type Regime } from "@bba/lib";
+import {
+  signUp as createSupabaseAccount,
+  taxRegimeLabels,
+  useBbaStore,
+  type TaxRegime
+} from "@bba/lib";
 import { Button } from "@bba/ui";
 
-const regimes: Regime[] = ["MEI", "Simples", "LucroPresumido", "LucroReal"];
+const regimes: TaxRegime[] = [
+  "mei",
+  "simples_nacional",
+  "lucro_presumido",
+  "lucro_real"
+];
 
 export default function CadastroPage() {
   const router = useRouter();
@@ -19,9 +29,9 @@ export default function CadastroPage() {
     password: "",
     name: "",
     cnpj: "",
-    regime: "Simples" as Regime,
-    segmento: "",
-    phone: ""
+    tax_regime: "simples_nacional" as TaxRegime,
+    segment: "",
+    main_phone: ""
   });
 
   const update = <K extends keyof typeof form>(field: K, value: (typeof form)[K]) => {
@@ -36,10 +46,9 @@ export default function CadastroPage() {
     const profile = {
       name: form.name,
       cnpj: form.cnpj,
-      regime: form.regime,
-      segmento: form.segmento,
-      phone: form.phone,
-      plan: "essencial" as const
+      tax_regime: form.tax_regime,
+      segment: form.segment,
+      main_phone: form.main_phone
     };
 
     try {
@@ -96,12 +105,12 @@ export default function CadastroPage() {
           <label htmlFor="regime">Regime</label>
           <select
             id="regime"
-            onChange={(event) => update("regime", event.target.value as Regime)}
-            value={form.regime}
+            onChange={(event) => update("tax_regime", event.target.value as TaxRegime)}
+            value={form.tax_regime}
           >
             {regimes.map((regime) => (
               <option key={regime} value={regime}>
-                {regime}
+                {taxRegimeLabels[regime]}
               </option>
             ))}
           </select>
@@ -111,8 +120,8 @@ export default function CadastroPage() {
           <label htmlFor="segmento">Segmento</label>
           <input
             id="segmento"
-            onChange={(event) => update("segmento", event.target.value)}
-            value={form.segmento}
+            onChange={(event) => update("segment", event.target.value)}
+            value={form.segment}
           />
         </div>
       </div>
@@ -122,8 +131,8 @@ export default function CadastroPage() {
         <input
           autoComplete="tel"
           id="phone"
-          onChange={(event) => update("phone", event.target.value)}
-          value={form.phone}
+          onChange={(event) => update("main_phone", event.target.value)}
+          value={form.main_phone}
         />
       </div>
 

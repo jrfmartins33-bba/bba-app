@@ -2,7 +2,7 @@ import { ScrollView, StyleSheet, Text, Pressable, View } from "react-native";
 import { BBA } from "@bba/config";
 import { taskStatusLabels, type TaskStatus, useBbaStore } from "@bba/lib";
 
-const statuses: TaskStatus[] = ["todo", "doing", "done"];
+const statuses: TaskStatus[] = ["todo", "in_progress", "done"];
 
 export default function TasksScreen() {
   const tasks = useBbaStore((state) => state.tasks);

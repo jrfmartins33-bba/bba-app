@@ -20,7 +20,7 @@ export const subscribeToChannel = (
       {
         event: "INSERT",
         schema: "public",
-        table: "messages",
+        table: "chat_messages",
         filter: `channel_id=eq.${channelId}`
       },
       (payload) => onMessage(payload.new as Message)
@@ -31,7 +31,7 @@ export const subscribeToChannel = (
 export const sendChannelMessage = async (
   channelId: string,
   senderId: string,
-  content: string
+  body: string
 ) => {
   if (!isSupabaseConfigured) {
     return {
@@ -42,10 +42,9 @@ export const sendChannelMessage = async (
 
   const supabase = getSupabaseClient();
 
-  return supabase.from("messages").insert({
+  return supabase.from("chat_messages").insert({
     channel_id: channelId,
     sender_id: senderId,
-    sender_role: "client",
-    content
+    body
   });
 };
