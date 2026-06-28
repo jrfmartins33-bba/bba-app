@@ -9,13 +9,16 @@ const env =
 
 const supabaseUrl =
   env.NEXT_PUBLIC_SUPABASE_URL ?? env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey =
-  env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const supabasePublishableKey =
+  env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+export const isSupabaseConfigured = Boolean(
+  supabaseUrl && supabasePublishableKey
+);
 
 export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl as string, supabaseAnonKey as string, {
+  ? createClient(supabaseUrl as string, supabasePublishableKey as string, {
       auth: {
         autoRefreshToken: true,
         persistSession: true,
@@ -32,7 +35,7 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
 export const getSupabaseClient = () => {
   if (!supabase) {
     throw new Error(
-      "Supabase nao configurado. Defina SUPABASE_URL e SUPABASE_ANON_KEY no ambiente."
+      "Supabase nao configurado. Defina SUPABASE_URL e SUPABASE_PUBLISHABLE_KEY no ambiente."
     );
   }
 

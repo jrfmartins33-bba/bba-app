@@ -359,7 +359,7 @@ export const BBA_FONT = {
 1. **Criar projeto no Supabase** — supabase.com/dashboard → New Project → Region: São Paulo (sa-east-1)
 2. **Executar migrations** — rodar os SQLs da Seção 4 no SQL Editor do Supabase
 3. **Inicializar monorepo** — `npx create-turbo@latest bba-app`
-4. **Configurar variáveis de ambiente** — `SUPABASE_URL` e `SUPABASE_ANON_KEY`
+4. **Configurar variáveis de ambiente** — `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY`
 5. **Deploy inicial no Vercel** — conectar repo GitHub, deploy automático
 
 ---
