@@ -71,7 +71,7 @@ export default function TarefasPage() {
   };
 
   return (
-    <>
+    <div className="tasks-page">
       <section className="page-header">
         <div>
           <h1>Tarefas</h1>
@@ -230,6 +230,6 @@ export default function TarefasPage() {
           ))}
         </section>
       </DragDropContext>
-    </>
+    </div>
   );
 }
