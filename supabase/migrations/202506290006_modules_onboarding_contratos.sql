@@ -173,9 +173,7 @@ CREATE TABLE IF NOT EXISTS client_documents (
   data_emissao        DATE,
   data_validade       DATE,
   data_vencimento     DATE,
-  esta_vencido        BOOLEAN GENERATED ALWAYS AS (
-                        data_validade IS NOT NULL AND data_validade < CURRENT_DATE
-                      ) STORED,
+  esta_vencido        BOOLEAN NOT NULL DEFAULT FALSE,
 
   status              VARCHAR(20)   NOT NULL DEFAULT 'Ativo'
                       CHECK (status IN ('Ativo','Vencido','Cancelado','Em renovação','Pendente')),

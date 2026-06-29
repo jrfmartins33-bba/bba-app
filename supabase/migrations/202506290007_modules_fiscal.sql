@@ -29,9 +29,7 @@ CREATE TABLE IF NOT EXISTS fiscal_obrigacoes (
                       CHECK (status IN (
                         'Pendente','Em andamento','Transmitida','Retificada',
                         'Dispensada','Atrasada','Cancelada')),
-  esta_atrasada       BOOLEAN GENERATED ALWAYS AS (
-                        status = 'Pendente' AND data_vencimento < CURRENT_DATE
-                      ) STORED,
+  esta_atrasada       BOOLEAN NOT NULL DEFAULT FALSE,
 
   numero_recibo       VARCHAR(100),
   numero_protocolo    VARCHAR(100),
@@ -80,9 +78,7 @@ CREATE TABLE IF NOT EXISTS fiscal_guias (
   status              VARCHAR(20)   NOT NULL DEFAULT 'Pendente'
                       CHECK (status IN (
                         'Pendente','Pago','Atrasado','Cancelado','Parcelado','Compensado')),
-  esta_atrasada       BOOLEAN GENERATED ALWAYS AS (
-                        status = 'Pendente' AND data_vencimento < CURRENT_DATE
-                      ) STORED,
+  esta_atrasada       BOOLEAN NOT NULL DEFAULT FALSE,
 
   banco_pagamento     VARCHAR(60),
   agencia_pagamento   VARCHAR(10),
@@ -306,7 +302,8 @@ INSERT INTO fiscal_calendario (regime_tributario, obrigacao, periodicidade, dia_
 (NULL,'FGTS-GPS',           'Mensal',    7,  'Dia 7 do mês seguinte', 'Caixa Econômica Federal', 'Lei 8.036/1990'),
 (NULL,'RAIS',               'Anual',     NULL,'Março/abril do ano seguinte (data RAIS)', 'MTE', 'Decreto 76.900/1975'),
 (NULL,'DIRF',               'Anual',     28, '28 de fevereiro do ano seguinte', 'Receita Federal', 'IN RFB 1.990/2020'),
-(NULL,'CAGED',              'Mensal',    7,  'Dia 7 do mês seguinte (admissões/demissões do mês)', 'MTE/CAGED', 'Lei 4.923/1965');
+(NULL,'CAGED',              'Mensal',    7,  'Dia 7 do mês seguinte (admissões/demissões do mês)', 'MTE/CAGED', 'Lei 4.923/1965')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- TRIGGERS updated_at

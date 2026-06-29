@@ -25,7 +25,8 @@ INSERT INTO ref_regimes_tributarios (codigo, nome, descricao) VALUES
 ('LP',   'Lucro Presumido',                   'Receita bruta anual até R$ 78.000.000. Base de cálculo presumida. Decreto 9.580/2018.'),
 ('LR',   'Lucro Real',                        'Obrigatório para receita > R$ 78.000.000 ou atividades específicas. IRPJ/CSLL sobre lucro real apurado.'),
 ('LA',   'Lucro Arbitrado',                   'Aplicado quando a escrituração do contribuinte é imprestável ou quando recusa-se à exibição de livros.'),
-('ISENTO','Entidade Isenta / Imune',          'Entidades sem fins lucrativos, templos, partidos políticos, entidades de educação e assistência social. Art. 150 CF.');
+('ISENTO','Entidade Isenta / Imune',          'Entidades sem fins lucrativos, templos, partidos políticos, entidades de educação e assistência social. Art. 150 CF.')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 2. ref_naturezas_juridicas
@@ -88,8 +89,8 @@ INSERT INTO ref_naturezas_juridicas (codigo, descricao, categoria) VALUES
 ('2348','Sociedade de Médicos','Entidade Empresarial'),
 ('2356','Sociedade Civil Brasileira com Porte de EPP','Entidade Empresarial'),
 -- MEI
-('2305','Microempreendedor Individual (MEI)','Entidade Empresarial'),
-('2313','Empresário Individual (EI)','Entidade Empresarial'),
+-- Revisado: linha removida por duplicar codigo 2305
+-- Revisado: linha removida por duplicar codigo 2313
 -- Entidades sem fins lucrativos
 ('3069','Fundação Privada','Entidade sem Fins Lucrativos'),
 ('3077','Serviço Social Autônomo','Entidade sem Fins Lucrativos'),
@@ -102,7 +103,8 @@ INSERT INTO ref_naturezas_juridicas (codigo, descricao, categoria) VALUES
 ('3174','Associação Privada','Entidade sem Fins Lucrativos'),
 ('3999','Outras Formas de Associação','Entidade sem Fins Lucrativos'),
 -- MEI (código oficial Receita)
-('4120','Microempreendedor Individual - MEI','MEI');
+('4120','Microempreendedor Individual - MEI','MEI')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 3. ref_tipos_documento_fiscal
@@ -133,7 +135,8 @@ INSERT INTO ref_tipos_documento_fiscal (codigo, nome, descricao, ambiente) VALUE
 ('BPEP',  'BP-e',    'Bilhete de Passagem Eletrônico. Modelo 63.','Federal'),
 ('GTVE',  'GTV-e',   'Guia de Transporte de Valores Eletrônica.','Federal'),
 ('NFP',   'NF de Produtor','Nota Fiscal de Produtor Rural.','Estadual'),
-('RECIBO','Recibo',  'Recibo de pagamento — não é documento fiscal.','Todos');
+('RECIBO','Recibo',  'Recibo de pagamento — não é documento fiscal.','Todos')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 4. ref_cnae
@@ -147,7 +150,7 @@ CREATE TABLE IF NOT EXISTS ref_cnae (
   secao         CHAR(1)      NOT NULL,
   divisao       CHAR(2)      NOT NULL,
   grupo         CHAR(3),
-  classe        CHAR(5),
+  classe        VARCHAR(6),
   subclasse     VARCHAR(9),
   descricao     VARCHAR(300) NOT NULL,
   nivel         VARCHAR(10)  NOT NULL CHECK (nivel IN ('Secao','Divisao','Grupo','Classe','Subclasse')),
@@ -169,7 +172,8 @@ INSERT INTO ref_cnae (codigo, codigo_limpo, secao, divisao, descricao, nivel) VA
 ('D','D','D','D','Eletricidade e Gás','Secao'),
 ('E','E','E','E','Água, Esgoto, Atividades de Gestão de Resíduos e Descontaminação','Secao'),
 ('F','F','F','F','Construção','Secao'),
-('G','G','G','G','Comércio; Reparação de Veículos Automotores e Motocicletas','Secao'),
+('G','G','G','G','Comércio
+ON CONFLICT DO NOTHING; Reparação de Veículos Automotores e Motocicletas','Secao'),
 ('H','H','H','H','Transporte, Armazenagem e Correio','Secao'),
 ('I','I','I','I','Alojamento e Alimentação','Secao'),
 ('J','J','J','J','Informação e Comunicação','Secao'),
@@ -305,7 +309,8 @@ INSERT INTO ref_cnae (codigo, codigo_limpo, secao, divisao, grupo, classe, subcl
 ('9601-7/02','9601702','S','96','960','9601-7','9601-7/02','Tinturarias','Subclasse'),
 ('8121-4/00','8121400','N','81','812','8121-4','8121-4/00','Limpeza em prédios e em domicílios','Subclasse'),
 ('8122-2/00','8122200','N','81','812','8122-2','8122-2/00','Imunização e controle de pragas urbanas','Subclasse'),
-('8129-0/00','8129000','N','81','812','8129-0','8129-0/00','Outras atividades de limpeza não especificadas anteriormente','Subclasse');
+('8129-0/00','8129000','N','81','812','8129-0','8129-0/00','Outras atividades de limpeza não especificadas anteriormente','Subclasse')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 5. ref_cfop
@@ -422,7 +427,8 @@ INSERT INTO ref_cfop (codigo, descricao, tipo, aplicacao) VALUES
 ('7.101','Venda de produção do estabelecimento','S','Exportação produção'),
 ('7.102','Venda de mercadoria adquirida ou recebida de terceiros','S','Exportação revenda'),
 ('7.201','Devolução de compra para industrialização realizada em outro país','S','Devolução importação industrial'),
-('7.900','Saída de mercadoria ou prestação de serviço não especificada','S','Outros exportação');
+('7.900','Saída de mercadoria ou prestação de serviço não especificada','S','Outros exportação')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 6. ref_ncm (amostra das principais — seed completo via ETL)
@@ -438,9 +444,9 @@ CREATE TABLE IF NOT EXISTS ref_ncm (
   ii_aliquota     NUMERIC(5,2) DEFAULT 0,
   capitulo        VARCHAR(2)   NOT NULL,
   posicao         VARCHAR(4),
-  subposicao      VARCHAR(6),
-  item            VARCHAR(7),
-  subitem         VARCHAR(8),
+  subposicao      VARCHAR(7),
+  item            VARCHAR(10),
+  subitem         VARCHAR(10),
   ativo           BOOLEAN      NOT NULL DEFAULT TRUE,
   created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -506,7 +512,8 @@ INSERT INTO ref_ncm (codigo, codigo_limpo, descricao, unidade_trib, ipi_aliquota
 ('0803.90.00','08039000','Outras bananas, frescas ou secas','KG',0,'08','0803','0803.90'),
 ('1001.19.00','10011900','Outros trigos, exceto durum, e trigos misturados com centeio','KG',0,'10','1001','1001.19'),
 ('1005.90.10','10059010','Milho em grão, exceto semente','KG',0,'10','1005','1005.90'),
-('1201.90.00','12019000','Outras sementes de soja, mesmo trituradas','KG',0,'12','1201','1201.90');
+('1201.90.00','12019000','Outras sementes de soja, mesmo trituradas','KG',0,'12','1201','1201.90')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 7. ref_origem_mercadoria
@@ -529,7 +536,8 @@ INSERT INTO ref_origem_mercadoria (codigo, descricao) VALUES
 ('5','Nacional, mercadoria ou bem com Conteúdo de Importação inferior ou igual a 40%'),
 ('6','Estrangeira - Importação direta, sem similar nacional, constante em lista da CAMEX e gás natural'),
 ('7','Estrangeira - Adquirida no mercado interno, sem similar nacional, constante em lista da CAMEX e gás natural'),
-('8','Nacional, mercadoria ou bem com Conteúdo de Importação superior a 70%');
+('8','Nacional, mercadoria ou bem com Conteúdo de Importação superior a 70%')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 8. ref_cst_icms
@@ -568,7 +576,8 @@ INSERT INTO ref_cst_icms (codigo, descricao, tipo, regime) VALUES
 ('300','Imune','CSOSN','Simples Nacional'),
 ('400','Não tributada pelo Simples Nacional','CSOSN','Simples Nacional'),
 ('500','ICMS cobrado anteriormente por substituição tributária (substituído) ou por antecipação','CSOSN','Simples Nacional'),
-('900','Outros','CSOSN','Simples Nacional');
+('900','Outros','CSOSN','Simples Nacional')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 9. ref_cst_pis_cofins
@@ -616,7 +625,8 @@ INSERT INTO ref_cst_pis_cofins (codigo, descricao, tipo) VALUES
 ('74','Operação de aquisição sem incidência da contribuição','Ambos'),
 ('75','Operação de aquisição por substituição tributária','Ambos'),
 ('98','Outras operações de entrada','Não-Cumulativo'),
-('99','Outras operações','Ambos');
+('99','Outras operações','Ambos')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 10. ref_cst_ipi
@@ -647,7 +657,8 @@ INSERT INTO ref_cst_ipi (codigo, descricao, tipo) VALUES
 ('53','Saída não-tributada','S'),
 ('54','Saída imune','S'),
 ('55','Saída com suspensão','S'),
-('99','Outras saídas','S');
+('99','Outras saídas','S')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 11. ref_modalidades_frete
@@ -668,7 +679,8 @@ INSERT INTO ref_modalidades_frete (codigo, nome, descricao) VALUES
 ('2','Contratação do Frete por conta de Terceiros','Terceiro contrata e paga o frete.'),
 ('3','Transporte Próprio por conta do Remetente','O próprio remetente realiza o transporte com veículo próprio.'),
 ('4','Transporte Próprio por conta do Destinatário','O destinatário busca a mercadoria com veículo próprio.'),
-('9','Sem Ocorrência de Transporte','Operação sem movimentação física de mercadoria (ex: serviços, transferência de propriedade).');
+('9','Sem Ocorrência de Transporte','Operação sem movimentação física de mercadoria (ex: serviços, transferência de propriedade).')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- RLS — Leitura pública para autenticados

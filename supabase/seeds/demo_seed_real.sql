@@ -19,10 +19,10 @@
 
      IMPORTANTE: ao criar cada usuário no Auth,
      usar o mesmo UUID definido neste seed:
-     Admin:   aaaaaaaa-0000-0000-0000-000000000001
-     Carlos:  bbbbbbbb-0000-0000-0000-000000000002
-     Vitória: cccccccc-0000-0000-0000-000000000003
-     Ricardo: dddddddd-0000-0000-0000-000000000004
+     Admin:   673e0c35-5afc-4c54-a82a-0c8e63279b99
+     Carlos:  d9e849b1-cd4a-4855-888c-857d8a7a6050
+     Vitória: 9ff84319-08bf-4a67-975e-4a229effdf4d
+     Ricardo: 30feab53-1950-4099-8699-6ea24bd71d71
 
   4. Os dados de demonstração estão prontos para uso.
 
@@ -40,7 +40,7 @@
 BEGIN;
 
 -- BLOCO 1 — PERFIS
-SET session_replication_role = replica;
+
 
 INSERT INTO public.profiles (
   id,
@@ -53,7 +53,7 @@ INSERT INTO public.profiles (
   updated_at
 ) VALUES
   (
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Admin BBA',
     'admin@bbabrazil.com.br',
     'bba_admin',
@@ -63,7 +63,7 @@ INSERT INTO public.profiles (
     NOW() - INTERVAL '120 days'
   ),
   (
-    'bbbbbbbb-0000-0000-0000-000000000002',
+    'd9e849b1-cd4a-4855-888c-857d8a7a6050',
     'Carlos Mendes',
     'carlos@carlosmendes.com.br',
     'client',
@@ -73,7 +73,7 @@ INSERT INTO public.profiles (
     NOW() - INTERVAL '10 days'
   ),
   (
-    'cccccccc-0000-0000-0000-000000000003',
+    '9ff84319-08bf-4a67-975e-4a229effdf4d',
     'Vitória Souza',
     'vitoria@vitoriamodas.com.br',
     'client',
@@ -83,7 +83,7 @@ INSERT INTO public.profiles (
     NOW() - INTERVAL '55 days'
   ),
   (
-    'dddddddd-0000-0000-0000-000000000004',
+    '30feab53-1950-4099-8699-6ea24bd71d71',
     'Ricardo Horizonte',
     'ricardo@construtorahorizonte.com.br',
     'client',
@@ -91,9 +91,13 @@ INSERT INTO public.profiles (
     '{"demo": true, "persona": "Construção civil"}'::jsonb,
     NOW() - INTERVAL '95 days',
     NOW() - INTERVAL '95 days'
-  );
-
-SET session_replication_role = origin;
+  )
+ON CONFLICT (id) DO UPDATE SET
+  full_name = EXCLUDED.full_name,
+  email = EXCLUDED.email,
+  role = EXCLUDED.role,
+  metadata = EXCLUDED.metadata,
+  updated_at = NOW();
 
 -- BLOCO 2 — EMPRESAS
 INSERT INTO public.companies (
@@ -110,7 +114,7 @@ INSERT INTO public.companies (
 ) VALUES
   (
     'eeeeeeee-0000-0000-0000-000000000001',
-    'bbbbbbbb-0000-0000-0000-000000000002',
+    'd9e849b1-cd4a-4855-888c-857d8a7a6050',
     'Carlos Mendes Consultoria',
     '12345678000191',
     'mei',
@@ -122,7 +126,7 @@ INSERT INTO public.companies (
   ),
   (
     'eeeeeeee-0000-0000-0000-000000000002',
-    'cccccccc-0000-0000-0000-000000000003',
+    '9ff84319-08bf-4a67-975e-4a229effdf4d',
     'Vitória Modas Ltda',
     '98765432000155',
     'simples_nacional',
@@ -134,7 +138,7 @@ INSERT INTO public.companies (
   ),
   (
     'eeeeeeee-0000-0000-0000-000000000003',
-    'dddddddd-0000-0000-0000-000000000004',
+    '30feab53-1950-4099-8699-6ea24bd71d71',
     'Construtora Horizonte Ltda',
     '11223344000177',
     'lucro_presumido',
@@ -147,15 +151,15 @@ INSERT INTO public.companies (
 
 UPDATE public.profiles
 SET company_id = 'eeeeeeee-0000-0000-0000-000000000001'
-WHERE id = 'bbbbbbbb-0000-0000-0000-000000000002';
+WHERE id = 'd9e849b1-cd4a-4855-888c-857d8a7a6050';
 
 UPDATE public.profiles
 SET company_id = 'eeeeeeee-0000-0000-0000-000000000002'
-WHERE id = 'cccccccc-0000-0000-0000-000000000003';
+WHERE id = '9ff84319-08bf-4a67-975e-4a229effdf4d';
 
 UPDATE public.profiles
 SET company_id = 'eeeeeeee-0000-0000-0000-000000000003'
-WHERE id = 'dddddddd-0000-0000-0000-000000000004';
+WHERE id = '30feab53-1950-4099-8699-6ea24bd71d71';
 
 -- BLOCO 3 — ONBOARDING STEPS
 INSERT INTO public.onboarding_steps (
@@ -179,7 +183,7 @@ INSERT INTO public.onboarding_steps (
     'Cadastro da empresa',
     'Conferência dos dados cadastrais básicos e enquadramento inicial.',
     'completed',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Dados do MEI conferidos com o cadastro da Receita Federal.',
     NOW() - INTERVAL '3 days',
     '{}'::jsonb,
@@ -193,7 +197,7 @@ INSERT INTO public.onboarding_steps (
     'Contatos e responsáveis',
     'Validação dos canais de contato e responsável operacional.',
     'completed',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Carlos será o ponto focal financeiro e fiscal.',
     NOW() - INTERVAL '2 days',
     '{}'::jsonb,
@@ -207,7 +211,7 @@ INSERT INTO public.onboarding_steps (
     'Envio de documentos iniciais',
     'Recebimento de comprovantes, contratos e documentação fiscal.',
     'in_progress',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Aguardando comprovantes de faturamento dos últimos 12 meses.',
     NULL,
     '{}'::jsonb,
@@ -221,7 +225,7 @@ INSERT INTO public.onboarding_steps (
     'Validação BBA',
     'Revisão técnica dos documentos e riscos identificados.',
     'pending',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     NULL,
     NULL,
     '{}'::jsonb,
@@ -235,7 +239,7 @@ INSERT INTO public.onboarding_steps (
     'Operação assistida',
     'Acompanhamento inicial da rotina após implantação.',
     'pending',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     NULL,
     NULL,
     '{}'::jsonb,
@@ -249,7 +253,7 @@ INSERT INTO public.onboarding_steps (
     'Cadastro da empresa',
     'Conferência cadastral e tributária da empresa.',
     'completed',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Contrato social e CNPJ validados.',
     NOW() - INTERVAL '45 days',
     '{}'::jsonb,
@@ -263,7 +267,7 @@ INSERT INTO public.onboarding_steps (
     'Contatos e responsáveis',
     'Definição de responsáveis por financeiro, loja e RH.',
     'completed',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Vitória centraliza aprovações financeiras.',
     NOW() - INTERVAL '42 days',
     '{}'::jsonb,
@@ -277,7 +281,7 @@ INSERT INTO public.onboarding_steps (
     'Envio de documentos iniciais',
     'Upload de extratos, folha, certificados e contratos.',
     'completed',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Documentos de maio e junho recebidos.',
     NOW() - INTERVAL '38 days',
     '{}'::jsonb,
@@ -291,7 +295,7 @@ INSERT INTO public.onboarding_steps (
     'Validação BBA',
     'Validação de inconsistências fiscais, financeiras e trabalhistas.',
     'completed',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Foram identificados ajustes de conciliação bancária.',
     NOW() - INTERVAL '34 days',
     '{}'::jsonb,
@@ -305,7 +309,7 @@ INSERT INTO public.onboarding_steps (
     'Operação assistida',
     'Acompanhamento das primeiras rotinas com a equipe BBA.',
     'completed',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Operação mensal estabilizada.',
     NOW() - INTERVAL '30 days',
     '{}'::jsonb,
@@ -319,7 +323,7 @@ INSERT INTO public.onboarding_steps (
     'Cadastro da empresa',
     'Validação cadastral e societária da construtora.',
     'completed',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Estrutura societária revisada para contratos públicos.',
     NOW() - INTERVAL '90 days',
     '{}'::jsonb,
@@ -333,7 +337,7 @@ INSERT INTO public.onboarding_steps (
     'Contatos e responsáveis',
     'Mapeamento de responsáveis por obra, fiscal, financeiro e jurídico.',
     'completed',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Ricardo centraliza decisões executivas.',
     NOW() - INTERVAL '82 days',
     '{}'::jsonb,
@@ -347,7 +351,7 @@ INSERT INTO public.onboarding_steps (
     'Envio de documentos iniciais',
     'Recebimento de contratos, medições, ARTs e certidões.',
     'completed',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Contratos federais e ARTs iniciais recebidos.',
     NOW() - INTERVAL '75 days',
     '{}'::jsonb,
@@ -361,7 +365,7 @@ INSERT INTO public.onboarding_steps (
     'Validação BBA',
     'Análise de riscos tributários, trabalhistas e de governança.',
     'completed',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Risco de ISS intermunicipal mapeado para acompanhamento.',
     NOW() - INTERVAL '68 days',
     '{}'::jsonb,
@@ -375,7 +379,7 @@ INSERT INTO public.onboarding_steps (
     'Operação assistida',
     'Acompanhamento de rotinas mensais e controles de obra.',
     'completed',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Rotina implantada com relatórios mensais de obra.',
     NOW() - INTERVAL '60 days',
     '{}'::jsonb,
@@ -404,7 +408,7 @@ INSERT INTO public.projects (
     'Estruturação fiscal, emissão de NF e organização dos processos digitais do MEI.',
     'fiscal',
     'active',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     NULL,
     '{"demo": true}'::jsonb,
     NOW() - INTERVAL '9 days',
@@ -417,7 +421,7 @@ INSERT INTO public.projects (
     'Organização do fluxo de caixa, conciliação bancária e controle de margem.',
     'financeiro',
     'active',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     NULL,
     '{"demo": true}'::jsonb,
     NOW() - INTERVAL '29 days',
@@ -430,7 +434,7 @@ INSERT INTO public.projects (
     'Estruturação de processos de RH, controle de ponto e folha de pagamento.',
     'rh',
     'active',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     NULL,
     '{"demo": true}'::jsonb,
     NOW() - INTERVAL '28 days',
@@ -443,7 +447,7 @@ INSERT INTO public.projects (
     'Execução da terceira fase da barragem Rio das Pedras. Contrato DNOCS vigente. Medições mensais e emissão de NFs de medição.',
     'fiscal',
     'active',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     CURRENT_DATE + 90,
     '{"demo": true, "contrato": "DNOCS"}'::jsonb,
     NOW() - INTERVAL '59 days',
@@ -456,7 +460,7 @@ INSERT INTO public.projects (
     'Participação em leilão eletrônico ANEEL para concessão da PCH Cachoeira Dourada. Prazo de habilitação: 30 dias.',
     'governanca',
     'active',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     CURRENT_DATE + 30,
     '{"demo": true, "orgao": "ANEEL"}'::jsonb,
     NOW() - INTERVAL '20 days',
@@ -494,8 +498,8 @@ INSERT INTO public.tasks (
     'Nota fiscal',
     CURRENT_DATE + 3,
     0,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '1 day',
     NOW() - INTERVAL '1 day'
@@ -512,8 +516,8 @@ INSERT INTO public.tasks (
     'DASN-SIMEI',
     CURRENT_DATE + 7,
     1,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '2 days',
     NOW()
@@ -530,8 +534,8 @@ INSERT INTO public.tasks (
     'Cadastro bancário',
     NULL,
     0,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '1 day',
     NOW() - INTERVAL '1 day'
@@ -548,8 +552,8 @@ INSERT INTO public.tasks (
     'Contrato',
     NULL,
     0,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '1 day',
     NOW() - INTERVAL '1 day'
@@ -566,8 +570,8 @@ INSERT INTO public.tasks (
     'Arquivos digitais',
     NULL,
     0,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '1 day',
     NOW() - INTERVAL '1 day'
@@ -584,8 +588,8 @@ INSERT INTO public.tasks (
     'Conciliação',
     CURRENT_DATE + 5,
     2,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '4 days',
     NOW()
@@ -602,8 +606,8 @@ INSERT INTO public.tasks (
     'Simples Nacional',
     CURRENT_DATE + 7,
     0,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '3 days',
     NOW() - INTERVAL '3 days'
@@ -620,8 +624,8 @@ INSERT INTO public.tasks (
     'Folha',
     NULL,
     1,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '12 days',
     NOW() - INTERVAL '5 days'
@@ -638,8 +642,8 @@ INSERT INTO public.tasks (
     'Contrato fornecedor',
     NULL,
     0,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '2 days',
     NOW() - INTERVAL '2 days'
@@ -656,8 +660,8 @@ INSERT INTO public.tasks (
     'Admissão',
     NULL,
     0,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '2 days',
     NOW()
@@ -674,8 +678,8 @@ INSERT INTO public.tasks (
     'Margem',
     NULL,
     1,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '15 days',
     NOW() - INTERVAL '8 days'
@@ -692,8 +696,8 @@ INSERT INTO public.tasks (
     'Certificado digital',
     CURRENT_DATE + 10,
     0,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '2 days',
     NOW() - INTERVAL '2 days'
@@ -710,8 +714,8 @@ INSERT INTO public.tasks (
     'Política comercial',
     NULL,
     0,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '1 day',
     NOW() - INTERVAL '1 day'
@@ -728,8 +732,8 @@ INSERT INTO public.tasks (
     'DNOCS',
     CURRENT_DATE + 2,
     3,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{"contrato": "DNOCS Etapa 7"}'::jsonb,
     NOW() - INTERVAL '1 day',
     NOW() - INTERVAL '1 day'
@@ -746,8 +750,8 @@ INSERT INTO public.tasks (
     'ISS',
     CURRENT_DATE + 5,
     2,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{"risco": "autuação fiscal"}'::jsonb,
     NOW() - INTERVAL '2 days',
     NOW()
@@ -764,8 +768,8 @@ INSERT INTO public.tasks (
     'CREA-GO',
     CURRENT_DATE + 7,
     1,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '1 day',
     NOW() - INTERVAL '1 day'
@@ -782,8 +786,8 @@ INSERT INTO public.tasks (
     'Medição',
     CURRENT_DATE + 3,
     4,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{"divergencia": 87000}'::jsonb,
     NOW() - INTERVAL '3 days',
     NOW()
@@ -800,8 +804,8 @@ INSERT INTO public.tasks (
     'Relatório CEF',
     CURRENT_DATE + 5,
     2,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{"financiador": "Caixa Econômica Federal"}'::jsonb,
     NOW() - INTERVAL '2 days',
     NOW() - INTERVAL '2 days'
@@ -818,8 +822,8 @@ INSERT INTO public.tasks (
     'Contrato federal',
     CURRENT_DATE + 15,
     1,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '1 day',
     NOW() - INTERVAL '1 day'
@@ -836,8 +840,8 @@ INSERT INTO public.tasks (
     'INSS',
     NULL,
     1,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '12 days',
     NOW() - INTERVAL '6 days'
@@ -854,8 +858,8 @@ INSERT INTO public.tasks (
     'Admissão obra',
     CURRENT_DATE + 4,
     2,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{"quantidade_operadores": 3}'::jsonb,
     NOW() - INTERVAL '3 days',
     NOW()
@@ -872,8 +876,8 @@ INSERT INTO public.tasks (
     'NR-18',
     CURRENT_DATE + 3,
     0,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{"colaboradores_pendentes": 8}'::jsonb,
     NOW() - INTERVAL '1 day',
     NOW() - INTERVAL '1 day'
@@ -890,8 +894,8 @@ INSERT INTO public.tasks (
     'Horas extras',
     NULL,
     1,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '10 days',
     NOW() - INTERVAL '4 days'
@@ -908,8 +912,8 @@ INSERT INTO public.tasks (
     'VPN',
     NULL,
     0,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '5 days',
     NOW()
@@ -926,8 +930,8 @@ INSERT INTO public.tasks (
     'Backup',
     CURRENT_DATE + 7,
     0,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{}'::jsonb,
     NOW() - INTERVAL '2 days',
     NOW() - INTERVAL '2 days'
@@ -944,8 +948,8 @@ INSERT INTO public.tasks (
     'Leilão ANEEL',
     CURRENT_DATE + 10,
     3,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{"prazo_habilitacao_dias": 30}'::jsonb,
     NOW() - INTERVAL '4 days',
     NOW()
@@ -962,8 +966,8 @@ INSERT INTO public.tasks (
     'Compliance',
     CURRENT_DATE + 20,
     1,
-    'aaaaaaaa-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     '{"lei": "14.133/2021"}'::jsonb,
     NOW() - INTERVAL '2 days',
     NOW() - INTERVAL '2 days'
@@ -1110,119 +1114,119 @@ INSERT INTO public.chat_messages (
   (
     '50000000-0000-0000-0000-000000000001',
     '40000000-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Carlos, bom dia! Precisamos que você nos envie o comprovante de faturamento dos últimos 12 meses para darmos andamento ao cadastro fiscal.',
     NOW() - INTERVAL '2 days 5 hours'
   ),
   (
     '50000000-0000-0000-0000-000000000002',
     '40000000-0000-0000-0000-000000000001',
-    'bbbbbbbb-0000-0000-0000-000000000002',
+    'd9e849b1-cd4a-4855-888c-857d8a7a6050',
     'Bom dia! Vou separar e envio até amanhã. Posso enviar por aqui mesmo?',
     NOW() - INTERVAL '2 days 4 hours 42 minutes'
   ),
   (
     '50000000-0000-0000-0000-000000000003',
     '40000000-0000-0000-0000-000000000001',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Pode sim! Pode anexar direto na conversa. Qualquer dúvida estamos aqui.',
     NOW() - INTERVAL '2 days 4 hours 30 minutes'
   ),
   (
     '50000000-0000-0000-0000-000000000004',
     '40000000-0000-0000-0000-000000000007',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Vitória, a conciliação bancária de maio ficou com uma diferença de R$ 1.240,00 a identificar. Você tem algum lançamento fora do sistema?',
     NOW() - INTERVAL '6 days 3 hours'
   ),
   (
     '50000000-0000-0000-0000-000000000005',
     '40000000-0000-0000-0000-000000000007',
-    'cccccccc-0000-0000-0000-000000000003',
+    '9ff84319-08bf-4a67-975e-4a229effdf4d',
     'Deixa eu verificar. Acho que foi uma compra de mercadoria que paguei direto no débito e não registrei.',
     NOW() - INTERVAL '6 days 2 hours 20 minutes'
   ),
   (
     '50000000-0000-0000-0000-000000000006',
     '40000000-0000-0000-0000-000000000007',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Provavelmente isso mesmo. Quando confirmar me passa o valor e a data que a gente ajusta.',
     NOW() - INTERVAL '6 days 2 hours'
   ),
   (
     '50000000-0000-0000-0000-000000000007',
     '40000000-0000-0000-0000-000000000007',
-    'cccccccc-0000-0000-0000-000000000003',
+    '9ff84319-08bf-4a67-975e-4a229effdf4d',
     'Confirmado! Foi R$ 1.240,00 em 15/05. Compra de malhas — fornecedor Tecidos Sul.',
     NOW() - INTERVAL '5 days 7 hours'
   ),
   (
     '50000000-0000-0000-0000-000000000008',
     '40000000-0000-0000-0000-000000000011',
-    'dddddddd-0000-0000-0000-000000000004',
+    '30feab53-1950-4099-8699-6ea24bd71d71',
     'Boa tarde equipe BBA. Temos dúvida sobre a retenção de INSS na nota fiscal da medição da etapa 7. O contrato é de empreitada mista. Qual alíquota aplicar?',
     NOW() - INTERVAL '3 days 6 hours'
   ),
   (
     '50000000-0000-0000-0000-000000000009',
     '40000000-0000-0000-0000-000000000011',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Ricardo, boa tarde! Em contratos de empreitada mista (material + mão de obra), a retenção previdenciária incide sobre 50% do valor bruto da NF, à alíquota de 11%. Vamos preparar um memorando técnico para documentar.',
     NOW() - INTERVAL '3 days 5 hours 30 minutes'
   ),
   (
     '50000000-0000-0000-0000-000000000010',
     '40000000-0000-0000-0000-000000000011',
-    'dddddddd-0000-0000-0000-000000000004',
+    '30feab53-1950-4099-8699-6ea24bd71d71',
     'Perfeito. E o ISS? A obra é em outro município.',
     NOW() - INTERVAL '3 days 5 hours 10 minutes'
   ),
   (
     '50000000-0000-0000-0000-000000000011',
     '40000000-0000-0000-0000-000000000011',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Para ISS em obra fora da sede, o recolhimento é para o município onde a obra é executada. Já estamos verificando a alíquota local. Retorno até amanhã com o valor exato.',
     NOW() - INTERVAL '3 days 4 hours 45 minutes'
   ),
   (
     '50000000-0000-0000-0000-000000000012',
     '40000000-0000-0000-0000-000000000012',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Ricardo, identificamos uma divergência de R$ 87.000,00 entre o boletim de medição físico e o cronograma financeiro da etapa 7. Precisamos alinhar antes de emitir a NF.',
     NOW() - INTERVAL '1 day 6 hours'
   ),
   (
     '50000000-0000-0000-0000-000000000013',
     '40000000-0000-0000-0000-000000000012',
-    'dddddddd-0000-0000-0000-000000000004',
+    '30feab53-1950-4099-8699-6ea24bd71d71',
     'Essa diferença é referente ao aditivo de prazo que foi aprovado semana passada. O engenheiro vai atualizar o boletim hoje.',
     NOW() - INTERVAL '1 day 5 hours 25 minutes'
   ),
   (
     '50000000-0000-0000-0000-000000000014',
     '40000000-0000-0000-0000-000000000012',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Entendido. Assim que o boletim for atualizado nos envie para conferência final antes da emissão. Prazo da NF é para depois de amanhã.',
     NOW() - INTERVAL '1 day 5 hours'
   ),
   (
     '50000000-0000-0000-0000-000000000015',
     '40000000-0000-0000-0000-000000000015',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Ricardo, iniciamos o levantamento dos documentos necessários para habilitação no leilão ANEEL da PCH Cachoeira Dourada. Precisamos de: 1. Balanço patrimonial dos últimos 3 exercícios 2. Certidões negativas atualizadas (federal, estadual, municipal e FGTS) 3. Atestado de capacidade técnica em obras hidrelétricas acima de 5MW.',
     NOW() - INTERVAL '8 days 4 hours'
   ),
   (
     '50000000-0000-0000-0000-000000000016',
     '40000000-0000-0000-0000-000000000015',
-    'dddddddd-0000-0000-0000-000000000004',
+    '30feab53-1950-4099-8699-6ea24bd71d71',
     'Balanços eu tenho aqui. As certidões vou solicitar segunda-feira. O atestado técnico preciso confirmar com o engenheiro responsável.',
     NOW() - INTERVAL '8 days 3 hours 25 minutes'
   ),
   (
     '50000000-0000-0000-0000-000000000017',
     '40000000-0000-0000-0000-000000000015',
-    'aaaaaaaa-0000-0000-0000-000000000001',
+    '673e0c35-5afc-4c54-a82a-0c8e63279b99',
     'Perfeito. Prazo para entrega da habilitação é daqui 28 dias. Vamos montar um checklist detalhado e acompanhar item a item. Você quer que eu agende uma reunião para alinhar a estratégia do leilão?',
     NOW() - INTERVAL '8 days 3 hours'
   );

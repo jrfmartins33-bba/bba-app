@@ -26,7 +26,8 @@ COMMENT ON TABLE ref_simples_nacional_parametros IS 'Parâmetros e limites do Si
 INSERT INTO ref_simples_nacional_parametros (ano, limite_mei, limite_me, limite_epp, limite_sublimite_icms, base_legal, observacao) VALUES
 (2025, 81000.00, 360000.00, 4800000.00, 3600000.00, 'LC 123/2006 + LC 155/2016 + LC 199/2023', 'MEI: R$ 81.000/ano (LC 199/2023 — vigente jan/2023). ME: até R$ 360.000/ano. EPP: até R$ 4.800.000/ano. Sublimite ICMS/ISS para estados com PIB < 1% do nacional: R$ 1.800.000.'),
 (2024, 81000.00, 360000.00, 4800000.00, 3600000.00, 'LC 123/2006 + LC 155/2016 + LC 199/2023', 'Mesmos limites de 2025'),
-(2023, 81000.00, 360000.00, 4800000.00, 3600000.00, 'LC 199/2023', 'LC 199/2023 elevou o limite do MEI de R$ 81.000 para R$ 81.000 (já era 81k). Para MEI Caminhoneiro: R$ 251.600/ano.');
+(2023, 81000.00, 360000.00, 4800000.00, 3600000.00, 'LC 199/2023', 'LC 199/2023 elevou o limite do MEI de R$ 81.000 para R$ 81.000 (já era 81k). Para MEI Caminhoneiro: R$ 251.600/ano.')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 2. ref_simples_nacional_anexos
@@ -68,7 +69,8 @@ INSERT INTO ref_simples_nacional_anexos (anexo, nome, atividades, tem_fator_r, o
 ('V',   'Serviços Intelectuais e de Alta Complexidade',
  'Auditoria, jornalismo, tecnologia (quando fator r < 28%), publicidade, engenharia, medicina, arquitetura, fisioterapia, psicologia, biologia, química, geologia, profissões regulamentadas de nível superior em geral. Design. Consultoria em gestão.',
  TRUE,
- 'Alíquotas de 15,50% a 30,50%. Fator r: se folha de salários / receita bruta nos últimos 12 meses for ≥ 28%, tributa pelo Anexo III. Se < 28%, tributa pelo Anexo V.');
+ 'Alíquotas de 15,50% a 30,50%. Fator r: se folha de salários / receita bruta nos últimos 12 meses for ≥ 28%, tributa pelo Anexo III. Se < 28%, tributa pelo Anexo V.')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 3. ref_simples_nacional_faixas
@@ -99,7 +101,8 @@ INSERT INTO ref_simples_nacional_faixas (ano, anexo, faixa, rbt12_de, rbt12_ate,
 (2025,'I',3,   360000.01,   720000.00, 0.0982,  13860.00, '9,82% nominal'),
 (2025,'I',4,   720000.01,  1800000.00, 0.1082,  22500.00, '10,82% nominal'),
 (2025,'I',5,  1800000.01,  3600000.00, 0.1450,  87300.00, '14,50% nominal'),
-(2025,'I',6,  3600000.01,  4800000.00, 0.1900, 378000.00, '19,00% nominal — faixa máxima EPP');
+(2025,'I',6,  3600000.01,  4800000.00, 0.1900, 378000.00, '19,00% nominal — faixa máxima EPP')
+ON CONFLICT DO NOTHING;
 
 -- ── ANEXO II — INDÚSTRIA ──
 INSERT INTO ref_simples_nacional_faixas (ano, anexo, faixa, rbt12_de, rbt12_ate, aliquota_nominal, parcela_deduzir, observacao) VALUES
@@ -108,7 +111,8 @@ INSERT INTO ref_simples_nacional_faixas (ano, anexo, faixa, rbt12_de, rbt12_ate,
 (2025,'II',3,  360000.01,   720000.00, 0.1026,  13860.00, '10,26% nominal'),
 (2025,'II',4,  720000.01,  1800000.00, 0.1126,  22500.00, '11,26% nominal'),
 (2025,'II',5, 1800000.01,  3600000.00, 0.1500,  87300.00, '15,00% nominal'),
-(2025,'II',6, 3600000.01,  4800000.00, 0.3000, 378000.00, '30,00% nominal');
+(2025,'II',6, 3600000.01,  4800000.00, 0.3000, 378000.00, '30,00% nominal')
+ON CONFLICT DO NOTHING;
 
 -- ── ANEXO III — SERVIÇOS GERAIS ──
 INSERT INTO ref_simples_nacional_faixas (ano, anexo, faixa, rbt12_de, rbt12_ate, aliquota_nominal, parcela_deduzir, observacao) VALUES
@@ -117,7 +121,8 @@ INSERT INTO ref_simples_nacional_faixas (ano, anexo, faixa, rbt12_de, rbt12_ate,
 (2025,'III',3, 360000.01,   720000.00, 0.1350,  17640.00, '13,50% nominal'),
 (2025,'III',4, 720000.01,  1800000.00, 0.1600,  35640.00, '16,00% nominal'),
 (2025,'III',5,1800000.01,  3600000.00, 0.2100, 125640.00, '21,00% nominal'),
-(2025,'III',6,3600000.01,  4800000.00, 0.3300, 648000.00, '33,00% nominal');
+(2025,'III',6,3600000.01,  4800000.00, 0.3300, 648000.00, '33,00% nominal')
+ON CONFLICT DO NOTHING;
 
 -- ── ANEXO IV — SERVIÇOS SEM CPP ──
 INSERT INTO ref_simples_nacional_faixas (ano, anexo, faixa, rbt12_de, rbt12_ate, aliquota_nominal, parcela_deduzir, observacao) VALUES
@@ -126,7 +131,8 @@ INSERT INTO ref_simples_nacional_faixas (ano, anexo, faixa, rbt12_de, rbt12_ate,
 (2025,'IV',3,  360000.01,   720000.00, 0.1020,  12420.00, '10,20% nominal'),
 (2025,'IV',4,  720000.01,  1800000.00, 0.1440,  39780.00, '14,40% nominal'),
 (2025,'IV',5, 1800000.01,  3600000.00, 0.2200, 183780.00, '22,00% nominal'),
-(2025,'IV',6, 3600000.01,  4800000.00, 0.3300, 828000.00, '33,00% nominal');
+(2025,'IV',6, 3600000.01,  4800000.00, 0.3300, 828000.00, '33,00% nominal')
+ON CONFLICT DO NOTHING;
 
 -- ── ANEXO V — SERVIÇOS INTELECTUAIS ──
 INSERT INTO ref_simples_nacional_faixas (ano, anexo, faixa, rbt12_de, rbt12_ate, aliquota_nominal, parcela_deduzir, observacao) VALUES
@@ -135,7 +141,8 @@ INSERT INTO ref_simples_nacional_faixas (ano, anexo, faixa, rbt12_de, rbt12_ate,
 (2025,'V',3,   360000.01,   720000.00, 0.1950,   9900.00, '19,50% nominal'),
 (2025,'V',4,   720000.01,  1800000.00, 0.2050,  17100.00, '20,50% nominal'),
 (2025,'V',5,  1800000.01,  3600000.00, 0.2300,  62100.00, '23,00% nominal'),
-(2025,'V',6,  3600000.01,  4800000.00, 0.3050, 540000.00, '30,50% nominal');
+(2025,'V',6,  3600000.01,  4800000.00, 0.3050, 540000.00, '30,50% nominal')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 4. ref_simples_nacional_partilha
@@ -169,7 +176,8 @@ INSERT INTO ref_simples_nacional_partilha (anexo, faixa, irpj, csll, cofins, pis
 ('I',3, 0.0500, 0.0350, 0.1220, 0.0265, 0.4200, 0.3320),  -- ajuste faixa 3
 ('I',4, 0.0500, 0.0350, 0.1220, 0.0265, 0.4200, 0.3200),
 ('I',5, 0.0500, 0.0350, 0.1220, 0.0265, 0.4200, 0.3200),
-('I',6, 0.1300, 0.1000, 0.2280, 0.1260, 0.4200, 0.0000);  -- faixa 6: sem ICMS (substituto trib)
+('I',6, 0.1300, 0.1000, 0.2280, 0.1260, 0.4200, 0.0000)
+ON CONFLICT DO NOTHING;  -- faixa 6: sem ICMS (substituto trib)
 
 -- ANEXO II — Indústria
 INSERT INTO ref_simples_nacional_partilha (anexo, faixa, irpj, csll, cofins, pis, cpp, icms, ipi) VALUES
@@ -178,7 +186,8 @@ INSERT INTO ref_simples_nacional_partilha (anexo, faixa, irpj, csll, cofins, pis
 ('II',3, 0.0500, 0.0350, 0.1220, 0.0265, 0.4200, 0.3200, 0.0500),
 ('II',4, 0.0500, 0.0350, 0.1220, 0.0265, 0.4200, 0.3200, 0.0500),
 ('II',5, 0.0500, 0.0350, 0.1220, 0.0265, 0.4200, 0.3200, 0.0500),
-('II',6, 0.1300, 0.1000, 0.2280, 0.1260, 0.4200, 0.0000, 0.0500);
+('II',6, 0.1300, 0.1000, 0.2280, 0.1260, 0.4200, 0.0000, 0.0500)
+ON CONFLICT DO NOTHING;
 
 -- ANEXO III — Serviços Gerais
 INSERT INTO ref_simples_nacional_partilha (anexo, faixa, irpj, csll, cofins, pis, cpp, iss) VALUES
@@ -187,7 +196,8 @@ INSERT INTO ref_simples_nacional_partilha (anexo, faixa, irpj, csll, cofins, pis
 ('III',3, 0.0400, 0.0350, 0.1270, 0.0275, 0.4300, 0.3250),
 ('III',4, 0.0400, 0.0350, 0.1270, 0.0275, 0.4300, 0.3100),
 ('III',5, 0.0400, 0.0350, 0.1270, 0.0275, 0.4300, 0.3000),
-('III',6, 0.3500, 0.1500, 0.1600, 0.0800, 0.2000, 0.0100);
+('III',6, 0.3500, 0.1500, 0.1600, 0.0800, 0.2000, 0.0100)
+ON CONFLICT DO NOTHING;
 
 -- ANEXO IV — Serviços sem CPP (CPP não está no DAS)
 INSERT INTO ref_simples_nacional_partilha (anexo, faixa, irpj, csll, cofins, pis, iss) VALUES
@@ -196,7 +206,8 @@ INSERT INTO ref_simples_nacional_partilha (anexo, faixa, irpj, csll, cofins, pis
 ('IV',3, 0.1800, 0.1950, 0.2300, 0.0600, 0.3200),
 ('IV',4, 0.1800, 0.1950, 0.2300, 0.0600, 0.3000),
 ('IV',5, 0.1800, 0.1950, 0.2300, 0.0600, 0.3000),
-('IV',6, 0.3300, 0.3200, 0.2200, 0.1600, 0.0000);
+('IV',6, 0.3300, 0.3200, 0.2200, 0.1600, 0.0000)
+ON CONFLICT DO NOTHING;
 
 -- ANEXO V — Serviços Intelectuais
 INSERT INTO ref_simples_nacional_partilha (anexo, faixa, irpj, csll, cofins, pis, cpp, iss) VALUES
@@ -205,7 +216,8 @@ INSERT INTO ref_simples_nacional_partilha (anexo, faixa, irpj, csll, cofins, pis
 ('V',3, 0.1600, 0.1500, 0.1700, 0.0800, 0.2800, 0.2100),
 ('V',4, 0.1600, 0.1500, 0.1700, 0.0800, 0.2800, 0.2100),
 ('V',5, 0.2100, 0.1500, 0.1600, 0.0800, 0.2000, 0.1000),
-('V',6, 0.3500, 0.1500, 0.1600, 0.0800, 0.2000, 0.0600);
+('V',6, 0.3500, 0.1500, 0.1600, 0.0800, 0.2000, 0.0600)
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 5. ref_mei_das
@@ -236,7 +248,8 @@ INSERT INTO ref_mei_das (ano, categoria, valor_inss, valor_icms, valor_iss, valo
 (2024,'MEI Serviços (ISS)',                  70.60, 0.00, 5.00,  75.60, NULL, 'LC 123/2006', NULL),
 (2024,'MEI Comércio + Serviços',             70.60, 1.00, 5.00,  76.60, NULL, 'LC 123/2006', NULL),
 (2023,'MEI Comércio e/ou Indústria',         66.00, 1.00, 0.00,  67.00, NULL, 'LC 123/2006', 'Base mai/2023: 5% × R$ 1.320,00 = R$ 66,00'),
-(2023,'MEI Serviços (ISS)',                  66.00, 0.00, 5.00,  71.00, NULL, 'LC 123/2006', NULL);
+(2023,'MEI Serviços (ISS)',                  66.00, 0.00, 5.00,  71.00, NULL, 'LC 123/2006', NULL)
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 6. ref_simples_nacional_atividades_vedadas
@@ -268,7 +281,8 @@ INSERT INTO ref_simples_nacional_vedacoes (descricao, base_legal, observacao) VA
 ('Produção ou venda no atacado de cigarros, armas de fogo, munições, fogos artificiais','Art. 17 LC 123/2006', NULL),
 ('Atividade de cessão ou locação de mão-de-obra (com exceções)','Art. 17 LC 123/2006', 'Exceção: serviços de vigilância, limpeza, conservação e construção civil.'),
 ('Empresa com débito com INSS ou com Fazenda Pública Federal, Estadual ou Municipal','Art. 17 LC 123/2006', 'Irregularidade fiscal impede a opção ou causa exclusão.'),
-('Empresa constituída sob a forma de empresa pública','Art. 3 §4 LC 123/2006', NULL);
+('Empresa constituída sob a forma de empresa pública','Art. 3 §4 LC 123/2006', NULL)
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- RLS

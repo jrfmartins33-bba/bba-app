@@ -33,7 +33,8 @@ INSERT INTO ref_salario_minimo (valor, data_vigencia_inicio, data_vigencia_fim, 
 (1212.00, '2022-01-01', '2023-05-01', 'Medida Provisória 1.109/2022', NULL),
 (1320.00, '2023-05-01', '2024-01-01', 'Medida Provisória 1.172/2023', 'Reajuste antecipado para maio/2023'),
 (1412.00, '2024-01-01', '2024-12-31', 'Decreto 11.864/2023', NULL),
-(1518.00, '2025-01-01', NULL,         'Decreto 12.302/2024', 'Vigente em 2025. Aumento de 7,5% sobre 2024.');
+(1518.00, '2025-01-01', NULL,         'Decreto 12.302/2024', 'Vigente em 2025. Aumento de 7,5% sobre 2024.')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 2. ref_irpf_faixas
@@ -62,7 +63,8 @@ INSERT INTO ref_irpf_faixas (ano_calendario, periodicidade, faixa, base_calculo_
 (2025,'Mensal',2,  2428.81,  2826.65, 7.50,   182.16,   235.89, NULL),
 (2025,'Mensal',3,  2826.66,  3751.05,15.00,   394.16,   235.89, NULL),
 (2025,'Mensal',4,  3751.06,  4664.68,22.50,   675.49,   235.89, NULL),
-(2025,'Mensal',5,  4664.69,      NULL,27.50,   908.74,   235.89, 'Alíquota máxima');
+(2025,'Mensal',5,  4664.69,      NULL,27.50,   908.74,   235.89, 'Alíquota máxima')
+ON CONFLICT DO NOTHING;
 
 -- Tabela Anual IRPF 2025 (declaração ano-base 2024 — IN RFB 2.255/2024 e tabela progressiva anual)
 INSERT INTO ref_irpf_faixas (ano_calendario, periodicidade, faixa, base_calculo_de, base_calculo_ate, aliquota, deducao_parcela, deducao_dependente, observacao) VALUES
@@ -70,7 +72,8 @@ INSERT INTO ref_irpf_faixas (ano_calendario, periodicidade, faixa, base_calculo_
 (2025,'Anual',2,  29142.01,  33919.80, 7.50,   2185.50,   2275.08, NULL),
 (2025,'Anual',3,  33919.81,  45012.60,15.00,   4706.82,   2275.08, NULL),
 (2025,'Anual',4,  45012.61,  55976.16,22.50,   8078.50,   2275.08, NULL),
-(2025,'Anual',5,  55976.17,       NULL,27.50,  10877.34,   2275.08, 'Alíquota máxima');
+(2025,'Anual',5,  55976.17,       NULL,27.50,  10877.34,   2275.08, 'Alíquota máxima')
+ON CONFLICT DO NOTHING;
 
 -- Tabela Mensal IRPF 2024 (ano-base para declaração entregue em 2025)
 INSERT INTO ref_irpf_faixas (ano_calendario, periodicidade, faixa, base_calculo_de, base_calculo_ate, aliquota, deducao_parcela, deducao_dependente, observacao) VALUES
@@ -78,7 +81,8 @@ INSERT INTO ref_irpf_faixas (ano_calendario, periodicidade, faixa, base_calculo_
 (2024,'Mensal',2,  2259.21,  2826.65, 7.50,   169.44,   189.59, NULL),
 (2024,'Mensal',3,  2826.66,  3751.05,15.00,   381.44,   189.59, NULL),
 (2024,'Mensal',4,  3751.06,  4664.68,22.50,   662.77,   189.59, NULL),
-(2024,'Mensal',5,  4664.69,      NULL,27.50,   896.00,   189.59, 'Alíquota máxima');
+(2024,'Mensal',5,  4664.69,      NULL,27.50,   896.00,   189.59, 'Alíquota máxima')
+ON CONFLICT DO NOTHING;
 
 -- Tabela Anual IRPF 2024 (declaração ano-base 2023)
 INSERT INTO ref_irpf_faixas (ano_calendario, periodicidade, faixa, base_calculo_de, base_calculo_ate, aliquota, deducao_parcela, deducao_dependente, observacao) VALUES
@@ -86,7 +90,8 @@ INSERT INTO ref_irpf_faixas (ano_calendario, periodicidade, faixa, base_calculo_
 (2024,'Anual',2,  27110.41,  33919.80, 7.50,   2033.28,   2275.08, NULL),
 (2024,'Anual',3,  33919.81,  45012.60,15.00,   4573.46,   2275.08, NULL),
 (2024,'Anual',4,  45012.61,  55976.16,22.50,   7932.36,   2275.08, NULL),
-(2024,'Anual',5,  55976.17,       NULL,27.50,  10720.36,   2275.08, 'Alíquota máxima');
+(2024,'Anual',5,  55976.17,       NULL,27.50,  10720.36,   2275.08, 'Alíquota máxima')
+ON CONFLICT DO NOTHING;
 
 -- Tabela Mensal IRPF 2023 (histórico)
 INSERT INTO ref_irpf_faixas (ano_calendario, periodicidade, faixa, base_calculo_de, base_calculo_ate, aliquota, deducao_parcela, deducao_dependente, observacao) VALUES
@@ -94,7 +99,8 @@ INSERT INTO ref_irpf_faixas (ano_calendario, periodicidade, faixa, base_calculo_
 (2023,'Mensal',2,  2112.01,  2826.65, 7.50,   158.40,   189.59, NULL),
 (2023,'Mensal',3,  2826.66,  3751.05,15.00,   370.40,   189.59, NULL),
 (2023,'Mensal',4,  3751.06,  4664.68,22.50,   651.73,   189.59, NULL),
-(2023,'Mensal',5,  4664.69,      NULL,27.50,   884.96,   189.59, 'Alíquota máxima');
+(2023,'Mensal',5,  4664.69,      NULL,27.50,   884.96,   189.59, 'Alíquota máxima')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 3. ref_irpf_deducoes
@@ -121,7 +127,8 @@ INSERT INTO ref_irpf_deducoes (ano_calendario, tipo_deducao, valor_limite, perce
 (2025,'Previdência privada (PGBL)',             NULL,         12.00, 'Lei 14.848/2024', 'Limite: 12% da renda bruta tributável anual. Apenas PGBL (não VGBL).'),
 (2025,'Pensão alimentícia judicial',            NULL,          NULL, 'Lei 14.848/2024', 'Sem limite. Obrigatória por decisão judicial ou acordo homologado.'),
 (2025,'Livro-caixa (autônomo)',                 NULL,          NULL, 'Lei 14.848/2024', 'Despesas necessárias à percepção da renda e à manutenção da fonte produtora.'),
-(2025,'Desconto simplificado',                  NULL,         20.00, 'Lei 14.848/2024', '20% da renda tributável, até R$ 16.754,34. Em substituição a todas as deduções legais.');
+(2025,'Desconto simplificado',                  NULL,         20.00, 'Lei 14.848/2024', '20% da renda tributável, até R$ 16.754,34. Em substituição a todas as deduções legais.')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 4. ref_inss_faixas
@@ -170,7 +177,8 @@ INSERT INTO ref_inss_faixas (ano, categoria, faixa, salario_de, salario_ate, ali
 (2025,'Empregado Doméstico',1,   0.00,  1518.00,  7.50, NULL, 'LC 150/2015 + Portaria MPS/MF 26/2025', 'Tabela progressiva igual empregado CLT'),
 (2025,'Empregado Doméstico',2, 1518.01, 2793.88,  9.00, NULL, 'LC 150/2015', NULL),
 (2025,'Empregado Doméstico',3, 2793.89, 4190.83, 12.00, NULL, 'LC 150/2015', NULL),
-(2025,'Empregado Doméstico',4, 4190.84, 7786.02, 14.00, NULL, 'LC 150/2015', 'Teto: R$ 7.786,02');
+(2025,'Empregado Doméstico',4, 4190.84, 7786.02, 14.00, NULL, 'LC 150/2015', 'Teto: R$ 7.786,02')
+ON CONFLICT DO NOTHING;
 
 -- INSS Empregado 2024 (histórico)
 INSERT INTO ref_inss_faixas (ano, categoria, faixa, salario_de, salario_ate, aliquota, teto_contribuicao, base_legal, observacao) VALUES
@@ -178,7 +186,8 @@ INSERT INTO ref_inss_faixas (ano, categoria, faixa, salario_de, salario_ate, ali
 (2024,'Empregado',         2, 1412.01,  2666.68,  9.00, NULL, 'Portaria MPS/MF 20/2024', NULL),
 (2024,'Empregado',         3, 2666.69,  4000.03, 12.00, NULL, 'Portaria MPS/MF 20/2024', NULL),
 (2024,'Empregado',         4, 4000.04,  7786.02, 14.00, NULL, 'Portaria MPS/MF 20/2024', 'Teto R$ 7.786,02 mantido em 2024'),
-(2024,'MEI',               1, 1412.00,  1412.00,  5.00,   70.60, 'LC 123/2006', 'MEI 2024: 5% × R$ 1.412,00 = R$ 70,60 + fixos');
+(2024,'MEI',               1, 1412.00,  1412.00,  5.00,   70.60, 'LC 123/2006', 'MEI 2024: 5% × R$ 1.412,00 = R$ 70,60 + fixos')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 5. ref_inss_tetos
@@ -200,7 +209,8 @@ INSERT INTO ref_inss_tetos (ano, teto_beneficio, teto_contribuicao, salario_mini
 (2023, 7507.49, 7507.49, 1320.00, 'Portaria MPS/MF 914/2023'),
 (2022, 7087.22, 7087.22, 1212.00, 'Portaria PRTM 914/2022'),
 (2021, 6433.57, 6433.57, 1100.00, 'Portaria PRTM 3.659/2021'),
-(2020, 6101.06, 6101.06, 1045.00, 'Portaria MEC 3.659/2020');
+(2020, 6101.06, 6101.06, 1045.00, 'Portaria MEC 3.659/2020')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 6. ref_fgts
@@ -229,7 +239,8 @@ INSERT INTO ref_fgts (ano, categoria, aliquota_mensal, aliquota_rescisao_sem_jus
 (2025,'Menor Aprendiz',             2.00,  0.00, 0.00, 'Art. 15 §7 Lei 8.036/1990','Alíquota reduzida de 2% durante período de aprendizagem.'),
 (2025,'Empregado Rural',            8.00, 40.00, 0.00, 'Lei 8.036/1990',            'Mesmas regras empregado urbano.'),
 (2024,'Empregado CLT',              8.00, 40.00, 0.00, 'Lei 8.036/1990',            'Valores 2024'),
-(2023,'Empregado CLT',              8.00, 40.00, 0.00, 'Lei 8.036/1990',            'Valores 2023');
+(2023,'Empregado CLT',              8.00, 40.00, 0.00, 'Lei 8.036/1990',            'Valores 2023')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 7. ref_inss_contribuicao_empresa
@@ -260,7 +271,8 @@ INSERT INTO ref_inss_contribuicao_empresa (ano, encargo, aliquota, obrigatorio, 
 (2025,'SEBRAE',                              0.60, TRUE,  'Folha de salários', 'Lei 8.029/1990', 'Para EPP e ME.'),
 (2025,'Salário-Educação',                    2.50, TRUE,  'Folha de salários', 'Art. 212 §5 CF', 'Destinado ao FNDE.'),
 (2025,'FGTS (sobre folha)',                  8.00, TRUE,  'Remuneração bruta', 'Lei 8.036/1990', 'Encargo patronal: 8% sobre remuneração total. Depositado mensalmente.'),
-(2025,'Custo total estimado sobre salário', 70.00, FALSE, 'Estimativa global', 'Diversas', 'Estimativa geral de encargos totais sobre a folha de salários, incluindo INSS patronal, RAT, terceiros, FGTS, provisões (13º, férias, FGTS sobre provisões).');
+(2025,'Custo total estimado sobre salário', 70.00, FALSE, 'Estimativa global', 'Diversas', 'Estimativa geral de encargos totais sobre a folha de salários, incluindo INSS patronal, RAT, terceiros, FGTS, provisões (13º, férias, FGTS sobre provisões).')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 8. ref_cbo
@@ -293,7 +305,8 @@ INSERT INTO ref_cbo (codigo, descricao, grande_grupo, nivel) VALUES
 ('6','Trabalhadores agropecuários, florestais, da caça e pesca','6','GrandeGrupo'),
 ('7','Trabalhadores da produção de bens e serviços industriais — Grupo 7','7','GrandeGrupo'),
 ('8','Trabalhadores da produção de bens e serviços industriais — Grupo 8','8','GrandeGrupo'),
-('9','Trabalhadores em serviços de reparação e manutenção','9','GrandeGrupo');
+('9','Trabalhadores em serviços de reparação e manutenção','9','GrandeGrupo')
+ON CONFLICT DO NOTHING;
 
 -- Ocupações mais relevantes para MEIs e PMEs
 INSERT INTO ref_cbo (codigo, descricao, grande_grupo, subgrupo, familia, nivel) VALUES
@@ -371,7 +384,8 @@ INSERT INTO ref_cbo (codigo, descricao, grande_grupo, subgrupo, familia, nivel) 
 ('5171-05','Zelador de edifício','5','51','5171','Ocupacao'),
 -- Segurança
 ('5174-05','Vigilante','5','51','5174','Ocupacao'),
-('5175-05','Porteiro','5','51','5175','Ocupacao');
+('5175-05','Porteiro','5','51','5175','Ocupacao')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 9. ref_contribuicao_sindical
@@ -394,7 +408,8 @@ COMMENT ON TABLE ref_contribuicao_sindical IS 'Contribuição sindical — facul
 INSERT INTO ref_contribuicao_sindical (ano, tipo, base_calculo, percentual, desconto_mensal, obrigatorio, base_legal, observacao) VALUES
 (2025,'Empregado',   'Um dia de salário por ano (desconto em março)', NULL, '1/30 do salário mensal', FALSE, 'Art. 578 CLT + Lei 13.467/2017', 'FACULTATIVA desde novembro/2017. Empregado deve autorizar expressamente o desconto. Sem autorização: não pode ser descontada.'),
 (2025,'Empregador',  'Percentual sobre capital social / folha', 0.08,  NULL, FALSE, 'Art. 580 CLT + Lei 13.467/2017', 'FACULTATIVA. Varia conforme atividade e filiação ao sindicato patronal.'),
-(2025,'Autônomo',    'Percentual sobre rendimento anual', 0.08,  NULL, FALSE, 'Art. 582 CLT + Lei 13.467/2017', 'FACULTATIVA. Profissionais liberais e autônomos.');
+(2025,'Autônomo',    'Percentual sobre rendimento anual', 0.08,  NULL, FALSE, 'Art. 582 CLT + Lei 13.467/2017', 'FACULTATIVA. Profissionais liberais e autônomos.')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- RLS — Leitura pública para autenticados

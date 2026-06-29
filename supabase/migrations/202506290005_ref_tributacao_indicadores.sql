@@ -39,7 +39,8 @@ INSERT INTO ref_lucro_presumido_percentuais (atividade, percentual_irpj, percent
 ('Construção por empreitada de mão de obra (sem material)', 32.00, 32.00, 'Art. 15 §1 III Lei 9.249/1995', 'Apenas mão de obra — sem material.'),
 ('Factoring', 32.00, 32.00, 'Art. 15 §1 III Lei 9.249/1995', NULL),
 ('Agências de publicidade e propaganda', 32.00, 32.00, 'Art. 15 §1 III Lei 9.249/1995', NULL),
-('Bancos e financeiras (Lucro Real obrigatório)', 0.00, 0.00, 'Art. 14 Lei 9.718/1998', 'Instituições financeiras são obrigadas ao Lucro Real.');
+('Bancos e financeiras (Lucro Real obrigatório)', 0.00, 0.00, 'Art. 14 Lei 9.718/1998', 'Instituições financeiras são obrigadas ao Lucro Real.')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 2. ref_aliquotas_irpj_csll
@@ -71,7 +72,8 @@ INSERT INTO ref_aliquotas_irpj_csll (ano, tributo, regime, faixa, base_de, base_
 (2025,'CSLL','Lucro Presumido',1, 0.00, NULL,'Trimestral',  9.00, 0.00, 'Art. 22 Lei 8.212/1991 + Lei 7.689/1988', 'CSLL: 9% sobre base de cálculo presumida ou real. Instituições financeiras: 20%.'),
 (2025,'CSLL','Lucro Real',  1,      0.00,     NULL,'Mensal',     9.00, 0.00, 'Lei 7.689/1988', 'CSLL normal: 9%. Financeiras/seguradoras: 20%.'),
 -- PIS e COFINS — Lucro Presumido (cumulativo)
-(2025,'IRPJ','Lucro Presumido',1, 0.00, NULL,'Trimestral', 15.00, 0.00, 'Lei 9.249/1995', 'LP: alíquota 15% sobre base presumida. Adicional 10% acima de R$ 60k/trimestre');
+(2025,'IRPJ','Lucro Presumido',1, 0.00, NULL,'Trimestral', 15.00, 0.00, 'Lei 9.249/1995', 'LP: alíquota 15% sobre base presumida. Adicional 10% acima de R$ 60k/trimestre')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 3. ref_pis_cofins
@@ -95,7 +97,8 @@ INSERT INTO ref_pis_cofins (ano, regime, tributo, aliquota_geral, aliquota_mono,
 (2025,'Cumulativo',    'PIS',    0.650, NULL, 'Lei 9.715/1998 + Dec. 4.524/2002', 'Lucro Presumido: PIS 0,65% sobre receita bruta. Não permite créditos.'),
 (2025,'Cumulativo',    'COFINS', 3.000, NULL, 'Lei 9.718/1998',                   'Lucro Presumido: COFINS 3,00% sobre receita bruta. Não permite créditos.'),
 (2025,'Não-Cumulativo','PIS',    1.650, NULL, 'Lei 10.637/2002',                  'Lucro Real: PIS 1,65% sobre receita. Permite créditos sobre insumos, ativos, etc.'),
-(2025,'Não-Cumulativo','COFINS', 7.600, NULL, 'Lei 10.833/2003',                  'Lucro Real: COFINS 7,60% sobre receita. Permite créditos.');
+(2025,'Não-Cumulativo','COFINS', 7.600, NULL, 'Lei 10.833/2003',                  'Lucro Real: COFINS 7,60% sobre receita. Permite créditos.')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 4. ref_iss_aliquotas
@@ -169,7 +172,8 @@ INSERT INTO ref_iss_aliquotas (item_lista, descricao_servico, aliquota_minima, a
 ('17.06','Propaganda e publicidade, inclusive promoção de vendas, planejamento de campanhas ou sistemas de publicidade',2.00,5.00,FALSE,'LC 116/2003',NULL),
 ('17.09','Perícias, laudos, exames técnicos e análises técnicas',2.00,5.00,FALSE,'LC 116/2003',NULL),
 ('17.10','Planejamento, organização e administração de feiras, exposições, congressos e congêneres',2.00,5.00,FALSE,'LC 116/2003',NULL),
-('17.11','Organização de festas e recepções; bufê',2.00,5.00,FALSE,'LC 116/2003',NULL),
+('17.11','Organização de festas e recepções
+ON CONFLICT DO NOTHING; bufê',2.00,5.00,FALSE,'LC 116/2003',NULL),
 ('17.13','Distribuição e entrega de encomendas e documentos e remessa de valores',2.00,5.00,FALSE,'LC 116/2003',NULL),
 ('17.14','Cobrança e recebimento por conta de terceiros',2.00,5.00,FALSE,'LC 116/2003',NULL),
 ('17.16','Florestamento, reflorestamento, semeadura, adubação, reparação de solo, plantio, silagem, colheita, corte e descascamento de árvores, silvicultura, exploração florestal e dos serviços congêneres',2.00,5.00,FALSE,'LC 116/2003',NULL),
@@ -245,7 +249,8 @@ INSERT INTO ref_icms_aliquotas_interestaduais (uf_origem, uf_destino, aliquota, 
 ('SP','MG', 4.00,'Res. SF 13/2012','SP → MG — produto importado'),
 -- DIFAL — Emenda Constitucional 87/2015 (consumidor final não contribuinte)
 -- O DIFAL foi reorganizado pela LC 190/2022. Inclui-se nota para referência.
-('SP','SP', 0.00,'Interna SP','Operação interna SP — alíquota interna SP define (geralmente 18% ou 12% conforme produto)');
+('SP','SP', 0.00,'Interna SP','Operação interna SP — alíquota interna SP define (geralmente 18% ou 12% conforme produto)')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 6. ref_icms_aliquotas_internas
@@ -300,7 +305,8 @@ INSERT INTO ref_icms_aliquotas_internas (uf_sigla, produto, aliquota, base_legal
 ('SP','Cigarros e derivados de tabaco',25.00,'RICMS SP',NULL),
 ('SP','Vestuário',18.00,'RICMS SP',NULL),
 ('SP','Medicamentos',12.00,'RICMS SP','Alíquota reduzida para medicamentos essenciais'),
-('TO','Geral',20.00,'RICMS TO Decreto 2.912/2006',NULL);
+('TO','Geral',20.00,'RICMS TO Decreto 2.912/2006',NULL)
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 7. ref_retencoes_fonte
@@ -339,7 +345,8 @@ INSERT INTO ref_retencoes_fonte (ano, tributo, tipo_servico, aliquota, valor_min
 (2025,'PIS','Serviços sujeitos à retenção',0.650,215.05,'PJ obrigada','IN RFB 1.234/2012',NULL),
 -- INSS retido na fonte
 (2025,'INSS','Cessão de mão-de-obra (substituto tributário)',11.000,0.00,'Tomador de serviços','Art. 31 Lei 8.212/1991','Retenção 11% sobre NF de serviços com cessão/locação de mão-de-obra. Empresa cedente desconta 11% da NFS-e.'),
-(2025,'INSS','Construção civil — empreitada de mão-de-obra',11.000,0.00,'Contratante','Art. 31 Lei 8.212/1991','Contratante retém 11% sobre NF do construtor quando fornece apenas mão-de-obra.');
+(2025,'INSS','Construção civil — empreitada de mão-de-obra',11.000,0.00,'Contratante','Art. 31 Lei 8.212/1991','Contratante retém 11% sobre NF do construtor quando fornece apenas mão-de-obra.')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 8. ref_indicadores_economia
@@ -430,7 +437,8 @@ INSERT INTO ref_indicadores_economia (indicador, competencia, valor_mensal, valo
 ('IGPM','2024-12-01',0.9600, 6.54,'FGV'),
 ('IGPM','2025-01-01',0.1400, NULL,'FGV'),
 ('IGPM','2025-02-01',1.0600, NULL,'FGV'),
-('IGPM','2025-03-01',0.2400, NULL,'FGV');
+('IGPM','2025-03-01',0.2400, NULL,'FGV')
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- RLS — Leitura pública para autenticados

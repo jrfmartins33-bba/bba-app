@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS financial_categorias (
   id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id          UUID          REFERENCES companies(id) ON DELETE CASCADE,
 
-  tipo                VARCHAR(10)   NOT NULL CHECK (tipo IN ('Receita','Despesa','Transferência')),
+  tipo                VARCHAR(20)   NOT NULL CHECK (tipo IN ('Receita','Despesa','Transferência')),
   nome                VARCHAR(100)  NOT NULL,
   descricao           TEXT,
   categoria_pai_id    UUID          REFERENCES financial_categorias(id),
@@ -120,7 +120,8 @@ INSERT INTO financial_categorias (tipo, nome, is_sistema, ordem) VALUES
 ('Despesa','Pró-labore',              TRUE, 60),
 ('Despesa','Distribuição de Lucros',  TRUE, 61),
 ('Despesa','Outras Despesas',         TRUE, 99),
-('Transferência','Transferência entre Contas', TRUE, 1);
+('Transferência','Transferência entre Contas', TRUE, 1)
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 3. financial_lancamentos
@@ -159,7 +160,7 @@ CREATE TABLE IF NOT EXISTS financial_lancamentos (
   -- Centro de custo / projeto
   centro_custo        VARCHAR(60),
   projeto             VARCHAR(60),
-  area_bba            VARCHAR(20)   CHECK (area_bba IN ('Financas','TI','Governanca','RH','Multi')),
+  area_bba            VARCHAR(20)   CHECK (area_bba IN ('financeiro','TI','Governanca','RH','Multi')),
 
   -- Referências externas
   nota_fiscal_id      UUID          REFERENCES fiscal_notas_fiscais(id),
@@ -224,9 +225,7 @@ CREATE TABLE IF NOT EXISTS financial_cobrancas (
                       CHECK (status IN (
                         'Pendente','Enviada','Paga','Atrasada',
                         'Cancelada','Estornada','Parcialmente paga')),
-  esta_atrasada       BOOLEAN GENERATED ALWAYS AS (
-                        status IN ('Pendente','Enviada') AND data_vencimento < CURRENT_DATE
-                      ) STORED,
+  esta_atrasada       BOOLEAN NOT NULL DEFAULT FALSE,
 
   nfse_id             UUID          REFERENCES fiscal_notas_fiscais(id),
   lancamento_id       UUID          REFERENCES financial_lancamentos(id),
@@ -290,24 +289,25 @@ CREATE INDEX IF NOT EXISTS idx_task_tpl_area    ON task_templates(area_bba);
 
 -- Templates globais BBA
 INSERT INTO task_templates (titulo, descricao, area_bba, regime_tributario, is_global, recorrente, frequencia, dia_do_mes, prioridade, dias_antes_vencimento) VALUES
-('DAS-MEI — Pagamento mensal', 'Emitir e pagar o DAS do MEI. Vencimento: dia 20.', 'financas','MEI',TRUE,TRUE,'Mensal',15,'high',5),
-('DASN-SIMEI — Declaração anual', 'Declaração anual do MEI. Prazo: 31 de maio.', 'financas','MEI',TRUE,TRUE,'Anual',NULL,'critical',30),
-('PGDAS-D — Apuração Simples', 'Apurar receitas e gerar DAS do Simples Nacional. Vencimento: dia 20.', 'financas','SN',TRUE,TRUE,'Mensal',15,'high',5),
-('DEFIS — Declaração Simples', 'Declaração de Informações Socioeconômicas e Fiscais. Prazo: 31/03.', 'financas','SN',TRUE,TRUE,'Anual',NULL,'critical',30),
-('DCTF — Entrega mensal', 'Declaração de Débitos e Créditos Tributários Federais.', 'financas','LP',TRUE,TRUE,'Mensal',10,'high',5),
-('DCTF — Entrega mensal (LR)', 'Declaração de Débitos e Créditos Tributários Federais — Lucro Real.', 'financas','LR',TRUE,TRUE,'Mensal',10,'high',5),
-('IRPJ/CSLL — Apuração trimestral (LP)', 'Apurar e recolher IRPJ e CSLL do trimestre — Lucro Presumido.', 'financas','LP',TRUE,TRUE,'Trimestral',NULL,'critical',15),
-('PIS/COFINS — Recolhimento mensal', 'Apurar e pagar PIS e COFINS. Vencimento: dia 25.', 'financas','LP',TRUE,TRUE,'Mensal',20,'high',5),
+('DAS-MEI — Pagamento mensal', 'Emitir e pagar o DAS do MEI. Vencimento: dia 20.', 'financeiro','MEI',TRUE,TRUE,'Mensal',15,'high',5),
+('DASN-SIMEI — Declaração anual', 'Declaração anual do MEI. Prazo: 31 de maio.', 'financeiro','MEI',TRUE,TRUE,'Anual',NULL,'critical',30),
+('PGDAS-D — Apuração Simples', 'Apurar receitas e gerar DAS do Simples Nacional. Vencimento: dia 20.', 'financeiro','SN',TRUE,TRUE,'Mensal',15,'high',5),
+('DEFIS — Declaração Simples', 'Declaração de Informações Socioeconômicas e Fiscais. Prazo: 31/03.', 'financeiro','SN',TRUE,TRUE,'Anual',NULL,'critical',30),
+('DCTF — Entrega mensal', 'Declaração de Débitos e Créditos Tributários Federais.', 'financeiro','LP',TRUE,TRUE,'Mensal',10,'high',5),
+('DCTF — Entrega mensal (LR)', 'Declaração de Débitos e Créditos Tributários Federais — Lucro Real.', 'financeiro','LR',TRUE,TRUE,'Mensal',10,'high',5),
+('IRPJ/CSLL — Apuração trimestral (LP)', 'Apurar e recolher IRPJ e CSLL do trimestre — Lucro Presumido.', 'financeiro','LP',TRUE,TRUE,'Trimestral',NULL,'critical',15),
+('PIS/COFINS — Recolhimento mensal', 'Apurar e pagar PIS e COFINS. Vencimento: dia 25.', 'financeiro','LP',TRUE,TRUE,'Mensal',20,'high',5),
 ('Folha de Pagamento — Processamento', 'Processar folha, calcular INSS, IRRF e FGTS dos colaboradores.', 'rh',NULL,TRUE,TRUE,'Mensal',25,'critical',5),
 ('FGTS — Recolhimento', 'Recolher FGTS dos empregados até o dia 7 do mês seguinte.', 'rh',NULL,TRUE,TRUE,'Mensal',1,'critical',6),
 ('eSocial — Fechamento mensal', 'Fechar folha no eSocial e transmitir eventos periódicos.', 'rh',NULL,TRUE,TRUE,'Mensal',5,'high',2),
-('DIRF — Declaração anual', 'Declaração do Imposto sobre a Renda Retido na Fonte. Prazo: 28/02.', 'financas',NULL,TRUE,TRUE,'Anual',NULL,'critical',30),
+('DIRF — Declaração anual', 'Declaração do Imposto sobre a Renda Retido na Fonte. Prazo: 28/02.', 'financeiro',NULL,TRUE,TRUE,'Anual',NULL,'critical',30),
 ('RAIS — Declaração anual', 'Relação Anual de Informações Sociais. Prazo: março/abril.', 'rh',NULL,TRUE,TRUE,'Anual',NULL,'high',30),
 ('Certidão Negativa Federal — Renovação', 'Verificar validade e renovar Certidão Negativa da Receita Federal.', 'governanca',NULL,TRUE,FALSE,NULL,NULL,'medium',7),
 ('Alvará de Funcionamento — Renovação', 'Verificar validade e renovar alvará municipal.', 'governanca',NULL,TRUE,FALSE,NULL,NULL,'medium',30),
-('Balancete mensal — Revisão', 'Revisar balancete do mês com cliente e validar lançamentos.', 'financas',NULL,TRUE,TRUE,'Mensal',20,'medium',5),
+('Balancete mensal — Revisão', 'Revisar balancete do mês com cliente e validar lançamentos.', 'financeiro',NULL,TRUE,TRUE,'Mensal',20,'medium',5),
 ('Backup de dados — Verificação', 'Verificar integridade e funcionamento dos backups de dados do cliente.', 'ti',NULL,TRUE,TRUE,'Mensal',25,'medium',3),
-('Certificado Digital — Validade', 'Verificar validade do certificado digital A1/A3 e alertar para renovação.', 'ti',NULL,TRUE,FALSE,NULL,NULL,'high',30);
+('Certificado Digital — Validade', 'Verificar validade do certificado digital A1/A3 e alertar para renovação.', 'ti',NULL,TRUE,FALSE,NULL,NULL,'high',30)
+ON CONFLICT DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────
 -- 6. task_attachments
