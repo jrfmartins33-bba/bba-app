@@ -3,6 +3,7 @@ export * from "./chat";
 export * from "./client-profile";
 export * from "./contracts";
 export * from "./financial";
+export * from "./trabalhista";
 export * from "./fiscal";
 export * from "./mock-data";
 export * from "./queries";

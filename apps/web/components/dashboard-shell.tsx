@@ -11,6 +11,7 @@ import {
   ReceiptText,
   ShieldCheck,
   UserRoundCheck,
+  Users,
   Wallet
 } from "lucide-react";
 import Image from "next/image";
@@ -26,6 +27,7 @@ const navItems = [
   { href: "/fiscal", label: "Fiscal", icon: ReceiptText },
   { href: "/financeiro", label: "Financeiro", icon: Wallet },
   { href: "/contratos", label: "Contratos", icon: FileSignature },
+  { href: "/trabalhista", label: "Trabalhista", icon: Users },
   { href: "/onboarding", label: "Onboarding", icon: UserRoundCheck },
   { href: "/tarefas", label: "Tarefas", icon: ClipboardList },
   { href: "/chat", label: "Chat", icon: MessageSquareText },
