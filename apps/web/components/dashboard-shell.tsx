@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Building2,
   ClipboardList,
   LayoutDashboard,
   LogOut,
@@ -17,6 +18,7 @@ import { isSupabaseConfigured, useBbaStore } from "@bba/lib";
 
 const navItems = [
   { href: "/dashboard", label: "Painel Executivo", icon: LayoutDashboard },
+  { href: "/cadastro-cliente", label: "Cadastro", icon: Building2 },
   { href: "/onboarding", label: "Onboarding", icon: UserRoundCheck },
   { href: "/tarefas", label: "Tarefas", icon: ClipboardList },
   { href: "/chat", label: "Chat", icon: MessageSquareText },

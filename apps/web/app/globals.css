@@ -1041,6 +1041,123 @@ button {
   margin: 0;
 }
 
+.client-registration {
+  display: grid;
+  gap: 22px;
+}
+
+.client-registration .bba-card {
+  align-content: start;
+}
+
+.completion-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.completion-ring {
+  align-items: center;
+  background:
+    radial-gradient(circle at center, var(--bba-white) 0 58%, transparent 59%),
+    conic-gradient(
+      var(--bba-success) calc(var(--value) * 1%),
+      #eee7da 0
+    );
+  border-radius: 50%;
+  color: var(--bba-navy);
+  display: inline-flex;
+  height: 132px;
+  justify-content: center;
+  justify-self: center;
+  width: 132px;
+}
+
+.completion-ring span {
+  font-size: 1.45rem;
+  font-weight: 800;
+}
+
+.completion-groups {
+  display: grid;
+  gap: 8px;
+}
+
+.completion-groups div {
+  align-items: center;
+  border-bottom: 1px solid var(--bba-line);
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 8px;
+}
+
+.completion-groups span {
+  color: var(--bba-muted);
+  font-size: 0.86rem;
+}
+
+.completion-groups strong {
+  color: var(--bba-navy);
+}
+
+.missing-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.missing-list span {
+  background: #f3f0ea;
+  border-radius: 999px;
+  color: var(--bba-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 6px 9px;
+}
+
+.missing-list .missing-list__done {
+  background: rgba(42, 122, 75, 0.12);
+  color: var(--bba-success);
+}
+
+.toggle-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.check-field {
+  align-items: center;
+  background: #fdfcf8;
+  border: 1px solid var(--bba-line);
+  border-radius: 8px;
+  color: var(--bba-navy);
+  display: flex;
+  font-size: 0.86rem;
+  font-weight: 700;
+  gap: 10px;
+  min-height: 42px;
+  padding: 10px 12px;
+}
+
+.check-field input {
+  accent-color: var(--bba-navy);
+  height: 16px;
+  width: 16px;
+}
+
+.save-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.save-panel__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 @media (max-width: 1080px) {
   .dashboard-shell {
     grid-template-columns: 1fr;
@@ -1117,6 +1234,10 @@ button {
   }
 
   .chat-form {
+    grid-template-columns: 1fr;
+  }
+
+  .toggle-grid {
     grid-template-columns: 1fr;
   }
 
