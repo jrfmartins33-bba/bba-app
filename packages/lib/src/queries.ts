@@ -494,7 +494,14 @@ export const fetchReadState = async (userId: string, channelIds: string[]) => {
     .eq("user_id", userId)
     .in("channel_id", channelIds);
 
-  if (error) throw error;
+  if (error) {
+    console.log(
+      "[BBA Chat Read State] Falha ao carregar estado de leitura; seguindo sem bloqueio.",
+      error
+    );
+    return [];
+  }
+
   return (data ?? []) as ChatReadState[];
 };
 

@@ -13,15 +13,27 @@ import {
 import { BBA } from "@bba/config";
 import { useBbaStore } from "@bba/lib";
 
+const readErrorMessage = (caught: unknown) => {
+  if (caught instanceof Error) {
+    return caught.message;
+  }
+
+  if (caught && typeof caught === "object" && "message" in caught) {
+    const message = (caught as { message?: unknown }).message;
+    return typeof message === "string" ? message : "";
+  }
+
+  return "";
+};
+
 const getLoginErrorMessage = (caught: unknown) => {
-  if (
-    caught instanceof Error &&
-    caught.message.toLowerCase().includes("invalid login credentials")
-  ) {
+  const message = readErrorMessage(caught);
+
+  if (message.toLowerCase().includes("invalid login credentials")) {
     return "Email ou senha invalidos. Contas demo usam a senha Teste123!.";
   }
 
-  return caught instanceof Error ? caught.message : "Nao foi possivel entrar.";
+  return message || "Nao foi possivel entrar.";
 };
 
 export default function LoginScreen() {
