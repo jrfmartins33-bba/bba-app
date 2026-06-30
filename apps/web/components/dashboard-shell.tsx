@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   LogOut,
   MessageSquareText,
+  ReceiptText,
   ShieldCheck,
   UserRoundCheck
 } from "lucide-react";
@@ -19,6 +20,7 @@ import { isSupabaseConfigured, useBbaStore } from "@bba/lib";
 const navItems = [
   { href: "/dashboard", label: "Painel Executivo", icon: LayoutDashboard },
   { href: "/cadastro-cliente", label: "Cadastro", icon: Building2 },
+  { href: "/fiscal", label: "Fiscal", icon: ReceiptText },
   { href: "/onboarding", label: "Onboarding", icon: UserRoundCheck },
   { href: "/tarefas", label: "Tarefas", icon: ClipboardList },
   { href: "/chat", label: "Chat", icon: MessageSquareText },
