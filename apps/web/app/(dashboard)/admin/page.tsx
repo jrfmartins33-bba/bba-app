@@ -2,11 +2,14 @@
 
 import {
   AlertTriangle,
+  ArrowUpRight,
   CheckCircle2,
   ClipboardList,
   MessageSquareText,
+  ShieldAlert,
   UsersRound
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   fetchAdminClients,
@@ -17,7 +20,7 @@ import {
   type TaskStatus,
   useBbaStore
 } from "@bba/lib";
-import { Card, StatusBadge } from "@bba/ui";
+import { Button, Card, StatusBadge } from "@bba/ui";
 
 const statusOrder: TaskStatus[] = ["todo", "in_progress", "done"];
 
@@ -31,6 +34,7 @@ const formatDate = (date?: string | null) =>
     : "Sem prazo";
 
 export default function AdminPage() {
+  const router = useRouter();
   const profile = useBbaStore((state) => state.profile);
   const company = useBbaStore((state) => state.company);
   const projects = useBbaStore((state) => state.projects);
@@ -38,6 +42,9 @@ export default function AdminPage() {
   const channels = useBbaStore((state) => state.channels);
   const messages = useBbaStore((state) => state.messages);
   const onboardingSteps = useBbaStore((state) => state.onboardingSteps);
+  const viewClientAsAdmin = useBbaStore((state) => state.viewClientAsAdmin);
+  const [enteringClientId, setEnteringClientId] = useState<string | null>(null);
+  const [enterError, setEnterError] = useState("");
 
   const openTasks = tasks.filter((task) => task.status !== "done");
   const blockedTasks = tasks.filter(
@@ -136,6 +143,24 @@ export default function AdminPage() {
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .slice(0, 6);
 
+  const handleEnterClient = async (clientId: string) => {
+    setEnterError("");
+    setEnteringClientId(clientId);
+
+    try {
+      await viewClientAsAdmin(clientId);
+      router.push("/dashboard");
+    } catch (caught) {
+      setEnterError(
+        caught instanceof Error
+          ? caught.message
+          : "Nao foi possivel abrir a visao completa deste cliente."
+      );
+    } finally {
+      setEnteringClientId(null);
+    }
+  };
+
   return (
     <>
       <section className="page-header">
@@ -196,6 +221,13 @@ export default function AdminPage() {
         </Card>
       </section>
 
+      {enterError ? (
+        <div className="form-error fiscal-alert" role="alert">
+          <ShieldAlert size={16} />
+          {enterError}
+        </div>
+      ) : null}
+
       <section className="section-grid">
         <Card className="span-12" title="Carteira de clientes">
           <div className="admin-table-wrap">
@@ -209,6 +241,7 @@ export default function AdminPage() {
                   <th>Onboarding</th>
                   <th>Pendencias</th>
                   <th>Status</th>
+                  <th>Acoes</th>
                 </tr>
               </thead>
               <tbody>
@@ -233,6 +266,17 @@ export default function AdminPage() {
                       >
                         {client.health}
                       </StatusBadge>
+                    </td>
+                    <td>
+                      <Button
+                        disabled={enteringClientId === client.id}
+                        icon={<ArrowUpRight size={16} />}
+                        onClick={() => void handleEnterClient(client.id)}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        {enteringClientId === client.id ? "Abrindo..." : "Ver cliente"}
+                      </Button>
                     </td>
                   </tr>
                 ))}

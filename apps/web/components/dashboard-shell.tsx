@@ -3,6 +3,7 @@
 import {
   Building2,
   ClipboardList,
+  Eye,
   LayoutDashboard,
   LogOut,
   MessageSquareText,
@@ -36,8 +37,10 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const company = useBbaStore((state) => state.company);
   const tasks = useBbaStore((state) => state.tasks);
   const messages = useBbaStore((state) => state.messages);
+  const adminViewingCompanyId = useBbaStore((state) => state.adminViewingCompanyId);
   const hydrateSession = useBbaStore((state) => state.hydrateSession);
   const signOut = useBbaStore((state) => state.signOut);
+  const exitClientView = useBbaStore((state) => state.exitClientView);
 
   const openTasks = tasks.filter((task) => task.status !== "done").length;
   const unread = messages.filter(
@@ -47,6 +50,11 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const handleSignOut = () => {
     signOut();
     router.push("/login");
+  };
+
+  const handleExitClientView = () => {
+    exitClientView();
+    router.push("/admin");
   };
 
   const isAdminArea = pathname.startsWith("/admin");
@@ -126,6 +134,18 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="app-main">
+        {adminViewingCompanyId ? (
+          <div className="admin-view-banner" role="status">
+            <span>
+              <Eye size={16} />
+              Modo admin: visualizando <strong>{company.name}</strong>
+            </span>
+            <Button onClick={handleExitClientView} size="sm" variant="ghost">
+              Voltar para Admin BBA
+            </Button>
+          </div>
+        ) : null}
+
         <header className="topbar">
           <div>
             <small>{isAdminArea ? "Equipe BBA" : "Cliente conectado"}</small>

@@ -264,8 +264,34 @@ button {
 
 .app-main {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-width: 0;
+}
+
+.admin-view-banner {
+  align-items: center;
+  background: var(--bba-navy);
+  color: var(--bba-white);
+  display: flex;
+  gap: 16px;
+  grid-row: 1;
+  justify-content: space-between;
+  padding: 10px 28px;
+}
+
+.admin-view-banner span {
+  align-items: center;
+  display: flex;
+  font-size: 0.85rem;
+  gap: 8px;
+}
+
+.admin-view-banner strong {
+  color: var(--bba-gold);
+}
+
+.admin-view-banner .bba-button--ghost {
+  color: var(--bba-white);
 }
 
 .topbar {
@@ -274,6 +300,7 @@ button {
   border-bottom: 1px solid var(--bba-line);
   display: flex;
   gap: 16px;
+  grid-row: 2;
   justify-content: space-between;
   min-height: 72px;
   padding: 14px 28px;
@@ -295,6 +322,7 @@ button {
 .dashboard-content {
   display: grid;
   gap: 22px;
+  grid-row: 3;
   padding: 28px;
 }
 

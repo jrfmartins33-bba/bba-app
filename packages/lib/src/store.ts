@@ -11,6 +11,7 @@ import {
 import {
   areaLabels,
   fetchChannels,
+  fetchCompany,
   fetchMessages,
   fetchReadState,
   fetchOnboardingSteps,
@@ -39,6 +40,16 @@ type Session = {
   role: UserRole;
 };
 
+type AdminHomeSnapshot = {
+  company: Company;
+  projects: Project[];
+  tasks: Task[];
+  channels: ChatChannel[];
+  messages: Message[];
+  onboardingSteps: OnboardingStep[];
+  readState: ChatReadState[];
+};
+
 type BbaStore = {
   session: Session | null;
   profile: Profile;
@@ -49,6 +60,8 @@ type BbaStore = {
   messages: Message[];
   onboardingSteps: OnboardingStep[];
   readState: ChatReadState[];
+  adminViewingCompanyId: string | null;
+  adminHomeSnapshot: AdminHomeSnapshot | null;
   hydrateSession: () => Promise<boolean>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, company: CompanyInput) => Promise<void>;
@@ -59,6 +72,8 @@ type BbaStore = {
   createTask: (task: CreateTaskInput) => void;
   sendMessage: (channelId: string, body: string) => void;
   markChannelAsRead: (channelId: string) => void;
+  viewClientAsAdmin: (companyId: string) => Promise<void>;
+  exitClientView: () => void;
 };
 
 const now = () => new Date().toISOString();
@@ -253,6 +268,8 @@ const loadClientState = async (userId: string) => {
 
 export const useBbaStore = create<BbaStore>((set, get) => ({
   session: null,
+  adminViewingCompanyId: null,
+  adminHomeSnapshot: null,
   ...signedOutState,
 
   hydrateSession: async () => {
@@ -271,6 +288,8 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
         clearAuthCookie();
         set({
           session: null,
+          adminViewingCompanyId: null,
+          adminHomeSnapshot: null,
           ...signedOutState
         });
         return false;
@@ -283,7 +302,9 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
           userId: session.user.id,
           email: session.user.email ?? clientState.profile.email ?? "",
           role: clientState.profile.role
-        }
+        },
+        adminViewingCompanyId: null,
+        adminHomeSnapshot: null
       });
       setAuthCookie();
       return true;
@@ -320,7 +341,9 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
           userId: user.id,
           email: user.email ?? normalizedEmail,
           role: clientState.profile.role
-        }
+        },
+        adminViewingCompanyId: null,
+        adminHomeSnapshot: null
       });
       setAuthCookie();
       return;
@@ -353,7 +376,9 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
             userId: user.id,
             email: user.email ?? normalizedEmail,
             role: clientState.profile.role
-          }
+          },
+          adminViewingCompanyId: null,
+          adminHomeSnapshot: null
         });
         setAuthCookie();
         return;
@@ -419,6 +444,8 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
     clearAuthCookie();
     set({
       session: null,
+      adminViewingCompanyId: null,
+      adminHomeSnapshot: null,
       ...signedOutState
     });
   },
@@ -559,5 +586,72 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
           );
         }
       });
+  },
+
+  viewClientAsAdmin: async (companyId) => {
+    const state = get();
+
+    if (state.profile.role !== "bba_admin" || !companyId) {
+      return;
+    }
+
+    const homeSnapshot: AdminHomeSnapshot = state.adminHomeSnapshot ?? {
+      company: state.company,
+      projects: state.projects,
+      tasks: state.tasks,
+      channels: state.channels,
+      messages: state.messages,
+      onboardingSteps: state.onboardingSteps,
+      readState: state.readState
+    };
+
+    const companyData = (await fetchCompany(companyId)) as Company | null;
+    const activeCompany: Company = companyData ?? {
+      ...emptyCompany,
+      id: companyId
+    };
+
+    const [projects, tasks, channels, onboardingSteps] = await Promise.all([
+      fetchProjects(activeCompany.id),
+      fetchTasks(activeCompany.id),
+      fetchChannels(activeCompany.id),
+      fetchOnboardingSteps(activeCompany.id)
+    ]);
+
+    const typedChannels = channels as ChatChannel[];
+
+    const [messageGroups, readState] = await Promise.all([
+      Promise.all(typedChannels.map((channel) => fetchMessages(channel.id))),
+      fetchReadState(
+        state.session?.userId ?? "",
+        typedChannels.map((channel) => channel.id)
+      )
+    ]);
+
+    set({
+      company: activeCompany,
+      projects: projects as Project[],
+      tasks: tasks as Task[],
+      channels: typedChannels,
+      messages: messageGroups.flat() as Message[],
+      onboardingSteps: onboardingSteps as OnboardingStep[],
+      readState,
+      adminViewingCompanyId: companyId,
+      adminHomeSnapshot: homeSnapshot
+    });
+  },
+
+  exitClientView: () => {
+    const state = get();
+
+    if (!state.adminHomeSnapshot) {
+      return;
+    }
+
+    set({
+      ...state.adminHomeSnapshot,
+      adminViewingCompanyId: null,
+      adminHomeSnapshot: null
+    });
   }
   }));
