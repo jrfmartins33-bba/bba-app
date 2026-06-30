@@ -8,7 +8,8 @@ import {
   MessageSquareText,
   ReceiptText,
   ShieldCheck,
-  UserRoundCheck
+  UserRoundCheck,
+  Wallet
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/dashboard", label: "Painel Executivo", icon: LayoutDashboard },
   { href: "/cadastro-cliente", label: "Cadastro", icon: Building2 },
   { href: "/fiscal", label: "Fiscal", icon: ReceiptText },
+  { href: "/financeiro", label: "Financeiro", icon: Wallet },
   { href: "/onboarding", label: "Onboarding", icon: UserRoundCheck },
   { href: "/tarefas", label: "Tarefas", icon: ClipboardList },
   { href: "/chat", label: "Chat", icon: MessageSquareText },
