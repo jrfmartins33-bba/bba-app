@@ -9,6 +9,7 @@ export default function ChatPage() {
   const profile = useBbaStore((state) => state.profile);
   const channels = useBbaStore((state) => state.channels);
   const messages = useBbaStore((state) => state.messages);
+  const readState = useBbaStore((state) => state.readState);
   const sendMessage = useBbaStore((state) => state.sendMessage);
   const markChannelAsRead = useBbaStore((state) => state.markChannelAsRead);
   const [selectedChannelId, setSelectedChannelId] = useState(channels[0]?.id ?? "");
@@ -55,7 +56,7 @@ export default function ChatPage() {
         <Card title="Areas">
           <div className="channel-list">
             {channels.map((channel) => {
-              const unread = getUnreadMessages(messages, channel.id, profile.id);
+              const unread = getUnreadMessages(messages, channel.id, profile.id, readState);
               return (
                 <button
                   className="channel-button"

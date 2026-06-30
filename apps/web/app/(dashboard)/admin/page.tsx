@@ -7,11 +7,13 @@ import {
   MessageSquareText,
   UsersRound
 } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  fetchAdminClients,
   areaLabels,
   taskStatusLabels,
   taxRegimeLabels,
+  type AdminClientSummary,
   type TaskStatus,
   useBbaStore
 } from "@bba/lib";
@@ -49,47 +51,29 @@ export default function AdminPage() {
     (step) => step.status === "completed"
   ).length;
 
-  const clients = useMemo(
-    () => [
-      {
-        id: company.id,
-        name: company.name,
-        role: profile.role === "bba_admin" ? "Admin" : "Cliente",
-        regime: company.tax_regime
-          ? taxRegimeLabels[company.tax_regime]
-          : "Nao informado",
-        owner: "Fiscal",
-        health: blockedTasks.length ? "Atencao" : "Saudavel",
-        onboarding: Math.round((doneSteps / Math.max(onboardingSteps.length, 1)) * 100),
-        openTasks: openTasks.length,
-        unread: unreadMessages.length
-      },
-      {
-        id: "demo-client-2",
-        name: "Fortaleza Digital Servicos",
-        role: "Cliente",
-        regime: taxRegimeLabels.lucro_presumido,
-        owner: "Financeiro",
-        health: "Saudavel",
-        onboarding: 80,
-        openTasks: 5,
-        unread: 2
-      },
-      {
-        id: "demo-client-3",
-        name: "Norte Comercio Integrado",
-        role: "Cliente",
-        regime: taxRegimeLabels.simples_nacional,
-        owner: "Governanca",
-        health: "Atencao",
-        onboarding: 45,
-        openTasks: 7,
-        unread: 4
-      }
-    ],
+  const [adminClients, setAdminClients] = useState<AdminClientSummary[] | null>(
+    null
+  );
+
+  const currentClient = useMemo<AdminClientSummary>(
+    () => ({
+      id: company.id || "local-client",
+      name: company.name || "Cliente BBA",
+      role: profile.role === "bba_admin" ? "Admin" : "Cliente",
+      regime: company.tax_regime
+        ? taxRegimeLabels[company.tax_regime]
+        : "Nao informado",
+      owner: "Fiscal",
+      health: blockedTasks.length ? "Atencao" : "Saudavel",
+      onboarding: Math.round((doneSteps / Math.max(onboardingSteps.length, 1)) * 100),
+      openTasks: openTasks.length,
+      unread: unreadMessages.length
+    }),
     [
       blockedTasks.length,
-      company,
+      company.id,
+      company.name,
+      company.tax_regime,
       doneSteps,
       onboardingSteps.length,
       openTasks.length,
@@ -97,6 +81,43 @@ export default function AdminPage() {
       unreadMessages.length
     ]
   );
+
+  useEffect(() => {
+    let mounted = true;
+
+    void fetchAdminClients()
+      .then((clients) => {
+        if (mounted) {
+          setAdminClients(clients);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setAdminClients(null);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const clients = useMemo(() => {
+    const source = adminClients ?? [currentClient];
+
+    return source.map((client) =>
+      client.id === company.id
+        ? {
+            ...client,
+            role: currentClient.role,
+            health: currentClient.health,
+            onboarding: currentClient.onboarding,
+            openTasks: currentClient.openTasks,
+            unread: currentClient.unread
+          }
+        : client
+    );
+  }, [adminClients, company.id, currentClient]);
 
   const projectTitleById = new Map(
     projects.map((project) => [project.id, project.name])

@@ -113,3 +113,8 @@ export type CreateTaskInput = {
   tag?: string;
   due_date?: string;
 };
+
+export type ChatReadState = {
+  channel_id: string;
+  last_read_at: string;
+};

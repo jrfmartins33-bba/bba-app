@@ -12,6 +12,7 @@ import {
   areaLabels,
   fetchChannels,
   fetchMessages,
+  fetchReadState,
   fetchOnboardingSteps,
   fetchProjects,
   fetchTasks
@@ -19,6 +20,7 @@ import {
 import { getSupabaseClient, isSupabaseConfigured } from "./supabase";
 import type {
   ChatChannel,
+  ChatReadState,
   Company,
   CompanyInput,
   CreateTaskInput,
@@ -46,6 +48,7 @@ type BbaStore = {
   channels: ChatChannel[];
   messages: Message[];
   onboardingSteps: OnboardingStep[];
+  readState: ChatReadState[];
   hydrateSession: () => Promise<boolean>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, company: CompanyInput) => Promise<void>;
@@ -75,7 +78,8 @@ const demoState = {
   tasks: demoTasks,
   channels: demoChannels,
   messages: demoMessages,
-  onboardingSteps: demoOnboardingSteps
+  onboardingSteps: demoOnboardingSteps,    
+  readState: [] as ChatReadState[]
 };
 
 const emptyProfile: Profile = {
@@ -110,7 +114,8 @@ const signedOutState = isSupabaseConfigured
       tasks: [],
       channels: [],
       messages: [],
-      onboardingSteps: []
+      onboardingSteps: [],
+      readState: []
     }
   : demoState;
 
@@ -222,18 +227,25 @@ const loadClientState = async (userId: string) => {
     fetchOnboardingSteps(activeCompany.id)
   ]);
 
-  const messageGroups = await Promise.all(
-    channels.map((channel) => fetchMessages(channel.id))
-  );
+  const typedChannels = channels as ChatChannel[];
+
+  const [messageGroups, readState] = await Promise.all([
+    Promise.all(typedChannels.map((channel) => fetchMessages(channel.id))),
+    fetchReadState(
+      userId,
+      typedChannels.map((channel) => channel.id)
+    )
+  ]);
 
   return {
     profile: typedProfile,
     company: activeCompany,
     projects: projects as Project[],
     tasks: tasks as Task[],
-    channels: channels as ChatChannel[],
+    channels: typedChannels,
     messages: messageGroups.flat() as Message[],
-    onboardingSteps: onboardingSteps as OnboardingStep[]
+    onboardingSteps: onboardingSteps as OnboardingStep[],
+    readState
   };
 };
 
@@ -494,7 +506,49 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
     }));
   },
 
-  markChannelAsRead: () => {
-    return undefined;
+  markChannelAsRead: (channelId) => {
+    const state = get();
+    const timestamp = now();
+
+    set((current) => {
+      const existing = current.readState.find(
+        (entry) => entry.channel_id === channelId
+      );
+
+      const readState = existing
+        ? current.readState.map((entry) =>
+            entry.channel_id === channelId
+              ? { ...entry, last_read_at: timestamp }
+              : entry
+          )
+        : [...current.readState, { channel_id: channelId, last_read_at: timestamp }];
+
+      return { readState };
+    });
+
+    if (!isSupabaseConfigured || !state.session) {
+      return;
+    }
+
+    const supabase = getSupabaseClient();
+
+    void supabase
+      .from("chat_read_state")
+      .upsert(
+        {
+          user_id: state.session.userId,
+          channel_id: channelId,
+          last_read_at: timestamp
+        },
+        { onConflict: "user_id,channel_id" }
+      )
+      .then(({ error }) => {
+        if (error) {
+          console.log(
+            "[BBA Chat Read State] Falha ao registrar leitura.",
+            error
+          );
+        }
+      });
   }
-}));
+  }));
