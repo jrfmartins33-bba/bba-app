@@ -1,6 +1,7 @@
 export * from "./auth";
 export * from "./chat";
 export * from "./client-profile";
+export * from "./contracts";
 export * from "./financial";
 export * from "./fiscal";
 export * from "./mock-data";
