@@ -7,11 +7,22 @@ import { FormEvent, useState } from "react";
 import { useBbaStore } from "@bba/lib";
 import { Button } from "@bba/ui";
 
+const getLoginErrorMessage = (caught: unknown) => {
+  if (
+    caught instanceof Error &&
+    caught.message.toLowerCase().includes("invalid login credentials")
+  ) {
+    return "Email ou senha invalidos. Contas demo usam a senha Teste123!.";
+  }
+
+  return caught instanceof Error ? caught.message : "Nao foi possivel entrar.";
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const signIn = useBbaStore((state) => state.signIn);
-  const [email, setEmail] = useState("cliente@bbabrazil.com.br");
-  const [password, setPassword] = useState("bba-demo");
+  const [email, setEmail] = useState("carlos@carlosmendes.com.br");
+  const [password, setPassword] = useState("Teste123!");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -25,7 +36,7 @@ export default function LoginPage() {
       router.push("/dashboard");
     } catch (caught) {
       setBusy(false);
-      setError(caught instanceof Error ? caught.message : "Nao foi possivel entrar.");
+      setError(getLoginErrorMessage(caught));
     }
   };
 

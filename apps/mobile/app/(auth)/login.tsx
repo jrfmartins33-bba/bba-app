@@ -13,17 +13,36 @@ import {
 import { BBA } from "@bba/config";
 import { useBbaStore } from "@bba/lib";
 
+const getLoginErrorMessage = (caught: unknown) => {
+  if (
+    caught instanceof Error &&
+    caught.message.toLowerCase().includes("invalid login credentials")
+  ) {
+    return "Email ou senha invalidos. Contas demo usam a senha Teste123!.";
+  }
+
+  return caught instanceof Error ? caught.message : "Nao foi possivel entrar.";
+};
+
 export default function LoginScreen() {
   const signIn = useBbaStore((state) => state.signIn);
-  const [email, setEmail] = useState("cliente@bbabrazil.com.br");
-  const [password, setPassword] = useState("bba-demo");
+  const [email, setEmail] = useState("carlos@carlosmendes.com.br");
+  const [password, setPassword] = useState("Teste123!");
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   const handleLogin = async () => {
     setBusy(true);
-    await signIn(email, password);
-    setBusy(false);
-    router.replace("/dashboard");
+    setError("");
+
+    try {
+      await signIn(email, password);
+      router.replace("/dashboard");
+    } catch (caught) {
+      setError(getLoginErrorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -34,6 +53,7 @@ export default function LoginScreen() {
       <View style={styles.card}>
         <Text style={styles.brand}>BBA App</Text>
         <Text style={styles.title}>Entrar no portal</Text>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
         <TextInput
           autoCapitalize="none"
           keyboardType="email-address"
@@ -82,6 +102,14 @@ const styles = StyleSheet.create({
     color: BBA.navy,
     fontSize: 24,
     fontWeight: "700"
+  },
+  error: {
+    backgroundColor: "#fff1f0",
+    borderColor: "#ffc7c2",
+    borderRadius: 8,
+    borderWidth: 1,
+    color: "#a62920",
+    padding: 10
   },
   input: {
     backgroundColor: "#fdfcf8",

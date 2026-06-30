@@ -6,19 +6,19 @@
   1. Aplicar a migration antes deste seed:
      supabase/migrations/202506280001_bba_app_core_schema.sql
 
-  2. Executar este seed no Supabase SQL Editor
+  2. Executar supabase/seeds/demo_auth_users.sql no Supabase SQL Editor.
 
-  3. Criar os usuários manualmente no Supabase Auth
-     (Authentication > Users > Add User)
-     com os seguintes e-mails e senhas:
+  3. Executar este seed no Supabase SQL Editor.
+
+     Usuarios demo:
 
      admin@bbabrazil.com.br  | senha: BBAadmin2025!
-     carlos@carlosmendes.com.br | senha: Demo2025!
-     vitoria@vitoriamodas.com.br | senha: Demo2025!
-     ricardo@construtorahorizonte.com.br | senha: Demo2025!
+     carlos@carlosmendes.com.br | senha: Teste123!
+     vitoria@vitoriamodas.com.br | senha: Teste123!
+     ricardo@construtorahorizonte.com.br | senha: Teste123!
 
-     IMPORTANTE: ao criar cada usuário no Auth,
-     usar o mesmo UUID definido neste seed:
+     IMPORTANTE: cada usuario Auth precisa usar o mesmo UUID definido
+     neste seed:
      Admin:   673e0c35-5afc-4c54-a82a-0c8e63279b99
      Carlos:  d9e849b1-cd4a-4855-888c-857d8a7a6050
      Vitória: 9ff84319-08bf-4a67-975e-4a229effdf4d
@@ -31,10 +31,9 @@
   dados reais de clientes.
 
   Observação técnica:
-  A tabela public.profiles referencia auth.users(id). Como este seed não
-  insere diretamente em auth.users, a inserção dos perfis usa
-  session_replication_role = replica apenas nesse bloco para permitir que
-  os usuários Auth sejam criados manualmente depois com os mesmos UUIDs.
+  A tabela public.profiles referencia auth.users(id). Execute
+  supabase/seeds/demo_auth_users.sql antes deste seed para garantir que
+  os logins demo existam no Supabase Auth.
 */
 
 BEGIN;

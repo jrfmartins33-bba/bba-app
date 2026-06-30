@@ -49,8 +49,18 @@ pnpm mobile
 
 1. Crie o projeto no Supabase.
 2. Copie `.env.example` para `.env.local` no web ou configure as variaveis no ambiente.
-3. Rode `supabase/migrations/202507010001_initial_schema.sql` no SQL Editor.
-4. Publique as functions em `supabase/functions/notify-client` e `supabase/functions/notify-bba-team`.
+3. Rode as migrations de `supabase/migrations/` no SQL Editor, em ordem cronologica.
+4. Para carregar a demonstracao, rode `supabase/seeds/demo_auth_users.sql` e depois `supabase/seeds/demo_seed_real.sql`.
+5. Publique as functions em `supabase/functions/notify-client` e `supabase/functions/notify-bba-team`.
+
+Logins demo:
+
+```text
+admin@bbabrazil.com.br | BBAadmin2025!
+carlos@carlosmendes.com.br | Teste123!
+vitoria@vitoriamodas.com.br | Teste123!
+ricardo@construtorahorizonte.com.br | Teste123!
+```
 
 Variaveis esperadas:
 

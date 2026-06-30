@@ -63,6 +63,8 @@ type BbaStore = {
 
 const now = () => new Date().toISOString();
 
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
 const createId = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -291,12 +293,17 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
   },
 
   signIn: async (email, password) => {
+    const normalizedEmail = normalizeEmail(email);
+
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
       const {
         data: { user },
         error
-      } = await supabase.auth.signInWithPassword({ email, password });
+      } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password
+      });
 
       if (error) {
         throw error;
@@ -311,7 +318,7 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
         ...clientState,
         session: {
           userId: user.id,
-          email: user.email ?? email,
+          email: user.email ?? normalizedEmail,
           role: clientState.profile.role
         }
       });
@@ -322,7 +329,7 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
     set({
       session: {
         userId: get().profile.id,
-        email,
+        email: normalizedEmail,
         role: "client"
       }
     });
@@ -330,6 +337,8 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
   },
 
   signUp: async (email, _password, companyInput) => {
+    const normalizedEmail = normalizeEmail(email);
+
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
       const {
@@ -342,7 +351,7 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
           ...clientState,
           session: {
             userId: user.id,
-            email: user.email ?? email,
+            email: user.email ?? normalizedEmail,
             role: clientState.profile.role
           }
         });
@@ -357,7 +366,7 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
     const profile: Profile = {
       id: clientId,
       full_name: companyInput.name,
-      email,
+      email: normalizedEmail,
       role: "client",
       company_id: companyId,
       metadata: {},
@@ -391,7 +400,7 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
     };
 
     set({
-      session: { userId: clientId, email, role: "client" },
+      session: { userId: clientId, email: normalizedEmail, role: "client" },
       profile,
       company,
       projects: [project],
