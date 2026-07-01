@@ -1,11 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { isSupabaseConfigured, useBbaStore } from "@bba/lib";
 import { Sidebar } from "@/components/sidebar";
 
 export function BbaDashboardShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const router = useRouter();
   const profile = useBbaStore((state) => state.profile);
   const hydrateSession = useBbaStore((state) => state.hydrateSession);
@@ -18,6 +19,7 @@ export function BbaDashboardShell({ children }: { children: ReactNode }) {
       onboardingSteps.filter((step) => step.status !== "completed").length,
     99
   );
+  const isCockpit = pathname === "/hoje" || pathname.startsWith("/hoje/");
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -53,7 +55,17 @@ export function BbaDashboardShell({ children }: { children: ReactNode }) {
         userName={profile.full_name || profile.email || undefined}
       />
 
-      <main className="bba-main">{children}</main>
+      <main className="bba-main">
+        <div
+          className={
+            isCockpit
+              ? "bba-main__content bba-main__content--cockpit"
+              : "bba-main__content bba-main__content--standard"
+          }
+        >
+          {children}
+        </div>
+      </main>
     </div>
   );
 }

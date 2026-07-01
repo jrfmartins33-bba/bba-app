@@ -460,6 +460,122 @@ button {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background:
+    radial-gradient(circle at top right, rgba(185, 149, 79, 0.14), transparent 34rem),
+    linear-gradient(180deg, #fbfaf6 0%, #f2eee6 100%);
+  color: #0c1f3f;
+}
+
+.bba-main__content {
+  flex: 1;
+  min-height: 100vh;
+  min-width: 0;
+}
+
+.bba-main__content--cockpit {
+  background: var(--app-bg);
+  color: var(--text-primary);
+}
+
+.bba-main__content--standard {
+  align-content: start;
+  display: grid;
+  gap: 22px;
+  margin: 0 auto;
+  max-width: 1680px;
+  padding: 32px;
+  width: 100%;
+}
+
+.bba-main__content--standard .page-header h1 {
+  color: #071a38;
+  text-shadow: none;
+}
+
+.bba-main__content--standard .page-header p,
+.bba-main__content--standard .metric span,
+.bba-main__content--standard .completion-groups span,
+.bba-main__content--standard .auth-form__footer {
+  color: #586170;
+}
+
+.bba-main__content--standard .bba-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.94)),
+    #ffffff;
+  border: 1px solid rgba(12, 31, 63, 0.12);
+  box-shadow:
+    0 18px 46px rgba(12, 31, 63, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.85) inset;
+  backdrop-filter: none;
+}
+
+.bba-main__content--standard .bba-card:hover {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(255, 253, 248, 0.97)),
+    #ffffff;
+  border-color: rgba(185, 149, 79, 0.28);
+  box-shadow:
+    0 22px 54px rgba(12, 31, 63, 0.1),
+    0 0 0 1px rgba(185, 149, 79, 0.08) inset;
+}
+
+.bba-main__content--standard .bba-card__header h2,
+.bba-main__content--standard .field label,
+.bba-main__content--standard .metric strong,
+.bba-main__content--standard .completion-groups strong,
+.bba-main__content--standard .check-field {
+  color: #071a38;
+}
+
+.bba-main__content--standard .field input,
+.bba-main__content--standard .field select,
+.bba-main__content--standard .field textarea,
+.bba-main__content--standard .control-input {
+  background: #fffefa;
+  border-color: rgba(12, 31, 63, 0.16);
+  color: #1f2937;
+}
+
+.bba-main__content--standard .field input::placeholder,
+.bba-main__content--standard .field textarea::placeholder,
+.bba-main__content--standard .control-input::placeholder {
+  color: #87909d;
+}
+
+.bba-main__content--standard .field input:focus,
+.bba-main__content--standard .field select:focus,
+.bba-main__content--standard .field textarea:focus,
+.bba-main__content--standard .control-input:focus {
+  border-color: #b9954f;
+  box-shadow: 0 0 0 3px rgba(185, 149, 79, 0.16);
+}
+
+.bba-main__content--standard .metric__icon,
+.bba-main__content--standard .check-field {
+  background: #f1eadc;
+  border-color: rgba(185, 149, 79, 0.24);
+}
+
+.bba-main__content--standard .status-badge,
+.bba-main__content--standard .missing-list span {
+  box-shadow: 0 1px 0 rgba(12, 31, 63, 0.06);
+}
+
+.bba-main__content--standard .missing-list span {
+  background: #f1eadc;
+  color: #526071;
+}
+
+.bba-main__content--standard .missing-list .missing-list__done {
+  background: rgba(42, 122, 75, 0.12);
+  color: #2a7a4b;
+}
+
+.bba-main__content--standard .form-error {
+  background: rgba(192, 57, 43, 0.08);
+  border-color: rgba(192, 57, 43, 0.24);
+  color: #b42318;
 }
 
 .bba-page {
@@ -472,7 +588,7 @@ button {
    COMPONENTES — CARDS
 ══════════════════════════════════════════ */
 
-.bba-card {
+.bba-page .bba-card {
   background: var(--app-card);
   border: 1px solid var(--app-border);
   border-radius: 8px;
@@ -483,20 +599,20 @@ button {
     box-shadow var(--medium) ease;
 }
 
-.bba-card:hover {
+.bba-page .bba-card:hover {
   border-color: rgba(185, 149, 79, 0.35);
   background: var(--app-card-hover);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
 }
 
 /* Card com status colorido no topo */
-.bba-card--green  { border-top: 2px solid var(--status-green); }
-.bba-card--amber  { border-top: 2px solid var(--status-amber); }
-.bba-card--red    { border-top: 2px solid var(--status-red); }
-.bba-card--gold   { border-top: 2px solid var(--bba-gold); }
+.bba-page .bba-card--green  { border-top: 2px solid var(--status-green); }
+.bba-page .bba-card--amber  { border-top: 2px solid var(--status-amber); }
+.bba-page .bba-card--red    { border-top: 2px solid var(--status-red); }
+.bba-page .bba-card--gold   { border-top: 2px solid var(--bba-gold); }
 
 /* Card de destaque (ação do dia) */
-.bba-card--highlight {
+.bba-page .bba-card--highlight {
   background: linear-gradient(135deg,
     rgba(18, 49, 95, 0.85),
     rgba(12, 31, 63, 0.9)
@@ -814,6 +930,10 @@ button {
 
   .bba-main {
     margin-left: 0;
+  }
+
+  .bba-main__content--standard {
+    padding: 20px 16px;
   }
 
   .bba-page {
