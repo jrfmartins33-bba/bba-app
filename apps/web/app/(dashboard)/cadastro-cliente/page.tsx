@@ -250,8 +250,8 @@ export default function CadastroClientePage() {
         </Card>
       ) : null}
 
-      <section className="section-grid">
-        <Card className="span-3">
+      <section className="registration-metrics">
+        <Card>
           <div className="metric">
             <span className="metric__icon">
               <ClipboardCheck size={20} />
@@ -263,7 +263,7 @@ export default function CadastroClientePage() {
           </div>
         </Card>
 
-        <Card className="span-3">
+        <Card>
           <div className="metric">
             <span className="metric__icon">
               <Building2 size={20} />
@@ -275,7 +275,7 @@ export default function CadastroClientePage() {
           </div>
         </Card>
 
-        <Card className="span-3">
+        <Card>
           <div className="metric">
             <span className="metric__icon">
               <ShieldCheck size={20} />
@@ -287,7 +287,7 @@ export default function CadastroClientePage() {
           </div>
         </Card>
 
-        <Card className="span-3">
+        <Card>
           <div className="metric">
             <span className="metric__icon">
               <Sparkles size={20} />

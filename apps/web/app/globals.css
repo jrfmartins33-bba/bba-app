@@ -485,6 +485,7 @@ button {
   align-items: center;
   display: flex;
   gap: 14px;
+  min-width: 0;
 }
 
 .metric__icon {
@@ -493,9 +494,14 @@ button {
   border-radius: 8px;
   color: var(--bba-navy);
   display: inline-flex;
+  flex: 0 0 42px;
   height: 42px;
   justify-content: center;
   width: 42px;
+}
+
+.metric > div {
+  min-width: 0;
 }
 
 .metric strong {
@@ -1090,6 +1096,12 @@ button {
 .client-registration {
   display: grid;
   gap: 22px;
+}
+
+.registration-metrics {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .client-registration .bba-card {
