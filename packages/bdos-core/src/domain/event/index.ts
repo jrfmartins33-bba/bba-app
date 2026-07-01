@@ -15,3 +15,11 @@ export type {
 } from "./event.types";
 
 export type { Event } from "./event";
+
+export type {
+  EventValidationError,
+  EventValidationInput,
+  EventValidationResult,
+} from "./event-validation";
+
+export { validateEvent } from "./event-validation";
