@@ -45,7 +45,7 @@ export default function LoginPage() {
 
     try {
       await signIn(email, password);
-      router.push("/dashboard");
+      router.push("/cadastro-cliente");
     } catch (caught) {
       setBusy(false);
       setError(getLoginErrorMessage(caught));

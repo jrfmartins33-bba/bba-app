@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/auth-helpers-nextjs'
+import { useBbaStore } from '@bba/lib'
 import {
   Home,
   Building2,
@@ -79,10 +79,7 @@ const NAV_MOTOR = [
 export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-  )
+  const signOut = useBbaStore((state) => state.signOut)
   const [motorOpen, setMotorOpen] = useState(false)
 
   const isActive = (href: string) => {
@@ -90,8 +87,8 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
     return pathname.startsWith(href)
   }
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
+  const handleLogout = () => {
+    signOut()
     router.push('/login')
   }
 

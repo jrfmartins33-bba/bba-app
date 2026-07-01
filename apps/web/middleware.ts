@@ -1,6 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED = ["/dashboard", "/tarefas", "/chat", "/onboarding", "/admin"];
+const PROTECTED = [
+  "/dashboard",
+  "/hoje",
+  "/cadastro-cliente",
+  "/fiscal",
+  "/financeiro",
+  "/contratos",
+  "/societario",
+  "/trabalhista",
+  "/tarefas",
+  "/chat",
+  "/onboarding",
+  "/admin"
+];
 const AUTH_ONLY = ["/login", "/cadastro"];
 
 export function middleware(request: NextRequest) {
