@@ -195,6 +195,19 @@ const buildAdminWorkspace = (profile: Profile): Company => ({
   updated_at: profile.updated_at
 });
 
+const loadOptional = async <T>(
+  label: string,
+  loader: () => Promise<T>,
+  fallback: T
+) => {
+  try {
+    return await loader();
+  } catch (error) {
+    console.log(`[BBA Auth] Falha ao carregar ${label}; seguindo.`, error);
+    return fallback;
+  }
+};
+
 const loadClientState = async (userId: string) => {
   const supabase = getSupabaseClient();
   const { data: profile, error: profileError } = await supabase
@@ -238,16 +251,24 @@ const loadClientState = async (userId: string) => {
   const activeCompany = company ?? buildAdminWorkspace(typedProfile);
 
   const [projects, tasks, channels, onboardingSteps] = await Promise.all([
-    fetchProjects(activeCompany.id),
-    fetchTasks(activeCompany.id),
-    fetchChannels(activeCompany.id),
-    fetchOnboardingSteps(activeCompany.id)
+    loadOptional("projetos", () => fetchProjects(activeCompany.id), []),
+    loadOptional("tarefas", () => fetchTasks(activeCompany.id), []),
+    loadOptional("canais do chat", () => fetchChannels(activeCompany.id), []),
+    loadOptional(
+      "onboarding",
+      () => fetchOnboardingSteps(activeCompany.id),
+      []
+    )
   ]);
 
   const typedChannels = channels as ChatChannel[];
 
   const [messageGroups, readState] = await Promise.all([
-    Promise.all(typedChannels.map((channel) => fetchMessages(channel.id))),
+    Promise.all(
+      typedChannels.map((channel) =>
+        loadOptional("mensagens do chat", () => fetchMessages(channel.id), [])
+      )
+    ),
     fetchReadState(
       userId,
       typedChannels.map((channel) => channel.id)
