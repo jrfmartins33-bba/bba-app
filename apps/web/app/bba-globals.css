@@ -460,10 +460,8 @@ button {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(circle at top right, rgba(185, 149, 79, 0.14), transparent 34rem),
-    linear-gradient(180deg, #fbfaf6 0%, #f2eee6 100%);
-  color: #0c1f3f;
+  background: var(--app-bg);
+  color: var(--text-primary);
 }
 
 .bba-main__content {
@@ -485,62 +483,88 @@ button {
   max-width: 1680px;
   padding: 32px;
   width: 100%;
+  background:
+    radial-gradient(circle at 88% 6%, rgba(185, 149, 79, 0.18), transparent 31rem),
+    radial-gradient(circle at 18% 16%, rgba(18, 49, 95, 0.55), transparent 28rem),
+    linear-gradient(135deg, #070d1a 0%, #0c1f3f 48%, #07101f 100%);
+  color: #f8f6f1;
 }
 
 .bba-main__content--standard .page-header h1 {
-  color: #071a38;
-  text-shadow: none;
+  color: #ffffff;
+  text-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
 .bba-main__content--standard .page-header p,
 .bba-main__content--standard .metric span,
 .bba-main__content--standard .completion-groups span,
-.bba-main__content--standard .auth-form__footer {
-  color: #586170;
+.bba-main__content--standard .auth-form__footer,
+.bba-main__content--standard .project-row p,
+.bba-main__content--standard .timeline-row p,
+.bba-main__content--standard .task-card p,
+.bba-main__content--standard .task-card__topline,
+.bba-main__content--standard .task-card__meta,
+.bba-main__content--standard .fiscal-row p,
+.bba-main__content--standard .calendar-row span,
+.bba-main__content--standard .onboarding-progress__summary span,
+.bba-main__content--standard .onboarding-step p,
+.bba-main__content--standard .admin-queue-row span,
+.bba-main__content--standard .admin-message-row span,
+.bba-main__content--standard .admin-row-actions time,
+.bba-main__content--standard .empty-state {
+  color: rgba(248, 246, 241, 0.68);
 }
 
 .bba-main__content--standard .bba-card {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.94)),
-    #ffffff;
-  border: 1px solid rgba(12, 31, 63, 0.12);
+    linear-gradient(180deg, rgba(18, 49, 95, 0.88), rgba(7, 13, 26, 0.92)),
+    #0c1f3f;
+  border: 1px solid rgba(185, 149, 79, 0.22);
   box-shadow:
-    0 18px 46px rgba(12, 31, 63, 0.08),
-    0 1px 0 rgba(255, 255, 255, 0.85) inset;
-  backdrop-filter: none;
+    0 22px 58px rgba(0, 0, 0, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  backdrop-filter: blur(14px);
 }
 
 .bba-main__content--standard .bba-card:hover {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(255, 253, 248, 0.97)),
-    #ffffff;
-  border-color: rgba(185, 149, 79, 0.28);
+    linear-gradient(180deg, rgba(18, 49, 95, 0.96), rgba(10, 21, 42, 0.96)),
+    #102a52;
+  border-color: rgba(185, 149, 79, 0.42);
   box-shadow:
-    0 22px 54px rgba(12, 31, 63, 0.1),
-    0 0 0 1px rgba(185, 149, 79, 0.08) inset;
+    0 26px 64px rgba(0, 0, 0, 0.34),
+    0 0 0 1px rgba(185, 149, 79, 0.12) inset;
 }
 
 .bba-main__content--standard .bba-card__header h2,
 .bba-main__content--standard .field label,
 .bba-main__content--standard .metric strong,
 .bba-main__content--standard .completion-groups strong,
+.bba-main__content--standard .project-row h3,
+.bba-main__content--standard .timeline-row h3,
+.bba-main__content--standard .task-card h3,
+.bba-main__content--standard .fiscal-row h3,
+.bba-main__content--standard .calendar-row strong,
+.bba-main__content--standard .onboarding-progress__summary strong,
+.bba-main__content--standard .onboarding-step--in_progress p,
+.bba-main__content--standard .admin-table td strong,
 .bba-main__content--standard .check-field {
-  color: #071a38;
+  color: #ffffff;
 }
 
 .bba-main__content--standard .field input,
 .bba-main__content--standard .field select,
 .bba-main__content--standard .field textarea,
 .bba-main__content--standard .control-input {
-  background: #fffefa;
-  border-color: rgba(12, 31, 63, 0.16);
-  color: #1f2937;
+  background: rgba(255, 253, 248, 0.96);
+  border-color: rgba(227, 210, 173, 0.4);
+  color: #071a38;
 }
 
 .bba-main__content--standard .field input::placeholder,
 .bba-main__content--standard .field textarea::placeholder,
 .bba-main__content--standard .control-input::placeholder {
-  color: #87909d;
+  color: #6f7785;
 }
 
 .bba-main__content--standard .field input:focus,
@@ -548,34 +572,138 @@ button {
 .bba-main__content--standard .field textarea:focus,
 .bba-main__content--standard .control-input:focus {
   border-color: #b9954f;
-  box-shadow: 0 0 0 3px rgba(185, 149, 79, 0.16);
+  box-shadow:
+    0 0 0 3px rgba(185, 149, 79, 0.22),
+    0 12px 28px rgba(0, 0, 0, 0.18);
 }
 
-.bba-main__content--standard .metric__icon,
-.bba-main__content--standard .check-field {
-  background: #f1eadc;
+.bba-main__content--standard .metric__icon {
+  background: rgba(185, 149, 79, 0.18);
   border-color: rgba(185, 149, 79, 0.24);
+  color: #e3d2ad;
+}
+
+.bba-main__content--standard .check-field {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(185, 149, 79, 0.25);
+}
+
+.bba-main__content--standard .project-row,
+.bba-main__content--standard .timeline-row,
+.bba-main__content--standard .task-card,
+.bba-main__content--standard .fiscal-row,
+.bba-main__content--standard .calendar-row,
+.bba-main__content--standard .empty-state {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(185, 149, 79, 0.18);
+}
+
+.bba-main__content--standard .admin-table th,
+.bba-main__content--standard .admin-table td {
+  border-color: rgba(185, 149, 79, 0.16);
+}
+
+.bba-main__content--standard .admin-table th {
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(248, 246, 241, 0.72);
+}
+
+.bba-main__content--standard .completion-groups div {
+  border-bottom-color: rgba(227, 210, 173, 0.24);
+}
+
+.bba-main__content--standard .completion-ring {
+  background:
+    radial-gradient(circle at center, #0c1f3f 0 58%, transparent 59%),
+    conic-gradient(
+      var(--bba-success) calc(var(--value) * 1%),
+      rgba(227, 210, 173, 0.22) 0
+    );
+  color: #ffffff;
+  box-shadow:
+    0 0 0 1px rgba(185, 149, 79, 0.18),
+    0 18px 36px rgba(0, 0, 0, 0.24);
 }
 
 .bba-main__content--standard .status-badge,
 .bba-main__content--standard .missing-list span {
-  box-shadow: 0 1px 0 rgba(12, 31, 63, 0.06);
+  border: 1px solid rgba(185, 149, 79, 0.22);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
+.bba-main__content--standard .status-badge--todo,
+.bba-main__content--standard .status-badge--pending {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(248, 246, 241, 0.7);
+}
+
+.bba-main__content--standard .status-badge--in_progress,
+.bba-main__content--standard .status-badge--active {
+  background: rgba(185, 149, 79, 0.2);
+  color: #f4dfaa;
+}
+
+.bba-main__content--standard .status-badge--done,
+.bba-main__content--standard .status-badge--completed {
+  background: rgba(34, 197, 94, 0.16);
+  color: #9de9b8;
+  border-color: rgba(34, 197, 94, 0.24);
+}
+
+.bba-main__content--standard .status-badge--paused,
+.bba-main__content--standard .status-badge--cancelled {
+  background: rgba(239, 68, 68, 0.14);
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.24);
+}
+
+.bba-main__content--standard .fiscal-tags span,
+.bba-main__content--standard .task-card__meta span,
 .bba-main__content--standard .missing-list span {
-  background: #f1eadc;
-  color: #526071;
+  background: rgba(185, 149, 79, 0.16);
+  color: #eadbbd;
 }
 
 .bba-main__content--standard .missing-list .missing-list__done {
-  background: rgba(42, 122, 75, 0.12);
-  color: #2a7a4b;
+  background: rgba(34, 197, 94, 0.16);
+  color: #9de9b8;
+  border-color: rgba(34, 197, 94, 0.24);
+}
+
+.bba-main__content--standard .bba-button--primary {
+  background: linear-gradient(135deg, #b9954f, #e3d2ad);
+  color: #071a38;
+  box-shadow: 0 12px 28px rgba(185, 149, 79, 0.22);
+}
+
+.bba-main__content--standard .bba-button--secondary {
+  background: rgba(185, 149, 79, 0.18);
+  border-color: rgba(185, 149, 79, 0.32);
+  color: #f4dfaa;
+}
+
+.bba-main__content--standard .bba-button--ghost {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(227, 210, 173, 0.24);
+  color: #f8f6f1;
+}
+
+.bba-main__content--standard .bba-button--danger {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.26);
+  color: #fecaca;
 }
 
 .bba-main__content--standard .form-error {
-  background: rgba(192, 57, 43, 0.08);
-  border-color: rgba(192, 57, 43, 0.24);
-  color: #b42318;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fecaca;
+}
+
+.bba-main__content--standard .form-success {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(34, 197, 94, 0.28);
+  color: #bbf7d0;
 }
 
 .bba-page {
