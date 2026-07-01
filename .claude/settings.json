@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Vercel__list_projects",
+      "mcp__claude_ai_Vercel__list_deployments",
+      "Bash(pnpm --filter @bba/lib typecheck)",
+      "Bash(pnpm --filter web typecheck)",
+      "Bash(pnpm --filter web build)",
+      "mcp__claude_ai_Vercel__get_deployment"
+    ]
+  }
+}

@@ -1,0 +1,829 @@
+/*
+  BBA APP — Global Dark Theme
+  Identidade: Navy #0c1f3f · Gold #b9954f
+  Aplicar via: import './bba-globals.css' no layout.tsx raiz
+*/
+
+@font-face {
+  font-family: "Henderson BCG Sans";
+  src: url("/fonts/BCGHenSansRegular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Henderson BCG Sans";
+  src: url("/fonts/BCGHenSansLight.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Henderson BCG Sans";
+  src: url("/fonts/BCGHenSansBold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ── Paleta BBA ── */
+  --bba-navy:        #0c1f3f;
+  --bba-navy-2:      #12315f;
+  --bba-navy-deep:   #070d1a;
+  --bba-gold:        #b9954f;
+  --bba-gold-soft:   #e3d2ad;
+  --bba-gold-dim:    rgba(185, 149, 79, 0.2);
+  --bba-gold-glow:   rgba(185, 149, 79, 0.35);
+  --bba-white:       #ffffff;
+  --bba-paper:       #f8f6f1;
+
+  /* ── App dark surfaces ── */
+  --app-bg:          #070d1a;
+  --app-sidebar:     #0c1f3f;
+  --app-card:        rgba(12, 31, 63, 0.65);
+  --app-card-hover:  rgba(18, 49, 95, 0.75);
+  --app-border:      rgba(185, 149, 79, 0.18);
+  --app-divider:     rgba(255, 255, 255, 0.07);
+
+  /* ── Texto ── */
+  --text-primary:    #ffffff;
+  --text-secondary:  rgba(255, 255, 255, 0.65);
+  --text-muted:      rgba(255, 255, 255, 0.38);
+  --text-gold:       #e3d2ad;
+
+  /* ── Status ── */
+  --status-green:    #22c55e;
+  --status-green-bg: rgba(34, 197, 94, 0.12);
+  --status-green-glow: rgba(34, 197, 94, 0.28);
+  --status-amber:    #f59e0b;
+  --status-amber-bg: rgba(245, 158, 11, 0.12);
+  --status-amber-glow: rgba(245, 158, 11, 0.28);
+  --status-red:      #ef4444;
+  --status-red-bg:   rgba(239, 68, 68, 0.12);
+  --status-red-glow: rgba(239, 68, 68, 0.28);
+  --status-blue:     #60a5fa;
+  --status-blue-bg:  rgba(96, 165, 250, 0.12);
+
+  /* ── Tipografia ── */
+  --font-sans: "Henderson BCG Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  /* ── Motion ── */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --fast: 0.2s;
+  --medium: 0.35s;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--app-bg);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+/* ══════════════════════════════════════════
+   LAYOUT PRINCIPAL
+══════════════════════════════════════════ */
+
+.bba-layout {
+  display: flex;
+  min-height: 100vh;
+  background: var(--app-bg);
+  /* grade sutil de fundo */
+  background-image:
+    linear-gradient(rgba(185, 149, 79, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(185, 149, 79, 0.025) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+/* ══════════════════════════════════════════
+   SIDEBAR
+══════════════════════════════════════════ */
+
+.bba-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 252px;
+  display: flex;
+  flex-direction: column;
+  background: var(--app-sidebar);
+  border-right: 1px solid var(--app-border);
+  z-index: 40;
+  overflow: hidden;
+}
+
+/* Linha dourada decorativa no topo da sidebar */
+.bba-sidebar::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent,
+    var(--bba-gold) 30%,
+    var(--bba-gold-soft) 50%,
+    var(--bba-gold) 70%,
+    transparent
+  );
+}
+
+/* Grade interna da sidebar */
+.bba-sidebar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* ── Logo area ── */
+.bba-sidebar__brand {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 20px 18px;
+  border-bottom: 1px solid var(--app-divider);
+}
+
+.bba-sidebar__brand-emblem {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--bba-gold-dim);
+  background: rgba(185, 149, 79, 0.1);
+  flex-shrink: 0;
+}
+
+.bba-sidebar__brand-emblem svg {
+  width: 18px;
+  height: 18px;
+  stroke: var(--bba-gold);
+  stroke-width: 1.5;
+  fill: none;
+}
+
+.bba-sidebar__brand-text {
+  display: grid;
+  gap: 1px;
+}
+
+.bba-sidebar__brand-name {
+  color: var(--bba-white);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.bba-sidebar__brand-role {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+/* ── Navegação principal ── */
+.bba-sidebar__nav {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 0;
+  scrollbar-width: none;
+}
+
+.bba-sidebar__nav::-webkit-scrollbar {
+  display: none;
+}
+
+.bba-nav-section {
+  padding: 0 10px;
+  margin-bottom: 4px;
+}
+
+.bba-nav-section-label {
+  display: block;
+  padding: 12px 10px 6px;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.bba-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  position: relative;
+  transition:
+    color var(--fast) ease,
+    background var(--fast) ease;
+  text-align: left;
+}
+
+.bba-nav-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity var(--fast) ease;
+  stroke-width: 1.6;
+}
+
+.bba-nav-item:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.bba-nav-item:hover svg {
+  opacity: 1;
+}
+
+/* Estado ativo */
+.bba-nav-item--active {
+  color: var(--bba-gold-soft) !important;
+  background: rgba(185, 149, 79, 0.1) !important;
+  font-weight: 600;
+}
+
+.bba-nav-item--active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: var(--bba-gold);
+  border-radius: 0 2px 2px 0;
+  box-shadow: 0 0 12px var(--bba-gold-glow);
+}
+
+.bba-nav-item--active svg {
+  opacity: 1;
+  stroke: var(--bba-gold-soft);
+}
+
+/* Badge de alerta */
+.bba-nav-badge {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--status-amber);
+  color: #000;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 10px;
+  box-shadow: 0 0 10px var(--status-amber-glow);
+}
+
+/* ── Divisor ── */
+.bba-sidebar__divider {
+  position: relative;
+  z-index: 1;
+  height: 1px;
+  margin: 6px 20px;
+  background: var(--app-divider);
+}
+
+/* ── Seção colapsável (Operacional/Motor) ── */
+.bba-nav-collapsible-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 20px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: color var(--fast) ease;
+}
+
+.bba-nav-collapsible-trigger:hover {
+  color: var(--text-secondary);
+}
+
+.bba-nav-collapsible-trigger svg {
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+  transition: transform var(--medium) var(--ease);
+}
+
+.bba-nav-collapsible-trigger--open svg {
+  transform: rotate(180deg);
+}
+
+.bba-nav-collapsible-content {
+  overflow: hidden;
+  transition: max-height var(--medium) var(--ease),
+              opacity var(--medium) ease;
+}
+
+.bba-nav-collapsible-content--closed {
+  max-height: 0;
+  opacity: 0;
+}
+
+.bba-nav-collapsible-content--open {
+  max-height: 400px;
+  opacity: 1;
+}
+
+/* ── Área do usuário (bottom) ── */
+.bba-sidebar__user {
+  position: relative;
+  z-index: 1;
+  padding: 14px 16px;
+  border-top: 1px solid var(--app-divider);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bba-sidebar__avatar {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  background: rgba(185, 149, 79, 0.15);
+  border: 1px solid var(--bba-gold-dim);
+  border-radius: 50%;
+  color: var(--bba-gold-soft);
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.bba-sidebar__user-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.bba-sidebar__user-name {
+  display: block;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bba-sidebar__user-email {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bba-sidebar__logout {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--text-muted);
+  border-radius: 4px;
+  transition: color var(--fast) ease, background var(--fast) ease;
+  flex-shrink: 0;
+}
+
+.bba-sidebar__logout:hover {
+  color: var(--status-red);
+  background: var(--status-red-bg);
+}
+
+.bba-sidebar__logout svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ══════════════════════════════════════════
+   CONTEÚDO PRINCIPAL
+══════════════════════════════════════════ */
+
+.bba-main {
+  margin-left: 252px;
+  flex: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.bba-page {
+  flex: 1;
+  padding: 32px;
+  max-width: 1280px;
+}
+
+/* ══════════════════════════════════════════
+   COMPONENTES — CARDS
+══════════════════════════════════════════ */
+
+.bba-card {
+  background: var(--app-card);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  backdrop-filter: blur(12px);
+  transition:
+    border-color var(--medium) ease,
+    background var(--medium) ease,
+    box-shadow var(--medium) ease;
+}
+
+.bba-card:hover {
+  border-color: rgba(185, 149, 79, 0.35);
+  background: var(--app-card-hover);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+/* Card com status colorido no topo */
+.bba-card--green  { border-top: 2px solid var(--status-green); }
+.bba-card--amber  { border-top: 2px solid var(--status-amber); }
+.bba-card--red    { border-top: 2px solid var(--status-red); }
+.bba-card--gold   { border-top: 2px solid var(--bba-gold); }
+
+/* Card de destaque (ação do dia) */
+.bba-card--highlight {
+  background: linear-gradient(135deg,
+    rgba(18, 49, 95, 0.85),
+    rgba(12, 31, 63, 0.9)
+  );
+  border-color: var(--bba-gold-dim);
+  box-shadow: 0 0 0 1px rgba(185, 149, 79, 0.08) inset;
+}
+
+/* ══════════════════════════════════════════
+   COMPONENTES — BOTÕES
+══════════════════════════════════════════ */
+
+/* Botão primário gold com glow */
+.bba-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 20px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition:
+    all var(--medium) var(--ease);
+}
+
+.bba-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.bba-btn--primary {
+  background: var(--bba-gold);
+  color: var(--bba-navy);
+  border: 1px solid var(--bba-gold);
+  box-shadow:
+    0 0 20px var(--bba-gold-glow),
+    0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.bba-btn--primary:hover {
+  background: #cba862;
+  border-color: #cba862;
+  box-shadow:
+    0 0 32px rgba(185, 149, 79, 0.55),
+    0 6px 20px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1px);
+}
+
+.bba-btn--secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.bba-btn--secondary:hover {
+  color: var(--text-primary);
+  border-color: rgba(185, 149, 79, 0.45);
+  background: rgba(185, 149, 79, 0.07);
+  box-shadow: 0 0 14px rgba(185, 149, 79, 0.15);
+}
+
+.bba-btn--ghost {
+  background: transparent;
+  color: var(--bba-gold-soft);
+  border: 1px solid var(--bba-gold-dim);
+  font-size: 11px;
+  min-height: 34px;
+  padding: 0 14px;
+}
+
+.bba-btn--ghost:hover {
+  background: rgba(185, 149, 79, 0.1);
+  border-color: var(--bba-gold);
+  box-shadow: 0 0 12px var(--bba-gold-glow);
+}
+
+/* ══════════════════════════════════════════
+   COMPONENTES — STATUS INDICATORS
+══════════════════════════════════════════ */
+
+.bba-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.bba-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.bba-status--green {
+  background: var(--status-green-bg);
+  color: var(--status-green);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.bba-status--green .bba-status__dot {
+  background: var(--status-green);
+  box-shadow: 0 0 8px var(--status-green-glow);
+  animation: statusPulse 2.5s ease infinite;
+}
+
+.bba-status--amber {
+  background: var(--status-amber-bg);
+  color: var(--status-amber);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.bba-status--amber .bba-status__dot {
+  background: var(--status-amber);
+  box-shadow: 0 0 8px var(--status-amber-glow);
+  animation: statusPulse 2.5s ease infinite;
+}
+
+.bba-status--red {
+  background: var(--status-red-bg);
+  color: var(--status-red);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.bba-status--red .bba-status__dot {
+  background: var(--status-red);
+  box-shadow: 0 0 8px var(--status-red-glow);
+  animation: statusPulse 1.8s ease infinite;
+}
+
+/* ══════════════════════════════════════════
+   COMPONENTES — EYEBROW / LABELS
+══════════════════════════════════════════ */
+
+.bba-eyebrow {
+  display: block;
+  color: var(--bba-gold);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.bba-label {
+  display: block;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+/* ══════════════════════════════════════════
+   COMPONENTES — SCORE BAR
+══════════════════════════════════════════ */
+
+.bba-score-bar {
+  display: grid;
+  gap: 4px;
+}
+
+.bba-score-bar__track {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.bba-score-bar__fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--bba-gold), var(--bba-gold-soft));
+  box-shadow: 0 0 8px var(--bba-gold-glow);
+  transition: width 0.8s var(--ease);
+}
+
+/* ══════════════════════════════════════════
+   COMPONENTES — LINHA DE OBRIGAÇÃO
+══════════════════════════════════════════ */
+
+.bba-obligation-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--app-divider);
+}
+
+.bba-obligation-row:last-child {
+  border-bottom: none;
+}
+
+.bba-obligation-days {
+  display: grid;
+  place-items: center;
+  min-width: 48px;
+  height: 48px;
+  font-size: 18px;
+  font-weight: 300;
+  line-height: 1;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.bba-obligation-days--critical {
+  color: var(--status-red);
+  border-color: rgba(239, 68, 68, 0.3);
+  box-shadow: 0 0 12px var(--status-red-glow);
+}
+
+.bba-obligation-days--warning {
+  color: var(--status-amber);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.bba-obligation-days--ok {
+  color: var(--text-secondary);
+}
+
+/* ══════════════════════════════════════════
+   ANIMAÇÕES
+══════════════════════════════════════════ */
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.6; transform: scale(0.8); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes goldShimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.bba-animate-in {
+  animation: fadeInUp 0.5s var(--ease) both;
+}
+
+.bba-animate-in:nth-child(1) { animation-delay: 0.05s; }
+.bba-animate-in:nth-child(2) { animation-delay: 0.10s; }
+.bba-animate-in:nth-child(3) { animation-delay: 0.15s; }
+.bba-animate-in:nth-child(4) { animation-delay: 0.20s; }
+.bba-animate-in:nth-child(5) { animation-delay: 0.25s; }
+
+/* ══════════════════════════════════════════
+   PLACEHOLDER INTELIGENTE
+══════════════════════════════════════════ */
+
+.bba-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px dashed rgba(185, 149, 79, 0.25);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.bba-placeholder svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  stroke: var(--bba-gold);
+  opacity: 0.6;
+}
+
+.bba-placeholder a,
+.bba-placeholder button {
+  color: var(--bba-gold-soft);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  margin-left: 4px;
+  transition: color var(--fast) ease;
+}
+
+.bba-placeholder a:hover,
+.bba-placeholder button:hover {
+  color: var(--bba-gold);
+}
+
+/* ══════════════════════════════════════════
+   RESPONSIVO
+══════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  .bba-sidebar {
+    transform: translateX(-100%);
+    transition: transform var(--medium) var(--ease);
+  }
+
+  .bba-sidebar--open {
+    transform: translateX(0);
+  }
+
+  .bba-main {
+    margin-left: 0;
+  }
+
+  .bba-page {
+    padding: 20px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
