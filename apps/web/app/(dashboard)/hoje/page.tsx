@@ -1,7 +1,12 @@
-import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/auth-helpers-nextjs'
-import { redirect } from 'next/navigation'
+"use client"
+
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import {
+  fetchClientCompanyProfile,
+  type ClientCompanyProfile,
+  useBbaStore,
+} from '@bba/lib'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,7 +41,7 @@ interface OnboardingItem {
 interface Task {
   id: string
   status: string
-  due_date?: string
+  due_date?: string | null
   title?: string
 }
 
@@ -47,6 +52,16 @@ interface ClientCompany {
   cnpj?: string
   city?: string
   state?: string
+}
+
+function isTaskOverdue(task: Task): boolean {
+  if (task.status === 'done' || !task.due_date) return false
+
+  const dueDate = new Date(`${task.due_date}T12:00:00`)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  return dueDate < today
 }
 
 // ── Score simples calculado de dados existentes ───────────────────────────────
@@ -78,7 +93,7 @@ function calcScoreFromExistingData(
   if (clientCompany?.trade_name) operacional += 25
   if (clientCompany?.city) operacional += 15
   if (clientCompany?.state) operacional += 10
-  const overdueTasks = tasks.filter((t) => t.status === 'overdue').length
+  const overdueTasks = tasks.filter(isTaskOverdue).length
   operacional = Math.max(0, operacional + 50 - overdueTasks * 10)
 
   // FINANCEIRO (0-100) — placeholder: dados de caixa ainda não existem
@@ -218,78 +233,76 @@ function ScoreBar({
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function HojePage() {
-  const cookieStore = cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-      },
-    },
-  )
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  if (!session) redirect('/login')
+export default function HojePage() {
+  const profile = useBbaStore((state) => state.profile)
+  const company = useBbaStore((state) => state.company)
+  const storeTasks = useBbaStore((state) => state.tasks)
+  const onboardingSteps = useBbaStore((state) => state.onboardingSteps)
+  const [clientProfile, setClientProfile] =
+    useState<ClientCompanyProfile | null>(null)
 
   // ── Buscar dados reais ────────────────────────────────────────────────────
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name')
-    .eq('id', session.user.id)
-    .single()
+  useEffect(() => {
+    let mounted = true
 
-  const { data: company } = await supabase
-    .from('companies')
-    .select('id, name')
-    .eq('account_owner_id', session.user.id)
-    .single()
+    if (!company.id) {
+      setClientProfile(null)
+      return () => {
+        mounted = false
+      }
+    }
 
-  let clientCompany: ClientCompany | null = null
-  let onboardingItems: OnboardingItem[] = []
-  let tasks: Task[] = []
-  let openTaskCount = 0
-  let overdueTaskCount = 0
-  let onboardingPct = 0
+    void fetchClientCompanyProfile(company.id)
+      .then((loadedProfile) => {
+        if (mounted) {
+          setClientProfile(loadedProfile)
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setClientProfile(null)
+        }
+      })
 
-  if (company) {
-    // Client company data
-    const { data: cc } = await supabase
-      .from('client_companies')
-      .select('trade_name, status, tax_regime, cnpj, city, state')
-      .eq('company_id', company.id)
-      .single()
-    clientCompany = cc
+    return () => {
+      mounted = false
+    }
+  }, [company.id])
 
-    // Onboarding
-    const { data: ob } = await supabase
-      .from('onboarding_checklist')
-      .select('id, completed, category')
-      .eq('company_id', company.id)
-    onboardingItems = ob ?? []
-    const done = onboardingItems.filter((i) => i.completed).length
-    onboardingPct =
-      onboardingItems.length > 0
-        ? Math.round((done / onboardingItems.length) * 100)
-        : 0
+  const clientCompany = useMemo<ClientCompany | null>(() => {
+    if (!company.id) return null
 
-    // Tasks
-    const { data: ts } = await supabase
-      .from('tasks')
-      .select('id, status, due_date, title')
-      .eq('company_id', company.id)
-      .neq('status', 'completed')
-    tasks = ts ?? []
-    openTaskCount = tasks.filter((t) => t.status === 'open').length
-    overdueTaskCount = tasks.filter((t) => t.status === 'overdue').length
-  }
+    return {
+      trade_name:
+        clientProfile?.nome_fantasia || clientProfile?.razao_social || company.name,
+      status: clientProfile?.status ?? 'active',
+      tax_regime: clientProfile?.regime_tributario ?? company.tax_regime ?? undefined,
+      cnpj: clientProfile?.cnpj ?? company.cnpj ?? undefined,
+      city: clientProfile?.municipio_codigo_ibge ?? undefined,
+      state: clientProfile?.uf_sigla ?? undefined,
+    }
+  }, [clientProfile, company])
+
+  const onboardingItems: OnboardingItem[] = useMemo(
+    () =>
+      onboardingSteps.map((step) => ({
+        id: step.id,
+        completed: step.status === 'completed',
+      })),
+    [onboardingSteps],
+  )
+  const tasks: Task[] = useMemo(
+    () => storeTasks.filter((task) => task.status !== 'done'),
+    [storeTasks],
+  )
+  const openTaskCount = tasks.length
+  const overdueTaskCount = tasks.filter(isTaskOverdue).length
+  const onboardingDone = onboardingItems.filter((i) => i.completed).length
+  const onboardingPct =
+    onboardingItems.length > 0
+      ? Math.round((onboardingDone / onboardingItems.length) * 100)
+      : 0
 
   // ── Calcular score com dados reais ───────────────────────────────────────
 
