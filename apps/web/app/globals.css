@@ -133,6 +133,7 @@ button {
 .form-grid {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .form-grid--two {
@@ -142,6 +143,7 @@ button {
 .field {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .field label {
@@ -159,9 +161,16 @@ button {
   border-radius: 8px;
   color: var(--bba-ink);
   min-height: 42px;
+  min-width: 0;
   outline: none;
   padding: 10px 12px;
   width: 100%;
+}
+
+.field input,
+.field select,
+.field textarea {
+  max-width: 100%;
 }
 
 .field textarea {
@@ -1093,19 +1102,57 @@ button {
   margin: 0;
 }
 
+.client-registration-page {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+  overflow-x: clip;
+  width: 100%;
+}
+
 .client-registration {
   display: grid;
   gap: 22px;
+  min-width: 0;
+  width: 100%;
 }
 
 .registration-metrics {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  min-width: 0;
+  width: 100%;
 }
 
-.client-registration .bba-card {
+.registration-section {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  width: 100%;
+}
+
+.registration-section--identity {
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 0.82fr);
+}
+
+.registration-section--two {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+}
+
+.registration-section--cards {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+}
+
+.registration-section--actions {
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 0.78fr);
+}
+
+.client-registration-page .bba-card {
   align-content: start;
+  container-type: inline-size;
+  min-width: 0;
+  width: 100%;
 }
 
 .completion-panel {
@@ -1180,7 +1227,7 @@ button {
 .toggle-grid {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   margin-top: 14px;
 }
 
@@ -1195,7 +1242,25 @@ button {
   font-weight: 700;
   gap: 10px;
   min-height: 42px;
+  min-width: 0;
   padding: 10px 12px;
+}
+
+.check-field span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@container (max-width: 430px) {
+  .client-registration-page .form-grid--two,
+  .client-registration-page .toggle-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .client-registration-page .completion-ring {
+    height: 116px;
+    width: 116px;
+  }
 }
 
 .check-field input {
@@ -1395,6 +1460,11 @@ button {
 
   .module-actions {
     justify-content: flex-start;
+  }
+
+  .registration-section--identity,
+  .registration-section--actions {
+    grid-template-columns: 1fr;
   }
 }
 

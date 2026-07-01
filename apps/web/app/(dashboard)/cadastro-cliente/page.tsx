@@ -228,7 +228,7 @@ export default function CadastroClientePage() {
     profile.role === "bba_admin" && company.id === profile.id;
 
   return (
-    <>
+    <div className="client-registration-page">
       <section className="page-header">
         <div>
           <h1>Cadastro do cliente</h1>
@@ -242,7 +242,7 @@ export default function CadastroClientePage() {
       </section>
 
       {isAdminWithoutClient ? (
-        <Card className="span-12" title="Selecao de cliente">
+        <Card title="Selecao de cliente">
           <div className="empty-state">
             A conta admin esta em uma area interna. A edicao direta por cliente
             entra na proxima etapa do Admin BBA.
@@ -301,8 +301,8 @@ export default function CadastroClientePage() {
       </section>
 
       <form className="client-registration" onSubmit={handleSubmit}>
-        <section className="section-grid">
-          <Card className="span-8" title="Identidade empresarial">
+        <section className="registration-section registration-section--identity">
+          <Card title="Identidade empresarial">
             <div className="form-grid form-grid--two">
               <Field label="Razao social" id="razao_social">
                 <input
@@ -385,7 +385,7 @@ export default function CadastroClientePage() {
             </div>
           </Card>
 
-          <Card className="span-4" title="Pendencias">
+          <Card title="Pendencias">
             <div className="completion-panel">
               <div
                 className="completion-ring"
@@ -417,8 +417,8 @@ export default function CadastroClientePage() {
           </Card>
         </section>
 
-        <section className="section-grid">
-          <Card className="span-6" title="Fiscal e tributario">
+        <section className="registration-section registration-section--two">
+          <Card title="Fiscal e tributario">
             <div className="form-grid form-grid--two">
               <Field label="Regime tributario" id="regime_tributario">
                 <select
@@ -534,7 +534,7 @@ export default function CadastroClientePage() {
             </div>
           </Card>
 
-          <Card className="span-6" title="Endereco">
+          <Card title="Endereco">
             <div className="form-grid form-grid--two">
               <Field label="CEP" id="cep">
                 <input
@@ -608,8 +608,8 @@ export default function CadastroClientePage() {
           </Card>
         </section>
 
-        <section className="section-grid">
-          <Card className="span-4" title="Contatos">
+        <section className="registration-section registration-section--cards">
+          <Card title="Contatos">
             <div className="form-grid">
               <Field label="Email principal" id="email_principal">
                 <input
@@ -662,7 +662,7 @@ export default function CadastroClientePage() {
             </div>
           </Card>
 
-          <Card className="span-4" title="Dados bancarios">
+          <Card title="Dados bancarios">
             <div className="form-grid">
               <Field label="Banco" id="banco_codigo">
                 <input
@@ -721,7 +721,7 @@ export default function CadastroClientePage() {
             </div>
           </Card>
 
-          <Card className="span-4" title="Operacao BBA">
+          <Card title="Operacao BBA">
             <div className="form-grid">
               <div className="form-grid form-grid--two">
                 <Field label="Inicio da relacao" id="data_inicio_relacao">
@@ -810,8 +810,8 @@ export default function CadastroClientePage() {
           </Card>
         </section>
 
-        <section className="section-grid">
-          <Card className="span-8" title="Observacoes">
+        <section className="registration-section registration-section--actions">
+          <Card title="Observacoes">
             <Field label="Notas internas e contexto operacional" id="observacoes">
               <textarea
                 id="observacoes"
@@ -821,7 +821,7 @@ export default function CadastroClientePage() {
             </Field>
           </Card>
 
-          <Card className="span-4" title="Acoes">
+          <Card title="Acoes">
             <div className="save-panel">
               {loading ? (
                 <span className="status-badge status-badge--pending">
@@ -857,7 +857,7 @@ export default function CadastroClientePage() {
         <OptionList id="municipio-options" options={references.municipios} />
         <OptionList id="banco-options" options={references.bancos} />
       </form>
-    </>
+    </div>
   );
 }
 
