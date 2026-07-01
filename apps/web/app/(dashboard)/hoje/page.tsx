@@ -69,6 +69,7 @@ type ScoreBand = {
 
 type RecommendedAction = {
   title: string
+  lever: string
   reason: string
   impact: string
   benefit: string
@@ -130,14 +131,14 @@ function getScoreBand(score: number): ScoreBand {
 
 function getOpenTaskText(openTaskCount: number, overdueTaskCount: number): string {
   if (overdueTaskCount > 0) {
-    return `${overdueTaskCount} tarefa${overdueTaskCount > 1 ? 's' : ''} vencida${overdueTaskCount > 1 ? 's' : ''}`
+    return `${overdueTaskCount} rotina${overdueTaskCount > 1 ? 's' : ''} operacional${overdueTaskCount > 1 ? 'is' : ''} em atraso`
   }
 
   if (openTaskCount > 0) {
-    return `${openTaskCount} tarefa${openTaskCount > 1 ? 's' : ''} aberta${openTaskCount > 1 ? 's' : ''}`
+    return `${openTaskCount} rotina${openTaskCount > 1 ? 's' : ''} em acompanhamento`
   }
 
-  return 'nenhuma tarefa crítica aberta'
+  return 'nenhuma rotina crítica aberta'
 }
 
 function getRecommendedAction({
@@ -155,12 +156,13 @@ function getRecommendedAction({
 }): RecommendedAction {
   if (overdueTaskCount > 0) {
     return {
-      title: 'Resolver decisões operacionais em atraso',
-      reason: `${overdueTaskCount} tarefa${overdueTaskCount > 1 ? 's estão' : ' está'} vencida${overdueTaskCount > 1 ? 's' : ''}.`,
+      title: 'Resolver rotinas críticas em atraso',
+      lever: 'resolver rotinas críticas',
+      reason: `${overdueTaskCount} rotina${overdueTaskCount > 1 ? 's estão' : ' está'} em atraso.`,
       impact: 'Atrasos podem travar obrigações, respostas da BBA e rotinas críticas da empresa.',
       benefit: 'Reduz risco operacional e melhora a leitura diária do BBA Advisor.',
       estimate: overdueTaskCount > 1 ? '8 minutos' : '4 minutos',
-      cta: 'Priorizar tarefas críticas',
+      cta: 'Priorizar decisões críticas',
       href: '/tarefas',
       urgency: 'critico',
     }
@@ -169,7 +171,8 @@ function getRecommendedAction({
   if (onboardingPct < 50) {
     return {
       title: 'Falta concluir a base da empresa',
-      reason: `Seu cadastro está ${onboardingPct}% completo.`,
+      lever: 'concluir base da empresa',
+      reason: `Sua base está ${onboardingPct}% validada.`,
       impact: 'Dados ausentes podem limitar emissão de notas, cálculo correto de impostos e análises financeiras.',
       benefit: 'Libera um diagnóstico BBA mais confiável e aumenta o Score da empresa.',
       estimate: '4 minutos',
@@ -181,12 +184,13 @@ function getRecommendedAction({
 
   if (!clientCompany?.tax_regime || !clientCompany?.cnpj) {
     return {
-      title: 'Completar dados fiscais essenciais',
+      title: 'Validar dados fiscais essenciais',
+      lever: 'validar dados fiscais essenciais',
       reason: 'CNPJ ou regime tributário ainda não estão completos na base atual.',
       impact: 'Sem esses dados, o BBA não consegue estimar obrigações e riscos fiscais com segurança.',
       benefit: 'Prepara a Agenda Tributária e melhora a precisão do Score Fiscal.',
       estimate: '3 minutos',
-      cta: 'Completar dados fiscais',
+      cta: 'Liberar diagnóstico fiscal',
       href: '/cadastro-cliente',
       urgency: 'atencao',
     }
@@ -195,11 +199,12 @@ function getRecommendedAction({
   if (onboardingPct < 80) {
     return {
       title: 'Fechar lacunas do diagnóstico',
+      lever: 'fechar lacunas da base',
       reason: `${100 - onboardingPct}% da configuração inicial ainda não foi concluída.`,
       impact: 'As lacunas reduzem a capacidade da BBA de antecipar riscos e orientar decisões.',
       benefit: 'Aumenta a governança e deixa o cockpit mais acionável.',
       estimate: '5 minutos',
-      cta: 'Revisar pendências da base',
+      cta: 'Revisar oportunidades da base',
       href: '/onboarding',
       urgency: 'info',
     }
@@ -208,6 +213,7 @@ function getRecommendedAction({
   if (score.financeiro === 0) {
     return {
       title: 'Liberar visão financeira da empresa',
+      lever: 'configurar caixa',
       reason: 'Ainda não há base suficiente para analisar caixa e previsibilidade financeira.',
       impact: 'Sem caixa estruturado, o BBA Advisor não consegue antecipar pressão de curto prazo.',
       benefit: 'Abre caminho para leitura de fluxo de caixa e decisões financeiras mais rápidas.',
@@ -220,8 +226,9 @@ function getRecommendedAction({
 
   return {
     title: 'Manter a rotina executiva ativa',
-    reason: openTaskCount > 0 ? `${openTaskCount} tarefa${openTaskCount > 1 ? 's seguem' : ' segue'} em acompanhamento.` : 'A operação não tem bloqueios críticos no momento.',
-    impact: 'A cadência diária evita que pequenas pendências virem risco operacional.',
+    lever: 'manter rotina executiva',
+    reason: openTaskCount > 0 ? `${openTaskCount} rotina${openTaskCount > 1 ? 's seguem' : ' segue'} em acompanhamento.` : 'A operação não tem bloqueios críticos no momento.',
+    impact: 'A cadência diária evita que pequenos desvios virem risco operacional.',
     benefit: 'Mantém o cockpit confiável e pronto para decisões recorrentes.',
     estimate: '2 minutos',
     cta: 'Revisar rotina de hoje',
@@ -300,7 +307,7 @@ function getScoreLosses({
   }
 
   if (overdueTaskCount > 0) {
-    losses.push(`Operacional: ${overdueTaskCount} tarefa${overdueTaskCount > 1 ? 's vencidas reduzem' : ' vencida reduz'} previsibilidade.`)
+    losses.push(`Operacional: ${overdueTaskCount} rotina${overdueTaskCount > 1 ? 's em atraso reduzem' : ' em atraso reduz'} previsibilidade.`)
   }
 
   return losses.length > 0 ? losses.slice(0, 4) : ['Nenhuma perda relevante identificada com os dados disponíveis hoje.']
@@ -324,7 +331,7 @@ function calcScoreFromExistingData(
   const total = onboardingItems.length
   const governanca = total > 0 ? Math.round((completed / total) * 100) : 0
 
-  // OPERACIONAL (0-100) — baseado em tarefas e dados de cadastro
+  // OPERACIONAL (0-100) — baseado em rotinas e dados de cadastro
   let operacional = 0
   if (clientCompany?.trade_name) operacional += 25
   if (clientCompany?.city) operacional += 15
@@ -342,26 +349,28 @@ function calcScoreFromExistingData(
 
 // ── Componentes inline ────────────────────────────────────────────────────────
 
-function RadarCard({
-  label,
+function PulseCard({
+  question,
   status,
   statusText,
   impact,
-  nextStep,
+  actionLabel,
+  href,
   delay = 0,
 }: {
-  label: string
+  question: string
   status: 'green' | 'amber' | 'red' | 'muted'
   statusText: string
   impact: string
-  nextStep: string
+  actionLabel: string
+  href: string
   delay?: number
 }) {
   const statusMap = {
-    green: { cls: 'bba-status--green', emoji: '🟢' },
-    amber: { cls: 'bba-status--amber', emoji: '🟡' },
-    red: { cls: 'bba-status--red', emoji: '🔴' },
-    muted: { cls: '', emoji: '⚪' },
+    green: { cls: 'bba-status--green' },
+    amber: { cls: 'bba-status--amber' },
+    red: { cls: 'bba-status--red' },
+    muted: { cls: '' },
   }
 
   const s = { cls: statusMap[status].cls }
@@ -376,7 +385,7 @@ function RadarCard({
         animationDelay: `${delay}s`,
       }}
     >
-      <span className="bba-label">{label}</span>
+      <span className="bba-label">{question}</span>
       <div className={`bba-status ${s.cls}`} style={{ width: 'fit-content' }}>
         <span className="bba-status__dot" />
         {statusText}
@@ -391,15 +400,9 @@ function RadarCard({
         >
           {impact}
         </p>
-        <p
-          style={{
-            color: 'var(--text-muted)',
-            fontSize: '11px',
-            lineHeight: 1.5,
-          }}
-        >
-          Próximo passo: {nextStep}
-        </p>
+        <Link href={href} className="bba-btn bba-btn--ghost" style={{ width: 'fit-content' }}>
+          {actionLabel}
+        </Link>
       </div>
     </div>
   )
@@ -580,23 +583,21 @@ export default function HojePage() {
 
   // ── Determinar status do Radar ───────────────────────────────────────────
 
-  const companyStatus =
-    clientCompany?.status === 'active' || clientCompany?.status === 'Ativo'
-      ? ('green' as const)
-      : ('amber' as const)
-
   const riskStatus = overdueTaskCount > 0 ? ('amber' as const) : ('green' as const)
 
   const caixaStatus = 'muted' as const
 
   const firstName = getFirstName(profile?.full_name)
   const companyName = clientCompany?.trade_name ?? company?.name ?? 'sua empresa'
+  const advisorGreeting = firstName
+    ? `${firstName}, analisei sua empresa agora.`
+    : 'Analisei sua empresa agora.'
   const advisorPoints: AdvisorPoint[] = [
     {
       label: 'Base da empresa',
       text:
         onboardingPct > 0
-          ? `Cadastro ${onboardingPct}% completo; ${Math.max(0, 100 - onboardingPct)}% ainda limita a profundidade do diagnóstico.`
+          ? `Base ${onboardingPct}% validada; ${Math.max(0, 100 - onboardingPct)}% ainda limita a profundidade do diagnóstico.`
           : 'Ainda não há checklist de base suficiente para medir a configuração inicial.',
     },
     {
@@ -604,13 +605,13 @@ export default function HojePage() {
       text:
         overdueTaskCount > 0
           ? `${getOpenTaskText(openTaskCount, overdueTaskCount)} exigem decisão antes de avançar.`
-          : `${getOpenTaskText(openTaskCount, overdueTaskCount)} no momento; a rotina está sem bloqueio vencido.`,
+          : `${getOpenTaskText(openTaskCount, overdueTaskCount)} no momento; a rotina está sem bloqueio em atraso.`,
     },
     {
       label: 'Caixa e impostos',
       text:
         score.financeiro === 0
-          ? 'Ainda não tenho dados suficientes para analisar caixa; a leitura fiscal depende da base cadastral validada.'
+          ? 'Ainda não tenho dados suficientes para analisar caixa; a leitura fiscal depende da base da empresa validada.'
           : 'A base financeira já permite iniciar uma leitura de previsibilidade.',
     },
   ]
@@ -779,7 +780,7 @@ export default function HojePage() {
                 lineHeight: 1.2,
               }}
             >
-              Analisei sua empresa hoje.
+              {advisorGreeting}
             </h2>
             <p
               style={{
@@ -788,15 +789,15 @@ export default function HojePage() {
                 lineHeight: 1.6,
               }}
             >
-              Identifiquei 3 pontos relevantes com os dados disponíveis no BBA App:
+              Encontrei 3 pontos que merecem atenção hoje, usando apenas os dados disponíveis no BBA App.
             </p>
           </div>
           <div
-            className="bba-status bba-status--amber"
+            className="bba-status bba-status--green"
             style={{ width: 'fit-content' }}
           >
             <span className="bba-status__dot" />
-            Motor de regras
+            Diagnóstico atualizado agora
           </div>
         </div>
 
@@ -850,18 +851,28 @@ export default function HojePage() {
               lineHeight: 1.55,
             }}
           >
-            Minha recomendação para hoje: <strong>{recommendedAction.title}</strong>.
+            Minha recomendação: <strong>{recommendedAction.title}</strong>.
           </p>
           <Link href={recommendedAction.href} className="bba-btn bba-btn--primary">
             {recommendedAction.cta}
           </Link>
+          <p
+            style={{
+              color: 'var(--text-muted)',
+              fontSize: '11px',
+              lineHeight: 1.5,
+              flexBasis: '100%',
+            }}
+          >
+            Se essa recomendação continuar aberta, o BBA Advisor acompanhará o impacto nos próximos dias.
+          </p>
         </div>
       </section>
 
-      {/* ── Radar ─────────────────────────────────────────────────── */}
+      {/* ── Pulso da Empresa ───────────────────────────────────────── */}
       <section style={{ marginBottom: '28px' }}>
         <span className="bba-eyebrow" style={{ marginBottom: '14px', display: 'block' }}>
-          Radar de hoje
+          Pulso da Empresa
         </span>
         <div
           style={{
@@ -870,48 +881,63 @@ export default function HojePage() {
             gap: '12px',
           }}
         >
-          <RadarCard
-            label="Caixa"
+          <PulseCard
+            question="Tenho dinheiro?"
             status={caixaStatus}
             statusText="Dados insuficientes"
-            impact="Ainda não tenho dados suficientes para prever seu fluxo de caixa."
-            nextStep="organize entradas e saídas no financeiro para liberar análise financeira."
+            impact="Ainda não consigo prever seu fluxo de caixa porque entradas e saídas não estão estruturadas."
+            actionLabel="Configurar caixa"
+            href="/financeiro"
             delay={0.05}
           />
-          <RadarCard
-            label="Risco Operacional"
+          <PulseCard
+            question="Estou em risco?"
             status={riskStatus}
-            statusText={riskStatus === 'green' ? 'Regular' : `${overdueTaskCount} em atraso`}
+            statusText={riskStatus === 'green' ? 'Sob controle' : 'Atenção hoje'}
             impact={
               riskStatus === 'green'
-                ? 'Nenhuma tarefa vencida no momento.'
-                : 'Tarefas vencidas podem gerar risco fiscal, financeiro ou de atendimento.'
+                ? 'Nenhuma rotina em atraso foi identificada.'
+                : `${overdueTaskCount} rotina${overdueTaskCount > 1 ? 's exigem' : ' exige'} decisão para reduzir risco operacional.`
             }
-            nextStep={
+            actionLabel={
               riskStatus === 'green'
-                ? 'continue acompanhando as tarefas abertas.'
-                : 'priorize as tarefas vencidas antes de avançar novas rotinas.'
+                ? 'Ver rotina'
+                : 'Priorizar decisões'
             }
+            href="/tarefas"
             delay={0.10}
           />
-          <RadarCard
-            label="Empresa"
-            status={companyStatus}
+          <PulseCard
+            question="Estou crescendo?"
+            status={
+              onboardingPct >= 80 && score.total >= 60
+                ? 'green'
+                : onboardingPct > 0
+                  ? 'amber'
+                  : 'muted'
+            }
             statusText={
-              companyStatus === 'green' ? 'Ativa e regular' : 'Verificar status'
+              onboardingPct >= 80 && score.total >= 60
+                ? 'Base evoluindo'
+                : 'Base em formação'
             }
-            impact={`Cadastro ${onboardingPct}% completo; isso define a confiabilidade do diagnóstico BBA.`}
-            nextStep={
+            impact={
               onboardingPct < 100
-                ? 'complete os dados pendentes para melhorar o Score BBA.'
-                : 'mantenha a base atualizada para preservar a leitura consultiva.'
+                ? `A empresa está ${onboardingPct}% validada; falta base para um diagnóstico mais profundo.`
+                : 'A base está validada e pronta para leituras executivas recorrentes.'
             }
+            actionLabel={
+              onboardingPct < 100
+                ? 'Liberar diagnóstico completo'
+                : 'Revisar Score'
+            }
+            href={onboardingPct < 100 ? '/cadastro-cliente' : '#score-bba'}
             delay={0.15}
           />
         </div>
       </section>
 
-      {/* ── Grid principal: Ação + Score ──────────────────────────── */}
+      {/* ── Grid principal: Decisão + Score ───────────────────────── */}
       <div
         style={{
           display: 'grid',
@@ -922,9 +948,9 @@ export default function HojePage() {
         }}
       >
 
-        {/* Ação do dia */}
+        {/* Decisão do Dia */}
         <div style={{ display: 'grid', gap: '12px' }}>
-          <span className="bba-eyebrow">Ação do dia</span>
+          <span className="bba-eyebrow">Decisão do Dia</span>
 
           <div
             className={`bba-card bba-card--highlight ${urgenciaStyle[recommendedAction.urgency]} bba-animate-in`}
@@ -1027,16 +1053,16 @@ export default function HojePage() {
             </div>
           </div>
 
-          {/* Resumo de tarefas */}
+          {/* Rotina em acompanhamento */}
           {(openTaskCount > 0 || overdueTaskCount > 0) && (
             <div
               className="bba-card bba-animate-in"
               style={{ padding: '20px 24px', animationDelay: '0.3s' }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                <span className="bba-eyebrow">Tarefas</span>
+                <span className="bba-eyebrow">Rotina em acompanhamento</span>
                 <Link href="/tarefas" style={{ color: 'var(--bba-gold-soft)', fontSize: '11px', fontWeight: 600 }}>
-                  Ver todas →
+                  Ver rotina →
                 </Link>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -1086,7 +1112,7 @@ export default function HojePage() {
         </div>
 
         {/* ── Score BBA ─────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gap: '12px' }}>
+        <div id="score-bba" style={{ display: 'grid', gap: '12px', scrollMarginTop: '24px' }}>
           <span className="bba-eyebrow">Score BBA</span>
 
           <div
@@ -1132,7 +1158,7 @@ export default function HojePage() {
                   marginTop: '8px',
                 }}
               >
-                {scoreBand.label}
+                Nível: {scoreBand.label}
               </strong>
               <p
                 style={{
@@ -1143,6 +1169,26 @@ export default function HojePage() {
                 }}
               >
                 {scoreBand.summary}
+              </p>
+              <p
+                style={{
+                  color: 'var(--text-secondary)',
+                  fontSize: '12px',
+                  lineHeight: 1.45,
+                  marginTop: '10px',
+                }}
+              >
+                Principal alavanca hoje: <strong>{recommendedAction.lever}</strong>.
+              </p>
+              <p
+                style={{
+                  color: 'var(--text-muted)',
+                  fontSize: '11px',
+                  lineHeight: 1.45,
+                  marginTop: '6px',
+                }}
+              >
+                Histórico de evolução será exibido quando houver leituras suficientes.
               </p>
             </div>
 
@@ -1178,7 +1224,7 @@ export default function HojePage() {
                 <div style={{ display: 'grid', gap: '8px' }}>
                   <span className="bba-label">Leitura por pilar</span>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '12px', lineHeight: 1.55 }}>
-                    Fiscal mede CNPJ, regime e status. Financeiro ainda está sem base de caixa. Governança usa a configuração inicial. Operacional combina cadastro, endereço e tarefas vencidas.
+                    Fiscal mede CNPJ, regime e status. Financeiro ainda está sem base de caixa. Governança usa a configuração inicial. Operacional combina base da empresa, endereço e rotinas em atraso.
                   </p>
                 </div>
 
@@ -1208,7 +1254,7 @@ export default function HojePage() {
                     gap: '8px',
                   }}
                 >
-                  <span className="bba-label">Ação para ganhar pontos hoje</span>
+                  <span className="bba-label">Alavanca para ganhar pontos hoje</span>
                   <p style={{ color: 'var(--text-secondary)', fontSize: '12px', lineHeight: 1.5 }}>
                     {recommendedAction.title}: {recommendedAction.benefit}
                   </p>
@@ -1239,15 +1285,15 @@ export default function HojePage() {
           >
             <div>
               <span className="bba-eyebrow" style={{ marginBottom: '6px' }}>
-                Base de decisão
+                Base para decisão
               </span>
               <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
                 {onboardingPct}% concluído ·{' '}
-                {onboardingPendingCount} {onboardingPendingCount === 1 ? 'item ainda limita' : 'itens ainda limitam'} o diagnóstico
+                {onboardingPendingCount} {onboardingPendingCount === 1 ? 'oportunidade ainda limita' : 'oportunidades ainda limitam'} o diagnóstico
               </p>
             </div>
             <Link href="/onboarding" className="bba-btn bba-btn--ghost">
-              Revisar base
+              Revisar oportunidades
             </Link>
           </div>
           <div style={{ marginTop: '14px' }}>
@@ -1270,7 +1316,7 @@ export default function HojePage() {
           animationDelay: '0.4s',
         }}
       >
-        <span className="bba-eyebrow">Próximo passo recomendado</span>
+        <span className="bba-eyebrow">Decisão recomendada</span>
         <div
           style={{
             display: 'grid',
@@ -1280,6 +1326,7 @@ export default function HojePage() {
           }}
         >
           <div style={{ display: 'grid', gap: '8px' }}>
+            <span className="bba-label">Decisão</span>
             <h2
               style={{
                 color: 'var(--text-primary)',
@@ -1293,11 +1340,17 @@ export default function HojePage() {
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.6 }}>
               Motivo: {recommendedAction.reason}
             </p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '12px', lineHeight: 1.5 }}>
+              Impacto prático: {recommendedAction.impact}
+            </p>
           </div>
           <div style={{ display: 'grid', gap: '8px' }}>
             <span className="bba-label">Benefício esperado</span>
             <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.6 }}>
               {recommendedAction.benefit}
+            </p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '11px', lineHeight: 1.5 }}>
+              Se essa recomendação continuar aberta, o BBA Advisor acompanhará o impacto nos próximos dias.
             </p>
           </div>
           <div style={{ display: 'grid', gap: '10px', justifyItems: 'start' }}>
