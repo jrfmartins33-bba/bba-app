@@ -567,25 +567,32 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
     }
 
     const supabase = getSupabaseClient();
+    const userId = state.session.userId;
 
-    void supabase
-      .from("chat_read_state")
-      .upsert(
-        {
-          user_id: state.session.userId,
-          channel_id: channelId,
-          last_read_at: timestamp
-        },
-        { onConflict: "user_id,channel_id" }
-      )
-      .then(({ error }) => {
+    void (async () => {
+      try {
+        const { error } = await supabase.from("chat_read_state").upsert(
+          {
+            user_id: userId,
+            channel_id: channelId,
+            last_read_at: timestamp
+          },
+          { onConflict: "user_id,channel_id" }
+        );
+
         if (error) {
           console.log(
             "[BBA Chat Read State] Falha ao registrar leitura.",
             error
           );
         }
-      });
+      } catch (error) {
+        console.log(
+          "[BBA Chat Read State] Falha ao registrar leitura.",
+          error
+        );
+      }
+    })();
   },
 
   viewClientAsAdmin: async (companyId) => {

@@ -356,18 +356,14 @@ export const fetchAdminClients = async (): Promise<AdminClientSummary[]> => {
         );
 
         if (channelIds.length) {
-          const [{ data: messagesData, error: messagesError }, { data: readStateData, error: readStateError }] =
+          const [{ data: messagesData, error: messagesError }, readStateData] =
             await Promise.all([
               supabase
                 .from("chat_messages")
                 .select("channel_id,sender_id,created_at")
                 .in("channel_id", channelIds)
                 .neq("sender_id", currentUser.id),
-              supabase
-                .from("chat_read_state")
-                .select("channel_id,last_read_at")
-                .eq("user_id", currentUser.id)
-                .in("channel_id", channelIds)
+              fetchReadState(currentUser.id, channelIds)
             ]);
 
           if (messagesError) {
@@ -375,14 +371,9 @@ export const fetchAdminClients = async (): Promise<AdminClientSummary[]> => {
               "[BBA Admin Data Source] Query chat_messages falhou.",
               messagesError
             );
-          } else if (readStateError) {
-            console.log(
-              "[BBA Admin Data Source] Query chat_read_state falhou.",
-              readStateError
-            );
           } else {
             const lastReadByChannelId = new Map(
-              (readStateData as AdminReadStateRow[] | null ?? []).map((row) => [
+              (readStateData as AdminReadStateRow[]).map((row) => [
                 row.channel_id,
                 row.last_read_at
               ])
@@ -479,7 +470,7 @@ export const fetchTasks = async (companyId: string) => {
 };
 
 export const fetchReadState = async (userId: string, channelIds: string[]) => {
-  if (!channelIds.length) {
+  if (!userId || !channelIds.length) {
     return [];
   }
 
@@ -487,22 +478,30 @@ export const fetchReadState = async (userId: string, channelIds: string[]) => {
     return [];
   }
 
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("chat_read_state")
-    .select("channel_id,last_read_at")
-    .eq("user_id", userId)
-    .in("channel_id", channelIds);
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from("chat_read_state")
+      .select("channel_id,last_read_at")
+      .eq("user_id", userId)
+      .in("channel_id", channelIds);
 
-  if (error) {
+    if (error) {
+      console.log(
+        "[BBA Chat Read State] Falha ao carregar estado de leitura; seguindo sem bloqueio.",
+        error
+      );
+      return [];
+    }
+
+    return (data ?? []) as ChatReadState[];
+  } catch (error) {
     console.log(
       "[BBA Chat Read State] Falha ao carregar estado de leitura; seguindo sem bloqueio.",
       error
     );
     return [];
   }
-
-  return (data ?? []) as ChatReadState[];
 };
 
 export const fetchChannels = async (companyId: string) => {
