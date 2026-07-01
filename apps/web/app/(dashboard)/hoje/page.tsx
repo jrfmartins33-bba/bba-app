@@ -219,7 +219,18 @@ function ScoreBar({
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function HojePage() {
-  const supabase = createServerComponentClient({ cookies })
+  const cookieStore = cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+      },
+    },
+  )
 
   const {
     data: { session },

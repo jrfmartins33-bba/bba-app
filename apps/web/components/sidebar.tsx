@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/auth-helpers-nextjs'
 import {
   Home,
   Building2,
@@ -79,7 +79,10 @@ const NAV_MOTOR = [
 export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = createClientComponentClient()
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+  )
   const [motorOpen, setMotorOpen] = useState(false)
 
   const isActive = (href: string) => {
