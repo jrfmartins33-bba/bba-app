@@ -13,3 +13,9 @@ coverage
 *.tsbuildinfo
 .DS_Store
 .pnpm-store/
+/private/
+/customer-data/
+
+*.xlsx
+*.xls
+*.xlsm

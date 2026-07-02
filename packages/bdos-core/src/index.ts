@@ -8,6 +8,30 @@ export * from "./domain/business-reality-simulator";
 export * from "./domain/digital-twin";
 export * from "./domain/business-facts-generator";
 export * from "./domain/business-fact";
+export * from "./domain/measurement";
+export * from "./domain/measurement-engine";
+export {
+  MeasurementCycleStatus,
+  advanceMeasurementCycle,
+  createMeasurementCycle,
+} from "./domain/measurement-workflow";
+export type {
+  AdvanceMeasurementCycleInput,
+  AdvanceMeasurementCycleResult,
+  AdvanceMeasurementCycleSuccess,
+  Certification,
+  CreateMeasurementCycleInput,
+  MeasurementBulletin,
+  MeasurementCycle,
+  MeasurementCycleId,
+  MeasurementCycleTransitionError,
+  MeasurementCycleTransitionFailure,
+  MeasurementProjectId,
+  MeasurementTimelineEventId,
+  MeasurementTimelineEventType,
+  MeasurementWorkflowMetadata,
+  TimelineEvent as MeasurementWorkflowTimelineEvent,
+} from "./domain/measurement-workflow";
 export * from "./capabilities/cash-intelligence";
 export * from "./engines/decision/pipeline/observe";
 export * from "./engines/decision/pipeline/diagnose";
