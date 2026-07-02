@@ -16,6 +16,19 @@ export type {
 
 export type { Event } from "./event";
 
+export type { EventPolicyResult } from "./event-policy";
+
+export { evaluateEventPolicy } from "./event-policy";
+
+export type {
+  CreateEventFailure,
+  CreateEventResult,
+  CreateEventSuccess,
+  EventInput,
+} from "./event-factory";
+
+export { createEvent } from "./event-factory";
+
 export type {
   EventValidationError,
   EventValidationInput,
