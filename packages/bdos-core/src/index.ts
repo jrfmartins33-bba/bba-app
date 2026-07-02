@@ -5,3 +5,4 @@ export * from "./capabilities/cash-intelligence";
 export * from "./engines/decision/pipeline/observe";
 export * from "./engines/decision/pipeline/diagnose";
 export * from "./engines/decision/rule-engine";
+export * from "./engines/decision/builder";

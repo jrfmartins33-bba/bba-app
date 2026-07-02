@@ -31,6 +31,7 @@ export interface ExpectedBenefit {
 }
 
 export enum DecisionStatus {
+  Created = "created",
   Proposed = "proposed",
   InReview = "in_review",
   Approved = "approved",
