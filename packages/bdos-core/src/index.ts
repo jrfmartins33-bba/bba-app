@@ -6,3 +6,5 @@ export * from "./engines/decision/pipeline/observe";
 export * from "./engines/decision/pipeline/diagnose";
 export * from "./engines/decision/rule-engine";
 export * from "./engines/decision/builder";
+export * from "./engines/decision/recommendation";
+export * from "./engines/decision/playbook";
