@@ -6,11 +6,20 @@ export type BusinessFactOrganizationId = string;
 
 export type BusinessFactCapability = string;
 
-export type BusinessFactSource = "event" | "capability" | "external";
+export type BusinessFactSource =
+  | "event"
+  | "capability"
+  | "external"
+  | "alpha-engenharia.measurement"
+  | "alpha-engenharia.invoice"
+  | "alpha-engenharia.accounts-receivable"
+  | "alpha-engenharia.cash-flow-signal";
 
 export type BusinessFactSourceReference = string;
 
 export type BusinessFactCategory =
+  | "revenue"
+  | "cash"
   | "financial"
   | "operational"
   | "tax"
