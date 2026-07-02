@@ -6,6 +6,18 @@ export type {
 export { createDecisionPortfolio } from "./decision-portfolio";
 
 export type {
+  PortfolioPriority,
+  PrioritizeDecisionPortfolioInput,
+  PrioritizedPortfolio,
+  PrioritizedPortfolioDateTime,
+  PrioritizedPortfolioItem,
+  PrioritizedPortfolioMetadata,
+  PrioritizedPortfolioSummary,
+} from "./portfolio-prioritization.types";
+
+export { prioritizeDecisionPortfolio } from "./portfolio-prioritization";
+
+export type {
   DecisionPortfolioCapability,
   DecisionPortfolioCase,
   DecisionPortfolioCountMap,
