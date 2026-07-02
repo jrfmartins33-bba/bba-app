@@ -1,3 +1,9 @@
+import type {
+  AlphaAccountsReceivable,
+  AlphaCashFlowSignal,
+  AlphaInvoice,
+} from "./financial-flow.types";
+
 export type AlphaEngenhariaId = string;
 
 export type AlphaEngenhariaDate = string;
@@ -163,5 +169,8 @@ export interface AlphaEngenhariaDigitalTwin {
   readonly projects: ReadonlyArray<AlphaEngenhariaProject>;
   readonly contracts: ReadonlyArray<AlphaEngenhariaContract>;
   readonly measurements: ReadonlyArray<AlphaEngenhariaMeasurement>;
+  readonly invoices: ReadonlyArray<AlphaInvoice>;
+  readonly accountsReceivables: ReadonlyArray<AlphaAccountsReceivable>;
+  readonly cashFlowSignals: ReadonlyArray<AlphaCashFlowSignal>;
   readonly businessEvents: ReadonlyArray<AlphaEngenhariaBusinessEvent>;
 }

@@ -7,6 +7,11 @@ import type {
   AlphaEngenhariaOrganization,
   AlphaEngenhariaProject,
 } from "./alpha-engenharia.types";
+import type {
+  AlphaAccountsReceivable,
+  AlphaCashFlowSignal,
+  AlphaInvoice,
+} from "./financial-flow.types";
 
 export interface CreateAlphaEngenhariaDigitalTwinInput {
   readonly company: AlphaEngenhariaCompany;
@@ -14,6 +19,9 @@ export interface CreateAlphaEngenhariaDigitalTwinInput {
   readonly projects: ReadonlyArray<AlphaEngenhariaProject>;
   readonly contracts: ReadonlyArray<AlphaEngenhariaContract>;
   readonly measurements: ReadonlyArray<AlphaEngenhariaMeasurement>;
+  readonly invoices: ReadonlyArray<AlphaInvoice>;
+  readonly accountsReceivables: ReadonlyArray<AlphaAccountsReceivable>;
+  readonly cashFlowSignals: ReadonlyArray<AlphaCashFlowSignal>;
   readonly businessEvents: ReadonlyArray<AlphaEngenhariaBusinessEvent>;
 }
 
@@ -61,6 +69,24 @@ export function createAlphaEngenhariaDigitalTwin(
       ...measurement,
       metadata: {
         ...measurement.metadata,
+      },
+    })),
+    invoices: input.invoices.map((invoice) => ({
+      ...invoice,
+      metadata: {
+        ...invoice.metadata,
+      },
+    })),
+    accountsReceivables: input.accountsReceivables.map((receivable) => ({
+      ...receivable,
+      metadata: {
+        ...receivable.metadata,
+      },
+    })),
+    cashFlowSignals: input.cashFlowSignals.map((signal) => ({
+      ...signal,
+      metadata: {
+        ...signal.metadata,
       },
     })),
     businessEvents: input.businessEvents.map((event) => ({
@@ -371,6 +397,104 @@ export const alphaEngenhariaDigitalTwinInput: CreateAlphaEngenhariaDigitalTwinIn
       status: "invoiced",
       metadata: {
         traceId: "alpha-measure-vale-norte-2026-03",
+      },
+    },
+  ],
+  invoices: [
+    {
+      id: "alpha-invoice-serra-azul-002",
+      measurementId: "alpha-measure-serra-azul-2026-02",
+      contractId: "alpha-contract-serra-azul-dam",
+      projectId: "alpha-project-serra-azul-dam",
+      customerId: "alpha-customer-hidroserra",
+      issueDate: "2026-03-04",
+      dueDate: "2026-04-18",
+      grossAmount: 1710000,
+      retentionAmount: 85500,
+      netAmount: 1624500,
+      status: "issued",
+      metadata: {
+        traceId: "alpha-invoice-serra-azul-002",
+        measurementNumber: "SA-2026-002",
+      },
+    },
+    {
+      id: "alpha-invoice-vale-norte-006",
+      measurementId: "alpha-measure-vale-norte-2026-03",
+      contractId: "alpha-contract-vale-norte-access-road",
+      projectId: "alpha-project-vale-norte-access-road",
+      customerId: "alpha-customer-vale-norte",
+      issueDate: "2026-04-02",
+      dueDate: "2026-06-01",
+      grossAmount: 1100000,
+      retentionAmount: 55000,
+      netAmount: 1045000,
+      status: "approved",
+      metadata: {
+        traceId: "alpha-invoice-vale-norte-006",
+        measurementNumber: "VN-2026-006",
+      },
+    },
+  ],
+  accountsReceivables: [
+    {
+      id: "alpha-ar-serra-azul-002",
+      invoiceId: "alpha-invoice-serra-azul-002",
+      customerId: "alpha-customer-hidroserra",
+      dueDate: "2026-04-18",
+      expectedReceiptDate: "2026-05-08",
+      amount: 1624500,
+      status: "overdue",
+      daysPastDue: 20,
+      metadata: {
+        traceId: "alpha-ar-serra-azul-002",
+        paymentRisk: "delayed_government_payment",
+      },
+    },
+    {
+      id: "alpha-ar-vale-norte-006",
+      invoiceId: "alpha-invoice-vale-norte-006",
+      customerId: "alpha-customer-vale-norte",
+      dueDate: "2026-06-01",
+      expectedReceiptDate: "2026-06-01",
+      amount: 1045000,
+      status: "open",
+      daysPastDue: 0,
+      metadata: {
+        traceId: "alpha-ar-vale-norte-006",
+      },
+    },
+  ],
+  cashFlowSignals: [
+    {
+      id: "alpha-cash-signal-serra-azul-002",
+      sourceType: "accounts_receivable",
+      sourceId: "alpha-ar-serra-azul-002",
+      date: "2026-05-08",
+      direction: "inflow",
+      amount: 1624500,
+      category: "customer_receipt",
+      description:
+        "At-risk customer receipt from delayed Serra Azul dam measurement invoice.",
+      certainty: "at_risk",
+      metadata: {
+        traceId: "alpha-cash-signal-serra-azul-002",
+        riskReason: "delayed_government_payment",
+      },
+    },
+    {
+      id: "alpha-cash-signal-vale-norte-006",
+      sourceType: "accounts_receivable",
+      sourceId: "alpha-ar-vale-norte-006",
+      date: "2026-06-01",
+      direction: "inflow",
+      amount: 1045000,
+      category: "customer_receipt",
+      description:
+        "Expected customer receipt from Vale Norte access road measurement invoice.",
+      certainty: "expected",
+      metadata: {
+        traceId: "alpha-cash-signal-vale-norte-006",
       },
     },
   ],
