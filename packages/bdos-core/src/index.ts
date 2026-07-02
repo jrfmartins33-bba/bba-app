@@ -10,6 +10,8 @@ export * from "./domain/business-facts-generator";
 export * from "./domain/business-fact";
 export * from "./domain/measurement";
 export * from "./domain/measurement-engine";
+export * from "./domain/measurement-entry";
+export * from "./domain/measurement-entry-processor";
 export {
   MeasurementCycleStatus,
   advanceMeasurementCycle,
