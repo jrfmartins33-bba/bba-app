@@ -4,6 +4,8 @@ export * from "./domain/decision-case";
 export * from "./domain/decision-portfolio";
 export * from "./domain/executive-insight";
 export * from "./domain/executive-brief";
+export * from "./domain/business-reality-simulator";
+export * from "./domain/digital-twin";
 export * from "./domain/business-fact";
 export * from "./capabilities/cash-intelligence";
 export * from "./engines/decision/pipeline/observe";
