@@ -13,7 +13,12 @@ export type BusinessFactSource =
   | "alpha-engenharia.measurement"
   | "alpha-engenharia.invoice"
   | "alpha-engenharia.accounts-receivable"
-  | "alpha-engenharia.cash-flow-signal";
+  | "alpha-engenharia.cash-flow-signal"
+  | "engineering-application.measurement-workspace"
+  | "engineering-application.approval-workflow"
+  | "engineering-application.bulletin-generator"
+  | "engineering-application.export-engine"
+  | "engineering-application.evidence-center";
 
 export type BusinessFactSourceReference = string;
 

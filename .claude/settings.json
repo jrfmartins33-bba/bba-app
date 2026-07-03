@@ -6,7 +6,23 @@
       "Bash(pnpm --filter @bba/lib typecheck)",
       "Bash(pnpm --filter web typecheck)",
       "Bash(pnpm --filter web build)",
-      "mcp__claude_ai_Vercel__get_deployment"
+      "mcp__claude_ai_Vercel__get_deployment",
+      "Bash(npx --no-install tsc src/domain/decision-case/adapters/engineering-business-facts/engineering-decision-case.test.ts --module commonjs --moduleResolution node --target ES2022 --esModuleInterop --skipLibCheck)",
+      "Bash(npx --no-install tsc src/domain/decision-case/adapters/engineering-business-facts/engineering-decision-case.test.ts src/architecture/node-shims.d.ts --module commonjs --moduleResolution node --target ES2022 --esModuleInterop --skipLibCheck)",
+      "Bash(node src/domain/decision-case/adapters/engineering-business-facts/engineering-decision-case.test.js)",
+      "Bash(npx --no-install tsc src/domain/decision-case/adapters/engineering-business-facts/engineering-decision-case.ts --module commonjs --moduleResolution node --target ES2022 --esModuleInterop --skipLibCheck)",
+      "Bash(mkdir -p /tmp/xlsx-inspect)",
+      "Bash(cp \"c:/Users/jrfma/Documents/Documentos/BBA/BBA APP/BM_08_LAGOA DO ARROZ _R_00.xlsx\" bm.zip)",
+      "Bash(cp \"c:/Users/jrfma/Documents/Documentos/BBA/BBA APP/CURVA S_MED-08_R_00.xlsx\" curva.zip)",
+      "Bash(unzip -o -q bm.zip -d bm)",
+      "Bash(unzip -o -q curva.zip -d curva)",
+      "Bash(python3 -c ' *)",
+      "Bash(rm -rf /tmp/xlsx-inspect /tmp/*.zip 2>/dev/null; echo done)",
+      "Bash(find . -maxdepth 3 -iname \".env*\" -not -path \"*/node_modules/*\")",
+      "Bash(grep -n \"\\\\.env\" .gitignore)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }

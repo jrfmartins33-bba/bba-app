@@ -19,3 +19,21 @@ export type {
 } from "./decision-case.types";
 
 export { DecisionCaseState } from "./decision-case.types";
+
+export {
+  createEngineeringDecisionCase,
+  engineeringDecisionCaseAdapter,
+  engineeringDecisionCaseAdapterId,
+  engineeringDecisionCaseDefaultActor,
+  generateEngineeringDecisionCases,
+  summarizeEngineeringDecisionCase,
+} from "./adapters/engineering-business-facts";
+export type {
+  EngineeringDecisionCaseAdapter,
+  EngineeringDecisionCaseMetadata,
+  EngineeringDecisionCaseSnapshot,
+  EngineeringDecisionCaseSummary,
+  EngineeringDecisionCaseTrace,
+  GenerateEngineeringDecisionCasesInput,
+  GenerateEngineeringDecisionCasesResult,
+} from "./adapters/engineering-business-facts";
