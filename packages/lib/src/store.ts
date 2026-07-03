@@ -123,6 +123,21 @@ const emptyCompany: Company = {
   updated_at: ""
 };
 
+export const hasCompleteIdentityBootstrap = (
+  profile: Profile | null | undefined,
+  company: Company | null | undefined
+) => {
+  if (!profile) {
+    return false;
+  }
+
+  if (profile.role === "bba_admin") {
+    return true;
+  }
+
+  return Boolean(profile.company_id && company?.id);
+};
+
 const signedOutState = isSupabaseConfigured
   ? {
       profile: emptyProfile,
@@ -317,6 +332,18 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
       }
 
       const clientState = await loadClientState(session.user.id);
+
+      if (!hasCompleteIdentityBootstrap(clientState.profile, clientState.company)) {
+        clearAuthCookie();
+        set({
+          session: null,
+          adminViewingCompanyId: null,
+          adminHomeSnapshot: null,
+          ...signedOutState
+        });
+        return false;
+      }
+
       set({
         ...clientState,
         session: {
@@ -356,6 +383,13 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
       }
 
       const clientState = await loadClientState(user.id);
+
+      if (!hasCompleteIdentityBootstrap(clientState.profile, clientState.company)) {
+        throw new Error(
+          "A conta ainda nao possui um bootstrap completo. Complete o cadastro antes de entrar."
+        );
+      }
+
       set({
         ...clientState,
         session: {
@@ -386,11 +420,23 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
       const {
-        data: { user }
+        data: { user },
+        error: userError
       } = await supabase.auth.getUser();
+
+      if (userError) {
+        throw userError;
+      }
 
       if (user) {
         const clientState = await loadClientState(user.id);
+
+        if (!hasCompleteIdentityBootstrap(clientState.profile, clientState.company)) {
+          throw new Error(
+            "A conta ainda nao possui um bootstrap completo. Complete o cadastro antes de entrar."
+          );
+        }
+
         set({
           ...clientState,
           session: {
@@ -404,6 +450,10 @@ export const useBbaStore = create<BbaStore>((set, get) => ({
         setAuthCookie();
         return;
       }
+
+      throw new Error(
+        "Nao foi possivel confirmar a sessao do cadastro. Tente novamente."
+      );
     }
 
     const clientId = createId();

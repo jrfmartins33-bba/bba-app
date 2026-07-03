@@ -118,53 +118,72 @@ export const signUp = async (
     return { data, error };
   }
 
-  const { data: createdCompany, error: companyError } = await supabase
-    .from("companies")
-    .insert({
-      owner_id: data.user.id,
-      name: company.name,
-      cnpj: normalizeCnpj(company.cnpj),
-      tax_regime: company.tax_regime ?? null,
-      segment: company.segment ?? null,
-      main_phone: company.main_phone ?? null
-    })
-    .select("id")
-    .single();
+  const userId = data.user.id;
 
-  if (companyError || !createdCompany) {
-    return { data, error: companyError };
+  try {
+    const { data: createdCompany, error: companyError } = await supabase
+      .from("companies")
+      .insert({
+        owner_id: userId,
+        name: company.name,
+        cnpj: normalizeCnpj(company.cnpj),
+        tax_regime: company.tax_regime ?? null,
+        segment: company.segment ?? null,
+        main_phone: company.main_phone ?? null
+      })
+      .select("id")
+      .single();
+
+    if (companyError || !createdCompany) {
+      throw companyError ?? new Error("Nao foi possivel criar a empresa do cliente.");
+    }
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({
+        company_id: createdCompany.id,
+        full_name: company.name,
+        email
+      })
+      .eq("id", userId);
+
+    if (profileError) {
+      throw profileError;
+    }
+
+    const { error: onboardingError } = await createDefaultOnboardingSteps(
+      createdCompany.id
+    );
+
+    if (onboardingError) {
+      throw onboardingError;
+    }
+
+    const { error: channelError } = await createDefaultChatChannels(createdCompany.id);
+
+    if (channelError) {
+      throw channelError;
+    }
+
+    const { error: projectError } = await createInitialProject(createdCompany.id);
+
+    if (projectError) {
+      throw projectError;
+    }
+
+    return { data, error: null };
+  } catch (caught) {
+    const cleanupError = await supabase.auth.admin.deleteUser(userId);
+
+    if (cleanupError.error) {
+      console.error("[BBA Auth] Falha ao remover conta zumbi apos cadastro parcial.", cleanupError.error);
+    }
+
+    return {
+      data,
+      error: caught instanceof Error ? caught : new Error("Nao foi possivel completar o cadastro.")
+    };
   }
-
-  const { error: profileError } = await supabase
-    .from("profiles")
-    .update({
-      company_id: createdCompany.id,
-      full_name: company.name,
-      email
-    })
-    .eq("id", data.user.id);
-
-  if (profileError) {
-    return { data, error: profileError };
-  }
-
-  const { error: onboardingError } = await createDefaultOnboardingSteps(
-    createdCompany.id
-  );
-
-  if (onboardingError) {
-    return { data, error: onboardingError };
-  }
-
-  const { error: channelError } = await createDefaultChatChannels(createdCompany.id);
-
-  if (channelError) {
-    return { data, error: channelError };
-  }
-
-  const { error: projectError } = await createInitialProject(createdCompany.id);
-
-  return { data, error: projectError };
 };
 
 export const signOut = async () => {
