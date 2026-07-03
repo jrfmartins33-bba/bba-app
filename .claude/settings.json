@@ -29,7 +29,9 @@
       "Bash(cat pnpm-workspace.yaml)",
       "Bash(grep -n \"\\\\\"typecheck\\\\\"\" package.json apps/*/package.json packages/*/package.json)",
       "Bash(grep -o '\\\\$\\\\$' supabase/migrations/202607030003_sec04_audit_compliance.sql)",
-      "Bash(pnpm typecheck *)"
+      "Bash(pnpm typecheck *)",
+      "Bash(awk '{print $1}')",
+      "Bash(node --check supabase/tests/governance/data-governance.test.mjs)"
     ],
     "additionalDirectories": [
       "\\tmp"
