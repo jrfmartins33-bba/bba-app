@@ -39,8 +39,6 @@
 BEGIN;
 
 -- BLOCO 1 — PERFIS
-
-
 INSERT INTO public.profiles (
   id,
   full_name,
@@ -66,7 +64,7 @@ INSERT INTO public.profiles (
     'Carlos Mendes',
     'carlos@carlosmendes.com.br',
     'client',
-    NULL,
+    'eeeeeeee-0000-0000-0000-000000000001',
     '{"demo": true, "persona": "MEI de consultoria"}'::jsonb,
     NOW() - INTERVAL '10 days',
     NOW() - INTERVAL '10 days'
@@ -76,7 +74,7 @@ INSERT INTO public.profiles (
     'Vitória Souza',
     'vitoria@vitoriamodas.com.br',
     'client',
-    NULL,
+    'eeeeeeee-0000-0000-0000-000000000002',
     '{"demo": true, "persona": "Varejo de moda"}'::jsonb,
     NOW() - INTERVAL '55 days',
     NOW() - INTERVAL '55 days'
@@ -86,7 +84,7 @@ INSERT INTO public.profiles (
     'Ricardo Horizonte',
     'ricardo@construtorahorizonte.com.br',
     'client',
-    NULL,
+    'eeeeeeee-0000-0000-0000-000000000003',
     '{"demo": true, "persona": "Construção civil"}'::jsonb,
     NOW() - INTERVAL '95 days',
     NOW() - INTERVAL '95 days'
@@ -95,6 +93,7 @@ ON CONFLICT (id) DO UPDATE SET
   full_name = EXCLUDED.full_name,
   email = EXCLUDED.email,
   role = EXCLUDED.role,
+  company_id = EXCLUDED.company_id,
   metadata = EXCLUDED.metadata,
   updated_at = NOW();
 
@@ -147,18 +146,6 @@ INSERT INTO public.companies (
     NOW() - INTERVAL '95 days',
     NOW() - INTERVAL '60 days'
   );
-
-UPDATE public.profiles
-SET company_id = 'eeeeeeee-0000-0000-0000-000000000001'
-WHERE id = 'd9e849b1-cd4a-4855-888c-857d8a7a6050';
-
-UPDATE public.profiles
-SET company_id = 'eeeeeeee-0000-0000-0000-000000000002'
-WHERE id = '9ff84319-08bf-4a67-975e-4a229effdf4d';
-
-UPDATE public.profiles
-SET company_id = 'eeeeeeee-0000-0000-0000-000000000003'
-WHERE id = '30feab53-1950-4099-8699-6ea24bd71d71';
 
 -- BLOCO 3 — ONBOARDING STEPS
 INSERT INTO public.onboarding_steps (
