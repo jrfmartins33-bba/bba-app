@@ -19,7 +19,17 @@
       "Bash(python3 -c ' *)",
       "Bash(rm -rf /tmp/xlsx-inspect /tmp/*.zip 2>/dev/null; echo done)",
       "Bash(find . -maxdepth 3 -iname \".env*\" -not -path \"*/node_modules/*\")",
-      "Bash(grep -n \"\\\\.env\" .gitignore)"
+      "Bash(grep -n \"\\\\.env\" .gitignore)",
+      "Bash(find . -maxdepth 1 -not -path \"./node_modules*\")",
+      "Bash(cat package.json)",
+      "Bash(sed -n '/CREATE TABLE IF NOT EXISTS client_cnaes_secundarios/,/^\\);/p' supabase/migrations/202506290006_modules_onboarding_contratos.sql)",
+      "Bash(sed -n '/CREATE TABLE IF NOT EXISTS fiscal_calendario/,/^\\);/p' supabase/migrations/202506290007_modules_fiscal.sql)",
+      "Bash(sed -n '/CREATE TABLE IF NOT EXISTS client_documents/,/^\\);/p' supabase/migrations/202506290006_modules_onboarding_contratos.sql)",
+      "Bash(sed -n '/CREATE TABLE IF NOT EXISTS service_contracts/,/^\\);/p' supabase/migrations/202506290006_modules_onboarding_contratos.sql)",
+      "Bash(cat pnpm-workspace.yaml)",
+      "Bash(grep -n \"\\\\\"typecheck\\\\\"\" package.json apps/*/package.json packages/*/package.json)",
+      "Bash(grep -o '\\\\$\\\\$' supabase/migrations/202607030003_sec04_audit_compliance.sql)",
+      "Bash(pnpm typecheck *)"
     ],
     "additionalDirectories": [
       "\\tmp"
