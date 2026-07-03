@@ -31,7 +31,10 @@
       "Bash(grep -o '\\\\$\\\\$' supabase/migrations/202607030003_sec04_audit_compliance.sql)",
       "Bash(pnpm typecheck *)",
       "Bash(awk '{print $1}')",
-      "Bash(node --check supabase/tests/governance/data-governance.test.mjs)"
+      "Bash(node --check supabase/tests/governance/data-governance.test.mjs)",
+      "Bash(rm -rf /tmp/ec-contract-test-out)",
+      "Bash(mkdir -p /tmp/ec-contract-test-out)",
+      "Bash(npx --no-install tsc src/domain/engineering-contract/engineering-contract.ts src/domain/engineering-contract/engineering-contract.types.ts src/domain/engineering-contract/index.ts src/domain/engineering-contract/engineering-contract.test.ts --outDir /tmp/ec-contract-test-out --module commonjs --moduleResolution node --target ES2022 --esModuleInterop --skipLibCheck)"
     ],
     "additionalDirectories": [
       "\\tmp"
