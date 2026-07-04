@@ -789,7 +789,7 @@ export default function HojePage() {
                 lineHeight: 1.6,
               }}
             >
-              Encontrei 3 pontos que merecem atenção hoje, usando apenas os dados disponíveis no BBA App.
+              Encontrei 3 pontos que merecem atenção hoje, usando apenas os dados disponíveis na BBA Platform.
             </p>
           </div>
           <div

@@ -200,7 +200,7 @@ const buildDefaultChannels = (companyId: string): ChatChannel[] =>
 const buildAdminWorkspace = (profile: Profile): Company => ({
   id: profile.company_id ?? profile.id,
   owner_id: profile.id,
-  name: "BBA App",
+  name: "BBA Platform",
   cnpj: null,
   tax_regime: null,
   segment: null,

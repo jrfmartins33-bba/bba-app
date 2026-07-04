@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useBbaStore } from '@bba/lib'
 import {
   Home,
+  LayoutGrid,
   Building2,
   Wallet,
   FileText,
@@ -35,6 +36,12 @@ const NAV_MAIN = [
     label: 'Hoje',
     icon: Home,
     description: 'Cockpit · Radar · Ações',
+  },
+  {
+    href: '/workspaces',
+    label: 'Workspaces',
+    icon: LayoutGrid,
+    description: 'Contabilidade · Engenharia · Novos módulos',
   },
   {
     href: '/empresa',
@@ -109,7 +116,7 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
           </svg>
         </div>
         <div className="bba-sidebar__brand-text">
-          <span className="bba-sidebar__brand-name">BBA App</span>
+          <span className="bba-sidebar__brand-name">BBA Platform</span>
           <span className="bba-sidebar__brand-role">Portal do cliente</span>
         </div>
       </div>

@@ -16,8 +16,8 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
               width={112}
             />
             <div>
-              <strong>BBA App</strong>
-              <span>Gestao operacional do cliente</span>
+              <strong>BBA Platform</strong>
+              <span>Operational Decision Platform</span>
             </div>
           </div>
           <h1>Rotinas, tarefas e conversas em um unico ambiente.</h1>

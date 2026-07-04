@@ -36,10 +36,29 @@
       "Bash(mkdir -p /tmp/ec-contract-test-out)",
       "Bash(npx --no-install tsc src/domain/engineering-contract/engineering-contract.ts src/domain/engineering-contract/engineering-contract.types.ts src/domain/engineering-contract/index.ts src/domain/engineering-contract/engineering-contract.test.ts --outDir /tmp/ec-contract-test-out --module commonjs --moduleResolution node --target ES2022 --esModuleInterop --skipLibCheck)",
       "Bash(npx tsc *)",
-      "Bash(npx tsx *)"
+      "Bash(npx tsx *)",
+      "Bash(mkdir -p \"packages/bdos-core/src/domain/document-reconstruction\")",
+      "Bash(grep -oE '[A-Za-z0-9_]+$')",
+      "Bash(awk '/^export \\\\{$/{flag=1} flag{print} /from \".\\\\/domain\\\\/document-reconstruction\";$/{if\\(flag\\){flag=0}}' src/index.ts)",
+      "Bash(cat)",
+      "Bash(sort -u /c/Users/jrfma/AppData/Local/Temp/claude/idx_exports.txt)",
+      "Bash(node -e ' *)",
+      "Bash(npm run *)",
+      "Bash(nohup npm run dev)",
+      "Bash(echo \"started pid $!\")",
+      "Bash(curl -s -o /c/Users/jrfma/AppData/Local/Temp/claude/workspaces.html -w \"HTTP_STATUS:%{http_code}\\\\n\" http://localhost:3000/workspaces)",
+      "Bash(curl -s -o /c/Users/jrfma/AppData/Local/Temp/claude/engenharia.html -w \"HTTP_STATUS:%{http_code}\\\\n\" http://localhost:3000/workspaces/engenharia)",
+      "Bash(curl -s -o /c/Users/jrfma/AppData/Local/Temp/claude/hoje.html -w \"HTTP_STATUS:%{http_code}\\\\n\" http://localhost:3000/hoje)",
+      "Bash(curl -s -o /c/Users/jrfma/AppData/Local/Temp/claude/login.html -w \"HTTP_STATUS:%{http_code}\\\\n\" http://localhost:3000/login)",
+      "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '\\\\''*next dev*'\\\\'' -or $_.CommandLine -like '\\\\''*next-server*'\\\\'' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }')",
+      "Bash(curl -s -o /dev/null -w \"post-stop status: %{http_code}\\\\n\" http://localhost:3000/workspaces --max-time 3)",
+      "Bash(curl -s -o /dev/null -w \"status: %{http_code}\\\\n\" http://localhost:3000/workspaces --max-time 3)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(curl -s -o /c/Users/jrfma/AppData/Local/Temp/claude/engenharia2.html -w \"HTTP_STATUS:%{http_code}\\\\n\" http://localhost:3000/workspaces/engenharia --max-time 15)"
     ],
     "additionalDirectories": [
-      "\\tmp"
+      "\\tmp",
+      "C:\\Users\\jrfma\\Documents\\Documentos\\BBA\\BBA APP\\packages\\bdos-core\\packages\\bdos-core\\src\\domain"
     ]
   }
 }
