@@ -22,6 +22,7 @@ interface CapabilityCard {
   description: string;
   status: CapabilityStatus;
   icon: LucideIcon;
+  href?: string;
 }
 
 const CAPABILITIES: CapabilityCard[] = [
@@ -30,7 +31,8 @@ const CAPABILITIES: CapabilityCard[] = [
     title: "Evidências",
     description: "Organização de fotos, registros de campo, documentos e observações técnicas.",
     status: "Pronto",
-    icon: FolderSearch
+    icon: FolderSearch,
+    href: "/workspaces/engenharia/evidencias"
   },
   {
     id: "memorias-calculo",
@@ -193,6 +195,11 @@ export default function EngenhariaWorkspacePage() {
                 <Icon size={20} />
               </div>
               <p className="workspace-card__description">{capability.description}</p>
+              {capability.href ? (
+                <Link className="bba-button bba-button--secondary bba-button--sm" href={capability.href}>
+                  Abrir
+                </Link>
+              ) : null}
             </Card>
           );
         })}

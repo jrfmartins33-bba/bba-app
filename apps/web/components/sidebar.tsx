@@ -151,33 +151,25 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
         <div className="bba-sidebar__divider" />
 
         {/* ── Workspaces (navegação contextual, config-driven) ──
-             Cada Workspace expande automaticamente quando a rota atual
-             está dentro do seu `basePath` — nenhum estado manual, nenhum
-             clique de expandir/recolher: o App Router (via usePathname)
-             é a única fonte de verdade. Adicionar um novo Workspace nunca
-             exige editar este componente — apenas WORKSPACE_NAV_CONFIG. */}
-        {WORKSPACE_NAV_CONFIG.map((workspace) => {
-          const WorkspaceIcon = workspace.icon
-          const isWorkspaceActive = pathname.startsWith(workspace.basePath)
+             O grupo de um Workspace só existe na Sidebar quando a rota
+             atual está dentro do seu `basePath` — fora disso, nenhum
+             grupo é renderizado (nem o próprio cabeçalho "Engenharia").
+             Nenhum estado manual, nenhum clique de expandir/recolher: o
+             App Router (via usePathname) é a única fonte de verdade.
+             Adicionar um novo Workspace nunca exige editar este
+             componente — apenas WORKSPACE_NAV_CONFIG. */}
+        {WORKSPACE_NAV_CONFIG.filter((workspace) => pathname.startsWith(workspace.basePath)).map(
+          (workspace) => {
+            const WorkspaceIcon = workspace.icon
 
-          return (
-            <div className="bba-nav-workspace-group" key={workspace.id}>
-              <Link
-                href={workspace.basePath}
-                className={`bba-nav-item ${isWorkspaceActive ? 'bba-nav-item--active' : ''}`}
-              >
-                <WorkspaceIcon />
-                <span>{workspace.label}</span>
-                <ChevronDown
-                  className={`bba-nav-workspace-chevron ${
-                    isWorkspaceActive
-                      ? 'bba-nav-workspace-chevron--open'
-                      : 'bba-nav-workspace-chevron--closed'
-                  }`}
-                />
-              </Link>
+            return (
+              <div className="bba-nav-workspace-group" key={workspace.id}>
+                <Link href={workspace.basePath} className="bba-nav-item bba-nav-item--active">
+                  <WorkspaceIcon />
+                  <span>{workspace.label}</span>
+                  <ChevronDown className="bba-nav-workspace-chevron bba-nav-workspace-chevron--open" />
+                </Link>
 
-              {isWorkspaceActive && (
                 <div className="bba-nav-workspace-items">
                   {workspace.items.map((item) => {
                     const ItemIcon = item.icon
@@ -206,13 +198,17 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
                     )
                   })}
                 </div>
-              )}
-            </div>
-          )
-        })}
+              </div>
+            )
+          }
+        )}
 
-        {/* ── Divisor ── */}
-        <div className="bba-sidebar__divider" />
+        {/* ── Divisor (só existe quando algum Workspace está aberto,
+             evitando um divisor duplicado quando o grupo acima não
+             renderiza nada) ── */}
+        {WORKSPACE_NAV_CONFIG.some((workspace) => pathname.startsWith(workspace.basePath)) && (
+          <div className="bba-sidebar__divider" />
+        )}
 
         <div className="bba-nav-section">
           {NAV_SECONDARY.map((item) => {

@@ -1313,3 +1313,76 @@ button {
   color: var(--text-primary);
   font-size: 13.5px;
 }
+
+.workspace-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Mesma receita visual de `.admin-table` (já usada em /admin), sob um nome
+   que reflete o domínio desta tela — nenhum novo estilo de tabela criado. */
+.workspace-table-wrap {
+  overflow-x: auto;
+}
+
+.workspace-table {
+  border-collapse: collapse;
+  min-width: 720px;
+  width: 100%;
+}
+
+.workspace-table th,
+.workspace-table td {
+  border-bottom: 1px solid var(--bba-line);
+  padding: 12px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.workspace-table th {
+  color: var(--bba-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.workspace-table td {
+  color: var(--bba-ink);
+  font-size: 0.86rem;
+}
+
+.workspace-table td strong {
+  color: var(--bba-navy);
+}
+
+.workspace-table__type {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workspace-table__type svg {
+  width: 15px;
+  height: 15px;
+  color: var(--bba-gold-soft);
+  flex-shrink: 0;
+}
+
+.bba-main__content--standard .workspace-table th,
+.bba-main__content--standard .workspace-table td {
+  border-color: rgba(185, 149, 79, 0.16);
+}
+
+.bba-main__content--standard .workspace-table th {
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(248, 246, 241, 0.72);
+}
+
+.bba-main__content--standard .workspace-table td {
+  color: rgba(248, 246, 241, 0.88);
+}
+
+.bba-main__content--standard .workspace-table td strong {
+  color: #ffffff;
+}
