@@ -39,7 +39,8 @@ const CAPABILITIES: CapabilityCard[] = [
     title: "Memórias de Cálculo",
     description: "Cálculo estruturado de quantitativos, fórmulas e trilhas auditáveis.",
     status: "Pronto",
-    icon: ClipboardList
+    icon: ClipboardList,
+    href: "/workspaces/engenharia/memorias"
   },
   {
     id: "documentos",
