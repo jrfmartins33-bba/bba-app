@@ -11,7 +11,6 @@ import {
   Wallet,
   FileText,
   Users,
-  MessageSquare,
   ChevronDown,
   LogOut,
   Shield,
@@ -22,6 +21,7 @@ import {
   Zap,
   Settings,
 } from 'lucide-react'
+import { WORKSPACE_NAV_CONFIG } from './workspace-nav-config'
 
 interface SidebarProps {
   userName?: string
@@ -30,7 +30,7 @@ interface SidebarProps {
   alertCount?: number
 }
 
-const NAV_MAIN = [
+const NAV_TOP = [
   {
     href: '/hoje',
     label: 'Hoje',
@@ -43,6 +43,9 @@ const NAV_MAIN = [
     icon: LayoutGrid,
     description: 'Contabilidade · Engenharia · Novos módulos',
   },
+]
+
+const NAV_SECONDARY = [
   {
     href: '/empresa',
     label: 'Empresa',
@@ -67,12 +70,6 @@ const NAV_MAIN = [
     icon: Users,
     description: 'RH · Folha · Encargos',
   },
-  {
-    href: '/bba',
-    label: 'BBA',
-    icon: MessageSquare,
-    description: 'Consultor · Solicitações',
-  },
 ]
 
 const NAV_MOTOR = [
@@ -91,6 +88,7 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
 
   const isActive = (href: string) => {
     if (href === '/hoje') return pathname === '/hoje' || pathname === '/'
+    if (href === '/workspaces') return pathname === '/workspaces'
     return pathname.startsWith(href)
   }
 
@@ -125,7 +123,7 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
       <nav className="bba-sidebar__nav" aria-label="Navegação principal">
 
         <div className="bba-nav-section">
-          {NAV_MAIN.map((item) => {
+          {NAV_TOP.map((item) => {
             const Icon = item.icon
             const active = isActive(item.href)
             const showBadge = item.href === '/hoje' && alertCount && alertCount > 0
@@ -144,6 +142,92 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
                     {alertCount}
                   </span>
                 )}
+              </Link>
+            )
+          })}
+        </div>
+
+        {/* ── Divisor ── */}
+        <div className="bba-sidebar__divider" />
+
+        {/* ── Workspaces (navegação contextual, config-driven) ──
+             Cada Workspace expande automaticamente quando a rota atual
+             está dentro do seu `basePath` — nenhum estado manual, nenhum
+             clique de expandir/recolher: o App Router (via usePathname)
+             é a única fonte de verdade. Adicionar um novo Workspace nunca
+             exige editar este componente — apenas WORKSPACE_NAV_CONFIG. */}
+        {WORKSPACE_NAV_CONFIG.map((workspace) => {
+          const WorkspaceIcon = workspace.icon
+          const isWorkspaceActive = pathname.startsWith(workspace.basePath)
+
+          return (
+            <div className="bba-nav-workspace-group" key={workspace.id}>
+              <Link
+                href={workspace.basePath}
+                className={`bba-nav-item ${isWorkspaceActive ? 'bba-nav-item--active' : ''}`}
+              >
+                <WorkspaceIcon />
+                <span>{workspace.label}</span>
+                <ChevronDown
+                  className={`bba-nav-workspace-chevron ${
+                    isWorkspaceActive
+                      ? 'bba-nav-workspace-chevron--open'
+                      : 'bba-nav-workspace-chevron--closed'
+                  }`}
+                />
+              </Link>
+
+              {isWorkspaceActive && (
+                <div className="bba-nav-workspace-items">
+                  {workspace.items.map((item) => {
+                    const ItemIcon = item.icon
+
+                    if (!item.href) {
+                      return (
+                        <span className="bba-nav-item bba-nav-subitem bba-nav-item--soon" key={item.label}>
+                          <ItemIcon />
+                          <span>{item.label}</span>
+                          <span className="bba-nav-item__soon-tag">em breve</span>
+                        </span>
+                      )
+                    }
+
+                    const itemActive = pathname === item.href
+
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={`bba-nav-item bba-nav-subitem ${itemActive ? 'bba-nav-item--active' : ''}`}
+                      >
+                        <ItemIcon />
+                        <span>{item.label}</span>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {/* ── Divisor ── */}
+        <div className="bba-sidebar__divider" />
+
+        <div className="bba-nav-section">
+          {NAV_SECONDARY.map((item) => {
+            const Icon = item.icon
+            const active = isActive(item.href)
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`bba-nav-item ${active ? 'bba-nav-item--active' : ''}`}
+                title={item.description}
+              >
+                <Icon />
+                <span>{item.label}</span>
               </Link>
             )
           })}

@@ -40,8 +40,8 @@ const CAPABILITIES: CapabilityCard[] = [
     icon: ClipboardList
   },
   {
-    id: "reconstrucao-documental",
-    title: "Reconstrução Documental",
+    id: "documentos",
+    title: "Documentos",
     description: "Reconstrução de boletins, relatórios e documentos técnicos para revisão.",
     status: "Pronto",
     icon: FileStack

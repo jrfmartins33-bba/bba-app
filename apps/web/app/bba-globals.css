@@ -380,6 +380,73 @@ button {
   opacity: 1;
 }
 
+/* ── Grupo de Workspace (navegação contextual) ──
+   Expande/recolhe com base na rota atual (usePathname), não em estado de
+   clique — por isso não reaproveita as classes --open/--closed acima
+   (que animam um toggle manual). Aqui os subitens só existem no DOM
+   quando o Workspace está ativo. */
+.bba-nav-workspace-group {
+  padding: 0 10px;
+  margin-bottom: 4px;
+}
+
+.bba-nav-workspace-chevron {
+  margin-left: auto;
+  width: 14px !important;
+  height: 14px !important;
+  opacity: 0.6;
+  transition: transform var(--medium) var(--ease);
+}
+
+.bba-nav-workspace-chevron--open {
+  transform: rotate(0deg);
+}
+
+.bba-nav-workspace-chevron--closed {
+  transform: rotate(-90deg);
+}
+
+.bba-nav-workspace-items {
+  margin: 2px 0 4px 20px;
+  padding-left: 12px;
+  border-left: 1px solid var(--app-divider);
+  display: grid;
+  gap: 1px;
+}
+
+.bba-nav-subitem {
+  min-height: 34px;
+  font-size: 12px;
+}
+
+.bba-nav-subitem svg {
+  width: 14px;
+  height: 14px;
+}
+
+.bba-nav-item--soon {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.bba-nav-item--soon:hover {
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.bba-nav-item--soon:hover svg {
+  opacity: 0.7;
+}
+
+.bba-nav-item__soon-tag {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 /* ── Área do usuário (bottom) ── */
 .bba-sidebar__user {
   position: relative;
