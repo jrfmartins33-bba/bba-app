@@ -1575,19 +1575,58 @@ button {
    packages/bdos-core/docs/BDS_ARCHITECTURE_PRINCIPLES.md). Sem lógica,
    sem integração — apenas estrutura e placeholders.
 
-   UI Sprint M2.1 substituiu o estado "recolhido" (opacity reduzida,
-   borda tracejada) pelo destaque "highlight" — o padrão oficial passou
-   a ser sempre totalmente visível, nunca atrás de um segundo clique.
+   UI Sprint M2.2 tornou o destaque dourado intrínseco ao componente
+   (sempre "o painel do BBA Advisor", nunca um modificador opcional) e
+   introduziu o padrão collapsed/expanded — PRINCIPLE 003 (Progressive
+   Disclosure) substitui a regra "sempre totalmente visível" da M2.1.
 ══════════════════════════════════════════ */
 
 /* Mesma receita visual de `.workspace-card--highlight` (usada em
    "Projeto ativo"/"BBA Advisor"), reaproveitada por valor — não por
    nome de classe — para manter packages/ui/src/decision/* desacoplado
-   de convenções específicas de apps/web. */
-.bba-main__content--standard .decision-insight-card--highlight {
+   de convenções específicas de apps/web. Sempre aplicado (não é mais
+   um modificador opcional): todo `DecisionInsightCard` é o painel do
+   BBA Advisor. */
+.bba-main__content--standard .decision-insight-card {
   background: linear-gradient(135deg, rgba(18, 49, 95, 0.85), rgba(12, 31, 63, 0.9));
   border-color: var(--bba-gold-dim);
   box-shadow: 0 0 0 1px rgba(185, 149, 79, 0.08) inset;
+}
+
+/* Mesma receita visual de `.workspace-card__icon`, reaproveitada por
+   valor pelo mesmo motivo acima. */
+.decision-insight-card__icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--bba-gold-dim);
+  border-radius: 8px;
+  background: rgba(185, 149, 79, 0.1);
+  color: var(--bba-gold-soft);
+  margin-bottom: 12px;
+}
+
+.decision-insight-card__subtitle {
+  margin: 0 0 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.decision-insight-card__insight {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.decision-insight-card__sections {
+  margin: 16px 0;
+}
+
+.decision-insight-card > .bba-button {
+  margin-top: 16px;
 }
 
 .decision-section {

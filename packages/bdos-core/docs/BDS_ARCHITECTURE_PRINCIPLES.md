@@ -75,20 +75,57 @@ parte de um número agregado no Dashboard Executivo e, sem sair do
 produto, consegue descer até a evidência de campo específica (uma
 foto, uma coordenada, um diário de obra) que sustenta aquele número.
 
+## PRINCIPLE 003 — Progressive Disclosure
+
+A interface deve apresentar primeiro o resumo executivo e revelar
+detalhes progressivamente apenas quando o usuário solicitar.
+
+Fluxo padrão:
+
+```
+Indicador
+    ↓
+Insight
+    ↓
+Análise
+    ↓
+Causa
+    ↓
+Impacto
+    ↓
+Atividade
+    ↓
+Evidência
+    ↓
+Documento
+```
+
+Nenhum painel de decisão deve nascer expandido: o estado inicial é
+sempre um resumo (status + um insight de uma linha); o detalhamento
+completo (PRINCIPLE 001) só aparece quando o próprio usuário pede,
+dentro do mesmo painel — nunca via modal, drawer ou nova página. Este
+princípio substitui a expectativa da UI Sprint M2.1 de que a análise
+ficaria sempre totalmente visível; a partir da M2.2, "sempre visível
+por padrão" torna-se "sempre disponível sob demanda, em um clique,
+sem sair do lugar".
+
 ---
 
-## Estado de implementação (UI Sprint M2)
+## Estado de implementação (UI Sprint M2.2)
 
 - ✅ Princípios documentados (este arquivo).
-- ✅ Componentes visuais de suporte criados em
-  `packages/ui/src/decision/` (`DecisionInsightCard`, `DecisionSection`,
-  `DecisionPlaceholder`) — sem lógica, sem estado, sem integração.
-- ✅ Primeira aplicação mock em `/workspaces/engenharia/planejamento`
-  (card "Análise da Situação", todos os campos como placeholder; botão
-  "Entender" inativo, sem modal/drawer/navegação).
-- ⏳ Nenhum Engine ainda alimenta esses componentes com dados reais e
-  nenhuma navegação de drill-down (Principle 002) foi implementada —
-  isso é trabalho de sprints futuras, uma por Engine.
+- ✅ Componente com estado — `DecisionInsightCard` — implementando
+  Progressive Disclosure (collapsed/expanded) em
+  `packages/ui/src/decision/`. É o único componente do módulo com
+  `useState`; `DecisionSection` e `DecisionPlaceholder` seguem sem
+  lógica, sem estado, sem integração.
+- ✅ Aplicação mock em `/workspaces/engenharia/planejamento`: painel
+  "BBA Advisor" / "Análise do Planejamento", nascendo recolhido
+  (status + insight de uma linha), com as 6 seções do PRINCIPLE 001
+  reveladas ao expandir — todos os campos como placeholder.
+- ⏳ Nenhum Engine ainda alimenta esse painel com dados reais e nenhuma
+  navegação de drill-down (Principle 002) foi implementada — isso é
+  trabalho de sprints futuras, uma por Engine.
 
 ## Engines que deverão adotar estes princípios
 

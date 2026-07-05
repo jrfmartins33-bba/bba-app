@@ -7,7 +7,6 @@ import {
   Filter,
   ListChecks,
   Plus,
-  Sparkles,
   Target,
   UploadCloud
 } from "lucide-react";
@@ -15,10 +14,9 @@ import {
   AnimatedCounter,
   Card,
   DecisionInsightCard,
-  DecisionPlaceholder,
-  DecisionSection,
   ProgressBar,
-  StatusBadge
+  StatusBadge,
+  type DecisionInsightCardSection
 } from "@bba/ui";
 
 type ActivityStatus = "Concluída" | "Em andamento" | "Planejada";
@@ -150,13 +148,21 @@ const SUMMARY = [
 // Traceability) em packages/bdos-core/docs/BDS_ARCHITECTURE_PRINCIPLES.md.
 // Cada placeholder comunica especificamente o que o Planning Engine
 // fará por essa seção no futuro — nenhum dado ou conclusão inventada.
-const AWAITING_LOCATION = "Aguardando identificação automática.";
-const AWAITING_CAUSE = "Aguardando análise das causas.";
-const AWAITING_IMPACT = "Aguardando cálculo de impacto.";
-const AWAITING_EVIDENCE = "Aguardando integração com os módulos operacionais.";
-const AWAITING_RECOMMENDATION = "Será gerada automaticamente pelo BBA Advisor.";
-const AWAITING_CONFIDENCE =
-  "Será calculado automaticamente conforme a quantidade e qualidade das evidências disponíveis.";
+const DECISION_SECTIONS: DecisionInsightCardSection[] = [
+  { title: "ONDE ESTÁ O DESVIO?", placeholder: "Aguardando identificação automática." },
+  { title: "O QUE ESTÁ CAUSANDO?", placeholder: "Aguardando análise das causas." },
+  { title: "QUAL O IMPACTO?", placeholder: "Aguardando cálculo de impacto." },
+  {
+    title: "QUAIS EVIDÊNCIAS SUPORTAM?",
+    placeholder: "Aguardando integração com os módulos operacionais."
+  },
+  { title: "QUAL A AÇÃO RECOMENDADA?", placeholder: "Será gerada automaticamente pelo BBA Advisor." },
+  {
+    title: "NÍVEL DE CONFIANÇA",
+    placeholder:
+      "Será calculado automaticamente conforme a quantidade e qualidade das evidências disponíveis."
+  }
+];
 
 export default function PlanejamentoPage() {
   return (
@@ -236,31 +242,17 @@ export default function PlanejamentoPage() {
           </dl>
         </Card>
 
-        {/* Padrão oficial (UI Sprint M2.1, ver packages/ui/src/decision/README.md):
-            sempre totalmente visível, nunca atrás de um segundo clique.
-            Motion (preparado, não implementado): ver comentário em
-            DecisionInsightCard/DecisionSection sobre SlideUp/FadeIn/
-            Progressive Reveal via packages/ui/src/motion/. */}
-        <DecisionInsightCard className="span-12" highlight title="Análise Inteligente">
-          <DecisionSection title="ONDE">
-            <DecisionPlaceholder>{AWAITING_LOCATION}</DecisionPlaceholder>
-          </DecisionSection>
-          <DecisionSection title="POR QUÊ">
-            <DecisionPlaceholder>{AWAITING_CAUSE}</DecisionPlaceholder>
-          </DecisionSection>
-          <DecisionSection title="IMPACTO">
-            <DecisionPlaceholder>{AWAITING_IMPACT}</DecisionPlaceholder>
-          </DecisionSection>
-          <DecisionSection title="EVIDÊNCIAS">
-            <DecisionPlaceholder>{AWAITING_EVIDENCE}</DecisionPlaceholder>
-          </DecisionSection>
-          <DecisionSection title="AÇÃO RECOMENDADA">
-            <DecisionPlaceholder>{AWAITING_RECOMMENDATION}</DecisionPlaceholder>
-          </DecisionSection>
-          <DecisionSection title="NÍVEL DE CONFIANÇA">
-            <DecisionPlaceholder>{AWAITING_CONFIDENCE}</DecisionPlaceholder>
-          </DecisionSection>
-        </DecisionInsightCard>
+        {/* Padrão oficial "BBA Advisor Decision Panel" (UI Sprint M2.2, ver
+            packages/ui/src/decision/README.md): nasce recolhido
+            (Progressive Disclosure, PRINCIPLE 003) e expande no mesmo card. */}
+        <DecisionInsightCard
+          className="span-12"
+          insight="Existe 1 ponto que merece atenção."
+          sections={DECISION_SECTIONS}
+          status="Dentro do prazo"
+          subtitle="Análise do Planejamento"
+          title="BBA Advisor"
+        />
 
         {SUMMARY.map((item) => {
           const Icon = item.icon;
@@ -283,7 +275,7 @@ export default function PlanejamentoPage() {
           );
         })}
 
-        <Card className="span-8 workspace-card" title="Cronograma">
+        <Card className="span-12 workspace-card" title="Cronograma">
           <div className="workspace-table-wrap">
             <table className="workspace-table">
               <thead>
@@ -314,23 +306,6 @@ export default function PlanejamentoPage() {
               </tbody>
             </table>
           </div>
-        </Card>
-
-        <Card className="span-4 workspace-card workspace-card--highlight" title="BBA Advisor">
-          <div className="workspace-card__icon" aria-hidden="true">
-            <Sparkles size={20} />
-          </div>
-          <p className="workspace-card__description">Fernando,</p>
-          <p className="workspace-card__description">
-            o planejamento encontra-se consistente com a evolução atual da obra.
-          </p>
-          <p className="workspace-card__description">
-            As próximas atividades críticas concentram-se na execução da fundação e preparação das
-            estruturas hidráulicas.
-          </p>
-          <p className="workspace-card__note">
-            Recomendação: acompanhar diariamente as atividades do caminho crítico.
-          </p>
         </Card>
       </section>
     </>

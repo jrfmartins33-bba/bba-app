@@ -1,7 +1,11 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
 export interface DecisionSectionProps extends Omit<HTMLAttributes<HTMLDivElement>, "title" | "children"> {
-  /** e.g. "ONDE", "POR QUÊ", "IMPACTO", "EVIDÊNCIAS", "AÇÃO RECOMENDADA", "NÍVEL DE CONFIANÇA". */
+  /**
+   * e.g. "ONDE ESTÁ O DESVIO?", "O QUE ESTÁ CAUSANDO?", "QUAL O
+   * IMPACTO?", "QUAIS EVIDÊNCIAS SUPORTAM?", "QUAL A AÇÃO
+   * RECOMENDADA?", "NÍVEL DE CONFIANÇA".
+   */
   title: string;
   children: ReactNode;
 }
@@ -14,7 +18,13 @@ const cx = (...classes: Array<string | false | undefined>) => classes.filter(Boo
  * Renders whatever `children` it's given — usually a `DecisionPlaceholder`
  * today, real content once an Engine feeds it. No logic, no state, no hooks.
  *
- * Motion (prepared, not implemented — UI Sprint M2.1): as each section's
+ * Since UI Sprint M2.2, `DecisionInsightCard` renders these internally
+ * from its `sections` prop (only while expanded) — pages consuming the
+ * official BBA Advisor Decision Panel no longer compose `DecisionSection`
+ * directly. It stays exported for any case that needs the bare building
+ * block.
+ *
+ * Motion (prepared, not implemented): as each section's
  * `DecisionPlaceholder` is replaced by real content, expect a staggered
  * `FadeIn` per section ("Progressive Reveal", `packages/ui/src/motion/`)
  * rather than the whole card appearing at once.

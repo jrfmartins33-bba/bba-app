@@ -1,69 +1,101 @@
 # Decision Traceability — Componentes de UI
 
-Componentes visuais que preparam a plataforma para os dois primeiros
-princípios do BDS — ver
-`packages/bdos-core/docs/BDS_ARCHITECTURE_PRINCIPLES.md`:
-**PRINCIPLE 001 — Full Traceability** e **PRINCIPLE 002 — Mandatory
-Drill-down**.
+Componentes visuais que preparam a plataforma para os princípios do
+BDS — ver `packages/bdos-core/docs/BDS_ARCHITECTURE_PRINCIPLES.md`:
+**PRINCIPLE 001 — Full Traceability**, **PRINCIPLE 002 — Mandatory
+Drill-down** e **PRINCIPLE 003 — Progressive Disclosure**.
 
-Nenhum destes componentes tem lógica, estado ou hooks — são blocos de
-apresentação puros, prontos para receber conteúdo real quando um Engine
-(Planning, Execution, Finance, Measurement, Evidence, Geospatial,
-Approval), o Dashboard Executivo ou o BBA Advisor estiver pronto para
-alimentá-los.
+Nenhum destes componentes busca dados ou integra com um Engine — são
+blocos de apresentação, prontos para receber conteúdo real quando um
+Engine (Planning, Execution, Finance, Measurement, Evidence,
+Geospatial, Approval), o Dashboard Executivo ou o BBA Advisor estiver
+pronto para alimentá-los.
 
 ## Componentes
 
-- **`DecisionInsightCard`** — wrapper de mais alto nível para a análise
-  de um indicador. Reaproveita o `Card` já existente (`@bba/ui`) em vez
-  de recriar chrome de card. Aceita `highlight` como uma prop puramente
-  visual (não é um toggle interativo) para o mesmo destaque em gradiente
-  dourado já usado por cards como "BBA Advisor".
+- **`DecisionInsightCard`** — o painel oficial, descrito abaixo. É o
+  único componente do módulo com estado (`useState`, apenas para
+  `expanded`).
 - **`DecisionSection`** — uma pergunta rotulada da estrutura de Full
-  Traceability (ex.: "ONDE", "POR QUÊ", "IMPACTO", "EVIDÊNCIAS", "AÇÃO
-  RECOMENDADA", "NÍVEL DE CONFIANÇA"). Renderiza qualquer `children` —
-  hoje, tipicamente um `DecisionPlaceholder`.
-- **`DecisionPlaceholder`** — texto de espera específico por seção (ex.:
-  "Aguardando identificação automática."), usado enquanto nenhum Engine
-  real alimenta a seção. Cada seção tem seu próprio texto — nunca a
-  mesma frase repetida.
+  Traceability (ex.: "ONDE ESTÁ O DESVIO?", "O QUE ESTÁ CAUSANDO?",
+  "QUAL O IMPACTO?", "QUAIS EVIDÊNCIAS SUPORTAM?", "QUAL A AÇÃO
+  RECOMENDADA?", "NÍVEL DE CONFIANÇA"). Desde a UI Sprint M2.2, é
+  renderizada internamente pela `DecisionInsightCard` a partir de sua
+  prop `sections`; permanece exportada para qualquer caso que precise
+  do bloco isolado. Sem lógica, sem estado.
+- **`DecisionPlaceholder`** — texto de espera específico por seção
+  (ex.: "Aguardando identificação automática."), usado enquanto nenhum
+  Engine real alimenta a seção. Cada seção tem seu próprio texto —
+  nunca a mesma frase repetida. Sem lógica, sem estado.
 
-## Decision Experience Pattern (UI Sprint M2.1)
+## BBA Advisor Decision Panel (padrão oficial, UI Sprint M2.2)
 
-Este é o padrão oficial de experiência para qualquer indicador da BBA
-Platform:
+Este é o padrão oficial de painel de decisão para qualquer indicador
+da BBA Platform, implementando Progressive Disclosure (PRINCIPLE 003):
 
-- **Todo indicador gera automaticamente uma análise.** Não existe botão
-  "Entender" nem qualquer outro segundo passo — a `DecisionInsightCard`
-  correspondente já está montada e visível assim que o indicador
-  aparece na tela.
-- **O usuário nunca precisa solicitar a explicação.** A plataforma se
-  explica sozinha; o que muda, conforme cada Engine é integrado, é o
-  conteúdo (de `DecisionPlaceholder` para dado real), nunca a
-  necessidade de uma ação do usuário para revelá-lo.
-- **O padrão é único e será reutilizado por todos os Engines** —
-  Planning, Execution, Finance, Measurement, Evidence, Geospatial,
-  Approval, o Dashboard Executivo e o BBA Advisor. Nenhum Engine deve
-  criar sua própria variação visual desta experiência.
+- **Nasce recolhido (estado resumido).** Mostra apenas `title`
+  ("BBA Advisor"), `subtitle` (o que este painel analisa, ex.:
+  "Análise do Planejamento"), `status` (badge, ex.: "Dentro do
+  prazo") e `insight` (uma linha de resumo executivo, ex.: "Existe 1
+  ponto que merece atenção."), além do botão "Expandir análise".
+- **Expande no mesmo card (estado detalhado).** Ao clicar em
+  "Expandir análise", o próprio card revela as seções de Full
+  Traceability (PRINCIPLE 001) passadas via prop `sections` — nunca um
+  modal, drawer ou nova página. O botão passa a "Recolher análise" e
+  alterna de volta ao estado resumido.
+- **Uma identidade visual única.** Sempre o mesmo estilo "BBA Advisor"
+  (gradiente navy/dourado, ícone `Sparkles`) — nenhum Engine deve criar
+  sua própria variação visual.
+- **API por props, não por composição.** A página consumidora passa
+  `title`, `subtitle`, `status`, `insight` e `sections` (array de
+  `{ title, placeholder }`); não compõe `DecisionSection`/
+  `DecisionPlaceholder` diretamente como filhos. Isso mantém a página
+  como Server Component simples, sem lógica de UI própria.
 
-## Como serão reutilizados
+### Props
 
-Cada Engine, ao ganhar sua própria tela de indicadores, deve montar sua
-"Análise Inteligente" equivalente com estes mesmos três componentes —
-substituindo os `DecisionPlaceholder`s por conteúdo real (texto,
-números, links de drill-down) sem precisar reconstruir a experiência
-visual, e sem reintroduzir um passo de clique intermediário. O
-Dashboard Executivo e o BBA Advisor devem seguir o mesmo padrão para
-qualquer indicador que exponham.
+```tsx
+<DecisionInsightCard
+  title="BBA Advisor"
+  subtitle="Análise do Planejamento"
+  status="Dentro do prazo"
+  insight="Existe 1 ponto que merece atenção."
+  sections={[
+    { title: "ONDE ESTÁ O DESVIO?", placeholder: "Aguardando identificação automática." },
+    { title: "O QUE ESTÁ CAUSANDO?", placeholder: "Aguardando análise das causas." },
+    { title: "QUAL O IMPACTO?", placeholder: "Aguardando cálculo de impacto." },
+    { title: "QUAIS EVIDÊNCIAS SUPORTAM?", placeholder: "Aguardando integração com os módulos operacionais." },
+    { title: "QUAL A AÇÃO RECOMENDADA?", placeholder: "Será gerada automaticamente pelo BBA Advisor." },
+    { title: "NÍVEL DE CONFIANÇA", placeholder: "Será calculado automaticamente conforme a quantidade e qualidade das evidências disponíveis." }
+  ]}
+/>
+```
 
-Primeira aplicação (mock, sem dados reais): card "Análise Inteligente"
-em `/workspaces/engenharia/planejamento`.
+`defaultExpanded` (default `false`) e `className` também são aceitos;
+Progressive Disclosure exige que todo painel novo mantenha
+`defaultExpanded` no seu padrão (`false`).
+
+## Como será reutilizado
+
+Este mesmo componente, com as mesmas props e os mesmos dois estados,
+deve ser reaproveitado — sem nenhuma variação visual própria — por:
+Planning, Execution, Geospatial, Evidence, Measurement, Finance, o
+Dashboard Executivo e o próprio BBA Advisor. Cada consumidor troca
+apenas `subtitle`, `status`, `insight` e o conteúdo de `sections`
+(placeholders hoje, dados reais do Engine correspondente no futuro) —
+nunca a estrutura, o comportamento de expandir/recolher ou a
+identidade visual do painel.
+
+Primeira aplicação (mock, sem dados reais): painel "BBA Advisor" em
+`/workspaces/engenharia/planejamento`.
 
 ## O que estes componentes NÃO fazem
 
-- Não buscam dados (sem `fetch`, sem hooks, sem import de `@bba/lib`).
-- Não implementam o drill-down do PRINCIPLE 002 — isso é navegação real
-  entre telas, fora do escopo puramente visual deste módulo.
+- Não buscam dados (sem `fetch`, sem hooks de dado, sem import de
+  `@bba/lib`). O único hook presente é o `useState` de UI da
+  `DecisionInsightCard`, controlando apenas `expanded`.
+- Não implementam o drill-down do PRINCIPLE 002 — isso é navegação
+  real entre telas, fora do escopo puramente visual deste módulo.
 - Não animam nada ainda — `FadeIn`/`SlideUp`/Progressive Reveal
   (`packages/ui/src/motion/`) estão documentados em comentário nos
   componentes como direção futura, não implementados.
