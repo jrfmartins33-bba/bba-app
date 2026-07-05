@@ -8,6 +8,7 @@ import {
   FileStack,
   FolderSearch,
   Landmark,
+  Ruler,
   Sparkles,
   Waves,
   type LucideIcon
@@ -41,6 +42,14 @@ const CAPABILITIES: CapabilityCard[] = [
     status: "Pronto",
     icon: ClipboardList,
     href: "/workspaces/engenharia/memorias"
+  },
+  {
+    id: "medicoes",
+    title: "Medições",
+    description:
+      "Organização de boletins, quantitativos executados e acompanhamento da evolução da obra.",
+    status: "Em desenvolvimento",
+    icon: Ruler
   },
   {
     id: "documentos",
