@@ -1568,20 +1568,26 @@ button {
 }
 
 /* ══════════════════════════════════════════
-   DECISION TRACEABILITY (UI Sprint M2)
+   DECISION TRACEABILITY (UI Sprint M2 / M2.1)
    Estilos dos componentes visuais de packages/ui/src/decision/* —
    preparam a estrutura de rastreabilidade (Full Traceability /
    Mandatory Drill-down, ver
    packages/bdos-core/docs/BDS_ARCHITECTURE_PRINCIPLES.md). Sem lógica,
    sem integração — apenas estrutura e placeholders.
+
+   UI Sprint M2.1 substituiu o estado "recolhido" (opacity reduzida,
+   borda tracejada) pelo destaque "highlight" — o padrão oficial passou
+   a ser sempre totalmente visível, nunca atrás de um segundo clique.
 ══════════════════════════════════════════ */
 
-.decision-insight-card--collapsed {
-  opacity: 0.7;
-}
-
-.bba-main__content--standard .decision-insight-card--collapsed {
-  border-style: dashed;
+/* Mesma receita visual de `.workspace-card--highlight` (usada em
+   "Projeto ativo"/"BBA Advisor"), reaproveitada por valor — não por
+   nome de classe — para manter packages/ui/src/decision/* desacoplado
+   de convenções específicas de apps/web. */
+.bba-main__content--standard .decision-insight-card--highlight {
+  background: linear-gradient(135deg, rgba(18, 49, 95, 0.85), rgba(12, 31, 63, 0.9));
+  border-color: var(--bba-gold-dim);
+  box-shadow: 0 0 0 1px rgba(185, 149, 79, 0.08) inset;
 }
 
 .decision-section {
@@ -1615,18 +1621,4 @@ button {
   font-size: 13px;
   font-style: italic;
   line-height: 1.6;
-}
-
-/* Cabeçalho de subseção com uma ação discreta ao lado (ex.: "Situação
-   do Projeto" + botão "Entender"). */
-.workspace-section-label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 18px 0 10px;
-}
-
-.workspace-section-label-row .workspace-section-label {
-  margin: 0;
 }

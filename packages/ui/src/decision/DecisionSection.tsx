@@ -1,7 +1,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
 export interface DecisionSectionProps extends Omit<HTMLAttributes<HTMLDivElement>, "title" | "children"> {
-  /** e.g. "ONDE", "POR QUÊ", "IMPACTO", "EVIDÊNCIAS", "AÇÃO RECOMENDADA". */
+  /** e.g. "ONDE", "POR QUÊ", "IMPACTO", "EVIDÊNCIAS", "AÇÃO RECOMENDADA", "NÍVEL DE CONFIANÇA". */
   title: string;
   children: ReactNode;
 }
@@ -13,6 +13,11 @@ const cx = (...classes: Array<string | false | undefined>) => classes.filter(Boo
  * (PRINCIPLE 001 — see `packages/bdos-core/docs/BDS_ARCHITECTURE_PRINCIPLES.md`).
  * Renders whatever `children` it's given — usually a `DecisionPlaceholder`
  * today, real content once an Engine feeds it. No logic, no state, no hooks.
+ *
+ * Motion (prepared, not implemented — UI Sprint M2.1): as each section's
+ * `DecisionPlaceholder` is replaced by real content, expect a staggered
+ * `FadeIn` per section ("Progressive Reveal", `packages/ui/src/motion/`)
+ * rather than the whole card appearing at once.
  */
 export function DecisionSection({ title, children, className, ...props }: DecisionSectionProps) {
   return (

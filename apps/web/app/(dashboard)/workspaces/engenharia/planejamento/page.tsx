@@ -148,7 +148,15 @@ const SUMMARY = [
 
 // Nenhum Engine alimenta esta análise ainda — ver PRINCIPLE 001 (Full
 // Traceability) em packages/bdos-core/docs/BDS_ARCHITECTURE_PRINCIPLES.md.
-const AWAITING_PLANNING_ENGINE = "Aguardando dados do Planning Engine.";
+// Cada placeholder comunica especificamente o que o Planning Engine
+// fará por essa seção no futuro — nenhum dado ou conclusão inventada.
+const AWAITING_LOCATION = "Aguardando identificação automática.";
+const AWAITING_CAUSE = "Aguardando análise das causas.";
+const AWAITING_IMPACT = "Aguardando cálculo de impacto.";
+const AWAITING_EVIDENCE = "Aguardando integração com os módulos operacionais.";
+const AWAITING_RECOMMENDATION = "Será gerada automaticamente pelo BBA Advisor.";
+const AWAITING_CONFIDENCE =
+  "Será calculado automaticamente conforme a quantidade e qualidade das evidências disponíveis.";
 
 export default function PlanejamentoPage() {
   return (
@@ -207,12 +215,7 @@ export default function PlanejamentoPage() {
           <p className="workspace-section-label">Progresso da Obra</p>
           <ProgressBar animated color="gold" label={`${PROGRESS_PERCENT}% concluído`} value={PROGRESS_PERCENT} />
 
-          <div className="workspace-section-label-row">
-            <p className="workspace-section-label">Situação do Projeto</p>
-            <button className="bba-button bba-button--ghost bba-button--sm" disabled type="button">
-              Entender
-            </button>
-          </div>
+          <p className="workspace-section-label">Situação do Projeto</p>
           <dl className="workspace-fact-list">
             <div className="workspace-fact">
               <dt>Situação</dt>
@@ -233,21 +236,29 @@ export default function PlanejamentoPage() {
           </dl>
         </Card>
 
-        <DecisionInsightCard className="span-12" collapsed title="Análise da Situação">
+        {/* Padrão oficial (UI Sprint M2.1, ver packages/ui/src/decision/README.md):
+            sempre totalmente visível, nunca atrás de um segundo clique.
+            Motion (preparado, não implementado): ver comentário em
+            DecisionInsightCard/DecisionSection sobre SlideUp/FadeIn/
+            Progressive Reveal via packages/ui/src/motion/. */}
+        <DecisionInsightCard className="span-12" highlight title="Análise Inteligente">
           <DecisionSection title="ONDE">
-            <DecisionPlaceholder>{AWAITING_PLANNING_ENGINE}</DecisionPlaceholder>
+            <DecisionPlaceholder>{AWAITING_LOCATION}</DecisionPlaceholder>
           </DecisionSection>
           <DecisionSection title="POR QUÊ">
-            <DecisionPlaceholder>{AWAITING_PLANNING_ENGINE}</DecisionPlaceholder>
+            <DecisionPlaceholder>{AWAITING_CAUSE}</DecisionPlaceholder>
           </DecisionSection>
           <DecisionSection title="IMPACTO">
-            <DecisionPlaceholder>{AWAITING_PLANNING_ENGINE}</DecisionPlaceholder>
+            <DecisionPlaceholder>{AWAITING_IMPACT}</DecisionPlaceholder>
           </DecisionSection>
           <DecisionSection title="EVIDÊNCIAS">
-            <DecisionPlaceholder>{AWAITING_PLANNING_ENGINE}</DecisionPlaceholder>
+            <DecisionPlaceholder>{AWAITING_EVIDENCE}</DecisionPlaceholder>
           </DecisionSection>
           <DecisionSection title="AÇÃO RECOMENDADA">
-            <DecisionPlaceholder>{AWAITING_PLANNING_ENGINE}</DecisionPlaceholder>
+            <DecisionPlaceholder>{AWAITING_RECOMMENDATION}</DecisionPlaceholder>
+          </DecisionSection>
+          <DecisionSection title="NÍVEL DE CONFIANÇA">
+            <DecisionPlaceholder>{AWAITING_CONFIDENCE}</DecisionPlaceholder>
           </DecisionSection>
         </DecisionInsightCard>
 
