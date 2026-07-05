@@ -1386,3 +1386,171 @@ button {
 .bba-main__content--standard .workspace-table td strong {
   color: #ffffff;
 }
+
+/* ══════════════════════════════════════════
+   MOTION DESIGN SYSTEM (UI Sprint M1)
+   Infraestrutura oficial de motion da BBA Platform — reutilizada por
+   packages/ui/src/motion/*. Coexiste com os tokens legados
+   `--fast`/`--medium`/`--ease` e com as keyframes `fadeInUp`/
+   `goldShimmer`/`statusPulse` (seção ANIMAÇÕES, ainda em uso em /hoje)
+   — nenhum dos dois foi alterado nesta sprint. `--motion-*` é a fonte
+   da verdade para telas novas; consolidar o legado nesta base é uma
+   oportunidade futura, fora de escopo aqui. `motion-slide-up` e o
+   shimmer do Skeleton reaproveitam, de propósito, as keyframes
+   `fadeInUp`/`goldShimmer` já existentes em vez de duplicá-las.
+══════════════════════════════════════════ */
+
+:root {
+  --motion-duration-fast: 150ms;
+  --motion-duration-normal: 250ms;
+  --motion-duration-slow: 450ms;
+  --motion-duration-reveal: 800ms;
+
+  --motion-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+}
+
+@keyframes motion-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes motion-slide-left {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes motion-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes motion-progress-fill {
+  from { width: 0%; }
+  to { width: var(--motion-progress-value, 0%); }
+}
+
+.motion-fade-in {
+  animation: motion-fade-in var(--motion-duration-normal) var(--motion-ease-enter) both;
+}
+
+.motion-slide-up {
+  animation: fadeInUp var(--motion-duration-normal) var(--motion-ease-enter) both;
+}
+
+.motion-slide-left {
+  animation: motion-slide-left var(--motion-duration-normal) var(--motion-ease-enter) both;
+}
+
+.motion-scale-in {
+  animation: motion-scale-in var(--motion-duration-normal) var(--motion-ease-enter) both;
+}
+
+/* ── Progress Bar ── */
+.motion-progress-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.motion-progress-bar__track {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.motion-progress-bar__fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--motion-progress-value, 0%);
+  border-radius: 999px;
+}
+
+.motion-progress-bar__fill--gold { background: var(--bba-gold); }
+.motion-progress-bar__fill--green { background: var(--status-green); }
+.motion-progress-bar__fill--amber { background: var(--status-amber); }
+.motion-progress-bar__fill--red { background: var(--status-red); }
+
+.motion-progress-bar__fill--animated {
+  animation: motion-progress-fill var(--motion-duration-reveal) var(--motion-ease-standard) both;
+}
+
+.motion-progress-bar__label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ── Skeleton (shimmer reaproveita a keyframe goldShimmer) ── */
+.motion-skeleton {
+  --motion-skeleton-bg: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06) 25%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.06) 75%
+  );
+}
+
+.motion-skeleton__line,
+.motion-skeleton__cell,
+.motion-skeleton__icon {
+  background: var(--motion-skeleton-bg);
+  background-size: 200% 100%;
+  animation: goldShimmer 1.6s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+.motion-skeleton--card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-card);
+}
+
+.motion-skeleton__line {
+  height: 12px;
+}
+
+.motion-skeleton__line--title {
+  width: 40%;
+  height: 16px;
+}
+
+.motion-skeleton__line--short {
+  width: 60%;
+}
+
+.motion-skeleton--metric {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.motion-skeleton__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.motion-skeleton--table {
+  display: grid;
+  gap: 10px;
+}
+
+.motion-skeleton__row {
+  display: grid;
+  grid-template-columns: repeat(var(--motion-skeleton-columns, 4), minmax(0, 1fr));
+  gap: 12px;
+}
+
+.motion-skeleton__cell {
+  height: 14px;
+}

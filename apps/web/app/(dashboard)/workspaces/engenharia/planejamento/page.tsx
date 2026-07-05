@@ -11,7 +11,7 @@ import {
   Target,
   UploadCloud
 } from "lucide-react";
-import { Card, StatusBadge } from "@bba/ui";
+import { Card, ProgressBar, StatusBadge } from "@bba/ui";
 
 type ActivityStatus = "Concluída" | "Em andamento" | "Planejada";
 
@@ -129,16 +129,14 @@ const ACTIVITIES: ActivityRow[] = [
   }
 ];
 
+const PROGRESS_PERCENT = 82;
+
 const SUMMARY = [
   { icon: ListChecks, value: 245, label: "Total de atividades" },
   { icon: CheckCircle2, value: 71, label: "Concluídas" },
   { icon: Clock, value: 28, label: "Em andamento" },
-  { icon: Target, value: "82%", label: "Prazo geral" }
+  { icon: Target, value: `${PROGRESS_PERCENT}%`, label: "Prazo geral" }
 ];
-
-const PROGRESS_PERCENT = 82;
-const PROGRESS_BAR_LENGTH = 20;
-const PROGRESS_FILLED = Math.round((PROGRESS_PERCENT / 100) * PROGRESS_BAR_LENGTH);
 
 export default function PlanejamentoPage() {
   return (
@@ -256,20 +254,7 @@ export default function PlanejamentoPage() {
         </Card>
 
         <Card className="span-12 workspace-card" title="Linha do Tempo">
-          <p
-            style={{
-              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-              fontSize: "20px",
-              letterSpacing: "1px",
-              margin: 0
-            }}
-          >
-            <span style={{ color: "var(--bba-gold)" }}>{"█".repeat(PROGRESS_FILLED)}</span>
-            <span style={{ color: "var(--text-muted)" }}>
-              {"▒".repeat(PROGRESS_BAR_LENGTH - PROGRESS_FILLED)}
-            </span>
-          </p>
-          <p className="workspace-card__description">{PROGRESS_PERCENT}% concluído</p>
+          <ProgressBar animated color="gold" label={`${PROGRESS_PERCENT}% concluído`} value={PROGRESS_PERCENT} />
         </Card>
       </section>
     </>
