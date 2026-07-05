@@ -1,13 +1,18 @@
 import {
+  BarChart3,
+  Banknote,
   ClipboardCheck,
   ClipboardList,
   FileDown,
   FileStack,
   FolderSearch,
+  GanttChart,
   HardHat,
   LayoutDashboard,
+  Map,
   Ruler,
   Sparkles,
+  Wrench,
   type LucideIcon
 } from "lucide-react";
 
@@ -51,12 +56,17 @@ export const WORKSPACE_NAV_CONFIG: ReadonlyArray<WorkspaceNavConfig> = [
     basePath: "/workspaces/engenharia",
     items: [
       { label: "Dashboard", icon: LayoutDashboard, href: "/workspaces/engenharia" },
+      { label: "Planejamento", icon: GanttChart },
+      { label: "Execução", icon: Wrench },
+      { label: "Geoespacial", icon: Map },
       { label: "Evidências", icon: FolderSearch, href: "/workspaces/engenharia/evidencias" },
-      { label: "Memórias", icon: ClipboardList, href: "/workspaces/engenharia/memorias" },
+      { label: "Memórias de Cálculo", icon: ClipboardList, href: "/workspaces/engenharia/memorias" },
       { label: "Medições", icon: Ruler },
       { label: "Documentos", icon: FileStack },
       { label: "Aprovações", icon: ClipboardCheck },
       { label: "Exportações", icon: FileDown },
+      { label: "Financeiro", icon: Banknote },
+      { label: "Dashboard Executivo", icon: BarChart3 },
       { label: "BBA Advisor", icon: Sparkles }
     ]
     // FASE 6 (preparação futura — nenhuma lógica, nenhum componente, nenhuma

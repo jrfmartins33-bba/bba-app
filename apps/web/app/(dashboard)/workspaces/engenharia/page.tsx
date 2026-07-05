@@ -1,21 +1,26 @@
 import Link from "next/link";
 import {
   ArrowLeft,
+  BarChart3,
+  Banknote,
   Calculator,
   ClipboardCheck,
   ClipboardList,
   FileDown,
   FileStack,
   FolderSearch,
+  GanttChart,
   Landmark,
+  Map,
   Ruler,
   Sparkles,
   Waves,
+  Wrench,
   type LucideIcon
 } from "lucide-react";
 import { Card } from "@bba/ui";
 
-type CapabilityStatus = "Pronto" | "Em desenvolvimento";
+type CapabilityStatus = "Pronto" | "Em desenvolvimento" | "Em breve";
 
 interface CapabilityCard {
   id: string;
@@ -26,7 +31,42 @@ interface CapabilityCard {
   href?: string;
 }
 
+/**
+ * Ordem definitiva da arquitetura da BBA Platform (UI Sprint 5.5):
+ * Planejamento → Execução → Geoespacial → Evidências → Memórias de
+ * Cálculo → Medições → Documentos → Aprovações → Exportações →
+ * Financeiro → Dashboard Executivo → BBA Advisor. Idêntica, item a
+ * item, à ordem dos subitens em `workspace-nav-config.ts` — Sidebar e
+ * Dashboard contam a mesma história. Planejamento/Execução/Geoespacial
+ * antecipam visualmente os três primeiros motores do BDS (Planning
+ * Engine, Execution Engine, Geospatial Engine), ainda antes dos módulos
+ * já em construção.
+ */
 const CAPABILITIES: CapabilityCard[] = [
+  {
+    id: "planejamento",
+    title: "Planejamento",
+    description:
+      "Cronograma, Curva S, Baseline, Recursos, Custos, Forecast e planejamento integrado da obra.",
+    status: "Em breve",
+    icon: GanttChart
+  },
+  {
+    id: "execucao",
+    title: "Execução",
+    description:
+      "Diário de Obras, equipes, equipamentos, clima, ocorrências e acompanhamento operacional.",
+    status: "Em breve",
+    icon: Wrench
+  },
+  {
+    id: "geoespacial",
+    title: "Geoespacial",
+    description:
+      "Mapa da obra, georreferenciamento, drone, topografia e evolução espacial da execução.",
+    status: "Em breve",
+    icon: Map
+  },
   {
     id: "evidencias",
     title: "Evidências",
@@ -73,6 +113,22 @@ const CAPABILITIES: CapabilityCard[] = [
     icon: FileDown
   },
   {
+    id: "financeiro",
+    title: "Financeiro",
+    description:
+      "Orçamento, custos, fluxo de caixa, margem, forecast e acompanhamento financeiro da obra.",
+    status: "Em breve",
+    icon: Banknote
+  },
+  {
+    id: "dashboard-executivo",
+    title: "Dashboard Executivo",
+    description:
+      "KPIs, indicadores estratégicos, carteira de obras e visão consolidada para diretoria.",
+    status: "Em breve",
+    icon: BarChart3
+  },
+  {
     id: "bba-advisor",
     title: "BBA Advisor",
     description: "Assistente operacional para destacar pendências, riscos e oportunidades.",
@@ -83,7 +139,8 @@ const CAPABILITIES: CapabilityCard[] = [
 
 const CAPABILITY_BADGE_CLASS: Record<CapabilityStatus, string> = {
   Pronto: "status-badge status-badge--completed",
-  "Em desenvolvimento": "status-badge status-badge--active"
+  "Em desenvolvimento": "status-badge status-badge--active",
+  "Em breve": "status-badge status-badge--pending"
 };
 
 const NEXT_STEPS = [
