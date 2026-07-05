@@ -46,3 +46,13 @@ em `/workspaces/engenharia/planejamento`.
   entre telas, fora do escopo puramente visual deste módulo.
 - Não decidem quando um card deve estar "recolhido" — quem consome o
   componente decide, via prop.
+
+## Nota de deployment
+
+O push original destes componentes (commit `5726682`) não gerou nenhum
+deployment na Vercel — o webhook Git→Vercel não chegou a criar o
+registro de build (confirmado via API da Vercel: nenhuma entrada, nem
+sequer `CANCELED`, existe para esse commit). Esta linha faz parte do
+commit que corrige isso, garantindo um diff real dentro do grafo do
+Turborepo para que o recurso "Skip unaffected projects" da Vercel não
+pule o build novamente.
