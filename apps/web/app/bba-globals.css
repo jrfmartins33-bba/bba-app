@@ -1579,6 +1579,12 @@ button {
    (sempre "o painel do BBA Advisor", nunca um modificador opcional) e
    introduziu o padrão collapsed/expanded — PRINCIPLE 003 (Progressive
    Disclosure) substitui a regra "sempre totalmente visível" da M2.1.
+
+   Release 1.1 (Planning Engine UX Polish, última sprint do Planning
+   Engine) inverteu a hierarquia visual — o Engine (ex.: "Planning
+   Engine") vira um rótulo discreto, "BBA Advisor" passa a ser quem
+   fala — e transformou as 6 seções em accordion (uma aberta por vez),
+   reduzindo a altura do painel expandido.
 ══════════════════════════════════════════ */
 
 /* Mesma receita visual de `.workspace-card--highlight` (usada em
@@ -1593,35 +1599,54 @@ button {
   box-shadow: 0 0 0 1px rgba(185, 149, 79, 0.08) inset;
 }
 
-/* Mesma receita visual de `.workspace-card__icon`, reaproveitada por
-   valor pelo mesmo motivo acima. */
-.decision-insight-card__icon {
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--bba-gold-dim);
-  border-radius: 8px;
-  background: rgba(185, 149, 79, 0.1);
+/* Mesma receita visual de `.workspaces-eyebrow`, reaproveitada por
+   valor pelo mesmo motivo acima: nomeia o Engine por trás da análise
+   sem competir com "BBA Advisor", que é quem fala (Release 1.1). */
+.decision-insight-card__engine-label {
+  display: block;
+  margin-bottom: 10px;
   color: var(--bba-gold-soft);
-  margin-bottom: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
-.decision-insight-card__subtitle {
-  margin: 0 0 8px;
+.decision-insight-card__advisor {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.decision-insight-card__advisor-icon {
+  color: var(--bba-gold-soft);
+  flex-shrink: 0;
+}
+
+.decision-insight-card__advisor-name {
   color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
 }
 
-.decision-insight-card__insight {
+.decision-insight-card__message {
   margin: 0;
+}
+
+.decision-insight-card__message p {
+  margin: 0 0 6px;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.6;
 }
 
+.decision-insight-card__message p:last-child {
+  margin-bottom: 0;
+}
+
 .decision-insight-card__sections {
+  animation: motion-fade-in var(--motion-duration-normal) var(--motion-ease-enter) both;
   margin: 16px 0;
 }
 
@@ -1629,29 +1654,58 @@ button {
   margin-top: 16px;
 }
 
+/* Accordion (Release 1.1): apenas uma seção aberta por vez, reduzindo
+   a altura do painel expandido em relação à M2.2, onde as 6 seções
+   ficavam sempre visíveis simultaneamente. */
 .decision-section {
-  padding: 12px 0;
   border-bottom: 1px solid var(--app-divider);
 }
 
 .decision-section:last-child {
   border-bottom: none;
-  padding-bottom: 0;
+}
+
+.decision-section__header {
+  align-items: center;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 10px 0;
+  text-align: left;
+  width: 100%;
 }
 
 .decision-section__title {
-  margin: 0 0 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.decision-section--open .decision-section__title {
+  color: var(--bba-gold-soft);
+}
+
+.decision-section__chevron {
   color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  flex-shrink: 0;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.decision-section--open .decision-section__chevron {
+  color: var(--bba-gold-soft);
+  transform: rotate(90deg);
 }
 
 .decision-section__content {
+  animation: motion-fade-in var(--motion-duration-normal) var(--motion-ease-enter) both;
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.6;
+  padding: 0 0 12px;
 }
 
 .decision-placeholder {

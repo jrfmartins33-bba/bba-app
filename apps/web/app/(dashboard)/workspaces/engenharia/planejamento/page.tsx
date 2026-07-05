@@ -149,20 +149,24 @@ const SUMMARY = [
 // Cada placeholder comunica especificamente o que o Planning Engine
 // fará por essa seção no futuro — nenhum dado ou conclusão inventada.
 const DECISION_SECTIONS: DecisionInsightCardSection[] = [
-  { title: "ONDE ESTÁ O DESVIO?", placeholder: "Aguardando identificação automática." },
-  { title: "O QUE ESTÁ CAUSANDO?", placeholder: "Aguardando análise das causas." },
-  { title: "QUAL O IMPACTO?", placeholder: "Aguardando cálculo de impacto." },
+  { title: "Onde está o desvio?", placeholder: "Aguardando identificação automática." },
+  { title: "O que está causando?", placeholder: "Aguardando análise das causas." },
+  { title: "Qual o impacto?", placeholder: "Aguardando cálculo de impacto." },
   {
-    title: "QUAIS EVIDÊNCIAS SUPORTAM?",
+    title: "Quais evidências suportam?",
     placeholder: "Aguardando integração com os módulos operacionais."
   },
-  { title: "QUAL A AÇÃO RECOMENDADA?", placeholder: "Será gerada automaticamente pelo BBA Advisor." },
+  { title: "Qual a ação recomendada?", placeholder: "Será gerada automaticamente pelo BBA Advisor." },
   {
-    title: "NÍVEL DE CONFIANÇA",
+    title: "Nível de confiança",
     placeholder:
       "Será calculado automaticamente conforme a quantidade e qualidade das evidências disponíveis."
   }
 ];
+
+// Conversacional — o Advisor fala como um especialista, não como um
+// formulário (Release 1.1, item 1).
+const ADVISOR_MESSAGE = ["Analisei o cronograma desta obra.", "Encontrei um ponto que merece sua atenção."];
 
 export default function PlanejamentoPage() {
   return (
@@ -242,16 +246,16 @@ export default function PlanejamentoPage() {
           </dl>
         </Card>
 
-        {/* Padrão oficial "BBA Advisor Decision Panel" (UI Sprint M2.2, ver
+        {/* Padrão oficial "BBA Advisor UX Pattern" (Release 1.1, ver
             packages/ui/src/decision/README.md): nasce recolhido
-            (Progressive Disclosure, PRINCIPLE 003) e expande no mesmo card. */}
+            (Progressive Disclosure, PRINCIPLE 003) e expande no mesmo
+            card como accordion — uma seção aberta por vez. */}
         <DecisionInsightCard
           className="span-12"
-          insight="Existe 1 ponto que merece atenção."
+          engineLabel="Planning Engine"
+          message={ADVISOR_MESSAGE}
           sections={DECISION_SECTIONS}
-          status="Dentro do prazo"
-          subtitle="Análise do Planejamento"
-          title="BBA Advisor"
+          status="🟢 Dentro do prazo"
         />
 
         {SUMMARY.map((item) => {
