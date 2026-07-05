@@ -109,21 +109,85 @@ ficaria sempre totalmente visível; a partir da M2.2, "sempre visível
 por padrão" torna-se "sempre disponível sob demanda, em um clique,
 sem sair do lugar".
 
+## PRINCIPLE 004 — Spatial Intelligence
+
+Todo dado do BDS poderá possuir uma dimensão espacial. Essa dimensão
+nunca deve ser tratada como mera localização (um metadado decorativo
+de exibição em mapa) — deve ser uma dimensão de primeira classe,
+usada para tomada de decisão, rastreabilidade, auditoria, correlação
+entre Engines, visualização e IA (BBA Advisor).
+
+**Por que este princípio existe — evidência concreta, não hipotética.**
+O código já contém duas referências espaciais criadas de forma
+independente, sem nenhum modelo compartilhado: `ProjectLocation`
+(`domain/project-management`, com `latitude`/`longitude` soltos no
+próprio `Project`) e `MeasurementCoordinate`
+(`domain/measurement`, com `latitude`/`longitude`/`elevation` por
+medição, além de um `MeasurementGeometry` não-geográfico separado).
+Nenhum dos dois se relaciona com o outro. Isso é exatamente o
+sintoma que este princípio existe para prevenir: cada Engine
+inventando seu próprio campo de localização, sem identidade
+compartilhada nem possibilidade de correlação. PRINCIPLE 004 não
+propõe substituir essas referências agora — propõe que nenhuma nova
+referência espacial seja criada fora de um modelo compartilhado a
+partir deste ponto, e que a consolidação das existentes seja uma
+decisão explícita de sprint futura, nunca um efeito colateral.
+
+**Reconciliação com conceitos já existentes (importante).** A
+documentação de produto do Geospatial Engine usa a metáfora "Digital
+Twin Operacional" para descrever uma representação espaço-temporal
+viva da obra. Isso é uma metáfora de produto, não o mesmo conceito
+que `domain/digital-twin` já implementa no código: hoje,
+`digital-twin` é um dataset estático de demonstração de um único
+tenant fictício ("Alpha Engenharia"), sem nenhuma dimensão espacial.
+Os dois nomes coincidem por acidente de linguagem, não por
+identidade de conceito — qualquer implementação futura do modelo
+espacial deve usar um nome de módulo distinto (ex.:
+`domain/spatial-object`), nunca estender ou renomear
+`domain/digital-twin` sem uma decisão arquitetural própria. Da mesma
+forma, "Spatial Confidence" (a confiabilidade de um dado espacial)
+não deve criar uma escala paralela de confiança: deve compor com o
+`EvidenceConfidence` já implementado e testado em
+`domain/field-evidence/evidence-confidence.ts` (níveis
+Low/Medium/High/Verified, pontuação determinística) — um novo fator
+espacial se soma aos fatores já existentes, não substitui a escala.
+Por fim, a rastreabilidade "onde/por quê/qual evidência" que a
+documentação de produto chama de "Decision Graph" já existe, em
+código, como a cadeia `Decision` → `DecisionCase` (máquina de estados
+`Created → Observed → Diagnosed → ... → Archived`) →
+`Recommendation.traceability` (`decisionId`, `diagnosisId`,
+`evidenceReferences[]`, `businessFactIds[]`). Um objeto espacial deve
+se tornar referenciável a partir dessa cadeia já existente — não
+deve nascer como uma estrutura de grafo paralela.
+
+Toda futura implementação deste princípio (o modelo de Spatial
+Object completo, com identidade, hierarquia, relações, camadas,
+ciclo de vida e confiança) está descrita em
+`packages/bdos-core/docs/GEOSPATIAL_ENGINE.md`.
+
 ---
 
-## Estado de implementação (UI Sprint M2.2)
+## Estado de implementação (UI Sprint 7 — Geospatial Engine MVP)
 
-- ✅ Princípios documentados (este arquivo).
+- ✅ Princípios documentados (este arquivo), incluindo PRINCIPLE 004.
 - ✅ Componente com estado — `DecisionInsightCard` — implementando
-  Progressive Disclosure (collapsed/expanded) em
+  Progressive Disclosure (collapsed/expanded, depois accordion) em
   `packages/ui/src/decision/`. É o único componente do módulo com
   `useState`; `DecisionSection` e `DecisionPlaceholder` seguem sem
   lógica, sem estado, sem integração.
-- ✅ Aplicação mock em `/workspaces/engenharia/planejamento`: painel
-  "BBA Advisor" / "Análise do Planejamento", nascendo recolhido
-  (status + insight de uma linha), com as 6 seções do PRINCIPLE 001
-  reveladas ao expandir — todos os campos como placeholder.
-- ⏳ Nenhum Engine ainda alimenta esse painel com dados reais e nenhuma
+- ✅ Aplicação mock em `/workspaces/engenharia/planejamento` e em
+  `/workspaces/engenharia/geoespacial`: painel "BBA Advisor",
+  nascendo recolhido, com as 6 seções do PRINCIPLE 001 como
+  accordion — todos os campos como placeholder.
+- ✅ Tela Geoespacial (UI Sprint 7): mapa placeholder, checklist de
+  camadas, linha do tempo e KPIs — 100% mock, sem nenhum modelo de
+  domínio por trás ainda.
+- ⏳ PRINCIPLE 004 ainda não tem nenhuma implementação em
+  `packages/bdos-core/src` — nenhum `SpatialObject`, nenhuma camada
+  espacial, nenhuma correlação real. `ProjectLocation` e
+  `MeasurementCoordinate` continuam sendo referências espaciais
+  isoladas, não consolidadas (ver nota de reconciliação acima).
+- ⏳ Nenhum Engine ainda alimenta os painéis com dados reais e nenhuma
   navegação de drill-down (Principle 002) foi implementada — isso é
   trabalho de sprints futuras, uma por Engine.
 

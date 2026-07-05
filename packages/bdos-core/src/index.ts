@@ -12,6 +12,7 @@ export * from "./domain/measurement";
 export * from "./domain/measurement-engine";
 export * from "./domain/measurement-entry";
 export * from "./domain/measurement-entry-processor";
+export * from "./domain/spatial-object";
 export {
   ContractStatus,
   advanceContractStatus,
