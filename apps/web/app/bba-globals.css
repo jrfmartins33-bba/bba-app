@@ -1400,6 +1400,79 @@ button {
 }
 
 /* ══════════════════════════════════════════
+   GEOESPACIAL — UI Sprint 7 (MVP)
+   Placeholder do mapa (Card "Mapa da Obra") e checklist de camadas
+   (Card "Camadas") — nenhuma integração de provedor de mapa, sem
+   interatividade real, tudo mock.
+══════════════════════════════════════════ */
+
+.workspace-map-placeholder {
+  align-items: center;
+  aspect-ratio: 16 / 9;
+  border: 1px dashed var(--app-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.workspace-map-placeholder__icon {
+  align-items: center;
+  background: rgba(185, 149, 79, 0.1);
+  border: 1px solid var(--bba-gold-dim);
+  border-radius: 999px;
+  color: var(--bba-gold-soft);
+  display: grid;
+  height: 48px;
+  place-items: center;
+  width: 48px;
+}
+
+.workspace-map-placeholder__text {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.workspace-map-placeholder__caption {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 420px;
+}
+
+.workspace-layer-list {
+  display: grid;
+  gap: 10px;
+}
+
+.workspace-layer {
+  align-items: center;
+  color: var(--text-muted);
+  display: flex;
+  font-size: 13px;
+  gap: 10px;
+}
+
+.workspace-layer--active {
+  color: var(--text-primary);
+}
+
+.workspace-layer__icon {
+  flex-shrink: 0;
+}
+
+.workspace-layer--active .workspace-layer__icon {
+  color: var(--bba-gold-soft);
+}
+
+/* ══════════════════════════════════════════
    MOTION DESIGN SYSTEM (UI Sprint M1)
    Infraestrutura oficial de motion da BBA Platform — reutilizada por
    packages/ui/src/motion/*. Coexiste com os tokens legados

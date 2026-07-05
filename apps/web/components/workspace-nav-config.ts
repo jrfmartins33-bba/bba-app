@@ -58,7 +58,7 @@ export const WORKSPACE_NAV_CONFIG: ReadonlyArray<WorkspaceNavConfig> = [
       { label: "Dashboard", icon: LayoutDashboard, href: "/workspaces/engenharia" },
       { label: "Planejamento", icon: GanttChart, href: "/workspaces/engenharia/planejamento" },
       { label: "Execução", icon: Wrench },
-      { label: "Geoespacial", icon: Map },
+      { label: "Geoespacial", icon: Map, href: "/workspaces/engenharia/geoespacial" },
       { label: "Evidências", icon: FolderSearch, href: "/workspaces/engenharia/evidencias" },
       { label: "Memórias de Cálculo", icon: ClipboardList, href: "/workspaces/engenharia/memorias" },
       { label: "Medições", icon: Ruler },

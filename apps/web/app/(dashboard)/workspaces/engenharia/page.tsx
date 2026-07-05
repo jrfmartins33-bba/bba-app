@@ -65,8 +65,9 @@ const CAPABILITIES: CapabilityCard[] = [
     title: "Geoespacial",
     description:
       "Mapa da obra, georreferenciamento, drone, topografia e evolução espacial da execução.",
-    status: "Em breve",
-    icon: Map
+    status: "Pronto",
+    icon: Map,
+    href: "/workspaces/engenharia/geoespacial"
   },
   {
     id: "evidencias",
