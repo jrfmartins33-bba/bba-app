@@ -4,4 +4,5 @@ export * from "./ChatBubble";
 export * from "./OnboardingProgress";
 export * from "./StatusBadge";
 export * from "./TaskCard";
+export * from "./decision";
 export * from "./motion";

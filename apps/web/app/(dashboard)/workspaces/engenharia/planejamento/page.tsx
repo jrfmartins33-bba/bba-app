@@ -11,7 +11,15 @@ import {
   Target,
   UploadCloud
 } from "lucide-react";
-import { AnimatedCounter, Card, ProgressBar, StatusBadge } from "@bba/ui";
+import {
+  AnimatedCounter,
+  Card,
+  DecisionInsightCard,
+  DecisionPlaceholder,
+  DecisionSection,
+  ProgressBar,
+  StatusBadge
+} from "@bba/ui";
 
 type ActivityStatus = "Concluída" | "Em andamento" | "Planejada";
 
@@ -138,6 +146,10 @@ const SUMMARY = [
   { icon: Target, value: PROGRESS_PERCENT, label: "Prazo geral", suffix: "%" }
 ];
 
+// Nenhum Engine alimenta esta análise ainda — ver PRINCIPLE 001 (Full
+// Traceability) em packages/bdos-core/docs/BDS_ARCHITECTURE_PRINCIPLES.md.
+const AWAITING_PLANNING_ENGINE = "Aguardando dados do Planning Engine.";
+
 export default function PlanejamentoPage() {
   return (
     <>
@@ -195,7 +207,12 @@ export default function PlanejamentoPage() {
           <p className="workspace-section-label">Progresso da Obra</p>
           <ProgressBar animated color="gold" label={`${PROGRESS_PERCENT}% concluído`} value={PROGRESS_PERCENT} />
 
-          <p className="workspace-section-label">Situação do Projeto</p>
+          <div className="workspace-section-label-row">
+            <p className="workspace-section-label">Situação do Projeto</p>
+            <button className="bba-button bba-button--ghost bba-button--sm" disabled type="button">
+              Entender
+            </button>
+          </div>
           <dl className="workspace-fact-list">
             <div className="workspace-fact">
               <dt>Situação</dt>
@@ -215,6 +232,24 @@ export default function PlanejamentoPage() {
             </div>
           </dl>
         </Card>
+
+        <DecisionInsightCard className="span-12" collapsed title="Análise da Situação">
+          <DecisionSection title="ONDE">
+            <DecisionPlaceholder>{AWAITING_PLANNING_ENGINE}</DecisionPlaceholder>
+          </DecisionSection>
+          <DecisionSection title="POR QUÊ">
+            <DecisionPlaceholder>{AWAITING_PLANNING_ENGINE}</DecisionPlaceholder>
+          </DecisionSection>
+          <DecisionSection title="IMPACTO">
+            <DecisionPlaceholder>{AWAITING_PLANNING_ENGINE}</DecisionPlaceholder>
+          </DecisionSection>
+          <DecisionSection title="EVIDÊNCIAS">
+            <DecisionPlaceholder>{AWAITING_PLANNING_ENGINE}</DecisionPlaceholder>
+          </DecisionSection>
+          <DecisionSection title="AÇÃO RECOMENDADA">
+            <DecisionPlaceholder>{AWAITING_PLANNING_ENGINE}</DecisionPlaceholder>
+          </DecisionSection>
+        </DecisionInsightCard>
 
         {SUMMARY.map((item) => {
           const Icon = item.icon;

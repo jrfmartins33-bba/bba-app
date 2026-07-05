@@ -1566,3 +1566,67 @@ button {
 .motion-skeleton__cell {
   height: 14px;
 }
+
+/* ══════════════════════════════════════════
+   DECISION TRACEABILITY (UI Sprint M2)
+   Estilos dos componentes visuais de packages/ui/src/decision/* —
+   preparam a estrutura de rastreabilidade (Full Traceability /
+   Mandatory Drill-down, ver
+   packages/bdos-core/docs/BDS_ARCHITECTURE_PRINCIPLES.md). Sem lógica,
+   sem integração — apenas estrutura e placeholders.
+══════════════════════════════════════════ */
+
+.decision-insight-card--collapsed {
+  opacity: 0.7;
+}
+
+.bba-main__content--standard .decision-insight-card--collapsed {
+  border-style: dashed;
+}
+
+.decision-section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--app-divider);
+}
+
+.decision-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.decision-section__title {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.decision-section__content {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.decision-placeholder {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.6;
+}
+
+/* Cabeçalho de subseção com uma ação discreta ao lado (ex.: "Situação
+   do Projeto" + botão "Entender"). */
+.workspace-section-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 10px;
+}
+
+.workspace-section-label-row .workspace-section-label {
+  margin: 0;
+}
