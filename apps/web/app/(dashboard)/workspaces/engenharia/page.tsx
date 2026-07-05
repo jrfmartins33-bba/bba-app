@@ -48,8 +48,9 @@ const CAPABILITIES: CapabilityCard[] = [
     title: "Planejamento",
     description:
       "Cronograma, Curva S, Baseline, Recursos, Custos, Forecast e planejamento integrado da obra.",
-    status: "Em breve",
-    icon: GanttChart
+    status: "Pronto",
+    icon: GanttChart,
+    href: "/workspaces/engenharia/planejamento"
   },
   {
     id: "execucao",

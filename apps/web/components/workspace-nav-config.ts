@@ -56,7 +56,7 @@ export const WORKSPACE_NAV_CONFIG: ReadonlyArray<WorkspaceNavConfig> = [
     basePath: "/workspaces/engenharia",
     items: [
       { label: "Dashboard", icon: LayoutDashboard, href: "/workspaces/engenharia" },
-      { label: "Planejamento", icon: GanttChart },
+      { label: "Planejamento", icon: GanttChart, href: "/workspaces/engenharia/planejamento" },
       { label: "Execução", icon: Wrench },
       { label: "Geoespacial", icon: Map },
       { label: "Evidências", icon: FolderSearch, href: "/workspaces/engenharia/evidencias" },
