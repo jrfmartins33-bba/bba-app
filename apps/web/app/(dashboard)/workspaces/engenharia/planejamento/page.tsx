@@ -11,7 +11,7 @@ import {
   Target,
   UploadCloud
 } from "lucide-react";
-import { Card, ProgressBar, StatusBadge } from "@bba/ui";
+import { AnimatedCounter, Card, ProgressBar, StatusBadge } from "@bba/ui";
 
 type ActivityStatus = "Concluída" | "Em andamento" | "Planejada";
 
@@ -132,10 +132,10 @@ const ACTIVITIES: ActivityRow[] = [
 const PROGRESS_PERCENT = 82;
 
 const SUMMARY = [
-  { icon: ListChecks, value: 245, label: "Total de atividades" },
-  { icon: CheckCircle2, value: 71, label: "Concluídas" },
-  { icon: Clock, value: 28, label: "Em andamento" },
-  { icon: Target, value: `${PROGRESS_PERCENT}%`, label: "Prazo geral" }
+  { icon: ListChecks, value: 245, label: "Total de atividades", suffix: "" },
+  { icon: CheckCircle2, value: 71, label: "Concluídas", suffix: "" },
+  { icon: Clock, value: 28, label: "Em andamento", suffix: "" },
+  { icon: Target, value: PROGRESS_PERCENT, label: "Prazo geral", suffix: "%" }
 ];
 
 export default function PlanejamentoPage() {
@@ -182,6 +182,37 @@ export default function PlanejamentoPage() {
               <dt>Contratante</dt>
               <dd>DNOCS</dd>
             </div>
+            <div className="workspace-fact">
+              <dt>Consórcio</dt>
+              <dd>CONJASF – HIDROMEC</dd>
+            </div>
+            <div className="workspace-fact">
+              <dt>Diretoria</dt>
+              <dd>Diretoria de Infraestrutura Hídrica - DI</dd>
+            </div>
+          </dl>
+
+          <p className="workspace-section-label">Progresso da Obra</p>
+          <ProgressBar animated color="gold" label={`${PROGRESS_PERCENT}% concluído`} value={PROGRESS_PERCENT} />
+
+          <p className="workspace-section-label">Situação do Projeto</p>
+          <dl className="workspace-fact-list">
+            <div className="workspace-fact">
+              <dt>Situação</dt>
+              <dd>🟢 Dentro do prazo</dd>
+            </div>
+            <div className="workspace-fact">
+              <dt>Planejado</dt>
+              <dd>{PROGRESS_PERCENT}%</dd>
+            </div>
+            <div className="workspace-fact">
+              <dt>Executado</dt>
+              <dd>79%</dd>
+            </div>
+            <div className="workspace-fact">
+              <dt>Financeiro</dt>
+              <dd>74%</dd>
+            </div>
           </dl>
         </Card>
 
@@ -195,7 +226,10 @@ export default function PlanejamentoPage() {
                   <Icon size={20} />
                 </span>
                 <div>
-                  <strong>{item.value}</strong>
+                  <strong>
+                    <AnimatedCounter value={item.value} />
+                    {item.suffix}
+                  </strong>
                   <span>{item.label}</span>
                 </div>
               </div>
@@ -251,10 +285,6 @@ export default function PlanejamentoPage() {
           <p className="workspace-card__note">
             Recomendação: acompanhar diariamente as atividades do caminho crítico.
           </p>
-        </Card>
-
-        <Card className="span-12 workspace-card" title="Linha do Tempo">
-          <ProgressBar animated color="gold" label={`${PROGRESS_PERCENT}% concluído`} value={PROGRESS_PERCENT} />
         </Card>
       </section>
     </>

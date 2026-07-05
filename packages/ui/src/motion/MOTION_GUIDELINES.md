@@ -81,9 +81,15 @@ usar como decoração ou em conteúdo que já está disponível.
   tratado globalmente (`bba-globals.css`), nenhuma ação adicional
   necessária nos componentes.
 
-## Demonstração desta sprint
+## Aplicações em telas reais
 
-A única aplicação em uma tela real: `/workspaces/engenharia/planejamento`,
-card "Linha do Tempo" — a barra estática de caracteres foi substituída
-pelo componente `ProgressBar` (`animated`, 0% → 82% em ~800ms). Nenhuma
-outra tela ou animação foi alterada.
+- **UI Sprint M1**: `/workspaces/engenharia/planejamento` — a barra
+  estática de caracteres do então-card "Linha do Tempo" foi substituída
+  pelo componente `ProgressBar` (`animated`, 0% → 82% em ~800ms).
+- **UI Sprint M1.1**: mesma tela — o `ProgressBar` passou a viver dentro
+  do card "Contexto da Obra" (seção "Progresso da Obra"; o card "Linha
+  do Tempo" deixou de existir), e os 4 KPIs (Total de atividades,
+  Concluídas, Em andamento, Prazo geral) passaram a usar
+  `AnimatedCounter` — primeira aplicação real deste componente. Nenhuma
+  outra tela foi alterada; apenas `ProgressBar` e `AnimatedCounter`
+  foram usados, sem Fade/Slide/Scale.

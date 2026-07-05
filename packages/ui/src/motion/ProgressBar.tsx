@@ -23,6 +23,18 @@ const cx = (...classes: Array<string | false | undefined>) => classes.filter(Boo
  * The fill's reveal is a pure CSS `@keyframes` animation driven by the
  * `--motion-progress-value` custom property (see `.motion-progress-bar__fill`
  * in `bba-globals.css`) — no JavaScript, no client component required.
+ *
+ * Future direction (UI Sprint M1.1 — documented only, not implemented,
+ * public API unchanged): a page may eventually need several related
+ * bars stacked together, e.g.
+ *
+ *   Planejado   ███████████
+ *   Executado   █████████
+ *   Financeiro  ████████
+ *
+ * When that's needed, prefer a small wrapper (e.g. a `ProgressBarGroup`
+ * rendering one `<ProgressBar>` per row) over adding an array prop here
+ * — `ProgressBar` itself should stay a single-bar primitive.
  */
 export function ProgressBar({
   value,

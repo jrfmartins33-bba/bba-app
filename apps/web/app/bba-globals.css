@@ -1225,6 +1225,18 @@ button {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+/* Cabeçalho de subseção dentro de um workspace-card (ex.: "Progresso da
+   Obra", "Situação do Projeto") — mesma linguagem visual de
+   `.workspace-fact dt`, mas utilizável fora de um par dt/dd. */
+.workspace-section-label {
+  margin: 18px 0 10px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
 .workspace-fact dt {
   margin-bottom: 4px;
   color: var(--text-muted);

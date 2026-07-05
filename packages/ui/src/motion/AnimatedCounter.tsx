@@ -8,7 +8,15 @@ export interface AnimatedCounterProps {
   value: number;
   /** Duration in ms. Defaults to the `reveal` motion token (800ms). */
   duration?: number;
-  /** Formats the (rounded) in-progress value for display, e.g. currency or thousands separators. */
+  /**
+   * Formats the (rounded) in-progress value for display, e.g. currency or
+   * thousands separators. Only usable from a caller that is *itself* a
+   * Client Component — a Server Component cannot pass a plain function as
+   * a prop across the RSC boundary (React throws "Functions cannot be
+   * passed directly to Client Components"). From a Server Component page,
+   * render a static prefix/suffix as a JSX sibling instead, e.g.
+   * `<AnimatedCounter value={82} />%`.
+   */
   formatter?: (value: number) => string;
   className?: string;
 }
@@ -17,8 +25,8 @@ export interface AnimatedCounterProps {
  * Counts up from 0 to `value` once on mount using `requestAnimationFrame`
  * with an ease-out curve — the one Motion primitive in this module that
  * genuinely needs JavaScript (a running numeric tween can't be expressed
- * as a plain CSS animation). Intended for KPI tiles; not wired into any
- * screen yet.
+ * as a plain CSS animation). First applied in the KPI tiles of
+ * `/workspaces/engenharia/planejamento` (UI Sprint M1.1).
  */
 export function AnimatedCounter({
   value,
