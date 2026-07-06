@@ -64,9 +64,6 @@
   --status-red:      #ef4444;
   --status-red-bg:   rgba(239, 68, 68, 0.12);
   --status-red-glow: rgba(239, 68, 68, 0.28);
-  --status-orange:      #f97316;
-  --status-orange-bg:   rgba(249, 115, 22, 0.12);
-  --status-orange-glow: rgba(249, 115, 22, 0.28);
   --status-blue:     #60a5fa;
   --status-blue-bg:  rgba(96, 165, 250, 0.12);
 
@@ -1476,13 +1473,11 @@ button {
 }
 
 /* ══════════════════════════════════════════
-   SPATIAL EXPERIENCE — EPIC 05 (Release 4.0) /
-   OPERATIONAL VISUAL INTELLIGENCE — EPIC 06 (Release 5.0)
-   Camadas interativas, mapa esquemático em SVG, Linha do Tempo
-   executiva e destaque de seleção sincronizado entre Mapa, Advisor e
-   Painel Executivo — todos os valores reaproveitados do restante do
-   Design System (cores, espaçamento, tokens de motion já existentes);
-   nenhum padrão visual novo foi criado do zero.
+   SPATIAL EXPERIENCE — EPIC 05 (Release 4.0)
+   Camadas interativas, mapa clicável, seletor de estágio da Linha do
+   Tempo — todos os valores reaproveitados do restante do Design
+   System (cores, espaçamento, tokens de motion já existentes); nenhum
+   padrão visual novo foi criado.
 ══════════════════════════════════════════ */
 
 .workspace-layer--interactive {
@@ -1509,141 +1504,65 @@ button {
   margin-left: auto;
 }
 
-/* ── Mapa esquemático (EPIC 06, Objetivo 3) ──
-   Sem imagens, sem biblioteca de mapa: cada SpatialObject vira um nó
-   (`.spatial-map-node`) com um `<svg>` real como indicador de status,
-   agrupado por contêiner pai (`.spatial-map-container`). */
-
 .spatial-map {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.spatial-map-diagram {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.spatial-map-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 }
 
-.spatial-map-container {
-  border: 1px dashed var(--app-border);
-  border-radius: 10px;
-  padding: 10px 12px;
-}
-
-.spatial-map-container__children {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-left: 18px;
-  margin-top: 6px;
-}
-
-.spatial-map-node-wrap {
-  position: relative;
-}
-
-.spatial-map-node {
+.spatial-map-pin {
   align-items: center;
-  background: none;
-  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--app-border);
   border-radius: 8px;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   cursor: pointer;
   display: flex;
-  font: inherit;
   gap: 8px;
-  padding: 6px 10px;
+  font: inherit;
+  padding: 10px 12px;
   text-align: left;
   transition:
     background-color var(--motion-duration-fast) var(--motion-ease-standard),
     border-color var(--motion-duration-fast) var(--motion-ease-standard),
     transform var(--motion-duration-fast) var(--motion-ease-standard);
-  width: 100%;
 }
 
-.spatial-map-node:hover {
+.spatial-map-pin:hover {
   background: rgba(185, 149, 79, 0.08);
   transform: translateY(-1px);
 }
 
-.spatial-map-node--container {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.spatial-map-node--selected {
+.spatial-map-pin--selected {
   background: rgba(185, 149, 79, 0.14);
   border-color: var(--bba-gold-dim);
   box-shadow: 0 0 0 1px rgba(185, 149, 79, 0.18) inset;
 }
 
-.spatial-map-node__dot {
+.spatial-map-pin__icon {
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
-.spatial-map-node__label {
+.spatial-map-pin__icon--attention {
+  color: var(--status-amber);
+}
+
+.spatial-map-pin__label {
   font-size: 13px;
   line-height: 1.4;
 }
 
-.spatial-map-tooltip {
-  background: var(--bba-navy);
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  left: 0;
-  padding: 10px 12px;
-  position: absolute;
-  top: calc(100% + 6px);
-  width: max-content;
-  max-width: 260px;
-  z-index: 20;
-  animation: motion-fade-in var(--motion-duration-fast) var(--motion-ease-enter) both;
-}
-
-.spatial-map-tooltip__title {
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 700;
-  margin: 0 0 6px;
-}
-
-.spatial-map-tooltip__facts {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-}
-
-.spatial-map-tooltip__facts div {
-  align-items: baseline;
-  display: flex;
-  gap: 6px;
-  justify-content: space-between;
-}
-
-.spatial-map-tooltip__facts dt {
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-.spatial-map-tooltip__facts dd {
-  color: var(--text-secondary);
-  font-size: 11px;
-  margin: 0;
-  text-align: right;
-}
-
-/* ── Linha do Tempo executiva (EPIC 06, Objetivo 1) ──
-   Cada estágio mostra número, nome, descrição, marcador de status
-   (✓/●/○) e data de referência; a lista inteira comanda o Workspace
-   (Objetivo 2), não apenas a barra de progresso abaixo dela. */
-
 .timeline-stage-list {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 12px;
 }
 
@@ -1651,14 +1570,13 @@ button {
   align-items: center;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--app-border);
-  border-radius: 10px;
+  border-radius: 999px;
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   font: inherit;
-  gap: 10px;
-  padding: 8px 14px;
-  text-align: left;
+  gap: 8px;
+  padding: 6px 14px 6px 8px;
   transition:
     background-color var(--motion-duration-fast) var(--motion-ease-standard),
     border-color var(--motion-duration-fast) var(--motion-ease-standard),
@@ -1674,31 +1592,12 @@ button {
   color: var(--text-primary);
 }
 
-.timeline-stage--completed .timeline-stage__marker {
-  color: var(--status-green);
-}
-
-.timeline-stage--current .timeline-stage__marker {
-  color: var(--bba-gold-soft);
-}
-
-.timeline-stage--future .timeline-stage__marker {
-  color: var(--text-muted);
-}
-
-.timeline-stage__marker {
-  flex-shrink: 0;
-  font-size: 14px;
-  width: 14px;
-}
-
 .timeline-stage__index {
   align-items: center;
   background: rgba(185, 149, 79, 0.1);
   border-radius: 999px;
   color: var(--text-muted);
   display: inline-flex;
-  flex-shrink: 0;
   font-size: 11px;
   font-weight: 700;
   height: 20px;
@@ -1711,67 +1610,8 @@ button {
   color: var(--bba-gold-soft);
 }
 
-.timeline-stage__body {
-  align-items: baseline;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  justify-content: space-between;
-  flex: 1;
-}
-
 .timeline-stage__label {
   font-size: 12.5px;
-  font-weight: 600;
-}
-
-.timeline-stage--active .timeline-stage__label {
-  color: var(--text-primary);
-}
-
-.timeline-stage__date {
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-/* ── Conexão visual e Replay (EPIC 06, Objetivos 2, 6, 7) ──
-   `.geospatial-selection-highlight` aplica a mesma cor de status do
-   objeto selecionado (via `--geospatial-selection-color`, uma CSS
-   custom property definida inline a partir do mesmo
-   `spatial-object-status.ts` usado pelo mapa) ao Advisor e ao Painel
-   Executivo, para que a seleção nunca divirja entre os três.
-   `.geospatial-fade` reaproveita a keyframe `motion-fade-in` já
-   existente para dar um replay visual discreto quando o estágio ou a
-   seleção mudam — sem reload, sem remount da página. */
-
-.geospatial-selection-highlight {
-  border-left: 3px solid var(--geospatial-selection-color, var(--app-border));
-  border-radius: 8px;
-  transition: border-color var(--motion-duration-normal) var(--motion-ease-standard);
-}
-
-.geospatial-fade {
-  animation: motion-fade-in var(--motion-duration-normal) var(--motion-ease-enter) both;
-}
-
-.geospatial-kpi-grid {
-  display: contents;
-}
-
-.executive-projection {
-  border-top: 1px dashed var(--app-divider);
-  margin-top: 14px;
-  padding-top: 14px;
-}
-
-/* ── UX Enterprise (EPIC 06, Objetivo 10) ──
-   Foco visível consistente para toda a nova interação por teclado. */
-
-.workspace-layer--interactive:focus-visible,
-.timeline-stage:focus-visible,
-.spatial-map-node:focus-visible {
-  outline: 2px solid var(--bba-gold-soft);
-  outline-offset: 2px;
 }
 
 /* ══════════════════════════════════════════
