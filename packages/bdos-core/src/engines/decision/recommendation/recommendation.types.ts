@@ -12,7 +12,11 @@ export type RecommendationActionType =
   | "reduce_discretionary_spending"
   | "accelerate_receivables"
   | "renegotiate_payment_terms"
-  | "defer_non_critical_expenses";
+  | "defer_non_critical_expenses"
+  | "regularize_spatial_geometry"
+  | "attach_spatial_evidence"
+  | "corroborate_spatial_layers"
+  | "defer_location_dependent_decisions";
 
 export type RecommendationMetadata = Readonly<Record<string, unknown>>;
 

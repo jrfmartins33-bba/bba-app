@@ -377,6 +377,33 @@ estado atual.
   execução confirmada, evidência fotográfica), a confiança sobe até
   Verified e a Decision correspondente deixa de existir — o risco se
   resolve, provado por asserção, não por design.
+- **Release 2.6 (concluída — Sprint 14)**: auditoria de rastreabilidade
+  (`geospatial-intelligence.traceability-audit.test.ts`) — as 7
+  perguntas do PRINCIPLE 001 verificadas, uma a uma, contra uma
+  `Decision` real da cadeia. As 6 primeiras (o quê, onde, quando, por
+  quê, impacto, evidências) respondidas honestamente, com os limites
+  reais documentados (ex.: "onde" hoje resolve por identidade
+  organizacional, não coordenada, porque só objetos sem geometria
+  chegam a gerar `Decision`). A 7ª ("qual ação recomendada?") é um gap
+  real, **provado por asserção**: `buildRecommendations` retorna vazio
+  para qualquer `Decision` que não seja de `cash-intelligence`, porque
+  `recommendation-builder.ts` está hardcoded a um único cenário
+  (`category=Financial` + `diagnosisType=projected_cash_deficit`) — não
+  é um defeito do geoespacial, é uma lacuna pré-existente do Decision
+  Engine compartilhado, nunca antes testada por ninguém.
+- **Release 2.7 (concluída — Sprint 15)**: `recommendation-builder.ts`
+  generalizado — `resolveRecommendationContent` substitui o único
+  `if isProjectedCashDeficitDecision` hardcoded por um padrão de
+  múltiplas entradas, cada uma com seu próprio conteúdo (título,
+  resumo, opções), sem alterar o caso do `cash-intelligence`
+  (verificado: mesmo formato de id, mesmas 7 asserções pré-existentes
+  continuam válidas). Uma `Decision` de risco espacial por baixa
+  confiança agora gera: "Regularizar a base espacial da frente/trecho
+  antes de avançar decisões dependentes de localização.", com 4 opções
+  táticas (regularizar geometria, anexar evidência, corroborar com
+  mais camadas, adiar decisões dependentes de localização). A
+  auditoria PRINCIPLE 001 da Sprint 14 foi atualizada — a 7ª pergunta,
+  antes um gap provado, agora é respondida honestamente também.
 - **Premium**: Replay temporal, BBA Advisor narrando correlações
   espaciais reais, priorização de fiscalização por risco calculado,
   novas regras (Spatial Evidence Gap, Isolated Spatial Object).
@@ -415,6 +442,14 @@ estado atual.
   (Sprint 13): `WorkPackage → SpatialObject → BusinessFact →
   Diagnosis → Decision`, incluindo a narrativa de risco se resolvendo
   conforme dado real chega (RTK, execução, evidência).
+- ✅ Auditoria PRINCIPLE 001 (Sprint 14, atualizada na Sprint 15): as 7
+  perguntas de Full Traceability respondidas honestamente contra uma
+  `Decision` real, incluindo a 7ª ("qual ação recomendada?").
+- ✅ `recommendation-builder.ts` generalizado (Sprint 15): reconhece
+  `category=Risk` + `diagnosisType=low_spatial_confidence` além do
+  cenário original do `cash-intelligence`, sem alterar o comportamento
+  deste último. Uma `Decision` de baixa confiança espacial já gera uma
+  `Recommendation` real, com 4 opções táticas.
 - ⏳ Execution e Evidence ainda não produzem nenhum dado espacial —
   apenas Planning (via `WorkPackage`), e ainda por fixture, não por
   dado de produção real.
