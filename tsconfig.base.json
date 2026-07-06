@@ -23,6 +23,9 @@
       "@bba/ui/*": ["packages/ui/src/*"],
       "@bba/bdos-core/services/geospatial-product-integration": [
         "packages/bdos-core/src/services/geospatial-product-integration/index.ts"
+      ],
+      "@bba/bdos-core/services/bba-project-import": [
+        "packages/bdos-core/src/services/bba-project-import/index.ts"
       ]
     }
   }

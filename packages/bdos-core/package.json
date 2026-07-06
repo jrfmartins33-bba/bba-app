@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./services/geospatial-product-integration": "./src/services/geospatial-product-integration/index.ts"
+    "./services/geospatial-product-integration": "./src/services/geospatial-product-integration/index.ts",
+    "./services/bba-project-import": "./src/services/bba-project-import/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

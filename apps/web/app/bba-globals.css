@@ -1615,6 +1615,115 @@ button {
 }
 
 /* ══════════════════════════════════════════
+   BBA PROJECT — Sprint Zero
+   Importador de cronograma e visão de EAP/Cronograma. Reaproveita ao
+   máximo classes já existentes (`.workspace-map-placeholder`,
+   `.workspace-layer*`, `.workspace-fact-list`, `.bba-button`) — apenas
+   a tabela de EAP/Cronograma é um padrão visual novo, por não haver
+   nada parecido no restante do Design System.
+══════════════════════════════════════════ */
+
+.bba-project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.bba-project-file-input {
+  display: none;
+}
+
+.bba-project-wbs-table {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bba-project-wbs-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bba-project-wbs-row {
+  align-items: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 56px 1fr 170px 120px auto;
+  font: inherit;
+  padding: 8px 10px;
+  text-align: left;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease-standard);
+  width: 100%;
+}
+
+.bba-project-wbs-row:hover {
+  background: rgba(185, 149, 79, 0.08);
+}
+
+.bba-project-wbs-row--selected {
+  background: rgba(185, 149, 79, 0.14);
+  border-color: var(--bba-gold-dim);
+}
+
+.bba-project-wbs-row--child {
+  color: var(--text-secondary);
+  padding-left: 26px;
+}
+
+.bba-project-wbs-code {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.bba-project-wbs-name {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.bba-project-wbs-row--child .bba-project-wbs-name {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.bba-project-wbs-dates {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.bba-project-wbs-progress {
+  min-width: 90px;
+}
+
+.bba-project-wbs-badge {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 700;
+  gap: 4px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.bba-project-wbs-badge--critical {
+  background: var(--status-red-bg);
+  color: var(--status-red);
+}
+
+.bba-project-wbs-badge--late {
+  background: var(--status-amber-bg);
+  color: var(--status-amber);
+}
+
+/* ══════════════════════════════════════════
    MOTION DESIGN SYSTEM (UI Sprint M1)
    Infraestrutura oficial de motion da BBA Platform — reutilizada por
    packages/ui/src/motion/*. Coexiste com os tokens legados

@@ -35,6 +35,7 @@ const OPERATIONAL_DOMAINS = [
   "approval-workflow",
   "bulletin-generator",
   "export-engine",
+  "schedule-management",
 ] as const;
 
 // Rule A — exact repo-relative directories an operational domain may never

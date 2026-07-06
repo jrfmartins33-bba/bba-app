@@ -20,6 +20,7 @@ import {
   DollarSign,
   Zap,
   Settings,
+  GanttChartSquare,
 } from 'lucide-react'
 import { WORKSPACE_NAV_CONFIG } from './workspace-nav-config'
 
@@ -36,6 +37,12 @@ const NAV_TOP = [
     label: 'Hoje',
     icon: Home,
     description: 'Cockpit · Radar · Ações',
+  },
+  {
+    href: '/bba-project',
+    label: 'BBA Project',
+    icon: GanttChartSquare,
+    description: 'O primeiro planejador de projetos orientado por decisões',
   },
   {
     href: '/workspaces',

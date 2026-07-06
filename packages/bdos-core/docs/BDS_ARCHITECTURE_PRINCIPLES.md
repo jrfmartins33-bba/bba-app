@@ -165,6 +165,53 @@ Object completo, com identidade, hierarquia, relações, camadas,
 ciclo de vida e confiança) está descrita em
 `packages/bdos-core/docs/GEOSPATIAL_ENGINE.md`.
 
+## PRINCIPLE 005 — No Isolated Activity
+
+Nenhuma informação de cronograma pode existir isolada.
+
+Toda atividade de um cronograma — de onde quer que venha (importação,
+criação manual, integração futura) — deve nascer já conectada a:
+
+- um **SpatialObject** (mesmo que ainda `Conceived`, sem geometria de
+  campo);
+- um **Decision Context** (capaz de gerar `BusinessFact` → `Diagnosis`
+  → `Decision`, através da mesma cadeia do Decision Engine, nunca uma
+  paralela);
+- uma **fonte de evidência** (mesmo que inicialmente vazia — "nenhuma
+  evidência anexada ainda" é uma resposta válida, uma atividade sem
+  fonte de evidência associada não é);
+- uma **rastreabilidade** (PRINCIPLE 001 — as sete perguntas);
+- uma **capacidade de receber recomendações** (via
+  `engines/decision/recommendation`, nunca um motor de sugestão
+  próprio).
+
+Isso impede que o cronograma se torne apenas uma lista de barras e
+datas. Cada atividade é um objeto vivo do BDS desde o instante em que
+é criada — não um registro passivo que só passa a "significar algo"
+depois de uma integração futura.
+
+**Por que este princípio existe.** A oportunidade estratégica do BBA
+Project (ver `docs/BBA_PROJECT.md`) só existe se todo cronograma
+importado herdar, automaticamente, o mesmo diferencial que o
+Geospatial Engine já provou: confiança, rastreabilidade e recomendação
+reais, não inventadas. Um cronograma que apenas "parece" com o
+Microsoft Project — barras, datas, percentual — sem estar conectado a
+essa cadeia seria um retrocesso, não um produto novo.
+
+**Reconciliação com PRINCIPLE 004.** Uma atividade não cria seu próprio
+`SpatialObject` do zero: ela nasce vinculada a um `WorkPackage`
+(`domain/work-package-management`), e é o adaptador já existente
+(`domain/spatial-object/adapters/work-package-management`, Sprint 12)
+quem produz o `SpatialObject` correspondente — exatamente como já
+acontece para o Geospatial Engine hoje. `domain/schedule-management`
+(a implementação deste princípio) reaproveita essa cadeia inteira; não
+duplica a criação de `SpatialObject`, `BusinessFact`, `Decision` ou
+`Recommendation`.
+
+Toda implementação deste princípio (o modelo de `ScheduleActivity`,
+dependências, caminho crítico, linha de base, curva S e o Importador
+de cronogramas) está descrita em `packages/bdos-core/docs/BBA_PROJECT.md`.
+
 ---
 
 ## Estado de implementação (UI Sprint 7 — Geospatial Engine MVP)
