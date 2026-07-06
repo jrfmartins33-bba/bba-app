@@ -354,6 +354,29 @@ estado atual.
   primeira vez, em todo o BDOS, que uma Rule é exercitada através do
   `executeRulePack` real e chega a um `Decision` real, com
   rastreabilidade verificada por asserção (não por convenção).
+- **Release 2.4 (concluída — Sprint 12)**: primeiro produtor real de
+  `SpatialObject` — `domain/spatial-object/adapters/work-package-management`
+  converte `WorkPackage`s do tipo `ExecutionFront` (frentes/trechos
+  reais do Planning) em `SpatialObject`s, sem inventar geometria (eles
+  nascem `Conceived`, só com camada `AsPlanned`, aguardando
+  topografia/RTK/drone real). `WorkPackage`s de outros tipos
+  (`ScopeGroup`, `CostGroup`, `Administration` etc.) são explicitamente
+  ignorados, nunca convertidos à força. Introduz a Regra E em
+  `engineering-boundaries.test.ts`, espelhando a Regra C: agora
+  `domain/spatial-object` também só pode importar um domínio
+  operacional através de um único adapter autorizado — o mesmo padrão
+  de governança aplicado a um segundo leitor, não um caso especial.
+- **Release 2.5 (concluída — Sprint 13)**: as duas pontas
+  encadeadas com `WorkPackage`s reais
+  (`geospatial-intelligence.work-package-integration.test.ts`) —
+  `WorkPackage → SpatialObject → BusinessFact → Diagnosis → Decision`
+  em uma única cadeia, sem nenhum fixture artificial de `SpatialObject`
+  no meio. Prova duas narrativas concretas: (1) frentes/trechos recém
+  concebidos pelo Planning, sem geometria, disparam Low Spatial
+  Confidence em toda a cadeia; (2) conforme dado real chega (RTK,
+  execução confirmada, evidência fotográfica), a confiança sobe até
+  Verified e a Decision correspondente deixa de existir — o risco se
+  resolve, provado por asserção, não por design.
 - **Premium**: Replay temporal, BBA Advisor narrando correlações
   espaciais reais, priorização de fiscalização por risco calculado,
   novas regras (Spatial Evidence Gap, Isolated Spatial Object).
@@ -383,11 +406,18 @@ estado atual.
   incluindo o caminho negativo (objetos de alta confiança não geram
   nenhuma Decision) e a rastreabilidade completa até o id do
   `SpatialObject` de origem.
-- ⏳ Nenhum Spatial Object real ainda é produzido por nenhum outro
-  Engine (Planning, Execution, Evidence) — a cadeia está provada com
-  fixture, mas ainda não é alimentada por dado de produção. Essa é a
-  próxima fronteira (wiring do Observe stage a partir do Planning
-  Engine, o primeiro Engine com dado espacial real disponível).
+- ✅ Primeiro produtor real de `SpatialObject` (Sprint 12): frentes e
+  trechos de execução (`WorkPackage` do tipo `ExecutionFront`) já
+  viram `SpatialObject`s reais, sem geometria inventada. Regra E
+  formaliza que `domain/spatial-object` só pode ler um domínio
+  operacional através deste único adapter.
+- ✅ Cadeia completa provada com `WorkPackage`s reais em série
+  (Sprint 13): `WorkPackage → SpatialObject → BusinessFact →
+  Diagnosis → Decision`, incluindo a narrativa de risco se resolvendo
+  conforme dado real chega (RTK, execução, evidência).
+- ⏳ Execution e Evidence ainda não produzem nenhum dado espacial —
+  apenas Planning (via `WorkPackage`), e ainda por fixture, não por
+  dado de produção real.
 - ⏳ `ProjectLocation` e `MeasurementCoordinate` continuam isolados,
   não consolidados — consolidação é decisão de sprint futura, não
   consequência automática deste documento.

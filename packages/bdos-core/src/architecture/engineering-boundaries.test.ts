@@ -10,7 +10,11 @@
  * `FORBIDDEN_SEGMENTS_FOR_OPERATIONAL` names each Capability individually
  * (not a `capabilities/*` wildcard) — adding a new Capability means adding
  * its segment here too, as done for `capabilities/geospatial-intelligence`
- * (Release 2.2 / Sprint 10). It reads only local files
+ * (Release 2.2 / Sprint 10). Rule E (Release 2.4 / Sprint 12) extends the
+ * same "operational domains stay behind one narrow adapter seam" idea from
+ * Rule C to a second reader, `domain/spatial-object` — the pattern is meant
+ * to be repeated this way for every future reader, not special-cased. It
+ * reads only local files
  * under this package, performs a textual import scan (no TypeScript
  * compiler API, no network, no external runtime), and reports every
  * violation found.
@@ -80,6 +84,13 @@ const FORBIDDEN_KEYWORDS_FOR_OPERATIONAL: ReadonlyArray<string> = [
 const AUTHORIZED_BUSINESS_FACTS_SEAM =
   "domain/business-facts-generator/adapters/engineering-application";
 
+// Rule E — the equivalent seam for the Geospatial Engine (Release 2.4 /
+// Sprint 12): `domain/spatial-object`'s own core files must never import an
+// operational domain directly. This one adapter subfolder is the sole
+// authorized exception, mirroring Rule C exactly for a different reader.
+const AUTHORIZED_SPATIAL_OBJECT_SEAM =
+  "domain/spatial-object/adapters/work-package-management";
+
 // Rule D — Export Engine must stay conceptual: no filesystem, no binary
 // encoding, no real document generation library, no Template Engine.
 const EXACT_FORBIDDEN_SPECIFIERS_FOR_EXPORT_ENGINE: ReadonlyArray<string> = [
@@ -108,7 +119,7 @@ interface ImportRef {
 }
 
 interface Violation {
-  readonly rule: "A" | "B" | "C" | "D";
+  readonly rule: "A" | "B" | "C" | "D" | "E";
   readonly file: string;
   readonly line: number;
   readonly specifier: string;
@@ -122,7 +133,8 @@ runTest("guard scans a non-trivial number of source files", () => {
       0,
     ) +
     listTsFiles(join(SRC_ROOT, "engines", "decision")).length +
-    listTsFiles(join(SRC_ROOT, "domain", "business-facts-generator")).length;
+    listTsFiles(join(SRC_ROOT, "domain", "business-facts-generator")).length +
+    listTsFiles(join(SRC_ROOT, "domain", "spatial-object")).length;
 
   assertEqual(total > 20, true, `expected to scan more than 20 files, scanned ${total}`);
 });
@@ -153,6 +165,14 @@ runTest(
   () => {
     const violations = findExportEngineViolations();
     assertNoViolations(violations, "Rule D violation(s) found");
+  },
+);
+
+runTest(
+  "Rule E: Spatial Object does not import operational domains directly outside the authorized adapter seam",
+  () => {
+    const violations = findSpatialObjectViolations();
+    assertNoViolations(violations, "Rule E violation(s) found");
   },
 );
 
@@ -260,6 +280,42 @@ function findBusinessFactsGeneratorViolations(): ReadonlyArray<Violation> {
           line: ref.line,
           specifier: ref.specifier,
           reason: `Business Facts Generator imports operational domain "${hitDomain}" directly outside "${AUTHORIZED_BUSINESS_FACTS_SEAM}"`,
+        });
+      }
+    });
+  });
+
+  return violations;
+}
+
+function findSpatialObjectViolations(): ReadonlyArray<Violation> {
+  const violations: Violation[] = [];
+  const files = listTsFiles(join(SRC_ROOT, "domain", "spatial-object"));
+
+  files.forEach((file) => {
+    const fileDirRel = toRepoRelative(dirname(file));
+
+    if (isUnderSegment(fileDirRel, AUTHORIZED_SPATIAL_OBJECT_SEAM)) {
+      return;
+    }
+
+    readImportsFromFile(file).forEach((ref) => {
+      if (!ref.specifier.startsWith(".")) {
+        return;
+      }
+
+      const relPath = resolveRelativeSpecifier(file, ref.specifier);
+      const hitDomain = OPERATIONAL_DOMAINS.find((domain) =>
+        isUnderSegment(relPath, `domain/${domain}`),
+      );
+
+      if (hitDomain !== undefined) {
+        violations.push({
+          rule: "E",
+          file: toRepoRelative(file),
+          line: ref.line,
+          specifier: ref.specifier,
+          reason: `Spatial Object imports operational domain "${hitDomain}" directly outside "${AUTHORIZED_SPATIAL_OBJECT_SEAM}"`,
         });
       }
     });
