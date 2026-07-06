@@ -18,7 +18,8 @@ export type BusinessFactSource =
   | "engineering-application.approval-workflow"
   | "engineering-application.bulletin-generator"
   | "engineering-application.export-engine"
-  | "engineering-application.evidence-center";
+  | "engineering-application.evidence-center"
+  | "spatial-object.confidence";
 
 export type BusinessFactSourceReference = string;
 

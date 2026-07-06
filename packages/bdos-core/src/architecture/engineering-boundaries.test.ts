@@ -6,7 +6,11 @@
  * fails loudly when a source file crosses a forbidden boundary between the
  * Engineering Operational Layer (EPIC 10) and the decision-side domains
  * (Decision Engine, Business Facts, Executive Intelligence, revenue/cash
- * intelligence) or the future Template Engine. It reads only local files
+ * intelligence, geospatial intelligence) or the future Template Engine.
+ * `FORBIDDEN_SEGMENTS_FOR_OPERATIONAL` names each Capability individually
+ * (not a `capabilities/*` wildcard) — adding a new Capability means adding
+ * its segment here too, as done for `capabilities/geospatial-intelligence`
+ * (Release 2.2 / Sprint 10). It reads only local files
  * under this package, performs a textual import scan (no TypeScript
  * compiler API, no network, no external runtime), and reports every
  * violation found.
@@ -34,6 +38,7 @@ const OPERATIONAL_DOMAINS = [
 const FORBIDDEN_SEGMENTS_FOR_OPERATIONAL: ReadonlyArray<string> = [
   "engines/decision",
   "capabilities/cash-intelligence",
+  "capabilities/geospatial-intelligence",
   "domain/decision",
   "domain/decision-case",
   "domain/decision-portfolio",
@@ -60,6 +65,7 @@ const FORBIDDEN_KEYWORDS_FOR_OPERATIONAL: ReadonlyArray<string> = [
   "executive-insight",
   "executive-brief",
   "cash-intelligence",
+  "geospatial-intelligence",
   "revenue-intelligence",
   "cash-flow",
   "cash-forecast",

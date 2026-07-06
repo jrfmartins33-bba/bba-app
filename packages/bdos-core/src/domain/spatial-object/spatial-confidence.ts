@@ -107,18 +107,20 @@ export function evaluateSpatialConfidence(input: EvaluateSpatialConfidenceInput)
     );
   }
 
-  if (spatialObject.geometries.length > 1) {
-    score += SPATIAL_CONFIDENCE_POINTS.geometryHasMultipleVersions;
-    reasons.push(
-      createReason(
-        "geometry_has_multiple_versions",
-        "Spatial object has more than one recorded geometry version.",
-      ),
-    );
-  } else {
-    warnings.push(
-      createWarning("single_geometry_version", "Spatial object has a single geometry version, never refined."),
-    );
+  if (currentGeometry !== null) {
+    if (spatialObject.geometries.length > 1) {
+      score += SPATIAL_CONFIDENCE_POINTS.geometryHasMultipleVersions;
+      reasons.push(
+        createReason(
+          "geometry_has_multiple_versions",
+          "Spatial object has more than one recorded geometry version.",
+        ),
+      );
+    } else {
+      warnings.push(
+        createWarning("single_geometry_version", "Spatial object has a single geometry version, never refined."),
+      );
+    }
   }
 
   const distinctLayerTypes = new Set(spatialObject.layers.map((layer) => layer.type));

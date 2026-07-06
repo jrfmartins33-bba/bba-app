@@ -329,18 +329,26 @@ estado atual.
 - **MVP (concluído — UI Sprint 7)**: tela `/workspaces/engenharia/geoespacial`
   com placeholder de mapa, checklist de camadas, linha do tempo e KPIs
   — 100% mock, sem nenhum modelo de domínio por trás.
-- **Release 2.1 (próxima)**: `domain/spatial-object` em
-  `packages/bdos-core/src` — tipos puros (SpatialObject, Spatial
-  Identity, Spatial Relationship, Spatial Layer, ciclo de vida),
-  seguindo a mesma convenção `.ts`/`.types.ts`/`index.ts`/`.test.ts`
-  dos demais domínios. Sem API, sem banco de dados, sem UI nova.
-- **Release 2.2**: `capabilities/geospatial-intelligence` (Facts →
-  Patterns → Rules), seguindo o padrão de `cash-intelligence`, com a
-  primeira regra real de correlação espacial; extensão do teste de
-  fronteiras arquiteturais (`engineering-boundaries.test.ts`) para
-  cobrir a nova capability.
+- **Release 2.1 (concluída — Sprint 9)**: `domain/spatial-object` em
+  `packages/bdos-core/src` — tipos e funções puras (SpatialObject,
+  Spatial Identity, Spatial Relationship, Spatial Layer, ciclo de
+  vida, Spatial Graph) e `spatial-confidence.ts` (compõe com
+  `EvidenceConfidence` já existente). Sem API, sem banco de dados,
+  sem UI nova.
+- **Release 2.2 (concluída — Sprint 10)**: `capabilities/geospatial-intelligence`
+  (Facts → Patterns → Rules), seguindo exatamente o padrão de
+  `cash-intelligence`; `lowSpatialConfidenceRule` como primeira regra
+  real de correlação espacial; `domain/business-facts-generator/adapters/spatial-object`
+  como o adaptador que converte `SpatialObject` em `BusinessFact`
+  (único ponto de contato entre o domínio espacial e o Decision
+  Engine); extensão de `engineering-boundaries.test.ts` para cobrir a
+  nova capability (Regra A agora nomeia `capabilities/geospatial-intelligence`
+  explicitamente, corrigindo uma lacuna real encontrada no teste —
+  ele só nomeava `cash-intelligence`, não um padrão genérico
+  `capabilities/*`).
 - **Premium**: Replay temporal, BBA Advisor narrando correlações
-  espaciais reais, priorização de fiscalização por risco calculado.
+  espaciais reais, priorização de fiscalização por risco calculado,
+  novas regras (Spatial Evidence Gap, Isolated Spatial Object).
 - **Enterprise**: consolidação multi-contrato/multi-estado,
   exportação para auditoria externa, modelo de permissão espacial
   multi-stakeholder completo.
@@ -353,8 +361,19 @@ estado atual.
 - ✅ Tela MVP mock em `/workspaces/engenharia/geoespacial` (UI Sprint 7).
 - ✅ Reconciliação arquitetural registrada — evita duplicar "Digital
   Twin", "Evidence Confidence" e "Decision Graph" sob nomes novos.
-- ⏳ Nenhum código de domínio (`domain/spatial-object`) implementado
-  ainda — é a próxima sprint proposta (Release 2.1 acima).
+- ✅ `domain/spatial-object` implementado (Sprint 9): aggregate root,
+  ciclo de vida, versionamento de geometria, relacionamentos, Spatial
+  Graph e Spatial Confidence.
+- ✅ `capabilities/geospatial-intelligence` implementada (Sprint 10),
+  com a primeira regra real (`lowSpatialConfidenceRule`) conectada ao
+  Decision Engine através de `business-facts-generator/adapters/spatial-object`.
+  Uma nova fonte aditiva (`"spatial-object.confidence"`) foi
+  adicionada a `BusinessFactSource` — a única alteração feita em
+  `domain/business-fact` até agora, puramente aditiva.
+- ⏳ Nenhum Spatial Object real ainda é produzido por nenhum outro
+  Engine (Planning, Execution, Evidence) — a capability e a regra
+  existem e estão corretas, mas ainda não são alimentadas por dado de
+  produção. Essa é a próxima fronteira (wiring do Observe stage).
 - ⏳ `ProjectLocation` e `MeasurementCoordinate` continuam isolados,
   não consolidados — consolidação é decisão de sprint futura, não
   consequência automática deste documento.

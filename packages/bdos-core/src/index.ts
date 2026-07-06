@@ -893,6 +893,7 @@ export * from "./domain/cash-flow-signal";
 export * from "./domain/cash-forecast";
 export * from "./domain/executive-cash-intelligence";
 export * from "./capabilities/cash-intelligence";
+export * from "./capabilities/geospatial-intelligence";
 export * from "./engines/decision/pipeline/observe";
 export * from "./engines/decision/pipeline/diagnose";
 export * from "./engines/decision/rule-engine";
