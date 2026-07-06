@@ -404,6 +404,43 @@ estado atual.
   mais camadas, adiar decisões dependentes de localização). A
   auditoria PRINCIPLE 001 da Sprint 14 foi atualizada — a 7ª pergunta,
   antes um gap provado, agora é respondida honestamente também.
+
+### EPIC 04 — Product Integration
+
+Objetivo: levar o BDOS do laboratório para o produto, sem deixar
+`apps/web` conhecer o domínio diretamente. Uma camada de Application
+Service (`services/`, irmã de `domain/`, `engines/`, `capabilities/`,
+`architecture/`) orquestra a cadeia já provada; um consumidor externo
+só enxerga essa camada, nunca `domain/spatial-object`,
+`engines/decision/*` ou `capabilities/geospatial-intelligence`
+diretamente.
+
+- **Release 3.0 (concluída — Sprint 16)**: `services/geospatial-product-integration`
+  — `buildGeospatialProductSnapshot`, uma única função que orquestra
+  `createWorkPackage (a partir de um DTO simples) →
+  generateSpatialObjectsFromWorkPackages → spatialObjectFactsAdapter →
+  executeRulePack → buildDecisions → buildRecommendations` (a mesma
+  cadeia da Sprint 13, agora encapsulada). Zero conhecimento de negócio
+  próprio — só orquestração. O input é um DTO plano
+  (`GeospatialWorkPackageInput`), não o agregado real `WorkPackage` —
+  quem chama o serviço nunca precisa saber que `createWorkPackage`
+  existe. `package.json` ganhou um `exports` map contendo **apenas**
+  `./services/geospatial-product-integration` — o export `"."` (barrel
+  completo) foi removido, não apenas "separado": confirmei por teste
+  real que, enquanto `"."` existisse, `import ... from "@bba/bdos-core"`
+  resolvia com sucesso via `node_modules`, ignorando completamente
+  qualquer configuração em `tsconfig.base.json`. Removido o `"."`,
+  tanto o import puro quanto `@bba/bdos-core/domain/spatial-object`
+  falham em tempo de compilação; apenas o subcaminho do serviço
+  resolve — provado, não apenas documentado.
+- **Release 3.1 (concluída — Sprint 17)**: `/workspaces/engenharia/geoespacial`
+  ligada a `@bba/bdos-core/services/geospatial-product-integration`.
+  Pela primeira vez, um usuário real vê uma `Decision`/`Recommendation`
+  genuinamente computada pelo BDOS — status, mensagem do Advisor e as
+  6 seções do painel agora refletem o resultado real da cadeia (local,
+  motivo, evidência, recomendação e nível de confiança), não mais
+  placeholders estáticos. O dado de entrada (`WorkPackage`s) ainda é
+  mock — não há Supabase/API ainda — mas o cálculo é 100% real.
 - **Premium**: Replay temporal, BBA Advisor narrando correlações
   espaciais reais, priorização de fiscalização por risco calculado,
   novas regras (Spatial Evidence Gap, Isolated Spatial Object).
@@ -450,6 +487,20 @@ estado atual.
   cenário original do `cash-intelligence`, sem alterar o comportamento
   deste último. Uma `Decision` de baixa confiança espacial já gera uma
   `Recommendation` real, com 4 opções táticas.
+- ✅ Application Service implementado (Sprint 16, EPIC 04):
+  `services/geospatial-product-integration/buildGeospatialProductSnapshot`
+  encapsula a cadeia inteira numa única chamada, exposta por um
+  `exports` dedicado em `package.json` — o primeiro passo para levar o
+  BDOS ao produto sem `apps/web` conhecer o domínio diretamente.
+- ✅ `/workspaces/engenharia/geoespacial` ligada ao BDOS (Sprint 17):
+  `apps/web` importa exclusivamente
+  `@bba/bdos-core/services/geospatial-product-integration` —
+  confirmado por teste real que `@bba/bdos-core` (import puro) e
+  `@bba/bdos-core/domain/spatial-object` (import direto ao domínio)
+  falham em tempo de compilação, provando o isolamento, não apenas
+  documentando-o. O painel do BBA Advisor na tela mostra status,
+  mensagem, local, causa, evidência, recomendação e nível de confiança
+  genuinamente computados pela cadeia real.
 - ⏳ Execution e Evidence ainda não produzem nenhum dado espacial —
   apenas Planning (via `WorkPackage`), e ainda por fixture, não por
   dado de produção real.

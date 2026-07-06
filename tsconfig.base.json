@@ -20,7 +20,10 @@
       "@bba/lib": ["packages/lib/src/index.ts"],
       "@bba/lib/*": ["packages/lib/src/*"],
       "@bba/ui": ["packages/ui/src/index.ts"],
-      "@bba/ui/*": ["packages/ui/src/*"]
+      "@bba/ui/*": ["packages/ui/src/*"],
+      "@bba/bdos-core/services/geospatial-product-integration": [
+        "packages/bdos-core/src/services/geospatial-product-integration/index.ts"
+      ]
     }
   }
 }

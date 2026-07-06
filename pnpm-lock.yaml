@@ -66,6 +66,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@bba/bdos-core':
+        specifier: workspace:*
+        version: link:../../packages/bdos-core
       '@bba/config':
         specifier: workspace:*
         version: link:../../packages/config

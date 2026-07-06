@@ -14,6 +14,11 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { Card, DecisionInsightCard, ProgressBar, type DecisionInsightCardSection } from "@bba/ui";
+import {
+  buildGeospatialProductSnapshot,
+  WorkPackageType,
+  type GeospatialWorkPackageInput
+} from "@bba/bdos-core/services/geospatial-product-integration";
 
 interface SpatialLayer {
   label: string;
@@ -39,6 +44,122 @@ const ACTIVE_LAYER_COUNT = SPATIAL_LAYERS.filter((layer) => layer.active).length
 
 const TEMPORAL_COVERAGE_PERCENT = 35;
 
+// UI Sprint 17 (EPIC 04 / Release 3.1): as frentes de execução abaixo
+// ainda são mock — não há Supabase/API alimentando esta tela ainda —
+// mas, a partir daqui, o cálculo é 100% real: `buildGeospatialProductSnapshot`
+// (@bba/bdos-core/services/geospatial-product-integration) executa a
+// mesma cadeia SpatialObject → BusinessFact → Diagnosis → Decision →
+// Recommendation já provada nas Sprints 9-16. Esta página nunca importa
+// domain/spatial-object, engines/decision ou capabilities/geospatial-intelligence
+// diretamente — só este serviço.
+const WORK_PACKAGES: GeospatialWorkPackageInput[] = [
+  {
+    id: "wp-frente-a",
+    code: "FR-A",
+    name: "Frente A — Fundação da Comporta",
+    type: WorkPackageType.ExecutionFront,
+    sequence: 1
+  }
+];
+
+const SNAPSHOT = buildGeospatialProductSnapshot({
+  workPackages: WORK_PACKAGES,
+  tenantId: "tenant-2f-engenharia",
+  organizationId: "org-lagoa-do-arroz",
+  contractId: "contract-lagoa-do-arroz",
+  projectId: "project-lagoa-do-arroz",
+  capability: "geospatial-intelligence",
+  generatedAt: "2026-07-06T09:40:00Z",
+  correlationId: "geoespacial-page-snapshot-001",
+  actor: "planning-engineer-marcos",
+  occurredAt: "2026-07-05T09:00:00Z"
+});
+
+const WORK_PACKAGE_NAMES: Record<string, string> = Object.fromEntries(
+  WORK_PACKAGES.map((workPackage) => [`spatial-object:work-package:${workPackage.id}`, workPackage.name])
+);
+
+// Traduz os códigos determinísticos de `evaluateSpatialConfidence`
+// (packages/bdos-core/src/domain/spatial-object/spatial-confidence.ts)
+// para texto legível — nenhuma causa é inventada aqui, apenas os
+// mesmos códigos reais recebem um rótulo em português.
+const WARNING_CODE_LABELS: Record<string, string> = {
+  no_current_geometry: "nenhuma geometria de campo registrada ainda",
+  current_geometry_low_precision: "geometria atual com baixa precisão",
+  single_geometry_version: "geometria nunca foi refinada por uma segunda medição",
+  single_layer_attached: "apenas uma camada de dado anexada até agora",
+  no_evidential_layer: "nenhuma evidência de campo anexada"
+};
+
+type GeospatialFact = (typeof SNAPSHOT)["facts"][number];
+
+function getFactStringMetadata(fact: GeospatialFact, key: string): string | null {
+  const value = fact.metadata[key];
+  return typeof value === "string" ? value : null;
+}
+
+function getFactWarningLabels(fact: GeospatialFact): string[] {
+  const value = fact.metadata.spatialConfidenceWarningCodes;
+  const codes = Array.isArray(value) ? (value as string[]) : [];
+  return codes.map((code) => WARNING_CODE_LABELS[code] ?? code);
+}
+
+const primaryFact = SNAPSHOT.facts[0] ?? null;
+const primaryDecision = SNAPSHOT.decisions[0] ?? null;
+const primaryRecommendation = SNAPSHOT.recommendations[0] ?? null;
+
+const primaryPlaceName = primaryFact
+  ? (WORK_PACKAGE_NAMES[primaryFact.sourceReference] ?? primaryFact.sourceReference)
+  : null;
+const primaryWarningLabels = primaryFact ? getFactWarningLabels(primaryFact) : [];
+const primaryConfidenceLevel = primaryFact ? getFactStringMetadata(primaryFact, "spatialConfidenceLevel") : null;
+
+const ADVISOR_STATUS = primaryDecision ? "🟡 Requer atenção" : "🟢 Sem pendências";
+
+const ADVISOR_MESSAGE = primaryDecision
+  ? [
+      "Analisei a base espacial das frentes de execução.",
+      `Encontrei ${SNAPSHOT.decisions.length} ponto${SNAPSHOT.decisions.length > 1 ? "s" : ""} que merece${SNAPSHOT.decisions.length > 1 ? "m" : ""} sua atenção.`
+    ]
+  : ["Analisei a base espacial das frentes de execução.", "Nenhum ponto crítico foi identificado no momento."];
+
+const DECISION_SECTIONS: DecisionInsightCardSection[] = [
+  {
+    title: "Onde está o desvio?",
+    placeholder: primaryPlaceName ?? "Aguardando identificação automática."
+  },
+  {
+    title: "O que está causando?",
+    placeholder:
+      primaryWarningLabels.length > 0
+        ? `${primaryWarningLabels.join("; ")}.`
+        : "Aguardando análise das causas."
+  },
+  {
+    title: "Qual o impacto?",
+    placeholder: primaryDecision
+      ? `Impacto categórico: ${primaryDecision.impact} (ainda não quantificado em prazo ou custo).`
+      : "Aguardando cálculo de impacto."
+  },
+  {
+    title: "Quais evidências suportam?",
+    placeholder: primaryFact
+      ? `Confiança espacial avaliada em ${primaryFact.value}/100, a partir da fonte "${primaryFact.source}".`
+      : "Aguardando integração com os módulos operacionais."
+  },
+  {
+    title: "Qual a ação recomendada?",
+    placeholder: primaryRecommendation?.summary ?? "Será gerada automaticamente pelo BBA Advisor."
+  },
+  {
+    title: "Nível de confiança",
+    placeholder:
+      primaryConfidenceLevel && primaryFact
+        ? `${primaryConfidenceLevel} (score ${primaryFact.value}/100).`
+        : "Será calculado automaticamente conforme a quantidade e qualidade das evidências disponíveis."
+  }
+];
+
 interface GeospatialKpi {
   icon: LucideIcon;
   value: string | number;
@@ -47,32 +168,10 @@ interface GeospatialKpi {
 
 const KPIS: GeospatialKpi[] = [
   { icon: Map, value: "12,4 km²", label: "Área monitorada" },
-  { icon: MapPin, value: 148, label: "Objetos espaciais" },
+  { icon: MapPin, value: SNAPSHOT.spatialObjects.length, label: "Objetos espaciais" },
   { icon: Layers, value: ACTIVE_LAYER_COUNT, label: "Camadas ativas" },
   { icon: Clock, value: "05/07/2026 · 09:40", label: "Última atualização" }
 ];
-
-// Nenhum Engine alimenta esta análise ainda — ver PRINCIPLE 001 (Full
-// Traceability) em packages/bdos-core/docs/BDS_ARCHITECTURE_PRINCIPLES.md.
-// Mesmos placeholders do padrão oficial (BBA Advisor UX Pattern) — nenhum
-// dado ou conclusão inventada.
-const DECISION_SECTIONS: DecisionInsightCardSection[] = [
-  { title: "Onde está o desvio?", placeholder: "Aguardando identificação automática." },
-  { title: "O que está causando?", placeholder: "Aguardando análise das causas." },
-  { title: "Qual o impacto?", placeholder: "Aguardando cálculo de impacto." },
-  {
-    title: "Quais evidências suportam?",
-    placeholder: "Aguardando integração com os módulos operacionais."
-  },
-  { title: "Qual a ação recomendada?", placeholder: "Será gerada automaticamente pelo BBA Advisor." },
-  {
-    title: "Nível de confiança",
-    placeholder:
-      "Será calculado automaticamente conforme a quantidade e qualidade das evidências disponíveis."
-  }
-];
-
-const ADVISOR_MESSAGE = ["O mapa operacional está pronto para receber dados geoespaciais."];
 
 export default function GeoespacialPage() {
   return (
@@ -187,7 +286,7 @@ export default function GeoespacialPage() {
           engineLabel="Geospatial Engine"
           message={ADVISOR_MESSAGE}
           sections={DECISION_SECTIONS}
-          status="Informativo"
+          status={ADVISOR_STATUS}
         />
 
         {KPIS.map((item) => {
