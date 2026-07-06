@@ -346,6 +346,14 @@ estado atual.
   explicitamente, corrigindo uma lacuna real encontrada no teste —
   ele só nomeava `cash-intelligence`, não um padrão genérico
   `capabilities/*`).
+- **Release 2.3 (concluída — Sprint 11)**: prova de integração de
+  ponta a ponta (`capabilities/geospatial-intelligence/geospatial-intelligence.integration.test.ts`),
+  com um fixture realista (`geospatial-intelligence.fixtures.ts`, dois
+  `SpatialObject`s da Barragem Lagoa do Arroz) percorrendo a cadeia
+  real `SpatialObject → BusinessFact → Diagnosis → Decision` — a
+  primeira vez, em todo o BDOS, que uma Rule é exercitada através do
+  `executeRulePack` real e chega a um `Decision` real, com
+  rastreabilidade verificada por asserção (não por convenção).
 - **Premium**: Replay temporal, BBA Advisor narrando correlações
   espaciais reais, priorização de fiscalização por risco calculado,
   novas regras (Spatial Evidence Gap, Isolated Spatial Object).
@@ -370,10 +378,16 @@ estado atual.
   Uma nova fonte aditiva (`"spatial-object.confidence"`) foi
   adicionada a `BusinessFactSource` — a única alteração feita em
   `domain/business-fact` até agora, puramente aditiva.
+- ✅ Cadeia completa provada de ponta a ponta com fixture realista
+  (Sprint 11): `SpatialObject → BusinessFact → Diagnosis → Decision`,
+  incluindo o caminho negativo (objetos de alta confiança não geram
+  nenhuma Decision) e a rastreabilidade completa até o id do
+  `SpatialObject` de origem.
 - ⏳ Nenhum Spatial Object real ainda é produzido por nenhum outro
-  Engine (Planning, Execution, Evidence) — a capability e a regra
-  existem e estão corretas, mas ainda não são alimentadas por dado de
-  produção. Essa é a próxima fronteira (wiring do Observe stage).
+  Engine (Planning, Execution, Evidence) — a cadeia está provada com
+  fixture, mas ainda não é alimentada por dado de produção. Essa é a
+  próxima fronteira (wiring do Observe stage a partir do Planning
+  Engine, o primeiro Engine com dado espacial real disponível).
 - ⏳ `ProjectLocation` e `MeasurementCoordinate` continuam isolados,
   não consolidados — consolidação é decisão de sprint futura, não
   consequência automática deste documento.
