@@ -3,6 +3,7 @@ export {
   buildScheduleSCurve,
   calculateCriticalPath,
   createScheduleActivity,
+  simulateActivityDelay,
   updateActivityProgress,
 } from "./schedule-management";
 export {
@@ -27,3 +28,27 @@ export type {
   ScheduleSCurvePoint,
   UpdateActivityProgressInput,
 } from "./schedule-management.types";
+
+export {
+  buildPlanningDatasetFromScheduleActivities,
+  toScheduleActivityInputsFromPlanningDataset,
+  toWorkPackageInputsFromPlanningDataset,
+} from "./planning-dataset";
+export type {
+  PlanningScheduleActivityConversion,
+  PlanningWorkPackageInput,
+} from "./planning-dataset";
+export type {
+  PlanningActivityDependency,
+  PlanningActivityRecord,
+  PlanningDataset,
+  PlanningDatasetOrigin,
+  PlanningDependencyType,
+  PlanningDetectedType,
+  PlanningFinancialSummary,
+  PlanningImportWarning,
+  PlanningImportWarningCode,
+  PlanningPeriodPoint,
+  PlanningPeriodSeries,
+  PlanningSourceType,
+} from "./planning-dataset.types";

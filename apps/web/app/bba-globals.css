@@ -1615,13 +1615,99 @@ button {
 }
 
 /* ══════════════════════════════════════════
-   BBA PROJECT — Sprint Zero
-   Importador de cronograma e visão de EAP/Cronograma. Reaproveita ao
-   máximo classes já existentes (`.workspace-map-placeholder`,
-   `.workspace-layer*`, `.workspace-fact-list`, `.bba-button`) — apenas
-   a tabela de EAP/Cronograma é um padrão visual novo, por não haver
-   nada parecido no restante do Design System.
+   BBA PROJECT STUDIO — Sprint Zero / Sprint 1
+   Importador de planejamento (XML/Excel) e visão de EAP/Cronograma.
+   Reaproveita ao máximo classes já existentes
+   (`.workspace-map-placeholder`, `.workspace-layer*`,
+   `.workspace-fact-list`, `.bba-button`) — apenas a tabela de
+   EAP/Cronograma, a escolha inicial e o aviso de limitação são padrões
+   visuais novos, por não haver nada parecido no restante do Design
+   System.
 ══════════════════════════════════════════ */
+
+.bba-project-entry-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.bba-project-entry-option {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font: inherit;
+  gap: 6px;
+  min-width: 220px;
+  padding: 18px 20px;
+  text-align: center;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    border-color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.bba-project-entry-option:hover {
+  background: rgba(185, 149, 79, 0.08);
+  border-color: var(--bba-gold-dim);
+}
+
+.bba-project-entry-option span:nth-child(2) {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.bba-project-entry-option__caption {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 400 !important;
+}
+
+.bba-project-limitation-note {
+  background: var(--status-amber-bg);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px 14px;
+}
+
+.bba-project-limitation-note svg {
+  color: var(--status-amber);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.bba-project-limitation-note p {
+  margin: 0 0 6px;
+}
+
+.bba-project-limitation-note ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.bba-project-limitation-note li {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.bba-project-living-schedule {
+  border-top: 1px dashed var(--app-divider);
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.bba-project-living-schedule .bba-button {
+  margin-top: 6px;
+}
 
 .bba-project-actions {
   display: flex;

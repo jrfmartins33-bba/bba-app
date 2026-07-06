@@ -39,7 +39,7 @@ import type {
  * aprimoramento explicitamente adiado para uma sprint futura (ver
  * roadmap em `BBA_PROJECT.md`), não fingido aqui.
  */
-const geospatialRulePack: RulePack = {
+export const geospatialRulePack: RulePack = {
   id: "geospatial-intelligence-rule-pack",
   name: "Geospatial Intelligence",
   version: "1.0.0",

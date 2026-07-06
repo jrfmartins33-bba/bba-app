@@ -25,6 +25,7 @@ export interface BbaProjectImportInput {
 
 export type BbaProjectImportErrorStage =
   | "xml_import"
+  | "work_package_creation"
   | "spatial_object_generation"
   | "business_fact_generation";
 

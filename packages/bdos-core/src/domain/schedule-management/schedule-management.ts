@@ -264,6 +264,36 @@ export function buildScheduleSCurve(
   return points;
 }
 
+/**
+ * BBA Project Studio — Sprint 1, Living Schedule. Simula um atraso
+ * aumentando a duração da atividade selecionada; o recálculo do
+ * caminho crítico acontece por reinvocar `calculateCriticalPath`
+ * (inalterada) sobre o resultado — nenhuma Decision, Recommendation ou
+ * regra nova nasce aqui, é puramente uma re-simulação de tempo, em
+ * memória, nunca persistida.
+ */
+export function simulateActivityDelay(
+  activities: ReadonlyArray<ScheduleActivity>,
+  activityId: string,
+  delayDays: number,
+): ReadonlyArray<ScheduleActivity> {
+  return activities.map((activity) => {
+    if (activity.id !== activityId) {
+      return activity;
+    }
+
+    return {
+      ...activity,
+      durationDays: activity.durationDays + delayDays,
+      plannedEnd: shiftDate(activity.plannedEnd, delayDays),
+    };
+  });
+}
+
+function shiftDate(isoDate: string, days: number): string {
+  return new Date(new Date(isoDate).getTime() + days * MS_PER_DAY).toISOString().slice(0, 10);
+}
+
 function actualProgressAt(activity: ScheduleActivity, day: number): number {
   if (activity.actualStart === null) {
     return 0;

@@ -40,7 +40,7 @@ const NAV_TOP = [
   },
   {
     href: '/bba-project',
-    label: 'BBA Project',
+    label: 'BBA Project Studio',
     icon: GanttChartSquare,
     description: 'O primeiro planejador de projetos orientado por decisões',
   },

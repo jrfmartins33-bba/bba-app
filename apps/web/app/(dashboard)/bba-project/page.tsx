@@ -6,7 +6,7 @@ export default function BbaProjectPage() {
       <section className="page-header">
         <div>
           <span className="workspaces-eyebrow">BBA Platform · Business Decision System</span>
-          <h1>BBA Project</h1>
+          <h1>BBA Project Studio</h1>
           <p>O primeiro planejador de projetos orientado por decisões.</p>
         </div>
       </section>
