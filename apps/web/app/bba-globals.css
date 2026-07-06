@@ -1810,6 +1810,519 @@ button {
 }
 
 /* ══════════════════════════════════════════
+   BBA PROJECT STUDIO — Sprint 2 (EPIC 02, Decision First Experience)
+   A decisão aparece primeiro; o cronograma passa a explicá-la. Paleta
+   e tipografia contidas (Palantir/Linear/Stripe/Vercel/Arc) — nenhuma
+   cor nova além de `--status-*` já existentes, nenhuma animação
+   decorativa: toda transição aqui comunica estado (seleção, hover,
+   entrada de dado real).
+══════════════════════════════════════════ */
+
+.bba-project-fade-in {
+  animation: motion-fade-in var(--motion-duration-normal) var(--motion-ease-enter) both;
+}
+
+/* ── Hero Executive + Health Score ── */
+
+.bba-project-hero {
+  background: linear-gradient(135deg, rgba(185, 149, 79, 0.1), rgba(185, 149, 79, 0.02));
+  border: 1px solid var(--bba-gold-dim);
+  border-radius: 12px;
+  padding: 28px 30px;
+}
+
+.bba-project-hero__badge {
+  align-items: center;
+  color: var(--bba-gold-soft);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 6px;
+  letter-spacing: 0.08em;
+  margin-bottom: 14px;
+  text-transform: uppercase;
+}
+
+.bba-project-hero__greeting {
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+
+.bba-project-hero__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+  max-width: 640px;
+}
+
+.bba-project-hero__body p {
+  color: var(--text-secondary);
+  font-size: 14.5px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.bba-project-health-score {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+  padding: 28px 20px;
+  text-align: center;
+}
+
+.bba-project-health-score__label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.bba-project-health-score__value {
+  color: var(--text-primary);
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1;
+  margin: 6px 0;
+}
+
+.bba-project-health-score[data-level="healthy"] .bba-project-health-score__value {
+  color: var(--status-green);
+}
+
+.bba-project-health-score[data-level="attention"] .bba-project-health-score__value {
+  color: var(--status-amber);
+}
+
+.bba-project-health-score[data-level="risk"] .bba-project-health-score__value,
+.bba-project-health-score[data-level="critical"] .bba-project-health-score__value {
+  color: var(--status-red);
+}
+
+.bba-project-health-score__status {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+/* ── Executive Cards ── */
+
+.bba-project-executive-cards {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .bba-project-executive-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.bba-project-executive-card {
+  animation: motion-fade-in var(--motion-duration-normal) var(--motion-ease-enter) both;
+  animation-delay: calc(var(--stagger, 0) * 45ms);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 16px 14px;
+  transition: border-color var(--motion-duration-fast) var(--motion-ease-standard), transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.bba-project-executive-card:hover {
+  border-color: var(--bba-gold-dim);
+  transform: translateY(-2px);
+}
+
+.bba-project-executive-card__icon {
+  color: var(--bba-gold-soft);
+}
+
+.bba-project-executive-card__value {
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.bba-project-executive-card__label {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+/* ── Advisor narrativo ── */
+
+.bba-project-advisor {
+  background: var(--bba-card, rgba(12, 31, 63, 0.4));
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  padding: 24px 26px;
+}
+
+.bba-project-advisor__header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.bba-project-advisor__identity {
+  align-items: center;
+  color: var(--bba-gold-soft);
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 8px;
+}
+
+.bba-project-advisor__narrative {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .bba-project-advisor__narrative {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bba-project-advisor__block {
+  border-left: 2px solid var(--app-divider);
+  padding-left: 14px;
+}
+
+.bba-project-advisor__block--highlight {
+  border-left-color: var(--bba-gold-dim);
+}
+
+.bba-project-advisor__block-title {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bba-project-advisor__block-body {
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 6px 0 0;
+}
+
+.bba-project-advisor__block--highlight .bba-project-advisor__block-body {
+  color: var(--bba-gold-soft);
+}
+
+.bba-project-explain-trigger {
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+  margin-top: 18px;
+  padding: 0;
+  transition: color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.bba-project-explain-trigger:hover {
+  color: var(--bba-gold-soft);
+}
+
+/* ── Painel de explicabilidade (drawer) ── */
+
+.bba-project-drawer-overlay {
+  align-items: stretch;
+  background: rgba(7, 13, 26, 0.6);
+  display: flex;
+  inset: 0;
+  justify-content: flex-end;
+  position: fixed;
+  z-index: 80;
+  animation: motion-fade-in var(--motion-duration-fast) var(--motion-ease-enter) both;
+}
+
+.bba-project-drawer {
+  background: var(--bba-navy);
+  border-left: 1px solid var(--app-border);
+  box-shadow: -20px 0 40px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 100%;
+  overflow-y: auto;
+  padding: 24px;
+  width: 420px;
+  animation: motion-slide-left var(--motion-duration-normal) var(--motion-ease-enter) both;
+}
+
+.bba-project-drawer__header {
+  align-items: center;
+  color: var(--text-primary);
+  display: flex;
+  font-size: 15px;
+  font-weight: 700;
+  justify-content: space-between;
+}
+
+.bba-project-drawer__close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.bba-project-drawer__close:hover {
+  color: var(--text-primary);
+}
+
+.bba-project-drawer__section h4 {
+  color: var(--bba-gold-soft);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.bba-project-drawer__section ul {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.bba-project-drawer__options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin-top: 10px;
+  padding: 0;
+}
+
+.bba-project-drawer__options li {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+}
+
+.bba-project-drawer__options strong {
+  color: var(--text-primary);
+  font-size: 12.5px;
+}
+
+.bba-project-drawer__options span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ── Modelo Espacial ── */
+
+.bba-project-spatial-model {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bba-project-spatial-node-wrap {
+  position: relative;
+}
+
+.bba-project-spatial-node {
+  align-items: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 10px;
+  padding: 8px 10px;
+  text-align: left;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease-standard), border-color var(--motion-duration-fast) var(--motion-ease-standard);
+  width: 100%;
+}
+
+.bba-project-spatial-node:hover {
+  background: rgba(185, 149, 79, 0.08);
+}
+
+.bba-project-spatial-node--selected {
+  background: rgba(185, 149, 79, 0.14);
+  border-color: var(--bba-gold-dim);
+}
+
+.bba-project-spatial-node__label {
+  font-size: 13px;
+}
+
+.bba-project-spatial-tooltip {
+  background: var(--bba-navy);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  left: 12px;
+  padding: 10px 12px;
+  position: absolute;
+  top: calc(100% + 2px);
+  width: max-content;
+  max-width: 240px;
+  z-index: 20;
+  animation: motion-fade-in var(--motion-duration-fast) var(--motion-ease-enter) both;
+}
+
+.bba-project-spatial-tooltip strong {
+  color: var(--text-primary);
+  font-size: 12.5px;
+}
+
+.bba-project-spatial-tooltip span {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+/* ── Atividades em Risco (lista inteligente) ── */
+
+.bba-project-risk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bba-project-risk-item {
+  align-items: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  font: inherit;
+  gap: 8px;
+  padding: 9px 10px;
+  text-align: left;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease-standard), border-color var(--motion-duration-fast) var(--motion-ease-standard);
+  width: 100%;
+}
+
+.bba-project-risk-item:hover {
+  background: rgba(185, 149, 79, 0.08);
+}
+
+.bba-project-risk-item--selected {
+  background: rgba(185, 149, 79, 0.14);
+  border-color: var(--bba-gold-dim);
+}
+
+.bba-project-risk-item__icon {
+  color: var(--status-amber);
+  flex-shrink: 0;
+}
+
+.bba-project-risk-item__icon--critical {
+  color: var(--status-red);
+  flex-shrink: 0;
+}
+
+.bba-project-risk-item__name {
+  color: var(--text-primary);
+  flex: 1;
+  font-size: 13px;
+  min-width: 140px;
+}
+
+.bba-project-risk-item__confidence {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* ── Linha de raciocínio ── */
+
+.bba-project-reasoning-chain {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  padding: 20px 22px;
+}
+
+.bba-project-reasoning-chain__track {
+  align-items: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.bba-project-reasoning-chain__step-wrap {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.bba-project-reasoning-chain__step {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 118px;
+  padding: 12px 14px;
+  transition: border-color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.bba-project-reasoning-chain__step:hover {
+  border-color: var(--bba-gold-dim);
+}
+
+.bba-project-reasoning-chain__count {
+  color: var(--bba-gold-soft);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.bba-project-reasoning-chain__label {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bba-project-reasoning-chain__description {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.bba-project-reasoning-chain__arrow {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ══════════════════════════════════════════
    MOTION DESIGN SYSTEM (UI Sprint M1)
    Infraestrutura oficial de motion da BBA Platform — reutilizada por
    packages/ui/src/motion/*. Coexiste com os tokens legados

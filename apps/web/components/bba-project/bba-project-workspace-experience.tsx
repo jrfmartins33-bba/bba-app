@@ -1,34 +1,33 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type RefObject } from "react";
+import { Clock, FileUp, Sparkles, TimerReset, TriangleAlert, UploadCloud } from "lucide-react";
+import { Card, ProgressBar } from "@bba/ui";
+import { activityIdFromSpatialObjectId, spatialObjectIdForActivity } from "./bba-project-ids";
 import {
-  AlertTriangle,
-  Clock,
-  FileSpreadsheet,
-  FileUp,
-  Sparkles,
-  TimerReset,
-  TriangleAlert,
-  UploadCloud
-} from "lucide-react";
-import { Card, DecisionInsightCard, ProgressBar, type DecisionInsightCardSection } from "@bba/ui";
-import { PlaceholderSpatialMapView } from "@/components/geospatial/geospatial-map-view";
-import type { SpatialMapObjectViewModel } from "@/components/geospatial/map-adapter";
-import type {
-  BbaProjectPlanningActivity,
-  BbaProjectSnapshot
-} from "./bba-project-view-types";
+  activityIdFromDecision,
+  buildAdvisorNarrative,
+  buildHeroNarrative,
+  buildReasoningChain,
+  computeHealthScore
+} from "./bba-project-insights";
+import { BbaProjectHero } from "./bba-project-hero";
+import { BbaProjectExecutiveCards, type ExecutiveCardsData } from "./bba-project-executive-cards";
+import { BbaProjectAdvisorNarrative } from "./bba-project-advisor-narrative";
+import { BbaProjectSpatialModel, deriveSpatialModelStatus, type SpatialModelObject } from "./bba-project-spatial-model";
+import { BbaProjectScheduleTable } from "./bba-project-schedule-table";
+import { BbaProjectRiskList, type RiskListItem } from "./bba-project-risk-list";
+import { BbaProjectReasoningChain } from "./bba-project-reasoning-chain";
+import type { BbaProjectPlanningActivity, BbaProjectSnapshot } from "./bba-project-view-types";
 
 /**
- * BBA Project Studio — Sprint 1 (Planning Dataset Import + Living
- * Schedule, ver `packages/bdos-core/docs/BBA_PROJECT.md`). Único
- * componente com estado desta tela. Nenhum cálculo do BDOS acontece
- * aqui: este componente só envia o arquivo para
- * `/api/bba-project/import` (que chama `importPlanningSource`, a
- * Application Service real) e apresenta o snapshot já pronto.
- *
- * A revelação em etapas é só ritmo de apresentação: o cálculo real do
- * BDOS é praticamente instantâneo para um arquivo deste tamanho.
+ * BBA Project Studio — Sprint 2 (EPIC 02, Decision First Experience,
+ * ver `packages/bdos-core/docs/BBA_PROJECT.md`). Único componente com
+ * estado desta tela. Nenhum cálculo do BDOS acontece aqui — este
+ * componente só envia o arquivo para `/api/bba-project/import` e
+ * apresenta o snapshot já pronto. Esta sprint é exclusivamente de
+ * experiência: a decisão aparece primeiro, o cronograma passa a
+ * explicá-la.
  */
 const PROCESSING_STEPS = [
   "Lendo arquivo...",
@@ -40,25 +39,12 @@ const PROCESSING_STEPS = [
 
 const STEP_DURATION_MS = 650;
 
-const WARNING_CODE_LABELS: Record<string, string> = {
-  no_current_geometry: "nenhuma geometria de campo registrada ainda",
-  current_geometry_low_precision: "geometria atual com baixa precisão",
-  single_geometry_version: "geometria nunca foi refinada por uma segunda medição",
-  single_layer_attached: "apenas uma camada de dado anexada até agora",
-  no_evidential_layer: "nenhuma evidência de campo anexada"
-};
-
 const PLANNING_TYPE_LABELS: Record<string, string> = {
   cronograma: "Cronograma",
   "curva-s": "Curva S",
   "fisico-financeiro": "Cronograma Físico-Financeiro",
   mixed: "Dados mistos",
   unknown: "Não identificado"
-};
-
-const SOURCE_TYPE_LABELS: Record<string, string> = {
-  "ms-project-xml": "Microsoft Project XML",
-  excel: "Excel"
 };
 
 const LIMITATION_NOTICE =
@@ -83,6 +69,7 @@ export function BbaProjectWorkspaceExperience() {
   const [delaySimulation, setDelaySimulation] = useState<DelaySimulation | null>(null);
   const [simulatingDelay, setSimulatingDelay] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const advisorRef = useRef<HTMLDivElement | null>(null);
 
   async function runImport(file: File) {
     setPhase("processing");
@@ -169,7 +156,7 @@ export function BbaProjectWorkspaceExperience() {
 
   if (entryChoice === "pending") {
     return (
-      <Card className="span-12 workspace-card" title="BBA Project Studio">
+      <Card className="span-12 workspace-card bba-project-fade-in" title="BBA Project Studio">
         <div className="workspace-map-placeholder">
           <div className="workspace-map-placeholder__icon" aria-hidden="true">
             <Sparkles size={22} />
@@ -194,7 +181,7 @@ export function BbaProjectWorkspaceExperience() {
 
   if (phase === "idle" || phase === "error") {
     return (
-      <Card className="span-12 workspace-card" title="Importar Planejamento">
+      <Card className="span-12 workspace-card bba-project-fade-in" title="Importar Planejamento">
         <div className="workspace-map-placeholder">
           <div className="workspace-map-placeholder__icon" aria-hidden="true">
             <UploadCloud size={22} />
@@ -240,7 +227,7 @@ export function BbaProjectWorkspaceExperience() {
 
   if (phase === "processing") {
     return (
-      <Card className="span-12 workspace-card" title="Importar Planejamento">
+      <Card className="span-12 workspace-card bba-project-fade-in" title="Importar Planejamento">
         <div className="workspace-map-placeholder">
           <div className="workspace-map-placeholder__icon bba-project-processing-icon" aria-hidden="true">
             <Clock size={22} />
@@ -254,6 +241,7 @@ export function BbaProjectWorkspaceExperience() {
 
   return (
     <BbaProjectReadyView
+      advisorRef={advisorRef}
       delaySimulation={delaySimulation}
       onSelectActivity={setSelectedActivityId}
       onSimulateDelay={(activity) => void handleSimulateDelay(activity)}
@@ -272,15 +260,6 @@ function firstAtRiskActivityId(snapshot: BbaProjectSnapshot): string | null {
   return activityId ?? snapshot.planningDataset.activities.find((activity) => !activity.isSummary)?.id ?? null;
 }
 
-function activityIdFromSpatialObjectId(spatialObjectId: string): string | null {
-  const prefix = "spatial-object:work-package:";
-  return spatialObjectId.startsWith(prefix) ? spatialObjectId.slice(prefix.length) : null;
-}
-
-function spatialObjectIdForActivity(activityId: string): string {
-  return `spatial-object:work-package:${activityId}`;
-}
-
 interface BbaProjectReadyViewProps {
   readonly snapshot: BbaProjectSnapshot;
   readonly selectedActivityId: string | null;
@@ -288,6 +267,7 @@ interface BbaProjectReadyViewProps {
   readonly onSimulateDelay: (activity: BbaProjectPlanningActivity) => void;
   readonly simulatingDelay: boolean;
   readonly delaySimulation: DelaySimulation | null;
+  readonly advisorRef: RefObject<HTMLDivElement>;
 }
 
 function BbaProjectReadyView({
@@ -296,7 +276,8 @@ function BbaProjectReadyView({
   onSelectActivity,
   onSimulateDelay,
   simulatingDelay,
-  delaySimulation
+  delaySimulation,
+  advisorRef
 }: BbaProjectReadyViewProps) {
   const planningActivities = snapshot.planningDataset.activities;
   const topLevelActivities = planningActivities.filter((activity) => activity.parentId === null);
@@ -312,22 +293,13 @@ function BbaProjectReadyView({
   const selectedSpatialObject = selectedActivity
     ? snapshot.spatialObjects.find((object) => object.id === spatialObjectIdForActivity(selectedActivity.id))
     : undefined;
-  const selectedFact = selectedSpatialObject
-    ? snapshot.facts.find((fact) => fact.sourceReference === selectedSpatialObject.id)
-    : undefined;
+  const selectedFact = selectedSpatialObject ? snapshot.facts.find((fact) => fact.sourceReference === selectedSpatialObject.id) : undefined;
   const selectedDecision = selectedSpatialObject
     ? snapshot.decisions.find((decision) => decision.evidence[0]?.sourceReference === selectedSpatialObject.id)
     : undefined;
   const selectedRecommendation = selectedDecision
     ? snapshot.recommendations.find((recommendation) => recommendation.decisionId === selectedDecision.id)
     : undefined;
-
-  const mapObjects: SpatialMapObjectViewModel[] = snapshot.spatialObjects.map((object) => ({
-    id: object.id,
-    label: object.label,
-    kind: object.kind,
-    riskLevel: snapshot.decisions.some((decision) => decision.evidence[0]?.sourceReference === object.id) ? "attention" : "none"
-  }));
 
   const confidenceLevel = selectedFact ? String(selectedFact.metadata.spatialConfidenceLevel ?? "") : null;
   const warningCodes = Array.isArray(selectedFact?.metadata.spatialConfidenceWarningCodes)
@@ -339,76 +311,121 @@ function BbaProjectReadyView({
   const aggregateSeries = snapshot.planningDataset.periodSeries.find((series) => series.activityId === null) ?? null;
   const latestAggregatePoint = aggregateSeries ? [...aggregateSeries.points].reverse().find((point) => point.actualPercent !== null) : null;
 
-  const isBehindSchedule =
-    selectedSchedule !== null &&
-    selectedSchedule !== undefined &&
-    selectedSchedule.percentComplete < 100 &&
-    asOfDate !== null &&
-    selectedSchedule.plannedEnd < asOfDate;
+  const plannedPercent = latestAggregatePoint ? roundMaybePercent(latestAggregatePoint.plannedPercent) : latestKnownPoint?.plannedPercent ?? null;
+  const actualPercent = latestAggregatePoint ? roundMaybePercent(latestAggregatePoint.actualPercent) : latestKnownPoint?.actualPercent ?? null;
 
-  const sections: DecisionInsightCardSection[] = [
-    {
-      title: "Qual atividade está em risco?",
-      placeholder: selectedActivity ? `${selectedActivity.code} — ${selectedActivity.name}` : "Nenhuma atividade selecionada."
-    },
-    {
-      title: "O que está causando?",
-      placeholder:
-        warningCodes.length > 0 ? warningCodes.map((code) => WARNING_CODE_LABELS[code] ?? code).join("; ") + "." : "Aguardando análise das causas."
-    },
-    {
-      title: "Está atrasada?",
-      placeholder:
-        selectedSchedule === null || selectedSchedule === undefined
-          ? "Este arquivo não trouxe datas de início/fim para esta atividade — impossível avaliar atraso por prazo."
-          : isBehindSchedule
-            ? `Sim — planejada para terminar em ${selectedSchedule.plannedEnd}, hoje com ${selectedSchedule.percentComplete}% concluído.`
-            : `Não, dentro do prazo planejado (${selectedSchedule.plannedEnd}).`
-    },
-    {
-      title: "Qual a confiança espacial?",
-      placeholder: confidenceLevel && selectedFact ? `${confidenceLevel} (score ${selectedFact.value}/100).` : "Sem dado disponível."
-    },
-    {
-      title: "Qual ação recomendada?",
-      placeholder: selectedRecommendation?.summary ?? "Nenhuma recomendação pendente para esta atividade."
-    },
-    {
-      title: "Está no caminho crítico?",
-      placeholder:
-        selectedSchedule === null || selectedSchedule === undefined
-          ? "Sem datas/dependências explícitas, o caminho crítico não pôde ser calculado para esta atividade."
-          : criticalIds.has(selectedSchedule.id)
-            ? "Sim — qualquer atraso aqui atrasa o projeto inteiro."
-            : "Não — esta atividade possui folga."
-    }
-  ];
+  const selectedIsCritical = selectedSchedule !== null && selectedSchedule !== undefined && criticalIds.has(selectedSchedule.id);
+
+  const healthScore = computeHealthScore(snapshot);
+  const heroNarrative = buildHeroNarrative(snapshot, selectedActivityId);
+  const advisorNarrative = buildAdvisorNarrative({
+    activity: selectedActivity,
+    warningCodes,
+    isCritical: selectedIsCritical,
+    hasSchedule: selectedSchedule !== null && selectedSchedule !== undefined,
+    recommendationSummary: selectedRecommendation?.summary ?? null
+  });
+  const reasoningSteps = buildReasoningChain(snapshot);
+
+  const spatialModelObjects: SpatialModelObject[] = snapshot.spatialObjects.map((object) => {
+    const fact = snapshot.facts.find((candidate) => candidate.sourceReference === object.id);
+    const level = fact ? String(fact.metadata.spatialConfidenceLevel ?? "") : null;
+    return {
+      id: object.id,
+      label: object.label,
+      kind: object.kind,
+      statusLevel: deriveSpatialModelStatus(level),
+      confidenceLabel: fact ? `${level} (score ${fact.value}/100)` : "Sem dado disponível"
+    };
+  });
+
+  const riskListItems: RiskListItem[] = riskActivities.map((activity) => {
+    const spatialObjectId = spatialObjectIdForActivity(activity.id);
+    const fact = snapshot.facts.find((candidate) => candidate.sourceReference === spatialObjectId);
+    const level = fact ? String(fact.metadata.spatialConfidenceLevel ?? "—") : "—";
+    return { activity, confidenceLabel: level, isCritical: criticalIds.has(activity.id) };
+  });
+
+  const executiveCardsData: ExecutiveCardsData = {
+    durationDays: snapshot.criticalPath.projectDurationDays > 0 ? snapshot.criticalPath.projectDurationDays : null,
+    activityCount: snapshot.summary.activityCount > 0 ? snapshot.summary.activityCount : planningActivities.length,
+    riskCount: riskActivities.length,
+    plannedPercent,
+    actualPercent,
+    confidenceLabel: confidenceLevel
+  };
 
   const advisorStatus = riskActivities.length > 0 ? "🟡 Requer atenção" : "🟢 Sem pendências";
-  const sourceLabel = SOURCE_TYPE_LABELS[snapshot.sourceType] ?? snapshot.sourceType;
   const planningTypeLabel = PLANNING_TYPE_LABELS[snapshot.detectedPlanningType] ?? snapshot.detectedPlanningType;
+
+  function scrollToAdvisor() {
+    advisorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <>
-      <Card className="span-12 workspace-card" title="Arquivo Importado">
+      <BbaProjectHero healthScore={healthScore} narrative={heroNarrative} onViewAnalysis={scrollToAdvisor} />
+
+      <BbaProjectExecutiveCards data={executiveCardsData} />
+
+      <div className="span-12" ref={advisorRef}>
+        <BbaProjectAdvisorNarrative
+          decision={selectedDecision}
+          fact={selectedFact}
+          narrative={advisorNarrative}
+          recommendation={selectedRecommendation}
+          status={advisorStatus}
+        />
+      </div>
+
+      <Card className="span-8 workspace-card bba-project-fade-in" title="Cronograma">
+        <BbaProjectScheduleTable
+          asOfDate={asOfDate}
+          criticalIds={criticalIds}
+          onSelectActivity={onSelectActivity}
+          planningActivities={planningActivities}
+          scheduleById={scheduleById}
+          selectedActivityId={selectedActivityId}
+          topLevelActivities={topLevelActivities}
+        />
+      </Card>
+
+      <Card className="span-4 workspace-card bba-project-fade-in" title="Modelo Espacial">
+        <BbaProjectSpatialModel objects={spatialModelObjects} onSelectObject={onSelectActivity} selectedObjectId={selectedSpatialObject?.id ?? null} />
+        <p className="workspace-card__note">Preparado para integração futura com GIS real — mesmo contrato, implementação diferente.</p>
+      </Card>
+
+      <Card className="span-4 workspace-card bba-project-fade-in" title="Atividades em Risco">
+        <BbaProjectRiskList
+          items={riskListItems}
+          onSelectActivity={onSelectActivity}
+          selectedActivityId={selectedActivityId}
+          totalActivityCount={planningActivities.filter((activity) => !activity.isSummary).length}
+        />
+      </Card>
+
+      <Card className="span-8 workspace-card bba-project-fade-in" title="Painel Executivo">
         <dl className="workspace-fact-list">
           <div className="workspace-fact">
             <dt>Arquivo</dt>
             <dd>{snapshot.fileName}</dd>
           </div>
           <div className="workspace-fact">
-            <dt>Tipo de fonte</dt>
-            <dd>{sourceLabel}</dd>
-          </div>
-          <div className="workspace-fact">
             <dt>Tipo de planejamento detectado</dt>
             <dd>{planningTypeLabel}</dd>
           </div>
           <div className="workspace-fact">
-            <dt>Itens reconhecidos</dt>
-            <dd>{snapshot.summary.activityCount > 0 ? snapshot.summary.activityCount : planningActivities.length}</dd>
+            <dt>Quantidade de riscos</dt>
+            <dd>{riskActivities.length}</dd>
           </div>
+          {snapshot.planningDataset.financial ? (
+            <div className="workspace-fact">
+              <dt>Valor do contrato</dt>
+              <dd>{formatCurrency(snapshot.planningDataset.financial.contractValue)}</dd>
+            </div>
+          ) : null}
         </dl>
+
         {snapshot.warnings.length > 0 ? (
           <div className="bba-project-limitation-note">
             <TriangleAlert aria-hidden="true" size={16} />
@@ -422,97 +439,6 @@ function BbaProjectReadyView({
             </div>
           </div>
         ) : null}
-      </Card>
-
-      <Card className="span-8 workspace-card" title="Cronograma">
-        <div className="bba-project-wbs-table">
-          {topLevelActivities.map((parent) => (
-            <BbaProjectWbsGroup
-              asOfDate={asOfDate}
-              childActivities={planningActivities.filter((activity) => activity.parentId === parent.id)}
-              criticalIds={criticalIds}
-              key={parent.id}
-              onSelectActivity={onSelectActivity}
-              parent={parent}
-              scheduleById={scheduleById}
-              selectedActivityId={selectedActivityId}
-            />
-          ))}
-        </div>
-      </Card>
-
-      <Card className="span-4 workspace-card" title="Mapa da Obra">
-        <PlaceholderSpatialMapView objects={mapObjects} onSelectObject={onSelectActivity} selectedObjectId={selectedSpatialObject?.id ?? null} />
-      </Card>
-
-      <Card className="span-4 workspace-card" title="Atividades em Risco">
-        <div className="workspace-layer-list">
-          {riskActivities.length === 0 ? (
-            <p className="workspace-card__description">Nenhuma atividade em risco no momento.</p>
-          ) : (
-            riskActivities.map((activity) => (
-              <button
-                className="workspace-layer workspace-layer--active workspace-layer--interactive"
-                key={activity.id}
-                onClick={() => onSelectActivity(activity.id)}
-                type="button"
-              >
-                <AlertTriangle aria-hidden="true" className="workspace-layer__icon" size={16} />
-                {activity.code} — {activity.name}
-              </button>
-            ))
-          )}
-        </div>
-        <p className="workspace-card__note">
-          {riskActivities.length} de {planningActivities.filter((activity) => !activity.isSummary).length} atividades sem
-          verificação espacial ainda.
-        </p>
-      </Card>
-
-      <DecisionInsightCard
-        className="span-8"
-        engineLabel="BBA Project Studio — Schedule Intelligence"
-        message={[
-          `Analisei ${planningActivities.filter((activity) => !activity.isSummary).length} itens deste ${planningTypeLabel.toLowerCase()}.`,
-          riskActivities.length > 0
-            ? `Encontrei ${riskActivities.length} ponto${riskActivities.length > 1 ? "s" : ""} que merece${riskActivities.length > 1 ? "m" : ""} sua atenção.`
-            : "Nenhum ponto crítico foi identificado no momento."
-        ]}
-        sections={sections}
-        status={advisorStatus}
-      />
-
-      <Card className="span-4 workspace-card" title="Painel Executivo">
-        <dl className="workspace-fact-list">
-          <div className="workspace-fact">
-            <dt>Duração do projeto</dt>
-            <dd>{snapshot.criticalPath.projectDurationDays > 0 ? `${snapshot.criticalPath.projectDurationDays} dias` : "—"}</dd>
-          </div>
-          <div className="workspace-fact">
-            <dt>Atividades no caminho crítico</dt>
-            <dd>{snapshot.criticalPath.criticalActivityIds.length}</dd>
-          </div>
-          <div className="workspace-fact">
-            <dt>Curva S — Planejado × Executado</dt>
-            <dd>
-              {latestAggregatePoint
-                ? `${formatPercent(latestAggregatePoint.plannedPercent)} × ${formatPercent(latestAggregatePoint.actualPercent)}`
-                : latestKnownPoint
-                  ? `${latestKnownPoint.plannedPercent}% × ${latestKnownPoint.actualPercent}%`
-                  : "—"}
-            </dd>
-          </div>
-          <div className="workspace-fact">
-            <dt>Quantidade de riscos</dt>
-            <dd>{riskActivities.length}</dd>
-          </div>
-          {snapshot.planningDataset.financial ? (
-            <div className="workspace-fact">
-              <dt>Valor do contrato</dt>
-              <dd>{formatCurrency(snapshot.planningDataset.financial.contractValue)}</dd>
-            </div>
-          ) : null}
-        </dl>
 
         {selectedActivity ? (
           <div className="bba-project-living-schedule">
@@ -538,94 +464,22 @@ function BbaProjectReadyView({
           </div>
         ) : null}
       </Card>
+
+      <Card className="span-4 workspace-card bba-project-fade-in" title="Resumo do Arquivo">
+        <dl className="workspace-fact-list">
+          <div className="workspace-fact">
+            <dt>Tipo de fonte</dt>
+            <dd>{snapshot.sourceType === "ms-project-xml" ? "Microsoft Project XML" : "Excel"}</dd>
+          </div>
+          <div className="workspace-fact">
+            <dt>Itens reconhecidos</dt>
+            <dd>{executiveCardsData.activityCount}</dd>
+          </div>
+        </dl>
+      </Card>
+
+      <BbaProjectReasoningChain steps={reasoningSteps} />
     </>
-  );
-}
-
-interface BbaProjectWbsGroupProps {
-  readonly parent: BbaProjectPlanningActivity;
-  readonly childActivities: ReadonlyArray<BbaProjectPlanningActivity>;
-  readonly criticalIds: ReadonlySet<string>;
-  readonly scheduleById: ReadonlyMap<string, BbaProjectSnapshot["activities"][number]>;
-  readonly selectedActivityId: string | null;
-  readonly onSelectActivity: (activityId: string) => void;
-  readonly asOfDate: string | null;
-}
-
-function BbaProjectWbsGroup({
-  parent,
-  childActivities,
-  criticalIds,
-  scheduleById,
-  selectedActivityId,
-  onSelectActivity,
-  asOfDate
-}: BbaProjectWbsGroupProps) {
-  return (
-    <div className="bba-project-wbs-group">
-      <BbaProjectWbsRow
-        activity={parent}
-        asOfDate={asOfDate}
-        isChild={false}
-        isCritical={criticalIds.has(parent.id)}
-        isSelected={parent.id === selectedActivityId}
-        onSelectActivity={onSelectActivity}
-        schedule={scheduleById.get(parent.id) ?? null}
-      />
-      {childActivities.map((child) => (
-        <BbaProjectWbsRow
-          activity={child}
-          asOfDate={asOfDate}
-          isChild
-          isCritical={criticalIds.has(child.id)}
-          isSelected={child.id === selectedActivityId}
-          key={child.id}
-          onSelectActivity={onSelectActivity}
-          schedule={scheduleById.get(child.id) ?? null}
-        />
-      ))}
-    </div>
-  );
-}
-
-interface BbaProjectWbsRowProps {
-  readonly activity: BbaProjectPlanningActivity;
-  readonly schedule: BbaProjectSnapshot["activities"][number] | null;
-  readonly isChild: boolean;
-  readonly isCritical: boolean;
-  readonly isSelected: boolean;
-  readonly onSelectActivity: (activityId: string) => void;
-  readonly asOfDate: string | null;
-}
-
-function BbaProjectWbsRow({ activity, schedule, isChild, isCritical, isSelected, onSelectActivity, asOfDate }: BbaProjectWbsRowProps) {
-  const isLate = schedule !== null && schedule.percentComplete < 100 && asOfDate !== null && schedule.plannedEnd < asOfDate;
-  const percent = schedule?.percentComplete ?? activity.percentActual ?? 0;
-
-  return (
-    <button
-      className={`bba-project-wbs-row${isChild ? " bba-project-wbs-row--child" : ""}${isSelected ? " bba-project-wbs-row--selected" : ""}`}
-      onClick={() => onSelectActivity(activity.id)}
-      type="button"
-    >
-      <span className="bba-project-wbs-code">{activity.code}</span>
-      <span className="bba-project-wbs-name">
-        {activity.isMilestone ? "◆ " : ""}
-        {activity.name}
-      </span>
-      <span className="bba-project-wbs-dates">
-        {schedule ? `${schedule.plannedStart} → ${schedule.plannedEnd}` : "Sem datas na origem"}
-      </span>
-      <span className="bba-project-wbs-progress">
-        <ProgressBar animated={false} color={isLate ? "red" : "gold"} value={percent} />
-      </span>
-      {isCritical ? <span className="bba-project-wbs-badge bba-project-wbs-badge--critical">Caminho Crítico</span> : null}
-      {isLate ? (
-        <span className="bba-project-wbs-badge bba-project-wbs-badge--late">
-          <FileSpreadsheet aria-hidden="true" size={12} /> Atrasada
-        </span>
-      ) : null}
-    </button>
   );
 }
 
@@ -633,13 +487,12 @@ function resolveActivityForDecision(
   snapshot: BbaProjectSnapshot,
   decision: BbaProjectSnapshot["decisions"][number]
 ): BbaProjectPlanningActivity | null {
-  const spatialObjectId = decision.evidence[0]?.sourceReference;
-  const activityId = spatialObjectId ? activityIdFromSpatialObjectId(spatialObjectId) : null;
+  const activityId = activityIdFromDecision(decision);
   return activityId ? snapshot.planningDataset.activities.find((activity) => activity.id === activityId) ?? null : null;
 }
 
-function formatPercent(value: number | null): string {
-  return value === null ? "—" : `${Math.round(value <= 1.5 ? value * 100 : value)}%`;
+function roundMaybePercent(value: number | null): number | null {
+  return value === null ? null : Math.round(value <= 1.5 ? value * 100 : value);
 }
 
 function formatCurrency(value: number | null): string {
