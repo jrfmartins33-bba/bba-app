@@ -1473,6 +1473,148 @@ button {
 }
 
 /* ══════════════════════════════════════════
+   SPATIAL EXPERIENCE — EPIC 05 (Release 4.0)
+   Camadas interativas, mapa clicável, seletor de estágio da Linha do
+   Tempo — todos os valores reaproveitados do restante do Design
+   System (cores, espaçamento, tokens de motion já existentes); nenhum
+   padrão visual novo foi criado.
+══════════════════════════════════════════ */
+
+.workspace-layer--interactive {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 4px 6px;
+  text-align: left;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease-standard);
+  width: 100%;
+}
+
+.workspace-layer--interactive:hover {
+  background: rgba(185, 149, 79, 0.08);
+}
+
+.workspace-layer__badge {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-style: italic;
+  margin-left: auto;
+}
+
+.spatial-map {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.spatial-map-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+
+.spatial-map-pin {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  font: inherit;
+  padding: 10px 12px;
+  text-align: left;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    border-color var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.spatial-map-pin:hover {
+  background: rgba(185, 149, 79, 0.08);
+  transform: translateY(-1px);
+}
+
+.spatial-map-pin--selected {
+  background: rgba(185, 149, 79, 0.14);
+  border-color: var(--bba-gold-dim);
+  box-shadow: 0 0 0 1px rgba(185, 149, 79, 0.18) inset;
+}
+
+.spatial-map-pin__icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.spatial-map-pin__icon--attention {
+  color: var(--status-amber);
+}
+
+.spatial-map-pin__label {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.timeline-stage-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.timeline-stage {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 8px;
+  padding: 6px 14px 6px 8px;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    border-color var(--motion-duration-fast) var(--motion-ease-standard),
+    color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.timeline-stage:hover {
+  background: rgba(185, 149, 79, 0.08);
+}
+
+.timeline-stage--active {
+  border-color: var(--bba-gold-dim);
+  color: var(--text-primary);
+}
+
+.timeline-stage__index {
+  align-items: center;
+  background: rgba(185, 149, 79, 0.1);
+  border-radius: 999px;
+  color: var(--text-muted);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  height: 20px;
+  justify-content: center;
+  width: 20px;
+}
+
+.timeline-stage--active .timeline-stage__index {
+  background: var(--bba-gold-dim);
+  color: var(--bba-gold-soft);
+}
+
+.timeline-stage__label {
+  font-size: 12.5px;
+}
+
+/* ══════════════════════════════════════════
    MOTION DESIGN SYSTEM (UI Sprint M1)
    Infraestrutura oficial de motion da BBA Platform — reutilizada por
    packages/ui/src/motion/*. Coexiste com os tokens legados
