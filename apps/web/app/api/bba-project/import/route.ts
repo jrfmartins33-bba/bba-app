@@ -13,12 +13,13 @@ import {
   insertDecisionSnapshot,
   insertPlanningDataset,
   insertPlanningImport,
+  persistRecommendation,
   uploadPlanningImportFile
 } from "@/lib/bdos/repository";
 
 /**
  * BBA Project Studio — Sprint 1 (PARTE 9), com persistência real desde
- * a Sprint 13.6/13.7/13.8. Único ponto de contato entre a UI e
+ * a Sprint 13.6/13.7/13.8/13.9. Único ponto de contato entre a UI e
  * `@bba/bdos-core/services/bba-project-import`: resolve a empresa do
  * usuário autenticado (via cookie de sessão, Sprint 13.6), garante a
  * Workspace/Projeto de Engenharia da empresa, grava o arquivo em
@@ -27,13 +28,23 @@ import {
  * cadeia real), grava o `PlanningDataset` normalizado em
  * `planning_datasets` (Camada 2, Sprint 13.7), grava o Decision
  * Snapshot resultante em `decision_snapshots` (Camada 3, Sprint 13.8,
- * `trigger_reason='import'`) e só então devolve o snapshot uniforme
+ * `trigger_reason='import'`) e sincroniza `recommendations` (Advisor
+ * persistente, Sprint 13.9) e só então devolve o snapshot uniforme
  * pronto. Nenhuma regra de negócio vive aqui.
  *
  * REGRA CRÍTICA: o caminho XML delega inteiramente para a mesma
  * `buildBbaProjectImportSnapshot` do Sprint Zero, através de
  * `importPlanningSource` — os números de produção
  * (12/9/9/9/41) continuam exatamente os mesmos.
+ *
+ * IDEMPOTÊNCIA (Sprint 13.9): `correlationId` é fixo por
+ * `engineeringProjectId` (não mais por upload/planningImportId) —
+ * isso é o que faz `Decision.id`/`Recommendation.id` saírem idênticos
+ * quando o mesmo risco (mesma atividade, mesma regra) reaparece em
+ * reimports do mesmo projeto. `persistRecommendation` depende
+ * exatamente disso: sem correlationId estável, cada reimport geraria
+ * um `recommendation_ref_id` novo e o índice único parcial em
+ * `recommendations` nunca pegaria a duplicata.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   const supabase = getSupabaseRouteHandlerClient();
@@ -66,10 +77,12 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const { companyId, userId } = auth;
   const planningImportId = randomUUID();
+  let workspaceId: string;
   let engineeringProjectId: string;
 
   try {
     const workspace = await ensureEngenhariaWorkspace(supabase, companyId);
+    workspaceId = workspace.id;
     const engineeringProject = await ensureDefaultEngineeringProject(supabase, companyId, workspace.id);
     engineeringProjectId = engineeringProject.id;
 
@@ -105,7 +118,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     tenantId: companyId,
     capability: "geospatial-intelligence",
     generatedAt: now,
-    correlationId: `bba-project-import:${planningImportId}`,
+    correlationId: `bba-project-import:${engineeringProjectId}`,
     actor: userId,
     occurredAt: now,
     asOfDate: now.slice(0, 10),
@@ -126,7 +139,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       dataset: snapshot.planningDataset
     });
 
-    await insertDecisionSnapshot(supabase, {
+    const decisionSnapshot = await insertDecisionSnapshot(supabase, {
       companyId,
       engineeringProjectId,
       planningDatasetId: planningDataset.id,
@@ -136,12 +149,38 @@ export async function POST(request: Request): Promise<NextResponse> {
       decisions: snapshot.decisions,
       recommendations: snapshot.recommendations
     });
+
+    for (const recommendation of snapshot.recommendations) {
+      await persistRecommendation(supabase, {
+        companyId,
+        workspaceId,
+        engineeringProjectId,
+        decisionSnapshotId: decisionSnapshot.id,
+        recommendationRefId: recommendation.id,
+        title: recommendation.title,
+        severity: getRecommendationSeverity(recommendation)
+      });
+    }
   } catch (error) {
-    console.error("[bba-project-import] Falha ao persistir planning dataset/decision snapshot.", error);
+    console.error("[bba-project-import] Falha ao persistir planning dataset/decision snapshot/recommendations.", error);
     return NextResponse.json({ error: "persistence_failed" }, { status: 500 });
   }
 
   return NextResponse.json(snapshot);
+}
+
+const DEFAULT_RECOMMENDATION_SEVERITY = "medium";
+
+/**
+ * `Recommendation.metadata.decisionPriority` guarda o valor do enum
+ * `DecisionPriority` ("low"/"medium"/"high"/"critical") como
+ * `unknown` — este helper só faz a leitura seguro dele para
+ * `recommendations.severity` (TEXT, copiado no momento da criação
+ * para listagem rápida, nunca ressincronizado depois).
+ */
+function getRecommendationSeverity(recommendation: { metadata: Readonly<Record<string, unknown>> }): string {
+  const value = recommendation.metadata.decisionPriority;
+  return typeof value === "string" && value.trim().length > 0 ? value : DEFAULT_RECOMMENDATION_SEVERITY;
 }
 
 function detectSourceType(fileName: string, mimeType: string, bytes: Uint8Array): PlanningImportSourceType | null {

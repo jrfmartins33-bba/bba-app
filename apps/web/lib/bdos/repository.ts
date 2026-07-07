@@ -213,3 +213,49 @@ export const insertDecisionSnapshot = async (
 
   return data;
 };
+
+const POSTGRES_UNIQUE_VIOLATION = "23505";
+
+export type PersistRecommendationOutcome = "created" | "already_active";
+
+// Advisor persistente (Sprint 13.9) — memória operacional. A
+// idempotência é garantida pelo índice único parcial
+// `recommendations_active_ref_unique` (ver migration
+// 20260707210000), não por esta função: aqui só tentamos o INSERT e
+// tratamos a violação de unicidade (23505) como "já existe uma
+// recommendation ativa para este risco, não duplicar" — nunca
+// atualizamos ou sincronizamos a linha existente, porque ela pode já
+// estar sendo tratada por um humano (status/owner mudados
+// manualmente).
+export const persistRecommendation = async (
+  supabase: SupabaseClient,
+  params: {
+    companyId: string;
+    workspaceId: string;
+    engineeringProjectId: string;
+    decisionSnapshotId: string;
+    recommendationRefId: string;
+    title: string;
+    severity: string;
+  }
+): Promise<PersistRecommendationOutcome> => {
+  const { error } = await supabase.from("recommendations").insert({
+    company_id: params.companyId,
+    workspace_id: params.workspaceId,
+    engineering_project_id: params.engineeringProjectId,
+    decision_snapshot_id: params.decisionSnapshotId,
+    recommendation_ref_id: params.recommendationRefId,
+    title: params.title,
+    severity: params.severity
+  });
+
+  if (!error) {
+    return "created";
+  }
+
+  if (error.code === POSTGRES_UNIQUE_VIOLATION) {
+    return "already_active";
+  }
+
+  throw error;
+};
