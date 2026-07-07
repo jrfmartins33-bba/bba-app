@@ -10,7 +10,15 @@ SET search_path = public
 AS $$
 BEGIN
   IF TG_OP = 'UPDATE' THEN
-    IF NEW.company_id IS DISTINCT FROM OLD.company_id AND NOT public.is_bba_admin() THEN
+    -- Only the first assignment (NULL -> a company) is exempt: that is the
+    -- self-registration flow in packages/lib/src/auth.ts, which creates the
+    -- profile with company_id NULL via handle_new_user() and then updates it
+    -- to the newly created company, running as the client itself. Any
+    -- change once company_id is already set is a tenant switch and stays
+    -- blocked for non-admins.
+    IF OLD.company_id IS NOT NULL
+       AND NEW.company_id IS DISTINCT FROM OLD.company_id
+       AND NOT public.is_bba_admin() THEN
       RAISE EXCEPTION 'Clients cannot change their assigned company';
     END IF;
 

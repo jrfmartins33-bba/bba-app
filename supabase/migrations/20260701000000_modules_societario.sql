@@ -103,18 +103,22 @@ CREATE INDEX IF NOT EXISTS idx_soc_asm_data    ON societario_assembleias(company
 -- ────────────────────────────────────────────────────────────
 -- 5. Triggers updated_at
 -- ────────────────────────────────────────────────────────────
+DROP TRIGGER IF EXISTS trg_soc_socios_upd ON societario_socios;
 CREATE TRIGGER trg_soc_socios_upd
   BEFORE UPDATE ON societario_socios
   FOR EACH ROW EXECUTE FUNCTION bba_set_updated_at();
 
+DROP TRIGGER IF EXISTS trg_soc_capital_upd ON societario_capital_social;
 CREATE TRIGGER trg_soc_capital_upd
   BEFORE UPDATE ON societario_capital_social
   FOR EACH ROW EXECUTE FUNCTION bba_set_updated_at();
 
+DROP TRIGGER IF EXISTS trg_soc_alt_upd ON societario_alteracoes;
 CREATE TRIGGER trg_soc_alt_upd
   BEFORE UPDATE ON societario_alteracoes
   FOR EACH ROW EXECUTE FUNCTION bba_set_updated_at();
 
+DROP TRIGGER IF EXISTS trg_soc_asm_upd ON societario_assembleias;
 CREATE TRIGGER trg_soc_asm_upd
   BEFORE UPDATE ON societario_assembleias
   FOR EACH ROW EXECUTE FUNCTION bba_set_updated_at();
@@ -128,53 +132,65 @@ ALTER TABLE societario_alteracoes      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE societario_assembleias     ENABLE ROW LEVEL SECURITY;
 
 -- societario_socios
+DROP POLICY IF EXISTS "soc_socios_sel" ON societario_socios;
 CREATE POLICY "soc_socios_sel" ON societario_socios
 FOR SELECT TO authenticated
 USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
+DROP POLICY IF EXISTS "soc_socios_ins" ON societario_socios;
 CREATE POLICY "soc_socios_ins" ON societario_socios
 FOR INSERT TO authenticated
 WITH CHECK (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
+DROP POLICY IF EXISTS "soc_socios_upd" ON societario_socios;
 CREATE POLICY "soc_socios_upd" ON societario_socios
 FOR UPDATE TO authenticated
 USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
 -- societario_capital_social
+DROP POLICY IF EXISTS "soc_capital_sel" ON societario_capital_social;
 CREATE POLICY "soc_capital_sel" ON societario_capital_social
 FOR SELECT TO authenticated
 USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
+DROP POLICY IF EXISTS "soc_capital_ins" ON societario_capital_social;
 CREATE POLICY "soc_capital_ins" ON societario_capital_social
 FOR INSERT TO authenticated
 WITH CHECK (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
+DROP POLICY IF EXISTS "soc_capital_upd" ON societario_capital_social;
 CREATE POLICY "soc_capital_upd" ON societario_capital_social
 FOR UPDATE TO authenticated
 USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
 -- societario_alteracoes
+DROP POLICY IF EXISTS "soc_alt_sel" ON societario_alteracoes;
 CREATE POLICY "soc_alt_sel" ON societario_alteracoes
 FOR SELECT TO authenticated
 USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
+DROP POLICY IF EXISTS "soc_alt_ins" ON societario_alteracoes;
 CREATE POLICY "soc_alt_ins" ON societario_alteracoes
 FOR INSERT TO authenticated
 WITH CHECK (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
+DROP POLICY IF EXISTS "soc_alt_upd" ON societario_alteracoes;
 CREATE POLICY "soc_alt_upd" ON societario_alteracoes
 FOR UPDATE TO authenticated
 USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
 -- societario_assembleias
+DROP POLICY IF EXISTS "soc_asm_sel" ON societario_assembleias;
 CREATE POLICY "soc_asm_sel" ON societario_assembleias
 FOR SELECT TO authenticated
 USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
+DROP POLICY IF EXISTS "soc_asm_ins" ON societario_assembleias;
 CREATE POLICY "soc_asm_ins" ON societario_assembleias
 FOR INSERT TO authenticated
 WITH CHECK (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
+DROP POLICY IF EXISTS "soc_asm_upd" ON societario_assembleias;
 CREATE POLICY "soc_asm_upd" ON societario_assembleias
 FOR UPDATE TO authenticated
 USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());

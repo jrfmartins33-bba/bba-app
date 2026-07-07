@@ -64,10 +64,12 @@ CREATE INDEX IF NOT EXISTS idx_rh_folha_func        ON rh_folha_pagamentos(funci
 -- ────────────────────────────────────────────────────────────
 -- 3. Triggers updated_at
 -- ────────────────────────────────────────────────────────────
+DROP TRIGGER IF EXISTS trg_rh_func_upd ON rh_funcionarios;
 CREATE TRIGGER trg_rh_func_upd
   BEFORE UPDATE ON rh_funcionarios
   FOR EACH ROW EXECUTE FUNCTION bba_set_updated_at();
 
+DROP TRIGGER IF EXISTS trg_rh_folha_upd ON rh_folha_pagamentos;
 CREATE TRIGGER trg_rh_folha_upd
   BEFORE UPDATE ON rh_folha_pagamentos
   FOR EACH ROW EXECUTE FUNCTION bba_set_updated_at();
@@ -79,27 +81,33 @@ ALTER TABLE rh_funcionarios       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rh_folha_pagamentos   ENABLE ROW LEVEL SECURITY;
 
 -- rh_funcionarios
+DROP POLICY IF EXISTS "rh_func_sel" ON rh_funcionarios;
 CREATE POLICY "rh_func_sel" ON rh_funcionarios
 FOR SELECT TO authenticated
 USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
+DROP POLICY IF EXISTS "rh_func_ins" ON rh_funcionarios;
 CREATE POLICY "rh_func_ins" ON rh_funcionarios
 FOR INSERT TO authenticated
 WITH CHECK (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
+DROP POLICY IF EXISTS "rh_func_upd" ON rh_funcionarios;
 CREATE POLICY "rh_func_upd" ON rh_funcionarios
 FOR UPDATE TO authenticated
 USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
 -- rh_folha_pagamentos
+DROP POLICY IF EXISTS "rh_folha_sel" ON rh_folha_pagamentos;
 CREATE POLICY "rh_folha_sel" ON rh_folha_pagamentos
 FOR SELECT TO authenticated
 USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
+DROP POLICY IF EXISTS "rh_folha_ins" ON rh_folha_pagamentos;
 CREATE POLICY "rh_folha_ins" ON rh_folha_pagamentos
 FOR INSERT TO authenticated
 WITH CHECK (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
 
+DROP POLICY IF EXISTS "rh_folha_upd" ON rh_folha_pagamentos;
 CREATE POLICY "rh_folha_upd" ON rh_folha_pagamentos
 FOR UPDATE TO authenticated
 USING (company_id IN (SELECT company_id FROM profiles WHERE id = auth.uid()) OR is_bba_admin());
