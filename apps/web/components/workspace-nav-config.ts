@@ -2,11 +2,15 @@ import {
   BarChart3,
   Banknote,
   ClipboardCheck,
+  ClipboardList,
   FileDown,
   FileStack,
+  FolderSearch,
   GanttChart,
+  GanttChartSquare,
   HardHat,
   LayoutDashboard,
+  Map,
   Ruler,
   Wrench,
   type LucideIcon
@@ -28,11 +32,15 @@ import {
  * exists for that section, adding its `href` here is the only change
  * needed for it to become a fully working, route-aware nav link.
  *
- * Geoespacial/Evidências/Memórias de Cálculo e BBA Advisor deixaram de
- * ser sub-itens deste Workspace (ver docs/PLATFORM_ARCHITECTURE.md,
- * seção 9): os três primeiros agora são Studios de mesmo nível que o
- * Project Studio (NAV_STUDIOS em `sidebar.tsx`); o Advisor nunca foi um
- * destino próprio — vive contextualizado dentro de cada Studio.
+ * Studios (Project/Geo/Studio de Evidências/Studio de Medições) são
+ * capacidades de plataforma com rota própria de nível superior
+ * (`/bba-project`, `/geoespacial`, `/evidencias`, `/memorias`), mas só
+ * aparecem na Sidebar quando o usuário está dentro do Workspace ao qual
+ * pertencem (ver docs/PLATFORM_ARCHITECTURE.md, seção 9) — por isso
+ * seus `href` continuam apontando para a rota de nível superior, e é a
+ * própria Sidebar (não este arquivo) que decide quando mostrar o grupo
+ * "Engenharia" com base neles. A visão de todos os Studios de uma vez
+ * (incluindo os ainda não construídos) é exclusiva do Admin BBA.
  */
 
 export interface WorkspaceSubNavItem {
@@ -59,7 +67,11 @@ export const WORKSPACE_NAV_CONFIG: ReadonlyArray<WorkspaceNavConfig> = [
     items: [
       { label: "Dashboard", icon: LayoutDashboard, href: "/workspaces/engenharia" },
       { label: "Planejamento", icon: GanttChart, href: "/workspaces/engenharia/planejamento" },
+      { label: "Project Studio", icon: GanttChartSquare, href: "/bba-project" },
       { label: "Execução", icon: Wrench },
+      { label: "Geo Studio", icon: Map, href: "/geoespacial" },
+      { label: "Studio de Evidências", icon: FolderSearch, href: "/evidencias" },
+      { label: "Studio de Medições", icon: ClipboardList, href: "/memorias" },
       { label: "Medições", icon: Ruler },
       { label: "Documentos", icon: FileStack },
       { label: "Aprovações", icon: ClipboardCheck },

@@ -29,7 +29,7 @@ import {
   ClipboardCheck,
   FileDown,
 } from 'lucide-react'
-import { WORKSPACE_NAV_CONFIG } from './workspace-nav-config'
+import { WORKSPACE_NAV_CONFIG, type WorkspaceNavConfig } from './workspace-nav-config'
 
 interface SidebarProps {
   userName?: string
@@ -53,9 +53,11 @@ const NAV_TOP = [
   },
 ]
 
-// BBA Platform — cada Studio é uma capacidade de produto de mesmo nível,
-// independente de qual workspace/projeto está ativo (ver
-// docs/PLATFORM_ARCHITECTURE.md, seção 9.2). Um item sem `href` ainda não
+// BBA Platform — visão completa de todos os Studios da plataforma
+// (incluindo os ainda não construídos), exclusiva do Admin BBA (ver
+// docs/PLATFORM_ARCHITECTURE.md, seção 9). Para o cliente, cada Studio
+// só aparece na Sidebar dentro do Workspace ao qual pertence — nunca
+// como uma lista global na tela principal. Um item sem `href` ainda não
 // tem Studio implementado — a Sidebar o renderiza como uma linha inerte
 // "em breve", igual ao padrão já usado nos sub-itens de Workspace.
 const NAV_STUDIOS = [
@@ -73,18 +75,18 @@ const NAV_STUDIOS = [
   },
   {
     href: '/evidencias',
-    label: 'Evidence Studio',
+    label: 'Studio de Evidências',
     icon: FolderSearch,
     description: 'Fotografias, vídeos e registros de campo',
   },
   {
     href: '/memorias',
-    label: 'Measure Studio',
+    label: 'Studio de Medições',
     icon: ClipboardList,
     description: 'Memórias de cálculo e quantitativos',
   },
   {
-    label: 'Finance Studio',
+    label: 'Studio de Finanças',
     icon: Wallet,
     description: 'Fluxo de caixa, custos, DRE e forecast financeiro',
   },
@@ -94,12 +96,12 @@ const NAV_STUDIOS = [
     description: 'Diário de obra, equipes e execução física',
   },
   {
-    label: 'Document Studio',
+    label: 'Studio de Documentos',
     icon: FileStack,
     description: 'Contratos, projetos e reconstrução documental',
   },
   {
-    label: 'Approval Studio',
+    label: 'Studio de Aprovações',
     icon: ClipboardCheck,
     description: 'Fluxos de aprovação e histórico de pendências',
   },
@@ -157,6 +159,16 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
     return pathname.startsWith(href)
   }
 
+  // Um Workspace conta como "ativo" tanto quando a rota está sob seu
+  // `basePath` quanto quando a rota é um dos seus próprios Studios de
+  // nível superior (ex.: /bba-project, /geoespacial) — assim o grupo
+  // "Engenharia" continua visível mesmo depois de abrir um Studio cuja
+  // URL não vive sob /workspaces/engenharia.
+  const isWorkspaceActive = (workspace: WorkspaceNavConfig) => {
+    if (pathname.startsWith(workspace.basePath)) return true
+    return workspace.items.some((item) => item.href !== undefined && pathname.startsWith(item.href))
+  }
+
   const handleLogout = () => {
     signOut()
     router.push('/login')
@@ -212,54 +224,59 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
           })}
         </div>
 
-        {/* ── Divisor ── */}
-        <div className="bba-sidebar__divider" />
+        {/* ── Studios (visão completa da plataforma, só para o Admin BBA —
+             ver docs/PLATFORM_ARCHITECTURE.md, seção 9). Para o cliente,
+             cada Studio só aparece dentro do Workspace ao qual pertence,
+             no grupo "Workspaces" logo abaixo. ── */}
+        {isAdmin && (
+          <>
+            <div className="bba-sidebar__divider" />
+            <div className="bba-nav-section">
+              <span className="bba-nav-section-label">Studios (visão Admin)</span>
+              {NAV_STUDIOS.map((item) => {
+                const Icon = item.icon
 
-        {/* ── Studios (capacidades de produto, mesmo nível para todas —
-             ver docs/PLATFORM_ARCHITECTURE.md, seção 9.2) ── */}
-        <div className="bba-nav-section">
-          <span className="bba-nav-section-label">Studios</span>
-          {NAV_STUDIOS.map((item) => {
-            const Icon = item.icon
+                if (!item.href) {
+                  return (
+                    <span className="bba-nav-item bba-nav-item--soon" key={item.label} title={item.description}>
+                      <Icon />
+                      <span>{item.label}</span>
+                      <span className="bba-nav-item__soon-tag">em breve</span>
+                    </span>
+                  )
+                }
 
-            if (!item.href) {
-              return (
-                <span className="bba-nav-item bba-nav-item--soon" key={item.label} title={item.description}>
-                  <Icon />
-                  <span>{item.label}</span>
-                  <span className="bba-nav-item__soon-tag">em breve</span>
-                </span>
-              )
-            }
+                const active = isActive(item.href)
 
-            const active = isActive(item.href)
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`bba-nav-item ${active ? 'bba-nav-item--active' : ''}`}
-                title={item.description}
-              >
-                <Icon />
-                <span>{item.label}</span>
-              </Link>
-            )
-          })}
-        </div>
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`bba-nav-item ${active ? 'bba-nav-item--active' : ''}`}
+                    title={item.description}
+                  >
+                    <Icon />
+                    <span>{item.label}</span>
+                  </Link>
+                )
+              })}
+            </div>
+          </>
+        )}
 
         {/* ── Divisor ── */}
         <div className="bba-sidebar__divider" />
 
         {/* ── Workspaces (navegação contextual, config-driven) ──
              O grupo de um Workspace só existe na Sidebar quando a rota
-             atual está dentro do seu `basePath` — fora disso, nenhum
-             grupo é renderizado (nem o próprio cabeçalho "Engenharia").
-             Nenhum estado manual, nenhum clique de expandir/recolher: o
-             App Router (via usePathname) é a única fonte de verdade.
-             Adicionar um novo Workspace nunca exige editar este
-             componente — apenas WORKSPACE_NAV_CONFIG. */}
-        {WORKSPACE_NAV_CONFIG.filter((workspace) => pathname.startsWith(workspace.basePath)).map(
+             atual está dentro do seu `basePath` (ou é um dos Studios que
+             pertencem a ele) — fora disso, nenhum grupo é renderizado
+             (nem o próprio cabeçalho "Engenharia"). Nenhum estado
+             manual, nenhum clique de expandir/recolher: o App Router
+             (via usePathname) é a única fonte de verdade. Adicionar um
+             novo Workspace nunca exige editar este componente — apenas
+             WORKSPACE_NAV_CONFIG. */}
+        {WORKSPACE_NAV_CONFIG.filter((workspace) => isWorkspaceActive(workspace)).map(
           (workspace) => {
             const WorkspaceIcon = workspace.icon
 
@@ -307,7 +324,7 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
         {/* ── Divisor (só existe quando algum Workspace está aberto,
              evitando um divisor duplicado quando o grupo acima não
              renderiza nada) ── */}
-        {WORKSPACE_NAV_CONFIG.some((workspace) => pathname.startsWith(workspace.basePath)) && (
+        {WORKSPACE_NAV_CONFIG.some((workspace) => isWorkspaceActive(workspace)) && (
           <div className="bba-sidebar__divider" />
         )}
 

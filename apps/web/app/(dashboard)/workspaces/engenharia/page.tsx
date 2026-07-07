@@ -10,6 +10,7 @@ import {
   FileStack,
   FolderSearch,
   GanttChart,
+  GanttChartSquare,
   Landmark,
   Map,
   Ruler,
@@ -34,11 +35,12 @@ interface CapabilityCard {
 /**
  * Este Workspace é o contexto do projeto ativo (Barragem Lagoa do Arroz,
  * 2F Engenharia) — os cards abaixo abrem os Studios relevantes para ele
- * (ver docs/PLATFORM_ARCHITECTURE.md, seção 9.2). Geo/Evidence/Measure
- * Studio já são capacidades de mesma hierarquia que o Project Studio,
- * por isso também aparecem na Sidebar em "Studios"; aqui eles são
- * apresentados no contexto deste projeto específico. BBA Advisor não é
- * um card de destino — vive contextualizado dentro de cada Studio.
+ * (ver docs/PLATFORM_ARCHITECTURE.md, seção 9). Project/Geo/Studio de
+ * Evidências/Studio de Medições têm rota própria de nível superior, mas
+ * só aparecem na Sidebar quando o usuário está dentro deste Workspace —
+ * a visão de todos os Studios de uma vez é exclusiva do Admin BBA. BBA
+ * Advisor não é um card de destino — vive contextualizado dentro de
+ * cada Studio.
  */
 const CAPABILITIES: CapabilityCard[] = [
   {
@@ -49,6 +51,14 @@ const CAPABILITIES: CapabilityCard[] = [
     status: "Pronto",
     icon: GanttChart,
     href: "/workspaces/engenharia/planejamento"
+  },
+  {
+    id: "project-studio",
+    title: "Project Studio",
+    description: "O primeiro planejador de projetos orientado por decisões — importação, Curva S e caminho crítico.",
+    status: "Pronto",
+    icon: GanttChartSquare,
+    href: "/bba-project"
   },
   {
     id: "execucao",
@@ -69,7 +79,7 @@ const CAPABILITIES: CapabilityCard[] = [
   },
   {
     id: "evidence-studio",
-    title: "Evidence Studio",
+    title: "Studio de Evidências",
     description: "Organização de fotos, registros de campo, documentos e observações técnicas.",
     status: "Pronto",
     icon: FolderSearch,
@@ -77,7 +87,7 @@ const CAPABILITIES: CapabilityCard[] = [
   },
   {
     id: "measure-studio",
-    title: "Measure Studio",
+    title: "Studio de Medições",
     description: "Cálculo estruturado de quantitativos, fórmulas e trilhas auditáveis.",
     status: "Pronto",
     icon: ClipboardList,

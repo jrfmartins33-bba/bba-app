@@ -28,13 +28,13 @@ Studio. Studio consome Engine. Advisor consome todos.**
 ```
 BBA Platform
 ├── Project Studio
-├── Finance Studio
+├── Studio de Finanças
 ├── Field Studio
 ├── Geo Studio
-├── Evidence Studio
-├── Measure Studio
-├── Document Studio
-├── Approval Studio
+├── Studio de Evidências
+├── Studio de Medições
+├── Studio de Documentos
+├── Studio de Aprovações
 ├── Export Studio
 └── BBA Advisor (transversal — vive dentro de cada Studio, não é um destino)
 ```
@@ -47,22 +47,45 @@ BBA Platform
 o prefixo "BBA".**
 
 - ✅ `BBA Platform`, `BBA Advisor`
-- ✅ `Project Studio`, `Finance Studio`, `Geo Studio`, ...
-- ❌ ~~`BBA Project Studio`~~, ~~`BBA Finance Studio`~~
+- ✅ `Project Studio`, `Studio de Finanças`, `Geo Studio`, ...
+- ❌ ~~`BBA Project Studio`~~, ~~`BBA Studio de Finanças`~~
 
 Motivo: evitar precisar renomear menus, telas e strings toda vez que um novo
 Studio nascer ou que a marca evoluir — o prefixo fica em exatamente dois
 lugares (o nome da plataforma e o nome do Advisor), não replicado em nove
 Studios.
 
-Esta sprint já aplica a convenção: label da sidebar, `<h1>` da página e texto
-de apresentação, em todos os Studios com tela real (Project, Geo, Evidence,
-Measure Studio). O slug de rota do Project Studio continua `bba-project` (não
+**Idioma do nome de cada Studio — decisão explícita do CPO, corrigida após
+ver a tela real em produção:** a palavra "Studio" é mantida como termo
+internacional (como "Design Studio"), mas o substantivo que a acompanha deve
+ser português sempre que soar natural em português de negócios. Concretamente:
+
+| Studio | Nome de exibição | Nome anterior (inglês, corrigido) |
+|---|---|---|
+| Project Studio | `Project Studio` | *(mantido)* |
+| Geo Studio | `Geo Studio` | *(mantido)* |
+| Field Studio | `Field Studio` | *(mantido)* |
+| Export Studio | `Export Studio` | *(mantido)* |
+| Studio de Finanças | `Studio de Finanças` | ~~Finance Studio~~ |
+| Studio de Evidências | `Studio de Evidências` | ~~Evidence Studio~~ |
+| Studio de Medições | `Studio de Medições` | ~~Measure Studio~~ |
+| Studio de Documentos | `Studio de Documentos` | ~~Document Studio~~ |
+| Studio de Aprovações | `Studio de Aprovações` | ~~Approval Studio~~ |
+
+Padrão de nome quando traduzido: **"Studio de [substantivo em português]"**,
+não "[substantivo] Studio" traduzido ao pé da letra — por isso "Studio de
+Evidências", nunca "Evidências Studio". Project/Geo/Field/Export
+permanecem em inglês por decisão explícita (termos já consolidados no
+vocabulário de negócio, sem tradução natural equivalente); os demais nomes
+de identificador interno (`domain/`, ids de card, etc.) continuam em inglês
+no código — só o rótulo visível ao usuário muda.
+
+O slug de rota do Project Studio continua `bba-project` (não
 `project-studio`) por estabilidade de URL — já estava em produção antes deste
-EPIC. Geo/Evidence/Measure Studio, por não terem esse mesmo histórico de URL
-pública, tiveram sua rota promovida para o nível superior preservando o
-mesmo nome de slug que já usavam (`/geoespacial`, `/evidencias`, `/memorias`)
-— ver seção 9.2.
+EPIC. Geo Studio/Studio de Evidências/Studio de Medições, por não terem esse
+mesmo histórico de URL pública, tiveram sua rota promovida para o nível
+superior preservando o mesmo nome de slug que já usavam (`/geoespacial`,
+`/evidencias`, `/memorias`) — ver seção 9.
 
 ---
 
@@ -78,13 +101,13 @@ não uma condição para o contrato valer.
 | Studio | Engine (conceito) | Onde vive hoje no código | Status |
 |---|---|---|---|
 | **Project Studio** | Planning Engine | `domain/schedule-management`, `domain/project-management` | Em produção (`/bba-project`) |
-| **Geo Studio** | Geospatial Engine | `capabilities/geospatial-intelligence`, `domain/spatial-object` | Em produção (`/geoespacial`, nível de topo desde a reconciliação de navegação) |
-| **Evidence Studio** | Evidence Engine | `domain/field-evidence`, `domain/evidence-center` | Em produção parcial (`/evidencias`, nível de topo) — dados de demonstração, ainda não integrado a um Engine real |
-| **Measure Studio** | Measurement Engine | `domain/measurement*` (6 variantes) | Em produção parcial (`/memorias`, nível de topo) — dados de demonstração; "Medições"/boletins ainda em desenvolvimento |
-| **Document Studio** | Document Engine | `domain/document-reconstruction`, `domain/official-template-engine` | Planejado (card "em breve") |
-| **Approval Studio** | Approval Engine | `domain/approval-workflow` | Planejado (card "em breve") |
+| **Geo Studio** | Geospatial Engine | `capabilities/geospatial-intelligence`, `domain/spatial-object` | Em produção (`/geoespacial`, nível de topo) |
+| **Studio de Evidências** | Evidence Engine | `domain/field-evidence`, `domain/evidence-center` | Em produção parcial (`/evidencias`, nível de topo) — dados de demonstração, ainda não integrado a um Engine real |
+| **Studio de Medições** | Measurement Engine | `domain/measurement*` (6 variantes) | Em produção parcial (`/memorias`, nível de topo) — dados de demonstração; boletins ainda em desenvolvimento |
+| **Studio de Documentos** | Document Engine | `domain/document-reconstruction`, `domain/official-template-engine` | Planejado (card "em breve") |
+| **Studio de Aprovações** | Approval Engine | `domain/approval-workflow` | Planejado (card "em breve") |
 | **Export Studio** | Export Engine | `domain/export-engine` | Planejado (card "em breve") |
-| **Finance Studio** | Finance Engine | `capabilities/cash-intelligence`, `domain/revenue-intelligence`, `domain/cash-forecast` | Planejado (card "em breve") |
+| **Studio de Finanças** | Finance Engine | `capabilities/cash-intelligence`, `domain/revenue-intelligence`, `domain/cash-forecast` | Planejado (card "em breve") |
 | **Field Studio** | Execution Engine | *(ainda não existe pasta própria — nenhum domínio de execução física foi iniciado)* | Planejado — nenhum código ainda |
 | *(não é um Studio)* | Decision Engine | `engines/decision` | Em produção — motor central que alimenta o Advisor em todos os Studios |
 
@@ -122,13 +145,13 @@ leitura.
 
 | Entidade | Studio dono | Studios consumidores (somente leitura) | Observação |
 |---|---|---|---|
-| `SpatialObject` / geometria | **Geo Studio** | Project Studio, Evidence Studio, Measure Studio | Escrita de geometria/localização é exclusiva do Geo Studio. |
-| `PlanningDataset` / `ScheduleActivity` | **Project Studio** | Finance Studio (curva S financeira), Field Studio (apontamento de execução) | Nenhum outro Studio recalcula CPM ou altera datas de linha de base. |
+| `SpatialObject` / geometria | **Geo Studio** | Project Studio, Studio de Evidências, Studio de Medições | Escrita de geometria/localização é exclusiva do Geo Studio. |
+| `PlanningDataset` / `ScheduleActivity` | **Project Studio** | Studio de Finanças (curva S financeira), Field Studio (apontamento de execução) | Nenhum outro Studio recalcula CPM ou altera datas de linha de base. |
 | `Decision` / `Recommendation` | **Decision Engine** (não é um Studio) | Todos os Studios, via Advisor | Nenhum Studio grava uma Decision diretamente — só o Decision Engine produz. |
-| Evidência (foto/vídeo/documento) | **Evidence Studio** | Measure Studio (substanciar medição), Document Studio | |
-| Medição / Boletim | **Measure Studio** | Finance Studio (faturamento) | |
-| Aprovação | **Approval Studio** | Todos os Studios podem solicitar; o registro da decisão de aprovação pertence ao Approval Studio | |
-| Fluxo de caixa / DRE | **Finance Studio** | Advisor (para narrativa cross-Studio na Home) | |
+| Evidência (foto/vídeo/documento) | **Studio de Evidências** | Studio de Medições (substanciar medição), Studio de Documentos | |
+| Medição / Boletim | **Studio de Medições** | Studio de Finanças (faturamento) | |
+| Aprovação | **Studio de Aprovações** | Todos os Studios podem solicitar; o registro da decisão de aprovação pertence ao Studio de Aprovações | |
+| Fluxo de caixa / DRE | **Studio de Finanças** | Advisor (para narrativa cross-Studio na Home) | |
 
 Quando um novo Studio precisar de um dado que já tem dono, a regra é sempre
 "consumir somente leitura via contrato do Studio dono" — nunca duplicar o
@@ -141,13 +164,13 @@ dado, nunca escrever por fora.
 | Studio | Ícone (lucide) | Cor predominante | Headline | Responsabilidade |
 |---|---|---|---|---|
 | **Project Studio** | `GanttChartSquare` | `--bba-gold` | "O primeiro planejador de projetos orientado por decisões" | Planejamento, cronograma, EAP, linha de base, CPM, Curva S, forecast, Living Schedule, replanejamento, importação |
-| **Finance Studio** | `Wallet` / `TrendingUp` | verde (`--status-green`) | "Sua obra, sua margem, em tempo real" | Fluxo de caixa, custos, receitas, orçamento, forecast financeiro, DRE, margens, rentabilidade |
+| **Studio de Finanças** | `Wallet` / `TrendingUp` | verde (`--status-green`) | "Sua obra, sua margem, em tempo real" | Fluxo de caixa, custos, receitas, orçamento, forecast financeiro, DRE, margens, rentabilidade |
 | **Field Studio** | `HardHat` | âmbar (`--status-amber`) | "O que aconteceu na obra, hoje" | Diário, produção, equipes, equipamentos, clima, ocorrências, checklists |
 | **Geo Studio** | `Map` | azul/dourado (reaproveitar tokens atuais) | "Onde sua obra realmente está" | Mapa, GIS, camadas, drone, RTK, inteligência espacial |
-| **Evidence Studio** | `Camera` / `FileImage` | neutro | "Prova, não achismo" | Fotos, vídeos, OCR, uploads, classificação, evidências |
-| **Measure Studio** | `Ruler` | `--bba-gold` | "Quanto foi de fato executado" | Medições, quantitativos, boletins, apropriações, memórias de cálculo |
-| **Document Studio** | `FileText` | neutro | "Todo documento, um só lugar" | Contratos, projetos, memoriais, licitações, OCR, reconstrução documental |
-| **Approval Studio** | `CheckSquare` | verde (`--status-green`) | "Nada trava sem rastro" | Fluxos de aprovação, pendências, histórico |
+| **Studio de Evidências** | `Camera` / `FileImage` | neutro | "Prova, não achismo" | Fotos, vídeos, OCR, uploads, classificação, evidências |
+| **Studio de Medições** | `Ruler` | `--bba-gold` | "Quanto foi de fato executado" | Medições, quantitativos, boletins, apropriações, memórias de cálculo |
+| **Studio de Documentos** | `FileText` | neutro | "Todo documento, um só lugar" | Contratos, projetos, memoriais, licitações, OCR, reconstrução documental |
+| **Studio de Aprovações** | `CheckSquare` | verde (`--status-green`) | "Nada trava sem rastro" | Fluxos de aprovação, pendências, histórico |
 | **Export Studio** | `Download` | neutro | "Seu dado, no formato que você precisa" | PDF, Excel, APIs, relatórios, integrações |
 | **BBA Advisor** *(transversal, não é destino)* | `Sparkles` | dourado (`--bba-gold-soft`) | "Analisei seu [contexto]." | Interpreta os Engines dentro de cada Studio — nunca uma tela própria |
 
@@ -179,7 +202,7 @@ extrair para `packages/ui` antes de haver uma segunda necessidade real.
 | Decision Timeline | Não existe ainda | — | Planejado |
 | Recommendation Card | Existe como parte do Explainability Drawer | — | Não generalizado |
 
-**Quando extrair para `packages/ui`:** no dia em que Finance Studio, Geo
+**Quando extrair para `packages/ui`:** no dia em que Studio de Finanças, Geo
 Studio (na sua encarnação definitiva) ou qualquer outro Studio precisar do
 Health Score ou do Executive Hero, extrai-se então para
 `packages/ui/src/studio-shared/` (nome de pasta a definir naquele momento) —
@@ -192,117 +215,129 @@ não antes. Extrair hoje, com um único consumidor, seria abstração prematura.
 | Studio | Componentes exclusivos |
 |---|---|
 | Project Studio | Gantt/WBS Table, Curva S, CPM, Living Schedule |
-| Finance Studio | Cash Flow, Forecast Financeiro, DRE, Burn Rate |
+| Studio de Finanças | Cash Flow, Forecast Financeiro, DRE, Burn Rate |
 | Geo Studio | GIS, Layers, Spatial Timeline |
 | Field Studio | Diário de Obra, Checklist de Campo |
-| Evidence Studio | Galeria/Timeline de Evidências, OCR Viewer |
-| Measure Studio | Boletim de Medição, Memória de Cálculo |
-| Document Studio | Reconstrução Documental, Template Engine |
-| Approval Studio | Fluxo de Aprovação, Histórico de Pendências |
+| Studio de Evidências | Galeria/Timeline de Evidências, OCR Viewer |
+| Studio de Medições | Boletim de Medição, Memória de Cálculo |
+| Studio de Documentos | Reconstrução Documental, Template Engine |
+| Studio de Aprovações | Fluxo de Aprovação, Histórico de Pendências |
 | Export Studio | Central de Exportação/Integrações |
 
 ---
 
-## 9. Navegação — reconciliação aplicada
+## 9. Navegação — modelo contextual (corrigido após validação com o produto real)
 
-> Atualização: a divergência identificada na primeira versão deste documento
+> Histórico da seção: a v1 deste documento identificou uma divergência
 > (Project Studio de nível superior × Geoespacial/Evidências/Memórias
-> aninhados dentro do workspace "Engenharia") foi corrigida logo em seguida,
-> ainda dentro do EPIC Platform Architecture 1.0, por decisão explícita do
-> CPO/Chief Architect. Esta seção descreve o estado **atual e já
-> implementado** — não é mais um plano futuro.
+> aninhados em "Engenharia") e a "corrigiu" promovendo todos os Studios
+> reais para um grupo global "Studios" no topo da Sidebar, visível sempre.
+> Ao ver essa tela publicada, o CPO/Chief Architect corrigiu o rumo: um
+> grupo global com os 9 Studios (a maioria "em breve") na Sidebar principal
+> é ruído para o cliente, que só usa os Studios relevantes ao projeto que
+> tem em mãos. Esta seção descreve o modelo **corrigido e implementado**,
+> substituindo integralmente a versão anterior — não são dois modelos
+> coexistindo, é uma correção de rumo.
 
-### 9.1 Estado anterior (histórico — como era antes desta correção)
+### 9.1 O modelo
+
+1. **Studio é uma capacidade de plataforma com rota própria de nível
+   superior** (`/bba-project`, `/geoespacial`, `/evidencias`, `/memorias`) —
+   isso não muda. O que muda é *onde e para quem* ele aparece na Sidebar.
+2. **Na Sidebar do cliente, um Studio só aparece dentro do Workspace ao qual
+   está associado**, exatamente como os demais itens de
+   `workspace-nav-config.ts` — nada de lista global permanente. O usuário
+   entra em "Engenharia" e só ali vê Project Studio, Geo Studio, Studio de
+   Evidências e Studio de Medições no menu contextual.
+3. **A visão completa de todos os 9 Studios de uma vez (incluindo os cinco
+   ainda "em breve") é exclusiva do Admin BBA** — um grupo adicional
+   "Studios (visão Admin)" que só renderiza quando `isAdmin` é verdadeiro
+   (o mesmo sinal que já controla o link "Admin BBA"). Serve como visão de
+   roadmap/gestão da plataforma inteira, não como algo que o cliente precisa
+   ver.
+4. **Na tela principal do Workspace** (`/workspaces/engenharia`), os mesmos
+   Studios aparecem como cards na grade de capacidades — o usuário vê a
+   mesma coisa nos dois lugares (card na tela + item no menu), nunca só um
+   dos dois.
 
 ```
-Sidebar
+Sidebar (cliente, fora de qualquer Workspace — ex.: em /hoje)
 ├── Hoje
-├── Project Studio               (/bba-project)      — nível superior
+└── Workspaces
+
+Sidebar (cliente, dentro de /workspaces/engenharia ou de um Studio que
+         pertence a ele — /bba-project, /geoespacial, /evidencias, /memorias)
+├── Hoje
 ├── Workspaces
-│    └── Engenharia             (/workspaces/engenharia)
-│         ├── Planejamento
-│         ├── Execução           (em breve)
-│         ├── Geoespacial        (/workspaces/engenharia/geoespacial)  ← aninhado
-│         ├── Evidências         (/workspaces/engenharia/evidencias)   ← aninhado
-│         ├── Memórias de Cálculo (/workspaces/engenharia/memorias)    ← aninhado
-│         ├── ...
-│         └── BBA Advisor        (card "em breve", tratado como destino)
-```
-
-Duas formas de organizar a mesma ideia de "Studio" coexistiam sem
-reconciliação: uma como app de nível superior, outra como aba de um
-workspace fixo. Isso não era um bug de código — era ausência de arquitetura
-de plataforma declarada, exatamente o que este EPIC resolve.
-
-### 9.2 Estado atual (aplicado nesta sprint)
-
-```
-Sidebar
-├── Hoje                         (/hoje)
-├── Studios
-│    ├── Project Studio          (/bba-project)
-│    ├── Geo Studio              (/geoespacial)
-│    ├── Evidence Studio         (/evidencias)
-│    ├── Measure Studio          (/memorias)
-│    ├── Finance Studio          (em breve, sem página ainda)
-│    ├── Field Studio            (em breve, sem página ainda)
-│    ├── Document Studio         (em breve, sem página ainda)
-│    ├── Approval Studio         (em breve, sem página ainda)
-│    └── Export Studio           (em breve, sem página ainda)
-├── Workspaces                   (/workspaces)
-│    └── Engenharia              (/workspaces/engenharia) — contexto do projeto ativo
-│         ├── Planejamento       (conteúdo de demonstração — ver nota abaixo)
-│         ├── Execução           (em breve)
-│         ├── Medições           (em breve)
-│         ├── Documentos         (em breve)
-│         ├── Aprovações         (em breve)
-│         ├── Exportações        (em breve)
-│         ├── Financeiro         (em breve)
-│         └── Dashboard Executivo (em breve)
+├── Engenharia                    (grupo contextual, expandido)
+│    ├── Dashboard                (/workspaces/engenharia)
+│    ├── Planejamento             (conteúdo de demonstração — ver nota)
+│    ├── Project Studio           (/bba-project)
+│    ├── Execução                 (em breve)
+│    ├── Geo Studio               (/geoespacial)
+│    ├── Studio de Evidências     (/evidencias)
+│    ├── Studio de Medições       (/memorias)
+│    ├── Medições                 (em breve — boletim, ainda distinto do Studio de Medições acima)
+│    ├── Documentos, Aprovações, Exportações, Financeiro, Dashboard Executivo (em breve)
 ├── Empresa / Caixa / Impostos / Equipe
-└── Operacional (Motor): Cadastro, Fiscal, Financeiro, Contratos, Trabalhista
+└── Operacional (Motor)
+
+Sidebar (Admin BBA, em qualquer tela)
+├── ... tudo acima, mais:
+├── Studios (visão Admin)          ← grupo global, só para isAdmin
+│    ├── Project Studio, Geo Studio, Studio de Evidências, Studio de
+│    │   Medições (navegáveis)
+│    └── Studio de Finanças, Field Studio, Studio de Documentos, Studio de
+│        Aprovações, Export Studio (em breve)
+└── Admin BBA
 ```
 
-Os quatro Studios com página real (Project, Geo, Evidence, Measure) agora
-vivem todos no mesmo nível hierárquico, com rota própria fora de
-`/workspaces/*` — exatamente o padrão que faltava reconciliar. Os cinco
-Studios ainda não construídos aparecem como linhas inertes "em breve" (mesmo
-padrão visual já usado para itens de Workspace sem `href`), para que a
-Sidebar já anuncie a forma final da Plataforma sem prometer uma tela que não
-existe.
+Um Studio com rota de nível superior (`/bba-project`, `/geoespacial`, etc.)
+não vive fisicamente sob `/workspaces/engenharia/*`, então a Sidebar precisa
+reconhecer que o usuário "está" no Workspace mesmo estando numa dessas
+rotas: `isWorkspaceActive` (`sidebar.tsx`) considera o Workspace ativo tanto
+quando a rota está sob seu `basePath` quanto quando é uma das rotas listadas
+em seus próprios itens — assim o grupo "Engenharia" continua visível (e a
+navegação contextual não desaparece) depois que o usuário abre um dos
+Studios a partir dele.
 
-"BBA Advisor" deixou de ser um card de destino: foi removido da grade de
-capacidades da Engenharia e de `workspace-nav-config.ts`. O Advisor continua
-existindo, mas somente como bloco narrativo contextual **dentro** de cada
-tela (Evidências e Memórias de Cálculo já tinham esse padrão embutido; Project
-Studio o tem desde o Sprint 2) — nunca como uma rota própria.
+**Nota sobre "Medições" (placeholder) vs. "Studio de Medições" (real):**
+o item de sub-navegação "Medições" (ícone `Ruler`, sem `href`, herdado da
+configuração original) e o novo "Studio de Medições" (`/memorias`) hoje
+convivem na mesma lista com nomes muito próximos — o primeiro representa uma
+capacidade futura de boletins de medição ainda não construída; o segundo é
+a tela real de memórias de cálculo, promovida a Studio. Não foram
+fundidos porque isso não foi pedido explicitamente e são, hoje, conceitos
+diferentes — fica registrado aqui como um ponto a esclarecer com o
+CPO/Chief Architect antes do próximo EPIC que tocar nesta área.
 
-O workspace "Engenharia" deixa de ser o dono exclusivo de Geo/Evidence/Measure
-Studio e passa a ser o que a seção 9 original já previa: **o contexto do
-projeto ativo** (Barragem Lagoa do Arroz, 2F Engenharia). Seus cards de
-"Geo Studio"/"Evidence Studio"/"Measure Studio" permanecem na grade — agora
-apontando para as rotas de nível superior — para que abrir um Studio a
-partir do contexto de um projeto continue sendo possível e descobrível.
+### 9.2 Por que a v1 desta seção estava errada
+
+A v1 promoveu Project/Geo/Evidence/Measure Studio para um grupo "Studios"
+sempre visível no topo da Sidebar, ao lado de "Hoje" e "Workspaces" —
+resolvendo a inconsistência de nível hierárquico, mas criando um problema
+novo: um cliente comum, na tela principal, passava a ver 9 linhas de Studio
+(a maioria "em breve") permanentemente no menu, sem relação com o projeto
+que estava de fato olhando. Isso é ruído de produto, não simplicidade — o
+tipo de decisão que só fica visível depois de olhar a tela publicada de
+verdade, e foi corrigida assim que identificada.
 
 **Nota sobre "Planejamento":** esta tela (`/workspaces/engenharia/planejamento`)
-não foi movida nem renomeada para Project Studio. Ao investigar o código para
-executar a correção, confirmou-se que são coisas genuinamente diferentes —
+continua sem alteração — não foi movida nem renomeada para Project Studio.
 "Planejamento" é uma tela de demonstração com dados estáticos ilustrativos,
 personalizada para a apresentação comercial à 2F Engenharia (nenhum Engine a
 alimenta — o próprio código já documentava isso: *"Nenhum Engine alimenta esta
 análise ainda"*), enquanto o Project Studio real (`/bba-project`) é o produto
 de fato, orientado a Engine, com importação real de XML/Excel. Fundir os dois
-teria sido um erro de arquitetura, não uma correção — por isso "Planejamento"
-permanece exatamente onde estava, sem alteração.
+teria sido um erro de arquitetura — por isso "Planejamento" permanece
+exatamente onde estava.
 
-**Nota sobre maturidade real dos Studios promovidos:** ao mover os arquivos,
-confirmou-se que Geo Studio de fato chama um serviço real do `bdos-core`
-(`buildGeospatialProductSnapshot`, com parâmetros fixos de demonstração) — é
-Engine-backed de verdade. Evidence Studio e Measure Studio, por outro lado,
-usam apenas arrays estáticos de exemplo, sem nenhuma chamada a `bdos-core`
-ainda. A tabela da seção 3 já reflete essa diferença real de maturidade —
-promover a rota não promoveu a integração com o Engine, e isso é dito aqui
-explicitamente para não sugerir uma maturidade que ainda não existe.
+**Nota sobre maturidade real dos Studios:** Geo Studio de fato chama um
+serviço real do `bdos-core` (`buildGeospatialProductSnapshot`, com
+parâmetros fixos de demonstração) — é Engine-backed de verdade. Studio de
+Evidências e Studio de Medições, por outro lado, usam apenas arrays
+estáticos de exemplo, sem nenhuma chamada a `bdos-core` ainda (ver seção 3).
+Ter uma rota de nível superior não implica maturidade de Engine.
 
 ### 9.3 O que ainda não foi feito (candidato a EPIC futuro)
 
@@ -332,30 +367,29 @@ implementado nesta sprint** (não é tela nova, não é Engine novo).
 ## 11. Menu definitivo (estado alvo)
 
 ```
-Hoje
-Advisor            (atalho para o resumo cross-Studio, não uma tela de dados)
-Studios
-  Project Studio
-  Finance Studio
-  Field Studio
-  Geo Studio
-  Evidence Studio
-  Measure Studio
-  Document Studio
-  Approval Studio
-  Export Studio
-Empresa
-Administração
+Cliente:
+  Hoje
+  Advisor            (atalho para o resumo cross-Studio, não uma tela de dados — conceito, seção 10)
+  Workspaces
+    Engenharia         → dentro dele: Project Studio, Geo Studio, Studio de
+                         Evidências, Studio de Medições + demais itens "em breve"
+  Empresa
+  Administração        (só quando isAdmin)
+
+Admin BBA (adicional):
+  Studios (visão Admin) — todos os 9 Studios de uma vez, para gestão de roadmap
 ```
 
-Estado atual (pós-reconciliação da seção 9.2): "Studios" já existe como grupo
-de nível superior na Sidebar, com Project/Geo/Evidence/Measure Studio
-navegáveis e os cinco restantes inertes ("em breve"). "Advisor" como atalho
-de resumo cross-Studio ainda não existe (depende da Home descrita na seção
-10, que é conceito, não implementação). "Workspaces" continua na Sidebar,
-por enquanto — só será removido quando o conceito de "contexto de projeto
-ativo" (seção 9.3) for realmente construído; até lá, é a única forma de
-abrir o contexto do projeto de demonstração (Engenharia).
+Estado atual (pós-correção da seção 9): não existe mais um grupo "Studios"
+permanente na Sidebar do cliente — cada Studio só aparece dentro do
+Workspace ao qual pertence. O grupo "Studios (visão Admin)", com os 9
+Studios (4 navegáveis + 5 "em breve"), só renderiza quando `isAdmin` é
+verdadeiro. "Advisor" como atalho de resumo cross-Studio ainda não existe
+(depende da Home descrita na seção 10, que é conceito, não implementação).
+"Workspaces" continua na Sidebar do cliente, por enquanto — só será removido
+quando o conceito de "contexto de projeto ativo" (seção 9.3) for realmente
+construído; até lá, é a única forma de abrir o contexto do projeto de
+demonstração (Engenharia).
 
 ---
 
@@ -403,13 +437,13 @@ um terceiro Studio nascer.
 | Studio | Status |
 |---|---|
 | Project Studio | Em produção |
-| Geo Studio (hoje "Geoespacial") | Em produção |
-| Evidence Studio | Em produção |
-| Measure Studio | Em produção parcial (Memórias de Cálculo) |
-| Finance Studio | Planejado |
+| Geo Studio | Em produção |
+| Studio de Evidências | Em produção parcial (dados de demonstração) |
+| Studio de Medições | Em produção parcial (Memórias de Cálculo, dados de demonstração) |
+| Studio de Finanças | Planejado |
 | Field Studio | Planejado |
-| Document Studio | Planejado |
-| Approval Studio | Planejado |
+| Studio de Documentos | Planejado |
+| Studio de Aprovações | Planejado |
 | Export Studio | Planejado |
 
 Esta tabela é um retrato de 2026-07 — vai ficar desatualizada por design.
