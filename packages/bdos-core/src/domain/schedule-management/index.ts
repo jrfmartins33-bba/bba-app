@@ -38,6 +38,7 @@ export type {
   PlanningScheduleActivityConversion,
   PlanningWorkPackageInput,
 } from "./planning-dataset";
+export { PLANNING_DATASET_SCHEMA_VERSION } from "./planning-dataset.types";
 export type {
   PlanningActivityDependency,
   PlanningActivityRecord,

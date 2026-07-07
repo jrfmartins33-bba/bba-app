@@ -136,3 +136,33 @@ export const insertPlanningImport = async (
     throw error;
   }
 };
+
+// Camada 2 do pipeline BDOS (Sprint 13.7) — Planning Dataset
+// normalizado, guardado verbatim como JSONB (ver
+// docs/BDOS_PERSISTENCE_ARCHITECTURE.md, seção 5.2). `dataset` é o
+// `PlanningDataset` completo vindo de `importPlanningSource`; este
+// repository não conhece sua forma interna, só o grava.
+export const insertPlanningDataset = async (
+  supabase: SupabaseClient,
+  params: {
+    companyId: string;
+    engineeringProjectId: string;
+    planningImportId: string;
+    datasetSchemaVersion: number;
+    detectedType: string;
+    dataset: unknown;
+  }
+): Promise<void> => {
+  const { error } = await supabase.from("planning_datasets").insert({
+    company_id: params.companyId,
+    engineering_project_id: params.engineeringProjectId,
+    planning_import_id: params.planningImportId,
+    dataset_schema_version: params.datasetSchemaVersion,
+    detected_type: params.detectedType,
+    dataset: params.dataset
+  });
+
+  if (error) {
+    throw error;
+  }
+};

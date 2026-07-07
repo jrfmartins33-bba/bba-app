@@ -10,6 +10,15 @@
 
 export type PlanningSourceType = "ms-project-xml" | "excel";
 
+/**
+ * Carimbo manual da forma de `PlanningDataset` (Sprint 13.7 —
+ * persistência da Camada 2, `planning_datasets.dataset_schema_version`).
+ * Incrementar sempre que esta interface mudar de verdade, nunca como
+ * semver automático — é o que permite saber quais linhas antigas
+ * precisam de migração/reinterpretação quando o formato evoluir.
+ */
+export const PLANNING_DATASET_SCHEMA_VERSION = 1;
+
 export type PlanningDetectedType = "cronograma" | "curva-s" | "fisico-financeiro" | "mixed" | "unknown";
 
 export interface PlanningDatasetOrigin {
