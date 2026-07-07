@@ -6,6 +6,7 @@ import {
   PLANNING_DATASET_SCHEMA_VERSION,
   type PlanningImportSourceType
 } from "@bba/bdos-core/services/bba-project-import";
+import { computeHealthScore } from "@/components/bba-project/bba-project-insights";
 import { getSupabaseRouteHandlerClient, requireAuthenticatedCompany } from "@/lib/supabase/server";
 import {
   ensureDefaultEngineeringProject,
@@ -28,9 +29,11 @@ import {
  * cadeia real), grava o `PlanningDataset` normalizado em
  * `planning_datasets` (Camada 2, Sprint 13.7), grava o Decision
  * Snapshot resultante em `decision_snapshots` (Camada 3, Sprint 13.8,
- * `trigger_reason='import'`) e sincroniza `recommendations` (Advisor
- * persistente, Sprint 13.9) e só então devolve o snapshot uniforme
- * pronto. Nenhuma regra de negócio vive aqui.
+ * `trigger_reason='import'`, incluindo o Health Score congelado no
+ * momento do cálculo — Sprint 13.10, ver `computeHealthScore`) e
+ * sincroniza `recommendations` (Advisor persistente, Sprint 13.9) e só
+ * então devolve o snapshot uniforme pronto. Nenhuma regra de negócio
+ * vive aqui.
  *
  * REGRA CRÍTICA: o caminho XML delega inteiramente para a mesma
  * `buildBbaProjectImportSnapshot` do Sprint Zero, através de
@@ -139,6 +142,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       dataset: snapshot.planningDataset
     });
 
+    const healthScore = computeHealthScore(snapshot);
+
     const decisionSnapshot = await insertDecisionSnapshot(supabase, {
       companyId,
       engineeringProjectId,
@@ -147,7 +152,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       triggerReason: "import",
       computedBy: userId,
       decisions: snapshot.decisions,
-      recommendations: snapshot.recommendations
+      recommendations: snapshot.recommendations,
+      healthScore: healthScore.score,
+      healthScoreLevel: healthScore.level
     });
 
     for (const recommendation of snapshot.recommendations) {

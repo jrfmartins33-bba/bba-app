@@ -7,6 +7,7 @@ import {
   type ClientCompanyProfile,
   useBbaStore,
 } from '@bba/lib'
+import type { EngineeringAdvisorBriefing, EngineeringAdvisorItem } from '@/lib/bdos/advisor'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -481,6 +482,95 @@ function ScoreBar({
   )
 }
 
+// ── Advisor de Engenharia (Sprint 13.10) ──────────────────────────────────────
+//
+// Primeiro de vários Advisors especializados que a Home vai um dia
+// orquestrar em uma única narrativa. Só consome
+// GET /api/bba-project/advisor (Advisor Service, apps/web/lib/bdos/advisor.ts)
+// — nenhum cálculo vive nesta página.
+
+const ENGINEERING_SEVERITY_META: Record<
+  EngineeringAdvisorItem['severity'],
+  { emoji: string; label: string; statusClass: string }
+> = {
+  critical: { emoji: '🔴', label: 'Crítico', statusClass: 'bba-status--red' },
+  attention: { emoji: '🟡', label: 'Atenção', statusClass: 'bba-status--amber' },
+  info: { emoji: '🟢', label: 'Informação', statusClass: 'bba-status--green' },
+  trend: { emoji: '⚪', label: 'Tendência', statusClass: '' },
+}
+
+function EngineeringAdvisorSection({ briefing }: { briefing: EngineeringAdvisorBriefing | null }) {
+  if (briefing === null) {
+    return null
+  }
+
+  if (!briefing.hasData) {
+    return (
+      <section className="bba-card bba-animate-in" style={{ padding: '20px 24px', display: 'grid', gap: '12px' }}>
+        <span className="bba-eyebrow">Advisor de Engenharia</span>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.6 }}>
+          Nenhum projeto de engenharia foi importado ainda. Assim que houver um cronograma importado, encontro os pontos que merecem sua atenção aqui.
+        </p>
+        <Link href="/bba-project" className="bba-btn bba-btn--ghost" style={{ width: 'fit-content' }}>
+          Executar novo Import
+        </Link>
+      </section>
+    )
+  }
+
+  if (briefing.items.length === 0) {
+    return (
+      <section className="bba-card bba-animate-in" style={{ padding: '20px 24px', display: 'grid', gap: '8px' }}>
+        <span className="bba-eyebrow">Advisor de Engenharia</span>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.6 }}>
+          Nenhum ponto exige atenção em {briefing.engineeringProjectName} hoje.
+        </p>
+      </section>
+    )
+  }
+
+  return (
+    <section className="bba-card bba-animate-in" style={{ padding: '20px 24px', display: 'grid', gap: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+        <span className="bba-eyebrow">Advisor de Engenharia</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{briefing.engineeringProjectName}</span>
+      </div>
+      <div style={{ display: 'grid', gap: '12px' }}>
+        {briefing.items.map((item, index) => {
+          const meta = ENGINEERING_SEVERITY_META[item.severity]
+          return (
+            <div
+              key={`${item.severity}-${index}`}
+              style={{
+                padding: '14px',
+                border: '1px solid var(--app-divider)',
+                borderRadius: '6px',
+                background: 'rgba(0,0,0,0.18)',
+                display: 'grid',
+                gap: '8px',
+              }}
+            >
+              <div className={`bba-status ${meta.statusClass}`} style={{ width: 'fit-content' }}>
+                <span className="bba-status__dot" />
+                {meta.emoji} {meta.label}
+              </div>
+              <p style={{ color: 'var(--text-primary)', fontSize: '13px', lineHeight: 1.55 }}>{item.headline}</p>
+              {item.detail && (
+                <p style={{ color: 'var(--text-muted)', fontSize: '12px', lineHeight: 1.5 }}>{item.detail}</p>
+              )}
+              {item.severity !== 'trend' && (
+                <Link href={item.actionHref} className="bba-btn bba-btn--ghost" style={{ width: 'fit-content' }}>
+                  {item.actionLabel}
+                </Link>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function HojePage() {
@@ -491,6 +581,30 @@ export default function HojePage() {
   const [clientProfile, setClientProfile] =
     useState<ClientCompanyProfile | null>(null)
   const [scoreExpanded, setScoreExpanded] = useState(false)
+  const [engineeringBriefing, setEngineeringBriefing] =
+    useState<EngineeringAdvisorBriefing | null>(null)
+
+  // ── Advisor de Engenharia (Sprint 13.10) ─────────────────────────────────
+
+  useEffect(() => {
+    let mounted = true
+
+    fetch('/api/bba-project/advisor')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: EngineeringAdvisorBriefing | null) => {
+        if (mounted && data) {
+          setEngineeringBriefing(data)
+        }
+      })
+      .catch(() => {
+        // Falha silenciosa: o Advisor de Engenharia é um bloco a mais na
+        // Home, nunca deve derrubar o restante da página se a rota falhar.
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   // ── Buscar dados reais ────────────────────────────────────────────────────
 
@@ -936,6 +1050,11 @@ export default function HojePage() {
           />
         </div>
       </section>
+
+      {/* ── Advisor de Engenharia (Sprint 13.10) ──────────────────── */}
+      <div style={{ marginBottom: '28px' }}>
+        <EngineeringAdvisorSection briefing={engineeringBriefing} />
+      </div>
 
       {/* ── Grid principal: Decisão + Score ───────────────────────── */}
       <div

@@ -190,6 +190,8 @@ export const insertDecisionSnapshot = async (
     computedBy: string | null;
     decisions: unknown;
     recommendations: unknown;
+    healthScore: number;
+    healthScoreLevel: string;
   }
 ): Promise<{ id: string }> => {
   const { data, error } = await supabase
@@ -202,7 +204,9 @@ export const insertDecisionSnapshot = async (
       trigger_reason: params.triggerReason,
       computed_by: params.computedBy,
       decisions: params.decisions,
-      recommendations: params.recommendations
+      recommendations: params.recommendations,
+      health_score: params.healthScore,
+      health_score_level: params.healthScoreLevel
     })
     .select("id")
     .single();
