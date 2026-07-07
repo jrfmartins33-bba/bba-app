@@ -38,7 +38,7 @@ export default function GeoespacialPage() {
       <section className="page-header">
         <div>
           <span className="workspaces-eyebrow">BBA Platform · Operational Decision Platform</span>
-          <h1>Geoespacial</h1>
+          <h1>Geo Studio</h1>
           <p>Mapa operacional da obra e evolução espacial.</p>
         </div>
         <Link className="bba-button bba-button--ghost bba-button--sm" href="/workspaces/engenharia">

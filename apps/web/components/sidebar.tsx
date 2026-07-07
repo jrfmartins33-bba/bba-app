@@ -21,6 +21,13 @@ import {
   Zap,
   Settings,
   GanttChartSquare,
+  Map,
+  FolderSearch,
+  ClipboardList,
+  HardHat,
+  FileStack,
+  ClipboardCheck,
+  FileDown,
 } from 'lucide-react'
 import { WORKSPACE_NAV_CONFIG } from './workspace-nav-config'
 
@@ -39,16 +46,67 @@ const NAV_TOP = [
     description: 'Cockpit · Radar · Ações',
   },
   {
-    href: '/bba-project',
-    label: 'BBA Project Studio',
-    icon: GanttChartSquare,
-    description: 'O primeiro planejador de projetos orientado por decisões',
-  },
-  {
     href: '/workspaces',
     label: 'Workspaces',
     icon: LayoutGrid,
     description: 'Contabilidade · Engenharia · Novos módulos',
+  },
+]
+
+// BBA Platform — cada Studio é uma capacidade de produto de mesmo nível,
+// independente de qual workspace/projeto está ativo (ver
+// docs/PLATFORM_ARCHITECTURE.md, seção 9.2). Um item sem `href` ainda não
+// tem Studio implementado — a Sidebar o renderiza como uma linha inerte
+// "em breve", igual ao padrão já usado nos sub-itens de Workspace.
+const NAV_STUDIOS = [
+  {
+    href: '/bba-project',
+    label: 'Project Studio',
+    icon: GanttChartSquare,
+    description: 'O primeiro planejador de projetos orientado por decisões',
+  },
+  {
+    href: '/geoespacial',
+    label: 'Geo Studio',
+    icon: Map,
+    description: 'Mapa, GIS e evolução espacial da obra',
+  },
+  {
+    href: '/evidencias',
+    label: 'Evidence Studio',
+    icon: FolderSearch,
+    description: 'Fotografias, vídeos e registros de campo',
+  },
+  {
+    href: '/memorias',
+    label: 'Measure Studio',
+    icon: ClipboardList,
+    description: 'Memórias de cálculo e quantitativos',
+  },
+  {
+    label: 'Finance Studio',
+    icon: Wallet,
+    description: 'Fluxo de caixa, custos, DRE e forecast financeiro',
+  },
+  {
+    label: 'Field Studio',
+    icon: HardHat,
+    description: 'Diário de obra, equipes e execução física',
+  },
+  {
+    label: 'Document Studio',
+    icon: FileStack,
+    description: 'Contratos, projetos e reconstrução documental',
+  },
+  {
+    label: 'Approval Studio',
+    icon: ClipboardCheck,
+    description: 'Fluxos de aprovação e histórico de pendências',
+  },
+  {
+    label: 'Export Studio',
+    icon: FileDown,
+    description: 'PDF, Excel, APIs e integrações',
   },
 ]
 
@@ -149,6 +207,42 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
                     {alertCount}
                   </span>
                 )}
+              </Link>
+            )
+          })}
+        </div>
+
+        {/* ── Divisor ── */}
+        <div className="bba-sidebar__divider" />
+
+        {/* ── Studios (capacidades de produto, mesmo nível para todas —
+             ver docs/PLATFORM_ARCHITECTURE.md, seção 9.2) ── */}
+        <div className="bba-nav-section">
+          <span className="bba-nav-section-label">Studios</span>
+          {NAV_STUDIOS.map((item) => {
+            const Icon = item.icon
+
+            if (!item.href) {
+              return (
+                <span className="bba-nav-item bba-nav-item--soon" key={item.label} title={item.description}>
+                  <Icon />
+                  <span>{item.label}</span>
+                  <span className="bba-nav-item__soon-tag">em breve</span>
+                </span>
+              )
+            }
+
+            const active = isActive(item.href)
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`bba-nav-item ${active ? 'bba-nav-item--active' : ''}`}
+                title={item.description}
+              >
+                <Icon />
+                <span>{item.label}</span>
               </Link>
             )
           })}

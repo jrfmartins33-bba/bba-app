@@ -5,8 +5,7 @@ import type { GeospatialProductIntegrationResult } from "@bba/bdos-core/services
  * — nunca um import direto de `domain/spatial-object`, `domain/business-fact`
  * etc., que `apps/web` não pode alcançar (ver `package.json`/`tsconfig.base.json`
  * do `@bba/bdos-core`). O mesmo padrão já usado em
- * `app/(dashboard)/workspaces/engenharia/geoespacial/page.tsx` desde a
- * UI Sprint 17.
+ * `app/(dashboard)/geoespacial/page.tsx` (Geo Studio) desde a UI Sprint 17.
  */
 export type GeospatialSnapshot = GeospatialProductIntegrationResult;
 export type GeospatialSpatialObject = GeospatialSnapshot["spatialObjects"][number];

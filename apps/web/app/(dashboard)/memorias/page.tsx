@@ -142,7 +142,7 @@ export default function MemoriasPage() {
       <section className="page-header">
         <div>
           <span className="workspaces-eyebrow">BBA Platform · Operational Decision Platform</span>
-          <h1>Memórias de Cálculo</h1>
+          <h1>Measure Studio</h1>
           <p>Organize quantitativos, fórmulas e cálculos auditáveis da obra.</p>
         </div>
         <Link className="bba-button bba-button--ghost bba-button--sm" href="/workspaces/engenharia">

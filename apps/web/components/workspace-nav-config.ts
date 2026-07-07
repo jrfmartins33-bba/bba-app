@@ -2,16 +2,12 @@ import {
   BarChart3,
   Banknote,
   ClipboardCheck,
-  ClipboardList,
   FileDown,
   FileStack,
-  FolderSearch,
   GanttChart,
   HardHat,
   LayoutDashboard,
-  Map,
   Ruler,
-  Sparkles,
   Wrench,
   type LucideIcon
 } from "lucide-react";
@@ -31,6 +27,12 @@ import {
  * inert, muted "em breve" row instead of a link. The moment a real route
  * exists for that section, adding its `href` here is the only change
  * needed for it to become a fully working, route-aware nav link.
+ *
+ * Geoespacial/Evidências/Memórias de Cálculo e BBA Advisor deixaram de
+ * ser sub-itens deste Workspace (ver docs/PLATFORM_ARCHITECTURE.md,
+ * seção 9): os três primeiros agora são Studios de mesmo nível que o
+ * Project Studio (NAV_STUDIOS em `sidebar.tsx`); o Advisor nunca foi um
+ * destino próprio — vive contextualizado dentro de cada Studio.
  */
 
 export interface WorkspaceSubNavItem {
@@ -58,16 +60,12 @@ export const WORKSPACE_NAV_CONFIG: ReadonlyArray<WorkspaceNavConfig> = [
       { label: "Dashboard", icon: LayoutDashboard, href: "/workspaces/engenharia" },
       { label: "Planejamento", icon: GanttChart, href: "/workspaces/engenharia/planejamento" },
       { label: "Execução", icon: Wrench },
-      { label: "Geoespacial", icon: Map, href: "/workspaces/engenharia/geoespacial" },
-      { label: "Evidências", icon: FolderSearch, href: "/workspaces/engenharia/evidencias" },
-      { label: "Memórias de Cálculo", icon: ClipboardList, href: "/workspaces/engenharia/memorias" },
       { label: "Medições", icon: Ruler },
       { label: "Documentos", icon: FileStack },
       { label: "Aprovações", icon: ClipboardCheck },
       { label: "Exportações", icon: FileDown },
       { label: "Financeiro", icon: Banknote },
-      { label: "Dashboard Executivo", icon: BarChart3 },
-      { label: "BBA Advisor", icon: Sparkles }
+      { label: "Dashboard Executivo", icon: BarChart3 }
     ]
     // FASE 6 (preparação futura — nenhuma lógica, nenhum componente, nenhuma
     // tela implementada): este Workspace poderá futuramente carregar uma

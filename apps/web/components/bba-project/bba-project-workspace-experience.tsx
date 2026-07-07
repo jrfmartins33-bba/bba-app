@@ -48,7 +48,7 @@ const PLANNING_TYPE_LABELS: Record<string, string> = {
 };
 
 const LIMITATION_NOTICE =
-  "Alguns dados não estavam explícitos no arquivo de origem. O BBA Project Studio importou o que pôde reconhecer sem inventar informações.";
+  "Alguns dados não estavam explícitos no arquivo de origem. O Project Studio importou o que pôde reconhecer sem inventar informações.";
 
 type EntryChoice = "pending" | "chosen";
 type Phase = "idle" | "processing" | "ready" | "error";
@@ -156,7 +156,7 @@ export function BbaProjectWorkspaceExperience() {
 
   if (entryChoice === "pending") {
     return (
-      <Card className="span-12 workspace-card bba-project-fade-in" title="BBA Project Studio">
+      <Card className="span-12 workspace-card bba-project-fade-in" title="Project Studio">
         <div className="workspace-map-placeholder">
           <div className="workspace-map-placeholder__icon" aria-hidden="true">
             <Sparkles size={22} />
@@ -188,7 +188,7 @@ export function BbaProjectWorkspaceExperience() {
           </div>
           <p className="workspace-map-placeholder__text">Importe seu planejamento</p>
           <p className="workspace-map-placeholder__caption">
-            O arquivo pode conter cronograma, curva S, físico-financeiro, medições, percentuais ou valores — o BBA Project
+            O arquivo pode conter cronograma, curva S, físico-financeiro, medições, percentuais ou valores — o Project
             Studio identifica automaticamente o que for possível.
           </p>
           <p className="workspace-map-placeholder__caption">

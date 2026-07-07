@@ -32,15 +32,13 @@ interface CapabilityCard {
 }
 
 /**
- * Ordem definitiva da arquitetura da BBA Platform (UI Sprint 5.5):
- * Planejamento → Execução → Geoespacial → Evidências → Memórias de
- * Cálculo → Medições → Documentos → Aprovações → Exportações →
- * Financeiro → Dashboard Executivo → BBA Advisor. Idêntica, item a
- * item, à ordem dos subitens em `workspace-nav-config.ts` — Sidebar e
- * Dashboard contam a mesma história. Planejamento/Execução/Geoespacial
- * antecipam visualmente os três primeiros motores do BDS (Planning
- * Engine, Execution Engine, Geospatial Engine), ainda antes dos módulos
- * já em construção.
+ * Este Workspace é o contexto do projeto ativo (Barragem Lagoa do Arroz,
+ * 2F Engenharia) — os cards abaixo abrem os Studios relevantes para ele
+ * (ver docs/PLATFORM_ARCHITECTURE.md, seção 9.2). Geo/Evidence/Measure
+ * Studio já são capacidades de mesma hierarquia que o Project Studio,
+ * por isso também aparecem na Sidebar em "Studios"; aqui eles são
+ * apresentados no contexto deste projeto específico. BBA Advisor não é
+ * um card de destino — vive contextualizado dentro de cada Studio.
  */
 const CAPABILITIES: CapabilityCard[] = [
   {
@@ -61,29 +59,29 @@ const CAPABILITIES: CapabilityCard[] = [
     icon: Wrench
   },
   {
-    id: "geoespacial",
-    title: "Geoespacial",
+    id: "geo-studio",
+    title: "Geo Studio",
     description:
       "Mapa da obra, georreferenciamento, drone, topografia e evolução espacial da execução.",
     status: "Pronto",
     icon: Map,
-    href: "/workspaces/engenharia/geoespacial"
+    href: "/geoespacial"
   },
   {
-    id: "evidencias",
-    title: "Evidências",
+    id: "evidence-studio",
+    title: "Evidence Studio",
     description: "Organização de fotos, registros de campo, documentos e observações técnicas.",
     status: "Pronto",
     icon: FolderSearch,
-    href: "/workspaces/engenharia/evidencias"
+    href: "/evidencias"
   },
   {
-    id: "memorias-calculo",
-    title: "Memórias de Cálculo",
+    id: "measure-studio",
+    title: "Measure Studio",
     description: "Cálculo estruturado de quantitativos, fórmulas e trilhas auditáveis.",
     status: "Pronto",
     icon: ClipboardList,
-    href: "/workspaces/engenharia/memorias"
+    href: "/memorias"
   },
   {
     id: "medicoes",
@@ -129,13 +127,6 @@ const CAPABILITIES: CapabilityCard[] = [
       "KPIs, indicadores estratégicos, carteira de obras e visão consolidada para diretoria.",
     status: "Em breve",
     icon: BarChart3
-  },
-  {
-    id: "bba-advisor",
-    title: "BBA Advisor",
-    description: "Assistente operacional para destacar pendências, riscos e oportunidades.",
-    status: "Em desenvolvimento",
-    icon: Sparkles
   }
 ];
 
