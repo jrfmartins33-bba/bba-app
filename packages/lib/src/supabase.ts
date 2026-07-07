@@ -1,4 +1,5 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 declare const process: {
   env: {
@@ -31,7 +32,7 @@ if (process.env.NODE_ENV === "development") {
 }
 
 export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl!, supabasePublishableKey!, {
+  ? createBrowserClient(supabaseUrl!, supabasePublishableKey!, {
       auth: {
         autoRefreshToken: true,
         persistSession: true,

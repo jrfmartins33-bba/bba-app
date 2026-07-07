@@ -1,14 +1,24 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { importPlanningSource, type PlanningImportSourceType } from "@bba/bdos-core/services/bba-project-import";
+import { getSupabaseRouteHandlerClient, requireAuthenticatedCompany } from "@/lib/supabase/server";
+import {
+  ensureDefaultEngineeringProject,
+  ensureEngenhariaWorkspace,
+  insertPlanningImport,
+  uploadPlanningImportFile
+} from "@/lib/bdos/repository";
 
 /**
- * BBA Project Studio — Sprint 1 (PARTE 9). Único ponto de contato
- * entre a UI e `@bba/bdos-core/services/bba-project-import`: recebe o
- * arquivo bruto (XML do Microsoft Project ou Excel .xlsx), detecta a
- * fonte por extensão/MIME/conteúdo, chama `importPlanningSource` (que
- * já orquestra a cadeia real) e devolve o snapshot uniforme pronto.
- * Nenhuma regra de negócio vive aqui.
+ * BBA Project Studio — Sprint 1 (PARTE 9), com persistência real desde
+ * a Sprint 13.6. Único ponto de contato entre a UI e
+ * `@bba/bdos-core/services/bba-project-import`: resolve a empresa do
+ * usuário autenticado (via cookie de sessão, Sprint 13.6), garante a
+ * Workspace/Projeto de Engenharia da empresa, grava o arquivo em
+ * Storage e o registro de proveniência em `planning_imports`
+ * (Sprint 13.5), então chama `importPlanningSource` (que já orquestra
+ * a cadeia real) e devolve o snapshot uniforme pronto. Nenhuma regra
+ * de negócio vive aqui.
  *
  * REGRA CRÍTICA: o caminho XML delega inteiramente para a mesma
  * `buildBbaProjectImportSnapshot` do Sprint Zero, através de
@@ -16,6 +26,13 @@ import { importPlanningSource, type PlanningImportSourceType } from "@bba/bdos-c
  * (12/9/9/9/41) continuam exatamente os mesmos.
  */
 export async function POST(request: Request): Promise<NextResponse> {
+  const supabase = getSupabaseRouteHandlerClient();
+  const auth = await requireAuthenticatedCompany(supabase);
+
+  if (!auth) {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+
   let formData: FormData;
 
   try {
@@ -37,17 +54,49 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "unsupported_file_type" }, { status: 400 });
   }
 
+  const { companyId, userId } = auth;
+  const planningImportId = randomUUID();
+  let engineeringProjectId: string;
+
+  try {
+    const workspace = await ensureEngenhariaWorkspace(supabase, companyId);
+    const engineeringProject = await ensureDefaultEngineeringProject(supabase, companyId, workspace.id);
+    engineeringProjectId = engineeringProject.id;
+
+    const storagePath = await uploadPlanningImportFile(supabase, {
+      companyId,
+      engineeringProjectId,
+      planningImportId,
+      fileName: file.name,
+      bytes: buffer,
+      contentType: file.type || "application/octet-stream"
+    });
+
+    await insertPlanningImport(supabase, {
+      id: planningImportId,
+      companyId,
+      engineeringProjectId,
+      sourceType,
+      fileName: file.name,
+      storagePath,
+      uploadedBy: userId
+    });
+  } catch (error) {
+    console.error("[bba-project-import] Falha ao persistir import.", error);
+    return NextResponse.json({ error: "persistence_failed" }, { status: 500 });
+  }
+
   const now = new Date().toISOString();
   const baseInput = {
     fileName: file.name,
-    organizationId: "organization-alpha-engenharia",
-    contractId: "contract-lagoa-do-arroz-001",
-    projectId: "project-lagoa-do-arroz",
-    tenantId: "tenant-alpha-engenharia",
+    organizationId: companyId,
+    contractId: engineeringProjectId,
+    projectId: engineeringProjectId,
+    tenantId: companyId,
     capability: "geospatial-intelligence",
     generatedAt: now,
-    correlationId: `bba-project-import:${randomUUID()}`,
-    actor: "bba-project-import",
+    correlationId: `bba-project-import:${planningImportId}`,
+    actor: userId,
     occurredAt: now,
     asOfDate: now.slice(0, 10),
   };
