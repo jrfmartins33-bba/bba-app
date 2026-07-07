@@ -141,7 +141,8 @@ export const insertPlanningImport = async (
 // normalizado, guardado verbatim como JSONB (ver
 // docs/BDOS_PERSISTENCE_ARCHITECTURE.md, seção 5.2). `dataset` é o
 // `PlanningDataset` completo vindo de `importPlanningSource`; este
-// repository não conhece sua forma interna, só o grava.
+// repository não conhece sua forma interna, só o grava. Retorna o id
+// porque a Camada 3 (decision_snapshots) referencia esta linha.
 export const insertPlanningDataset = async (
   supabase: SupabaseClient,
   params: {
@@ -152,17 +153,63 @@ export const insertPlanningDataset = async (
     detectedType: string;
     dataset: unknown;
   }
-): Promise<void> => {
-  const { error } = await supabase.from("planning_datasets").insert({
-    company_id: params.companyId,
-    engineering_project_id: params.engineeringProjectId,
-    planning_import_id: params.planningImportId,
-    dataset_schema_version: params.datasetSchemaVersion,
-    detected_type: params.detectedType,
-    dataset: params.dataset
-  });
+): Promise<{ id: string }> => {
+  const { data, error } = await supabase
+    .from("planning_datasets")
+    .insert({
+      company_id: params.companyId,
+      engineering_project_id: params.engineeringProjectId,
+      planning_import_id: params.planningImportId,
+      dataset_schema_version: params.datasetSchemaVersion,
+      detected_type: params.detectedType,
+      dataset: params.dataset
+    })
+    .select("id")
+    .single();
 
-  if (error) {
-    throw error;
+  if (error || !data) {
+    throw error ?? new Error("Nao foi possivel gravar o Planning Dataset.");
   }
+
+  return data;
+};
+
+// Camada 3 do pipeline BDOS (Sprint 13.8) — Decision Snapshot, memória
+// técnica imutável (ver docs/BDOS_PERSISTENCE_ARCHITECTURE.md, seção
+// 5.3). `decisions`/`recommendations` são os arrays completos vindos
+// do Decision Engine, gravados verbatim; este repository não conhece
+// sua forma interna.
+export const insertDecisionSnapshot = async (
+  supabase: SupabaseClient,
+  params: {
+    companyId: string;
+    engineeringProjectId: string;
+    planningDatasetId: string;
+    engineVersion: string;
+    triggerReason: "import" | "manual_recalculation" | "scheduled";
+    computedBy: string | null;
+    decisions: unknown;
+    recommendations: unknown;
+  }
+): Promise<{ id: string }> => {
+  const { data, error } = await supabase
+    .from("decision_snapshots")
+    .insert({
+      company_id: params.companyId,
+      engineering_project_id: params.engineeringProjectId,
+      planning_dataset_id: params.planningDatasetId,
+      engine_version: params.engineVersion,
+      trigger_reason: params.triggerReason,
+      computed_by: params.computedBy,
+      decisions: params.decisions,
+      recommendations: params.recommendations
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    throw error ?? new Error("Nao foi possivel gravar o Decision Snapshot.");
+  }
+
+  return data;
 };

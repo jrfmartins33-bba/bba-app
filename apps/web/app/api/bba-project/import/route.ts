@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import {
+  ENGINE_VERSION,
   importPlanningSource,
   PLANNING_DATASET_SCHEMA_VERSION,
   type PlanningImportSourceType
@@ -9,6 +10,7 @@ import { getSupabaseRouteHandlerClient, requireAuthenticatedCompany } from "@/li
 import {
   ensureDefaultEngineeringProject,
   ensureEngenhariaWorkspace,
+  insertDecisionSnapshot,
   insertPlanningDataset,
   insertPlanningImport,
   uploadPlanningImportFile
@@ -16,15 +18,17 @@ import {
 
 /**
  * BBA Project Studio — Sprint 1 (PARTE 9), com persistência real desde
- * a Sprint 13.6/13.7. Único ponto de contato entre a UI e
+ * a Sprint 13.6/13.7/13.8. Único ponto de contato entre a UI e
  * `@bba/bdos-core/services/bba-project-import`: resolve a empresa do
  * usuário autenticado (via cookie de sessão, Sprint 13.6), garante a
  * Workspace/Projeto de Engenharia da empresa, grava o arquivo em
  * Storage e o registro de proveniência em `planning_imports`
  * (Sprint 13.5), chama `importPlanningSource` (que já orquestra a
  * cadeia real), grava o `PlanningDataset` normalizado em
- * `planning_datasets` (Camada 2, Sprint 13.7) e só então devolve o
- * snapshot uniforme pronto. Nenhuma regra de negócio vive aqui.
+ * `planning_datasets` (Camada 2, Sprint 13.7), grava o Decision
+ * Snapshot resultante em `decision_snapshots` (Camada 3, Sprint 13.8,
+ * `trigger_reason='import'`) e só então devolve o snapshot uniforme
+ * pronto. Nenhuma regra de negócio vive aqui.
  *
  * REGRA CRÍTICA: o caminho XML delega inteiramente para a mesma
  * `buildBbaProjectImportSnapshot` do Sprint Zero, através de
@@ -113,7 +117,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       : importPlanningSource({ ...baseInput, sourceType, excelBytes: buffer });
 
   try {
-    await insertPlanningDataset(supabase, {
+    const planningDataset = await insertPlanningDataset(supabase, {
       companyId,
       engineeringProjectId,
       planningImportId,
@@ -121,8 +125,19 @@ export async function POST(request: Request): Promise<NextResponse> {
       detectedType: snapshot.detectedPlanningType,
       dataset: snapshot.planningDataset
     });
+
+    await insertDecisionSnapshot(supabase, {
+      companyId,
+      engineeringProjectId,
+      planningDatasetId: planningDataset.id,
+      engineVersion: ENGINE_VERSION,
+      triggerReason: "import",
+      computedBy: userId,
+      decisions: snapshot.decisions,
+      recommendations: snapshot.recommendations
+    });
   } catch (error) {
-    console.error("[bba-project-import] Falha ao persistir planning dataset.", error);
+    console.error("[bba-project-import] Falha ao persistir planning dataset/decision snapshot.", error);
     return NextResponse.json({ error: "persistence_failed" }, { status: 500 });
   }
 

@@ -18,3 +18,4 @@ export { simulateScheduleDelay } from "./living-schedule";
 export type { SimulateScheduleDelayInput, SimulateScheduleDelayResult } from "./living-schedule.types";
 
 export { PLANNING_DATASET_SCHEMA_VERSION } from "../../domain/schedule-management";
+export { ENGINE_VERSION } from "../../engines/decision/engine-version";
