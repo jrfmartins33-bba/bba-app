@@ -1,5 +1,8 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
 import {
   EngineeringKpiUnit,
   EngineeringMilestoneStatus,
@@ -703,7 +706,7 @@ function structureInputFixture(
 }
 
 function readDomainSourceFiles(): string {
-  const domainDir = resolve(__dirname);
+  const domainDir = resolve(CURRENT_DIR);
   return listTsFiles(domainDir)
     .filter((file) => !file.endsWith(".test.ts"))
     .map((file) => readFileSync(file, "utf8"))

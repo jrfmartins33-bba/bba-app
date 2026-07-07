@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { BusinessFact } from "../../../business-fact";
 import {
   attachedEvidenceFixture,
@@ -26,8 +27,9 @@ import {
 } from "./index";
 import type { EngineeringApplicationSnapshot } from "./engineering-application-snapshot.types";
 
-const SRC_ROOT = resolve(__dirname, "../../../..");
-const ADAPTER_DIR = resolve(__dirname);
+const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
+const SRC_ROOT = resolve(CURRENT_DIR, "../../../..");
+const ADAPTER_DIR = resolve(CURRENT_DIR);
 const OPERATIONAL_DOMAINS = [
   "contract-management",
   "project-management",

@@ -21,8 +21,10 @@
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const SRC_ROOT = resolve(__dirname, "..");
+const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
+const SRC_ROOT = resolve(CURRENT_DIR, "..");
 
 const OPERATIONAL_DOMAINS = [
   "contract-management",

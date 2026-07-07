@@ -10,6 +10,7 @@
     "build:web": "pnpm --filter @bba/web build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
+    "test": "node scripts/run-tests.mjs",
     "mobile": "pnpm --filter @bba/mobile start"
   },
   "devDependencies": {

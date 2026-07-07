@@ -20,5 +20,3 @@ declare module "node:path" {
   export function resolve(...segments: string[]): string;
   export function relative(from: string, to: string): string;
 }
-
-declare const __dirname: string;
