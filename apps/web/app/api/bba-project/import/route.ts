@@ -6,7 +6,8 @@ import {
   PLANNING_DATASET_SCHEMA_VERSION,
   type PlanningImportSourceType
 } from "@bba/bdos-core/services/bba-project-import";
-import { narrateEngineeringBriefing } from "@bba/bdos-core/advisor/claude-narrator";
+import { narrateEngineeringBriefing, renderEngineeringAdvisorSummaryToText } from "@bba/bdos-core/advisor/claude-narrator";
+import { validateEngineeringAdvisorSummary } from "@bba/bdos-core/advisor/advisor-response-validator";
 import { computeHealthScore } from "@/components/bba-project/bba-project-insights";
 import { getSupabaseRouteHandlerClient, requireAuthenticatedCompany } from "@/lib/supabase/server";
 import { getEngineeringAdvisorBriefing } from "@/lib/bdos/advisor";
@@ -192,13 +193,18 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     const narration = await narrateEngineeringBriefing(briefing.context);
+    const validation = validateEngineeringAdvisorSummary(narration.raw, briefing.context);
+
+    if (!validation.valid) {
+      throw new Error(`Resposta do Claude reprovada na validação: ${validation.reason}`);
+    }
 
     await insertAdvisorNarrative(supabase, {
       companyId,
       engineeringProjectId,
       decisionSnapshotId,
       model: narration.model,
-      narrative: narration.narrative
+      narrative: renderEngineeringAdvisorSummaryToText(validation.summary)
     });
   } catch (error) {
     console.error("[bba-project-import] Falha ao gerar narrativa do Advisor (fallback: itens template).", error);

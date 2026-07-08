@@ -8,15 +8,19 @@
     "./services/bba-project-import": "./src/services/bba-project-import/index.ts",
     "./advisor/claude-narrator": "./src/advisor/claude-narrator.ts",
     "./advisor/advisor-context.types": "./src/advisor/advisor-context.types.ts",
-    "./advisor/advisor-context-builder": "./src/advisor/advisor-context-builder.ts"
+    "./advisor/advisor-context-builder": "./src/advisor/advisor-context-builder.ts",
+    "./advisor/advisor-summary.types": "./src/advisor/advisor-summary.types.ts",
+    "./advisor/advisor-response-validator": "./src/advisor/advisor-response-validator.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "advisor:live-check": "tsx src/advisor/advisor-live-check.ts"
   },
   "devDependencies": {
     "typescript": "^5.7.2"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.110.0"
+    "@anthropic-ai/sdk": "^0.110.0",
+    "@next/env": "14.2.23"
   }
 }
