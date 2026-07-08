@@ -186,14 +186,12 @@ export async function POST(request: Request): Promise<NextResponse> {
   // devolve narrative: null e a Home usa os itens template determinísticos.
   try {
     const briefing = await getEngineeringAdvisorBriefing(supabase, companyId);
-    const narration = await narrateEngineeringBriefing({
-      engineeringProjectName: briefing.engineeringProjectName ?? "Projeto de Engenharia",
-      items: briefing.items.map((item) => ({
-        severity: item.severity,
-        headline: item.headline,
-        detail: item.detail
-      }))
-    });
+
+    if (!briefing.context) {
+      throw new Error("Advisor sem contexto rico (nenhum decision snapshot disponível ainda).");
+    }
+
+    const narration = await narrateEngineeringBriefing(briefing.context);
 
     await insertAdvisorNarrative(supabase, {
       companyId,

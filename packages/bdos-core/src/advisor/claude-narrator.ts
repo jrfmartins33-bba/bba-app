@@ -1,10 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
+import type { EngineeringAdvisorContext } from "./advisor-context.types";
 
-// BBA Advisor — narrador via Claude (Sprint 13.12, "diferencial BBA" V1).
-// Camada de redação, não de cálculo: recebe só os itens que
-// getEngineeringAdvisorBriefing() já produziu (apps/web/lib/bdos/advisor.ts)
+// BBA Advisor — narrador via Claude (Sprint 13.12, "diferencial BBA" V1;
+// Sprint 14.1 do Epic 14 trocou o input pobre — EngineeringAdvisorItem[] —
+// por EngineeringAdvisorContext, ver advisor-context-builder.ts). Camada
+// de redação, não de cálculo: recebe só o contexto já filtrado/resolvido
+// pelo AdvisorContextBuilder (apps/web/lib/bdos/advisor.ts monta e chama)
 // e devolve uma síntese em linguagem natural. Nunca lê banco, nunca chama
-// outro Engine, nunca recebe nada além do JSON fechado abaixo — a mesma
+// outro Engine, nunca recebe Decision[]/Recommendation[] cru — a mesma
 // regra de fronteira que já vale para o resto do Advisor (ver
 // docs/PLATFORM_ARCHITECTURE.md, seção 1: "Advisor... nunca cria regra de
 // negócio, só interpreta o que os Engines já calcularam") vale para a LLM.
@@ -20,22 +23,12 @@ const MAX_OUTPUT_TOKENS = 400;
 const SYSTEM_PROMPT = `Você é o BBA Advisor, um narrador que resume o estado de um projeto de engenharia para o gestor da empresa cliente.
 
 REGRAS INEGOCIÁVEIS:
-- Use exclusivamente os fatos fornecidos no JSON abaixo. Nunca invente número, data, nome de atividade ou valor que não esteja explicitamente presente.
+- Use exclusivamente os fatos fornecidos no JSON abaixo (snapshot, decisions, recommendations, evidenceIndex, historySummary). Nunca invente número, data, nome de atividade ou valor que não esteja explicitamente presente.
+- Dentro de "recommendations", os campos "traceability.businessFactIds" e "traceability.evidenceReferences" são apenas referências de rastreabilidade interna — nunca descreva ou infira o conteúdo delas; use somente o que já está explícito em "decisions" e "evidenceIndex".
 - Se um dado necessário não estiver no JSON, diga que a informação não está disponível — nunca estime ou infira um valor ausente.
 - Não dê conselho jurídico, financeiro ou contratual além do que os itens já descrevem.
 - Escreva em português do Brasil, tom direto e executivo, sem jargão técnico.
 - No máximo 3 parágrafos curtos. Comece pelo que exige ação, se houver algo crítico ou de atenção.`;
-
-export interface EngineeringAdvisorNarrationItem {
-  readonly severity: "critical" | "attention" | "info" | "trend";
-  readonly headline: string;
-  readonly detail: string;
-}
-
-export interface EngineeringAdvisorNarrationInput {
-  readonly engineeringProjectName: string;
-  readonly items: ReadonlyArray<EngineeringAdvisorNarrationItem>;
-}
 
 export interface EngineeringAdvisorNarrationResult {
   readonly narrative: string;
@@ -59,7 +52,7 @@ function getClient(): Anthropic {
 }
 
 export async function narrateEngineeringBriefing(
-  input: EngineeringAdvisorNarrationInput
+  context: EngineeringAdvisorContext
 ): Promise<EngineeringAdvisorNarrationResult> {
   const model = process.env.ANTHROPIC_ADVISOR_MODEL?.trim() || DEFAULT_MODEL;
   const client = getClient();
@@ -73,7 +66,7 @@ export async function narrateEngineeringBriefing(
     messages: [
       {
         role: "user",
-        content: `Projeto: ${input.engineeringProjectName}\n\nFatos (JSON, única fonte permitida):\n${JSON.stringify(input.items)}`
+        content: `Contexto do Advisor (JSON, única fonte permitida):\n${JSON.stringify(context)}`
       }
     ]
   });
