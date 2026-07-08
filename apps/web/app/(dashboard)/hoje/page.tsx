@@ -522,8 +522,8 @@ function EngineeringAdvisorSection({ briefing }: { briefing: EngineeringAdvisorB
     return (
       <section className="bba-card bba-animate-in" style={{ padding: '20px 24px', display: 'grid', gap: '8px' }}>
         <span className="bba-eyebrow">Advisor de Engenharia</span>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.6 }}>
-          Nenhum ponto exige atenção em {briefing.engineeringProjectName} hoje.
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
+          {briefing.narrative ?? `Nenhum ponto exige atenção em ${briefing.engineeringProjectName} hoje.`}
         </p>
       </section>
     )
@@ -535,6 +535,22 @@ function EngineeringAdvisorSection({ briefing }: { briefing: EngineeringAdvisorB
         <span className="bba-eyebrow">Advisor de Engenharia</span>
         <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{briefing.engineeringProjectName}</span>
       </div>
+      {briefing.narrative && (
+        <p
+          style={{
+            color: 'var(--text-primary)',
+            fontSize: '13px',
+            lineHeight: 1.65,
+            whiteSpace: 'pre-line',
+            padding: '12px 14px',
+            border: '1px solid var(--app-divider)',
+            borderRadius: '6px',
+            background: 'rgba(255,255,255,0.03)',
+          }}
+        >
+          {briefing.narrative}
+        </p>
+      )}
       <div style={{ display: 'grid', gap: '12px' }}>
         {briefing.items.map((item, index) => {
           const meta = ENGINEERING_SEVERITY_META[item.severity]

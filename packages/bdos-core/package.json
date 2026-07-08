@@ -5,12 +5,16 @@
   "type": "module",
   "exports": {
     "./services/geospatial-product-integration": "./src/services/geospatial-product-integration/index.ts",
-    "./services/bba-project-import": "./src/services/bba-project-import/index.ts"
+    "./services/bba-project-import": "./src/services/bba-project-import/index.ts",
+    "./advisor/claude-narrator": "./src/advisor/claude-narrator.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0"
   }
 }

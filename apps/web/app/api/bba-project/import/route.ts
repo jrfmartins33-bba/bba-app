@@ -6,11 +6,14 @@ import {
   PLANNING_DATASET_SCHEMA_VERSION,
   type PlanningImportSourceType
 } from "@bba/bdos-core/services/bba-project-import";
+import { narrateEngineeringBriefing } from "@bba/bdos-core/advisor/claude-narrator";
 import { computeHealthScore } from "@/components/bba-project/bba-project-insights";
 import { getSupabaseRouteHandlerClient, requireAuthenticatedCompany } from "@/lib/supabase/server";
+import { getEngineeringAdvisorBriefing } from "@/lib/bdos/advisor";
 import {
   ensureDefaultEngineeringProject,
   ensureEngenhariaWorkspace,
+  insertAdvisorNarrative,
   insertDecisionSnapshot,
   insertPlanningDataset,
   insertPlanningImport,
@@ -132,6 +135,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       ? importPlanningSource({ ...baseInput, sourceType, xml: new TextDecoder("utf-8").decode(buffer) })
       : importPlanningSource({ ...baseInput, sourceType, excelBytes: buffer });
 
+  let decisionSnapshotId: string;
+
   try {
     const planningDataset = await insertPlanningDataset(supabase, {
       companyId,
@@ -156,6 +161,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       healthScore: healthScore.score,
       healthScoreLevel: healthScore.level
     });
+    decisionSnapshotId = decisionSnapshot.id;
 
     for (const recommendation of snapshot.recommendations) {
       await persistRecommendation(supabase, {
@@ -171,6 +177,33 @@ export async function POST(request: Request): Promise<NextResponse> {
   } catch (error) {
     console.error("[bba-project-import] Falha ao persistir planning dataset/decision snapshot/recommendations.", error);
     return NextResponse.json({ error: "persistence_failed" }, { status: 500 });
+  }
+
+  // BBA Advisor — narrativa via Claude (Sprint 13.12). Deliberadamente FORA
+  // do try/catch acima: uma falha aqui (rede, quota, ANTHROPIC_API_KEY
+  // ausente) nunca pode derrubar um import que já persistiu com sucesso.
+  // Sem narrativa gravada, getEngineeringAdvisorBriefing() simplesmente
+  // devolve narrative: null e a Home usa os itens template determinísticos.
+  try {
+    const briefing = await getEngineeringAdvisorBriefing(supabase, companyId);
+    const narration = await narrateEngineeringBriefing({
+      engineeringProjectName: briefing.engineeringProjectName ?? "Projeto de Engenharia",
+      items: briefing.items.map((item) => ({
+        severity: item.severity,
+        headline: item.headline,
+        detail: item.detail
+      }))
+    });
+
+    await insertAdvisorNarrative(supabase, {
+      companyId,
+      engineeringProjectId,
+      decisionSnapshotId,
+      model: narration.model,
+      narrative: narration.narrative
+    });
+  } catch (error) {
+    console.error("[bba-project-import] Falha ao gerar narrativa do Advisor (fallback: itens template).", error);
   }
 
   return NextResponse.json(snapshot);

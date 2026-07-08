@@ -40,6 +40,7 @@ export interface EngineeringAdvisorBriefing {
   readonly engineeringProjectId: string | null;
   readonly engineeringProjectName: string | null;
   readonly items: ReadonlyArray<EngineeringAdvisorItem>;
+  readonly narrative: string | null;
 }
 
 const PROJECT_STUDIO_HREF = "/bba-project";
@@ -61,7 +62,7 @@ export const getEngineeringAdvisorBriefing = async (
   }
 
   if (!latestSnapshot) {
-    return { hasData: false, engineeringProjectId: null, engineeringProjectName: null, items: [] };
+    return { hasData: false, engineeringProjectId: null, engineeringProjectName: null, items: [], narrative: null };
   }
 
   const engineeringProjectId = latestSnapshot.engineering_project_id as string;
@@ -75,7 +76,7 @@ export const getEngineeringAdvisorBriefing = async (
 
   const staleThreshold = new Date(Date.now() - STALE_RECOMMENDATION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const [previousSnapshotResult, openRecommendationsResult, staleCountResult, latestImportResult] =
+  const [previousSnapshotResult, openRecommendationsResult, staleCountResult, latestImportResult, narrativeResult] =
     await Promise.all([
       supabase
         .from("decision_snapshots")
@@ -102,6 +103,11 @@ export const getEngineeringAdvisorBriefing = async (
         .eq("engineering_project_id", engineeringProjectId)
         .order("uploaded_at", { ascending: false })
         .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("advisor_narratives")
+        .select("narrative")
+        .eq("decision_snapshot_id", latestSnapshot.id as string)
         .maybeSingle()
     ]);
 
@@ -109,6 +115,7 @@ export const getEngineeringAdvisorBriefing = async (
   if (openRecommendationsResult.error) throw openRecommendationsResult.error;
   if (staleCountResult.error) throw staleCountResult.error;
   if (latestImportResult.error) throw latestImportResult.error;
+  if (narrativeResult.error) throw narrativeResult.error;
 
   const items: EngineeringAdvisorItem[] = [];
 
@@ -184,5 +191,11 @@ export const getEngineeringAdvisorBriefing = async (
     });
   }
 
-  return { hasData: true, engineeringProjectId, engineeringProjectName, items };
+  return {
+    hasData: true,
+    engineeringProjectId,
+    engineeringProjectName,
+    items,
+    narrative: narrativeResult.data?.narrative ?? null
+  };
 };
