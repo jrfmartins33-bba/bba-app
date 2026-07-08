@@ -263,3 +263,31 @@ export const persistRecommendation = async (
 
   throw error;
 };
+
+// BBA Advisor — narrativa via Claude (Sprint 13.12). Uma linha por
+// decision_snapshot (índice único `advisor_narratives_snapshot_unique`);
+// chamado no máximo uma vez por import, logo após o snapshot ser gravado.
+// Se `narrateEngineeringBriefing` (packages/bdos-core) já falhou, esta
+// função nunca é chamada — não há "narrativa vazia" gravada.
+export const insertAdvisorNarrative = async (
+  supabase: SupabaseClient,
+  params: {
+    companyId: string;
+    engineeringProjectId: string;
+    decisionSnapshotId: string;
+    model: string;
+    narrative: string;
+  }
+): Promise<void> => {
+  const { error } = await supabase.from("advisor_narratives").insert({
+    company_id: params.companyId,
+    engineering_project_id: params.engineeringProjectId,
+    decision_snapshot_id: params.decisionSnapshotId,
+    model: params.model,
+    narrative: params.narrative
+  });
+
+  if (error) {
+    throw error;
+  }
+};
