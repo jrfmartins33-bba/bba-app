@@ -19,6 +19,10 @@ import type {
 const STUDIO_IDS = ["bba-project", "geoespacial", "evidencias", "memorias"] as const;
 export type CopilotStudioId = (typeof STUDIO_IDS)[number];
 
+export function isCopilotStudioId(value: string): value is CopilotStudioId {
+  return (STUDIO_IDS as ReadonlyArray<string>).includes(value);
+}
+
 export const createCopilotConversation = async (
   supabase: SupabaseClient,
   params: {
@@ -114,25 +118,29 @@ export const appendCopilotAssistantMessage = async (
   return data;
 };
 
+// Linha completa (para a UI reconstruir o histórico exibido, incluindo
+// reasoning_chain/confidence/explainability de turnos passados) — role+
+// content é só a fatia que toCopilotConversationHistory extrai para
+// replay no próximo turno (ver copilot-turn-builder.ts); os campos
+// congelados existem para auditoria/exibição, não para re-alimentar a
+// conversa (ver DECISION_COPILOT.md).
 export interface CopilotMessageRow {
   readonly id: string;
   readonly role: CopilotMessageRole;
   readonly content: string;
+  readonly reasoningChain: unknown;
+  readonly confidence: unknown;
+  readonly explainability: unknown;
   readonly createdAt: string;
 }
 
-// Histórico para replay no próximo turno (ver copilot-turn-builder.ts) —
-// só role+content, na ordem em que ocorreram. Os campos congelados
-// (context_snapshot etc.) não fazem parte do histórico reenviado ao
-// Claude a cada turno; eles existem para auditoria, não para
-// re-alimentar a conversa (ver DECISION_COPILOT.md).
 export const listCopilotMessages = async (
   supabase: SupabaseClient,
   conversationId: string
 ): Promise<ReadonlyArray<CopilotMessageRow>> => {
   const { data, error } = await supabase
     .from("copilot_messages")
-    .select("id, role, content, created_at")
+    .select("id, role, content, reasoning_chain, confidence, explainability, created_at")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });
 
@@ -144,6 +152,9 @@ export const listCopilotMessages = async (
     id: row.id as string,
     role: row.role as CopilotMessageRole,
     content: row.content as string,
+    reasoningChain: row.reasoning_chain,
+    confidence: row.confidence,
+    explainability: row.explainability,
     createdAt: row.created_at as string
   }));
 };

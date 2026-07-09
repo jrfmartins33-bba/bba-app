@@ -1,0 +1,156 @@
+import { NextResponse } from "next/server";
+import { runCopilotTurn } from "@bba/bdos-core/advisor/copilot/copilot-turn-builder";
+import { validateCopilotAnswer } from "@bba/bdos-core/advisor/copilot/copilot-response-validator";
+import { assembleCopilotAssistantTurn } from "@bba/bdos-core/advisor/copilot/copilot-turn-assembler";
+import { getSupabaseRouteHandlerClient, requireAuthenticatedCompany } from "@/lib/supabase/server";
+import { getEngineeringAdvisorBriefing } from "@/lib/bdos/advisor";
+import { getEngineeringAdvisorHistoricalFacts } from "@/lib/bdos/advisor-historical-facts-repository";
+import {
+  appendCopilotAssistantMessage,
+  appendCopilotUserMessage,
+  createCopilotConversation,
+  isCopilotStudioId,
+  listCopilotMessages,
+  toCopilotConversationHistory
+} from "@/lib/bdos/copilot-repository";
+
+/**
+ * Decision Copilot (Epic 15, Fase 1) — único turno de conversa: recebe
+ * a pergunta, monta o contexto (mesmo pipeline que já alimenta a Home),
+ * chama o Claude, valida e persiste. Nenhum cálculo de negócio novo
+ * aqui — igual ao resto do Advisor, esta rota só orquestra o que
+ * bdos-core e o repository já decidem.
+ *
+ * Fase 1 assume uma única engineering_project ativa por empresa (mesma
+ * limitação que o resto da plataforma hoje — ver
+ * docs/PLATFORM_ARCHITECTURE.md secao 9.3, "Workspace ainda não é um
+ * seletor real de múltiplos projetos"). Por isso `projectId` no corpo
+ * da requisição é validado contra o projeto que
+ * getEngineeringAdvisorBriefing já resolve para a empresa autenticada,
+ * em vez de escolher entre vários — um mismatch aqui é sinal de bug no
+ * cliente, não uma segunda engineering_project válida sendo ignorada.
+ */
+interface CopilotMessageRequestBody {
+  readonly conversationId?: string;
+  readonly studioId: string;
+  readonly projectId: string;
+  readonly message: string;
+}
+
+function isValidRequestBody(body: unknown): body is CopilotMessageRequestBody {
+  if (typeof body !== "object" || body === null) {
+    return false;
+  }
+
+  const candidate = body as Record<string, unknown>;
+
+  return (
+    typeof candidate.studioId === "string" &&
+    typeof candidate.projectId === "string" &&
+    typeof candidate.message === "string" &&
+    candidate.message.trim().length > 0 &&
+    (candidate.conversationId === undefined || typeof candidate.conversationId === "string")
+  );
+}
+
+export async function POST(request: Request): Promise<NextResponse> {
+  const supabase = getSupabaseRouteHandlerClient();
+  const auth = await requireAuthenticatedCompany(supabase);
+
+  if (!auth) {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "invalid_json_body" }, { status: 400 });
+  }
+
+  if (!isValidRequestBody(body)) {
+    return NextResponse.json({ error: "invalid_copilot_message_body" }, { status: 400 });
+  }
+
+  if (!isCopilotStudioId(body.studioId)) {
+    return NextResponse.json({ error: "invalid_studio_id" }, { status: 400 });
+  }
+
+  const briefing = await getEngineeringAdvisorBriefing(supabase, auth.companyId);
+
+  if (!briefing.hasData || !briefing.context) {
+    return NextResponse.json({ error: "no_advisor_context_available" }, { status: 409 });
+  }
+
+  if (briefing.engineeringProjectId !== body.projectId) {
+    return NextResponse.json({ error: "project_id_mismatch" }, { status: 409 });
+  }
+
+  try {
+    const conversationId =
+      body.conversationId ??
+      (
+        await createCopilotConversation(supabase, {
+          companyId: auth.companyId,
+          engineeringProjectId: body.projectId,
+          studioId: body.studioId,
+          createdBy: auth.userId
+        })
+      ).id;
+
+    const priorMessages = body.conversationId ? await listCopilotMessages(supabase, conversationId) : [];
+    const conversationHistory = toCopilotConversationHistory(priorMessages);
+
+    await appendCopilotUserMessage(supabase, {
+      companyId: auth.companyId,
+      conversationId,
+      content: body.message
+    });
+
+    const historicalFacts = await getEngineeringAdvisorHistoricalFacts(supabase, briefing.context);
+
+    const { raw, model, promptContext } = await runCopilotTurn(
+      briefing.context,
+      historicalFacts,
+      conversationHistory,
+      body.message
+    );
+
+    const validation = validateCopilotAnswer(raw, briefing.context);
+
+    if (!validation.valid) {
+      console.error("[copilot-message] Resposta do Claude reprovada pelo validator.", validation.reason);
+      return NextResponse.json({ error: "copilot_answer_validation_failed", conversationId }, { status: 502 });
+    }
+
+    const turn = assembleCopilotAssistantTurn(
+      validation.insight,
+      briefing.context,
+      historicalFacts,
+      promptContext,
+      briefing.decisionSnapshotId,
+      model
+    );
+
+    const assistantMessage = await appendCopilotAssistantMessage(supabase, {
+      companyId: auth.companyId,
+      conversationId,
+      turn
+    });
+
+    return NextResponse.json({
+      conversationId,
+      message: {
+        id: assistantMessage.id,
+        role: "assistant" as const,
+        content: turn.content,
+        reasoningChain: turn.reasoningChain,
+        confidence: turn.confidence,
+        explainability: turn.explainability
+      }
+    });
+  } catch (error) {
+    console.error("[copilot-message] Falha ao processar o turno.", error);
+    return NextResponse.json({ error: "copilot_turn_failed" }, { status: 500 });
+  }
+}
