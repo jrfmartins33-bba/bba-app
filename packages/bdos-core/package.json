@@ -6,6 +6,7 @@
   "exports": {
     "./services/geospatial-product-integration": "./src/services/geospatial-product-integration/index.ts",
     "./services/bba-project-import": "./src/services/bba-project-import/index.ts",
+    "./services/execution-management": "./src/services/execution-management/index.ts",
     "./advisor/claude-narrator": "./src/advisor/claude-narrator.ts",
     "./advisor/advisor-context.types": "./src/advisor/advisor-context.types.ts",
     "./advisor/advisor-context-builder": "./src/advisor/advisor-context-builder.ts",
