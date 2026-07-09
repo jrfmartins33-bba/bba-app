@@ -212,6 +212,58 @@ Toda implementação deste princípio (o modelo de `ScheduleActivity`,
 dependências, caminho crítico, linha de base, curva S e o Importador
 de cronogramas) está descrita em `packages/bdos-core/docs/BBA_PROJECT.md`.
 
+## PRINCIPLE 006 — No Isolated Task
+
+Nenhuma `ExecutionTask` pode existir sem uma cadeia causal auditável
+completa:
+
+```
+Decision → Recommendation → Playbook → ActionPlan → Action → ExecutionTask → EvidenceReference[]
+```
+
+Uma `ExecutionTask` sem uma `Action` de origem não é uma versão mais
+simples do modelo — é um modelo diferente (tarefa operacional livre),
+que não pertence a este agregado. Se um dia esse segundo modelo for
+necessário, ele nasce como um domínio novo, num Epic novo — nunca como
+uma ramificação condicional dentro do Execution Engine.
+
+**Por que este princípio existe.** `engines/decision/action-plan` já
+produz `ActionPlan`/`Action` em produção, mas `ActionPlanStatus` só
+tem o valor `"created"` — a cadeia de rastreabilidade que o BDOS já
+mantém ponta a ponta (`Decision` → `Recommendation` → `Playbook` →
+`ActionPlan` → `Action`) simplesmente para antes de chegar à execução
+real. Sem esta regra, o Execution Engine (Epic 16) poderia nascer como
+um gerenciador de tarefas genérico — qualquer tarefa, criada por
+qualquer pessoa, sem justificativa auditável — o que romperia
+exatamente a cadeia que PRINCIPLE 001 (Full Traceability) já exige
+para todo indicador da plataforma. Este princípio estende essa mesma
+exigência até a execução em campo, mesma disciplina de PRINCIPLE 005
+("No Isolated Activity") aplicada um nível adiante.
+
+**Reconciliação com PRINCIPLE 005.** PRINCIPLE 005 garante que nenhuma
+`ScheduleActivity` exista isolada do Decision Context. PRINCIPLE 006
+garante o mesmo um passo à frente na cadeia: nenhuma `ExecutionTask`
+existe isolada de uma `Action` já aprovada. Uma `ExecutionTask` pode
+referenciar, opcionalmente, uma `ScheduleActivity` — nunca a altera; a
+propriedade de `ScheduleActivity`/`PlanningDataset` continua
+exclusivamente do Project Studio.
+
+**Fronteiras adicionais que a implementação deste princípio deve
+respeitar** (detalhadas em `packages/bdos-core/docs/EXECUTION_ENGINE.md`):
+o Decision Engine nunca encerra uma `ExecutionTask` — encerramento
+("concluído operacional") é prerrogativa exclusiva do Execution
+Engine; o efeito medido depois pelo Decision Engine é um conceito
+separado (`ImpactConfirmed`), nunca uma condição de fechamento;
+evidência nunca é armazenada pelo Execution Engine, só referenciada
+(`EvidenceReference[]` apontando para o Studio de Evidências, mesmo
+padrão que `Decision.evidence`/`Recommendation.traceability.
+evidenceReferences` já usam).
+
+Toda implementação deste princípio (o modelo de `ExecutionWorkflow`/
+`ExecutionTask`, fronteiras com Project Studio, Decision Engine e o
+Decision Copilot, e o faseamento do Epic 16) está descrita em
+`packages/bdos-core/docs/EXECUTION_ENGINE.md`.
+
 ---
 
 ## Estado de implementação (UI Sprint 7 — Geospatial Engine MVP)
