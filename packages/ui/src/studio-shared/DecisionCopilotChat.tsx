@@ -110,6 +110,16 @@ export function DecisionCopilotChat({ studioId, className }: DecisionCopilotChat
         return;
       }
 
+      if (response.status === 503) {
+        setUnavailableReason(
+          "O BBA Advisor está temporariamente indisponível por limitação do provedor de IA. Nenhuma decisão foi alterada."
+        );
+        setMessages((current) =>
+          current.map((message) => (message.id === userMessage.id ? { ...message, failed: true } : message))
+        );
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(`copilot_message_failed:${response.status}`);
       }

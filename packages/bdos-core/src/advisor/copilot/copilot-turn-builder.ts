@@ -1,4 +1,4 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicClient } from "../anthropic-client";
 import type { EngineeringAdvisorContext } from "../advisor-context.types";
 import type { EngineeringAdvisorHistoricalFacts } from "../advisor-historical-facts.types";
@@ -129,6 +129,13 @@ export interface CopilotTurnRawResult {
   readonly raw: unknown;
   readonly model: string;
   readonly promptContext: EngineeringAdvisorPromptContext;
+}
+
+// Erro vindo do próprio SDK Anthropic (billing/crédito, rate limit,
+// indisponibilidade do provedor) — distinto de um bug no nosso código,
+// para a rota decidir uma resposta HTTP e uma mensagem de UI diferentes.
+export function isAnthropicProviderError(error: unknown): boolean {
+  return error instanceof Anthropic.APIError;
 }
 
 export async function runCopilotTurn(
