@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { runCopilotTurn } from "@bba/bdos-core/advisor/copilot/copilot-turn-builder";
-import { validateCopilotAnswer } from "@bba/bdos-core/advisor/copilot/copilot-response-validator";
-import { assembleCopilotAssistantTurn } from "@bba/bdos-core/advisor/copilot/copilot-turn-assembler";
+import { resolveCopilotTurn } from "@bba/bdos-core/advisor/copilot/copilot-turn-orchestrator";
 import { getSupabaseRouteHandlerClient, requireAuthenticatedCompany } from "@/lib/supabase/server";
 import { getEngineeringAdvisorBriefing } from "@/lib/bdos/advisor";
 import { getEngineeringAdvisorHistoricalFacts } from "@/lib/bdos/advisor-historical-facts-repository";
@@ -15,10 +13,11 @@ import {
 } from "@/lib/bdos/copilot-repository";
 
 /**
- * Decision Copilot (Epic 15, Fase 1) — único turno de conversa: recebe
- * a pergunta, monta o contexto (mesmo pipeline que já alimenta a Home),
- * chama o Claude, valida e persiste. Nenhum cálculo de negócio novo
- * aqui — igual ao resto do Advisor, esta rota só orquestra o que
+ * Decision Copilot (Epic 15) — único turno de conversa: recebe a
+ * pergunta, delega a `resolveCopilotTurn` (bdos-core) a decisão de
+ * como respondê-la — determinística (Intent Router, Fase 2) ou via
+ * Claude (Fase 1) — e persiste o resultado. Nenhum cálculo de negócio
+ * novo aqui — igual ao resto do Advisor, esta rota só orquestra o que
  * bdos-core e o repository já decidem.
  *
  * Fase 1 assume uma única engineering_project ativa por empresa (mesma
@@ -115,28 +114,20 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const historicalFacts = await getEngineeringAdvisorHistoricalFacts(supabase, briefing.context);
 
-    const { raw, model, promptContext } = await runCopilotTurn(
+    const outcome = await resolveCopilotTurn(
       briefing.context,
       historicalFacts,
       conversationHistory,
-      body.message
+      body.message,
+      briefing.decisionSnapshotId
     );
 
-    const validation = validateCopilotAnswer(raw, briefing.context);
-
-    if (!validation.valid) {
-      console.error("[copilot-message] Resposta do Claude reprovada pelo validator.", validation.reason);
+    if (outcome.kind === "validation_failed") {
+      console.error("[copilot-message] Resposta do Claude reprovada pelo validator.", outcome.reason);
       return NextResponse.json({ error: "copilot_answer_validation_failed", conversationId }, { status: 502 });
     }
 
-    const turn = assembleCopilotAssistantTurn(
-      validation.insight,
-      briefing.context,
-      historicalFacts,
-      promptContext,
-      briefing.decisionSnapshotId,
-      model
-    );
+    const turn = outcome.turn;
 
     const assistantMessage = await appendCopilotAssistantMessage(supabase, {
       companyId: auth.companyId,
