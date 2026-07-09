@@ -17,7 +17,12 @@ export type EngineeringAdvisorConfidenceReason =
   | "all_recommendations_traceable"
   | "some_recommendations_untraceable"
   | "evidence_complete"
-  | "evidence_incomplete";
+  | "evidence_incomplete"
+  // Decision Copilot (Epic 15, Fase 2) — turno resolvido de forma
+  // determinística (Clarifying Questions, unsupported_action), sem
+  // insight validado a avaliar. Ver DECISION_COPILOT_PHASE2.md §2/§6.
+  | "clarifying_question"
+  | "unsupported_action_request";
 
 export interface EngineeringAdvisorConfidenceMetrics {
   readonly insightCount: number;

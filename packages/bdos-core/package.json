@@ -19,7 +19,12 @@
     "./advisor/copilot/copilot-turn.types": "./src/advisor/copilot/copilot-turn.types.ts",
     "./advisor/copilot/copilot-turn-builder": "./src/advisor/copilot/copilot-turn-builder.ts",
     "./advisor/copilot/copilot-response-validator": "./src/advisor/copilot/copilot-response-validator.ts",
-    "./advisor/copilot/copilot-turn-assembler": "./src/advisor/copilot/copilot-turn-assembler.ts"
+    "./advisor/copilot/copilot-turn-assembler": "./src/advisor/copilot/copilot-turn-assembler.ts",
+    "./advisor/copilot/copilot-candidates": "./src/advisor/copilot/copilot-candidates.ts",
+    "./advisor/copilot/copilot-reasoning-chain": "./src/advisor/copilot/copilot-reasoning-chain.ts",
+    "./advisor/copilot/copilot-deterministic-turn-builder": "./src/advisor/copilot/copilot-deterministic-turn-builder.ts",
+    "./advisor/copilot/copilot-intent-router": "./src/advisor/copilot/copilot-intent-router.ts",
+    "./advisor/copilot/copilot-turn-orchestrator": "./src/advisor/copilot/copilot-turn-orchestrator.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

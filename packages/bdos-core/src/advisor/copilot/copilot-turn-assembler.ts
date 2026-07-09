@@ -1,12 +1,12 @@
 import type { EngineeringAdvisorContext } from "../advisor-context.types";
 import { buildEngineeringAdvisorConfidence } from "../advisor-confidence-builder";
 import { buildEngineeringAdvisorExplanations } from "../advisor-explanation-builder";
-import type { EngineeringAdvisorExplanation } from "../advisor-explanation.types";
 import type { EngineeringAdvisorHistoricalFacts } from "../advisor-historical-facts.types";
 import type { EngineeringAdvisorPromptContext } from "../advisor-prompt-context.types";
 import type { EngineeringAdvisorInsight } from "../advisor-summary.types";
 import { computeContextHash } from "./context-hash";
-import type { CopilotAssistantTurn, CopilotReasoningStep } from "./copilot-turn.types";
+import { buildCopilotReasoningChain } from "./copilot-reasoning-chain";
+import type { CopilotAssistantTurn } from "./copilot-turn.types";
 
 // Decision Copilot (Epic 15, Fase 1) — monta o CopilotAssistantTurn
 // pronto para persistir, a partir do insight já validado
@@ -57,26 +57,4 @@ export function assembleCopilotAssistantTurn(
     decisionSnapshotId,
     model
   };
-}
-
-function buildCopilotReasoningChain(explanation: EngineeringAdvisorExplanation): ReadonlyArray<CopilotReasoningStep> {
-  return [
-    {
-      label: "Decisions consideradas",
-      count: explanation.decisions.length,
-      description: explanation.decisions.map((decision) => decision.title).join("; ") || "Nenhuma decision citada."
-    },
-    {
-      label: "Recomendações relacionadas",
-      count: explanation.recommendations.length,
-      description:
-        explanation.recommendations.map((recommendation) => recommendation.title).join("; ") ||
-        "Nenhuma recommendation citada."
-    },
-    {
-      label: "Evidências usadas",
-      count: explanation.evidence.length,
-      description: explanation.evidence.map((evidenceItem) => evidenceItem.description).join("; ") || "Nenhuma evidência citada."
-    }
-  ];
 }
