@@ -76,7 +76,7 @@ já melhora a Fase 1 mesmo sem Alternative Comparison).
 | Capacidade | Por que está bloqueada | O que destrava |
 |---|---|---|
 | Business Reality Simulator | Falta de gatilho de produto — é demo/sandbox, não decisão real (ver §4) | Um pedido de produto real e explícito por um modo demo do Copilot; até lá, `parked` |
-| Workflow Handoff | Falta de infraestrutura — Execution Engine tem zero código hoje (ver §5) | `docs/PLATFORM_ARCHITECTURE.md` §3 registrar o Execution Engine como "em produção" ou "em desenvolvimento" |
+| Workflow Handoff | ~~Falta de infraestrutura — Execution Engine tem zero código hoje~~ **Resolvido (2026-07-09) — Epic 16.7/16.8.** Ver §5. | ~~`docs/PLATFORM_ARCHITECTURE.md` §3 registrar o Execution Engine como "em produção" ou "em desenvolvimento"~~ **Feito** — `PLATFORM_ARCHITECTURE.md` §3 já registra o Execution Engine como Engine em produção; handoff real implementado em `packages/bdos-core/docs/COPILOT_WORKFLOW_HANDOFF.md` |
 
 Ordem de leitura das seções abaixo segue essa sequência.
 
@@ -397,9 +397,23 @@ financeira real (leitura 2).
 
 ---
 
-## 5. Workflow Handoff (Execution Engine) — bloqueado, não é sub-sprint da Fase 2
+## 5. Workflow Handoff (Execution Engine)
 
-### Por que isto não tem um número de sub-sprint
+> **Status: Completed (Epic 16.7/16.8, 2026-07-09).** Esta seção descrevia,
+> no momento em que foi escrita, por que o Workflow Handoff estava
+> bloqueado e o que faltava para destravá-lo — permanece abaixo como
+> **registro histórico** (não é reescrita retroativamente), porque o
+> raciocínio de por que algo era impossível é tão auditável quanto o
+> raciocínio de como ficou possível. A implementação real — contrato de
+> aprovação estrutural (`approveRecommendationId`), resolução dentro do
+> contexto congelado, atomicidade via `approve_copilot_recommendation`,
+> idempotência, botão na UI — está em
+> `packages/bdos-core/docs/COPILOT_WORKFLOW_HANDOFF.md` (Epic 16.7) e no
+> botão de aprovação (Epic 16.8). Ver também `EXECUTION_ENGINE.md`,
+> seção "Arquitetura final (fim do Epic 16)", para o fluxo completo
+> Decision → ... → ExecutionTask com o handoff do Copilot incluído.
+
+### Por que isto não tinha um número de sub-sprint (no momento em que foi escrito)
 
 `docs/PLATFORM_ARCHITECTURE.md` §3 é explícito: Execution Engine
 (Field Studio) "ainda não existe pasta própria — nenhum domínio de
@@ -514,7 +528,10 @@ de turno único e passa a conduzir uma conversa de verdade dentro dos
 limites que a Fase 1 já auditava — sem gastar uma chamada ao Claude
 para nenhuma das decisões estruturais no caminho. Business Reality
 Simulator fica `parked`, fora do caminho de produção, até um pedido de
-produto real. Workflow Handoff permanece formalmente bloqueado até o
-Execution Engine — quando esse dia chegar, o Epic 15 ganha uma Fase 3
-com seu próprio documento de desenho, seguindo a mesma disciplina
-desde o início: schema e contrato primeiro, código depois.
+produto real. Workflow Handoff, que permanecia formalmente bloqueado
+até o Execution Engine existir, chegou lá: o Epic 15 ganhou sua Fase 3
+(Epic 16.7/16.8) com documento de desenho próprio
+(`COPILOT_WORKFLOW_HANDOFF.md`), seguindo a mesma disciplina desde o
+início — schema e contrato primeiro, código depois. O Decision Copilot
+hoje aprova Recommendations de verdade, sem tocar no Intent Router e
+sem interpretar linguagem natural para isso.

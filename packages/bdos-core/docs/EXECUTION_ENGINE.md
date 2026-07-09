@@ -288,19 +288,91 @@ houver demanda real.
 
 ## Fases do Epic 16
 
-| Fase | Entrega |
-|---|---|
-| 16.1 | Este documento — arquitetura e fronteiras |
-| 16.2 | Domain model puro (`packages/bdos-core`, sem I/O) — resolve o que ainda está em aberto nos Riscos 2 (gatilho de fechamento) e 4 (forma do bloqueio) antes de propor tipos; Riscos 1 e 3 já saíram decididos desta revisão |
-| 16.3 | Persistência + RLS (schema real, migration) |
-| 16.4 | Application Services (`services/execution-*`) — é isto, não a tabela, que destrava o Workflow Handoff do Copilot |
-| 16.5 | Field Studio UI mínima |
-| 16.6 | Evidência/histórico de status |
-| 16.7 | Copilot handoff (consumindo o Application Service de 16.4) |
+> Atualizado em 16.9 (Release Closure) — a coluna "Entregue" registra o
+> que de fato foi construído, não uma correção retroativa do plano
+> original. As duas divergem em 16.5/16.6 porque o levantamento de
+> produto mudou de direção no meio do Epic (ver
+> `ACTIONPLAN_MATERIALIZATION_BOUNDARY.md`) — registrado aqui como
+> histórico, não escondido.
 
-Mesma disciplina dos Epics 14/15: cada fase é um incremento testável
+| Fase | Planejado originalmente (16.1) | Entregue |
+|---|---|---|
+| 16.1 | Este documento — arquitetura e fronteiras | Igual ao planejado — arquitetura, fronteiras, PRINCIPLE 006 (`BDS_ARCHITECTURE_PRINCIPLES.md`) |
+| 16.2 | Domain model puro (`packages/bdos-core`, sem I/O) | Igual ao planejado — `domain/execution-management` (`ExecutionWorkflow`/`ExecutionTask`, state machine, PRINCIPLE 006 aplicado em TS) |
+| 16.3 | Persistência + RLS (schema real, migration) | Igual ao planejado — **e também entregou o que estava planejado para 16.6** (evidência/histórico de status: `execution_task_evidence_references`, `execution_task_status_history`), porque as duas tabelas nasceram junto do schema principal, não numa fase separada |
+| 16.4 | Application Services (`services/execution-*`) — destrava o Workflow Handoff do Copilot | Igual ao planejado — `createExecutionWorkflowFromActionPlan`. Só não bastou sozinho para destravar o Copilot: faltava a peça do 16.6 (abaixo) |
+| 16.5 | Field Studio UI mínima | **Reescopado pelo CPO durante a sprint** — virou repository/API mínima em `apps/web` (`execution-repository.ts`, `/api/execution/workflows`, `/api/execution/tasks`), sem UI própria. Field Studio (a tela) continua Planejado (`PLATFORM_ARCHITECTURE.md` §3/§14) |
+| 16.6 | Evidência/histórico de status | **Substituído** — essa entrega já tinha saído junto do 16.3 (acima). Em vez disso, o levantamento desta fase descobriu que `buildPlaybooks`/`buildActionPlans` nunca tinham consumidor real em produção (`ACTIONPLAN_MATERIALIZATION_BOUNDARY.md`) — 16.6A/B/C generalizaram os dois e construíram `materializeExecutionWorkflowFromRecommendation`, o verdadeiro destravador do Workflow Handoff |
+| 16.7 | Copilot handoff (consumindo o Application Service de 16.4) | Entregue, mas maior que o planejado — precisou do 16.6 primeiro, e ganhou desenho formal próprio (`COPILOT_WORKFLOW_HANDOFF.md`): aprovação estrutural (`approveRecommendationId`), nunca pelo Intent Router; resolução dentro do contexto congelado; atomicidade real via `approve_copilot_recommendation` (Postgres, `SECURITY INVOKER`); idempotência |
+| 16.8 | *(não previsto no plano original)* | Botão "Aprovar" em `DecisionCopilotChat.tsx` — único consumidor real do contrato do 16.7 |
+| 16.9 | *(não previsto no plano original)* | Release Closure — este documento, `PLATFORM_ARCHITECTURE.md`, `DECISION_COPILOT_PHASE2.md`, `EXECUTION_ENGINE_E2E_CHECKLIST.md` |
+
+Mesma disciplina dos Epics 14/15: cada fase foi um incremento testável
 sobre a anterior — sem schema antes de 16.2 responder os riscos
-abaixo.
+abaixo, e sem 16.7 antes do 16.6 resolver o pipeline real.
+
+---
+
+## Arquitetura final (fim do Epic 16)
+
+"Fotografia" do fluxo definitivo — a cadeia causal completa que
+PRINCIPLE 006 exige, ponta a ponta, mais o handoff real a partir do
+Decision Copilot que a completa:
+
+```
+Decision
+    │            (Decision Engine, engines/decision)
+    ▼
+Recommendation
+    │            buildPlaybooks (16.6A — curado ou genérico,
+    ▼             nunca inventa conteúdo sem dado real)
+Playbook
+    │            buildActionPlans (16.6B — mesma regra)
+    ▼
+ActionPlan
+    │            createExecutionWorkflowFromActionPlan (16.4)
+    ▼
+ExecutionWorkflow
+    │            1 ExecutionTask por Action (PRINCIPLE 006:
+    ▼             sourceActionId sempre obrigatório)
+ExecutionTask
+    │            attachEvidenceReference (16.2) — obrigatório
+    ▼             antes de completeExecutionTask aceitar "Completed"
+EvidenceReference[]
+```
+
+Handoff real a partir do Decision Copilot (Epic 16.7/16.8), que
+materializa a cadeia acima de ponta a ponta numa única chamada:
+
+```
+Decision Copilot (conversa)
+    │
+    │  botão "Aprovar" (16.8) — gesto estrutural, nunca texto livre;
+    │  nunca passa por classifyCopilotIntent (Intent Router intocado)
+    ▼
+POST /api/copilot/message { approveRecommendationId, ... }
+    │
+    │  resolveCopilotApprovalTurn (bdos-core) — exige exatamente 1
+    │  Recommendation no contexto congelado/auditável
+    ▼
+materializeExecutionWorkflowFromRecommendation (16.6C)
+    │            = buildPlaybooks → buildActionPlans →
+    │              createExecutionWorkflowFromActionPlan, compostos
+    ▼
+approve_copilot_recommendation (Postgres, SECURITY INVOKER)
+    │            grava ExecutionWorkflow + ExecutionTasks +
+    │              status history + o turno do Copilot numa única
+    │              transação implícita — idempotente
+    ▼
+Execution Engine (execution_workflows/execution_tasks, RLS ativo)
+```
+
+Duas cadeias, um princípio só (PRINCIPLE 006): nenhuma `ExecutionTask`
+existe sem essa proveniência completa, seja materializada manualmente
+(16.4, `POST /api/execution/workflows`) ou pelo handoff real do
+Copilot (16.7/16.8) — o mesmo `createExecutionWorkflowFromActionPlan`
+está por trás dos dois caminhos, nunca duas implementações da mesma
+regra.
 
 ---
 
