@@ -11,7 +11,9 @@
     "./advisor/advisor-context-builder": "./src/advisor/advisor-context-builder.ts",
     "./advisor/advisor-summary.types": "./src/advisor/advisor-summary.types.ts",
     "./advisor/advisor-response-validator": "./src/advisor/advisor-response-validator.ts",
-    "./advisor/advisor-historical-facts.types": "./src/advisor/advisor-historical-facts.types.ts"
+    "./advisor/advisor-historical-facts.types": "./src/advisor/advisor-historical-facts.types.ts",
+    "./advisor/advisor-explanation.types": "./src/advisor/advisor-explanation.types.ts",
+    "./advisor/advisor-explanation-builder": "./src/advisor/advisor-explanation-builder.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

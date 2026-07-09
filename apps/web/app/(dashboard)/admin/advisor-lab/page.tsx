@@ -40,6 +40,44 @@ interface RunMetrics {
   readonly responseId: string;
 }
 
+// Explainability (Sprint 14.4) — construída pelo BDOS a partir dos ids
+// que o Validator já aprovou, nunca pedida ao Claude. missingReferences
+// só existe para o caso defensivo (não deveria acontecer, dado que o
+// Validator já barra ids inexistentes) de um id citado não ser
+// encontrado no contexto — a UI só mostra esse bloco se houver algo lá.
+interface ExplanationDecision {
+  readonly id: string;
+  readonly title: string;
+  readonly priority: string;
+}
+
+interface ExplanationRecommendation {
+  readonly id: string;
+  readonly title: string;
+  readonly isNew: boolean;
+  readonly recurring: boolean;
+}
+
+interface ExplanationEvidence {
+  readonly decisionId: string;
+  readonly source: string;
+  readonly description: string;
+}
+
+interface ExplanationMissingReferences {
+  readonly decisionIds: ReadonlyArray<string>;
+  readonly recommendationIds: ReadonlyArray<string>;
+  readonly evidenceDecisionIds: ReadonlyArray<string>;
+}
+
+interface Explanation {
+  readonly insightTitle: string;
+  readonly decisions: ReadonlyArray<ExplanationDecision>;
+  readonly recommendations: ReadonlyArray<ExplanationRecommendation>;
+  readonly evidence: ReadonlyArray<ExplanationEvidence>;
+  readonly missingReferences: ExplanationMissingReferences;
+}
+
 // ok:false = Claude respondeu (temos prompts/métricas/context normalmente),
 // mas o texto não era JSON válido — diagnóstico mínimo (ver run/route.ts):
 // preserva rawText/parseError em vez de esconder atrás de um erro genérico.
@@ -52,6 +90,7 @@ type RunResult =
       readonly raw: unknown;
       readonly validator: ValidatorResult;
       readonly narrative: string | null;
+      readonly explanations: ReadonlyArray<Explanation> | null;
       readonly metrics: RunMetrics;
     }
   | {
@@ -381,6 +420,90 @@ export default function AdvisorLabPage() {
             <section className="section-grid">
               <Card className="span-12" title="Narrativa renderizada">
                 <p style={{ whiteSpace: "pre-line" }}>{result.narrative ?? "(nenhuma — validação reprovou)"}</p>
+              </Card>
+            </section>
+          ) : null}
+
+          {result.ok && result.explanations ? (
+            <section className="section-grid">
+              <Card className="span-12" title="Explainability">
+                <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "12px" }}>
+                  Montada pelo BDOS a partir dos ids que o Validator já aprovou — nada inferido, nada gerado pelo
+                  Claude.
+                </p>
+                <div style={{ display: "grid", gap: "16px" }}>
+                  {result.explanations.map((explanation, index) => {
+                    const hasMissingReferences =
+                      explanation.missingReferences.decisionIds.length > 0 ||
+                      explanation.missingReferences.recommendationIds.length > 0 ||
+                      explanation.missingReferences.evidenceDecisionIds.length > 0;
+
+                    return (
+                      <div
+                        key={`${explanation.insightTitle}-${index}`}
+                        style={{
+                          border: "1px solid var(--app-divider)",
+                          borderRadius: "6px",
+                          padding: "12px 14px"
+                        }}
+                      >
+                        <strong>{explanation.insightTitle}</strong>
+
+                        <div style={{ marginTop: "10px" }}>
+                          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Decision utilizada</span>
+                          {explanation.decisions.map((decision) => (
+                            <p key={decision.id} style={{ fontSize: "13px", margin: "4px 0" }}>
+                              {decision.title} <em>({decision.priority})</em>
+                            </p>
+                          ))}
+                        </div>
+
+                        <div style={{ marginTop: "10px" }}>
+                          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                            Recommendation utilizada
+                          </span>
+                          {explanation.recommendations.map((recommendation) => (
+                            <p key={recommendation.id} style={{ fontSize: "13px", margin: "4px 0" }}>
+                              {recommendation.title}{" "}
+                              <em>
+                                ({recommendation.isNew ? "nova" : "já existia"}
+                                {recommendation.recurring ? ", recorrente" : ""})
+                              </em>
+                            </p>
+                          ))}
+                        </div>
+
+                        <div style={{ marginTop: "10px" }}>
+                          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Evidence utilizada</span>
+                          {explanation.evidence.map((evidence, evidenceIndex) => (
+                            <p key={evidenceIndex} style={{ fontSize: "13px", margin: "4px 0" }}>
+                              [{evidence.source}] {evidence.description}
+                            </p>
+                          ))}
+                        </div>
+
+                        {hasMissingReferences ? (
+                          <div
+                            className="form-error fiscal-alert"
+                            role="alert"
+                            style={{ marginTop: "10px", fontSize: "12px" }}
+                          >
+                            <strong>Referências ausentes</strong>
+                            {explanation.missingReferences.decisionIds.length > 0 ? (
+                              <p>Decisions: {explanation.missingReferences.decisionIds.join(", ")}</p>
+                            ) : null}
+                            {explanation.missingReferences.recommendationIds.length > 0 ? (
+                              <p>Recommendations: {explanation.missingReferences.recommendationIds.join(", ")}</p>
+                            ) : null}
+                            {explanation.missingReferences.evidenceDecisionIds.length > 0 ? (
+                              <p>Evidence (decisionIds): {explanation.missingReferences.evidenceDecisionIds.join(", ")}</p>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
               </Card>
             </section>
           ) : null}

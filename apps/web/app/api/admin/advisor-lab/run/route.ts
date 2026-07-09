@@ -8,6 +8,7 @@ import {
   renderEngineeringAdvisorSummaryToText
 } from "@bba/bdos-core/advisor/claude-narrator";
 import { validateEngineeringAdvisorSummary } from "@bba/bdos-core/advisor/advisor-response-validator";
+import { buildEngineeringAdvisorExplanations } from "@bba/bdos-core/advisor/advisor-explanation-builder";
 import type { Decision, EngineeringAdvisorContext, Recommendation } from "@bba/bdos-core/advisor/advisor-context.types";
 
 // Advisor Lab (Sprint 14.2A) — único ponto de execução manual do Advisor
@@ -106,6 +107,14 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const validation = validateEngineeringAdvisorSummary(diagnostics.raw, context);
 
+    // Explainability (Sprint 14.4) só existe para um insight já aprovado
+    // pelo Validator — sem summary válido não há citação segura para
+    // explicar. Nenhuma chamada nova ao Claude, nenhuma busca nova: usa
+    // só o que já está em memória (context, historicalFacts, summary).
+    const explanations = validation.valid
+      ? buildEngineeringAdvisorExplanations(validation.summary, context, historicalFacts)
+      : null;
+
     return NextResponse.json({
       ok: true,
       context,
@@ -115,6 +124,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       raw: diagnostics.raw,
       validator: validation,
       narrative: validation.valid ? renderEngineeringAdvisorSummaryToText(validation.summary) : null,
+      explanations,
       metrics
     });
   } catch (error) {
