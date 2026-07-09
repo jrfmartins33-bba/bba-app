@@ -1,3 +1,5 @@
+import { buildActionPlans } from "../../engines/decision/action-plan";
+import { buildPlaybooks } from "../../engines/decision/playbook";
 import { createExecutionTask, createExecutionWorkflow } from "../../domain/execution-management";
 import type { ExecutionTask } from "../../domain/execution-management";
 import type {
@@ -5,6 +7,7 @@ import type {
   CreateExecutionWorkflowFromActionPlanResult,
   ExecutionServiceError,
   ExecutionServiceErrorStage,
+  MaterializeExecutionWorkflowFromRecommendationInput,
 } from "./execution-management-service.types";
 
 /**
@@ -92,6 +95,41 @@ export function createExecutionWorkflowFromActionPlan(
     tasks,
     errors,
   };
+}
+
+/**
+ * Epic 16.6C — ActionPlan Materialization Orchestrator. Único
+ * objetivo: compor `buildPlaybooks` (Decision Engine, Epic 16.6A) →
+ * `buildActionPlans` (Decision Engine, Epic 16.6B) →
+ * `createExecutionWorkflowFromActionPlan` (Execution Engine, Fase
+ * 16.4) numa chamada só. Resolve o Risco 3 de
+ * `ACTIONPLAN_MATERIALIZATION_BOUNDARY.md` (onde mora a orquestração)
+ * a favor de estender este serviço, não criar um novo — a jornada
+ * completa "de uma Recommendation aprovada a um ExecutionWorkflow"
+ * fica atrás de uma porta só (`@bba/bdos-core/services/execution-management`).
+ *
+ * Nenhuma lógica nova: nenhuma das três funções compostas muda de
+ * comportamento aqui, nenhuma decisão é recalculada, nenhuma
+ * interpretação de linguagem natural acontece (isso é papel do
+ * Copilot, que chama esta função depois de já ter resolvido qual
+ * Recommendation e obtido aprovação — nunca dentro dela), nenhuma UI.
+ * A Recommendation já precisa estar aprovada antes desta chamada —
+ * esta função nunca decide isso, só materializa o que já foi.
+ */
+export function materializeExecutionWorkflowFromRecommendation(
+  input: MaterializeExecutionWorkflowFromRecommendationInput,
+): CreateExecutionWorkflowFromActionPlanResult {
+  const [playbook] = buildPlaybooks([input.recommendation]);
+  const [actionPlan] = buildActionPlans([playbook]);
+
+  return createExecutionWorkflowFromActionPlan({
+    actionPlan,
+    createdAt: input.createdAt,
+    correlationId: input.correlationId,
+    createdBy: input.createdBy,
+    sourceSystem: input.sourceSystem,
+    scheduleActivityIdByActionId: input.scheduleActivityIdByActionId,
+  });
 }
 
 function toServiceError(

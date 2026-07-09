@@ -1,10 +1,12 @@
 import type { ActionPlan } from "../../engines/decision/action-plan";
+import type { Recommendation } from "../../engines/decision/recommendation";
 import type { ExecutionTask, ExecutionWorkflow } from "../../domain/execution-management";
 
 // Reexportado por nome — apps/web nunca importa engines/decision/*
 // diretamente (mesma regra de domain/*, PLATFORM_ARCHITECTURE.md §4);
 // este subpath (services/execution-management) é a única porta.
 export type { Action, ActionPlan } from "../../engines/decision/action-plan";
+export type { Recommendation } from "../../engines/decision/recommendation";
 
 export type ExecutionServiceErrorStage = "workflow_creation" | "task_creation";
 
@@ -43,4 +45,19 @@ export interface CreateExecutionWorkflowFromActionPlanResult {
   readonly workflow: ExecutionWorkflow | null;
   readonly tasks: ReadonlyArray<ExecutionTask>;
   readonly errors: ReadonlyArray<ExecutionServiceError>;
+}
+
+export interface MaterializeExecutionWorkflowFromRecommendationInput {
+  /**
+   * A Recommendation já real (decision_snapshots.recommendations) —
+   * já aprovada por quem quer que chame esta função (Copilot, script,
+   * rota). Esta função nunca decide se deveria ser aprovada; só
+   * materializa o que já foi.
+   */
+  readonly recommendation: Recommendation;
+  readonly createdAt: string;
+  readonly correlationId: string;
+  readonly createdBy: string;
+  readonly sourceSystem: string;
+  readonly scheduleActivityIdByActionId?: Readonly<Record<string, string>>;
 }
