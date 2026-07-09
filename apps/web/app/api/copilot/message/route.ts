@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAnthropicProviderError } from "@bba/bdos-core/advisor/copilot/copilot-turn-builder";
 import { resolveCopilotTurn } from "@bba/bdos-core/advisor/copilot/copilot-turn-orchestrator";
 import { getSupabaseRouteHandlerClient, requireAuthenticatedCompany } from "@/lib/supabase/server";
 import { getEngineeringAdvisorBriefing } from "@/lib/bdos/advisor";
@@ -147,6 +148,11 @@ export async function POST(request: Request): Promise<NextResponse> {
       }
     });
   } catch (error) {
+    if (isAnthropicProviderError(error)) {
+      console.error("[copilot-message] Provedor de IA (Anthropic) indisponível.", error);
+      return NextResponse.json({ error: "advisor_provider_unavailable" }, { status: 503 });
+    }
+
     console.error("[copilot-message] Falha ao processar o turno.", error);
     return NextResponse.json({ error: "copilot_turn_failed" }, { status: 500 });
   }
