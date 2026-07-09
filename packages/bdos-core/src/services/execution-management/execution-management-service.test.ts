@@ -1,5 +1,6 @@
 import type { ActionPlan } from "../../engines/decision/action-plan";
-import { createExecutionWorkflowFromActionPlan } from "./execution-management-service";
+import type { Recommendation } from "../../engines/decision/recommendation";
+import { createExecutionWorkflowFromActionPlan, materializeExecutionWorkflowFromRecommendation } from "./execution-management-service";
 
 function actionPlan(overrides: Partial<ActionPlan> = {}): ActionPlan {
   return {
@@ -109,6 +110,100 @@ runTest("ActionPlan sem nenhuma Action ainda cria um workflow válido, só sem t
   assertTrue(result.success, "workflow sem tasks ainda é um resultado válido");
   assertTrue(result.workflow !== null, "workflow deve ser criado mesmo sem Actions");
   assertEqual(result.tasks.length, 0, "nenhuma task deve ser criada quando o ActionPlan não tem Actions");
+});
+
+// Epic 16.6C — ActionPlan Materialization Orchestrator. Fixture
+// genérica (fora de cash_protection) — antes do 16.6A/16.6B isso
+// produzia 0 Playbooks/ActionPlans; agora materializa de ponta a
+// ponta pelo caminho genérico.
+const genericRecommendation: Recommendation = {
+  id: "recommendation-1",
+  decisionId: "decision-1",
+  title: "Regularizar geometria espacial do Bloco 3",
+  summary: "A geometria do Bloco 3 precisa ser regularizada antes da próxima medição.",
+  options: [
+    {
+      id: "recommendation-1:option:regularize_spatial_geometry",
+      type: "regularize_spatial_geometry",
+      title: "Regularizar geometria espacial",
+      description: "Corrigir a geometria do SpatialObject associado ao Bloco 3.",
+    },
+    {
+      id: "recommendation-1:option:attach_spatial_evidence",
+      type: "attach_spatial_evidence",
+      title: "Anexar evidência espacial",
+      description: "Anexar levantamento RTK atualizado como evidência.",
+    },
+  ],
+  traceability: {
+    decisionId: "decision-1",
+    diagnosisId: "diagnosis-1",
+    capabilities: ["geospatial-intelligence"],
+    evidenceReferences: ["spatial-confidence"],
+    businessFactIds: ["fact-1"],
+  },
+  metadata: {
+    recommendationType: "spatial_confidence",
+    decisionPriority: "high",
+  },
+  createdAt: "2026-07-09T09:00:00.000Z",
+};
+
+const cashProtectionRecommendation: Recommendation = {
+  id: "recommendation-2",
+  decisionId: "decision-2",
+  title: "Proteger caixa projetado",
+  summary: "Déficit de caixa projetado exige ação imediata.",
+  options: [],
+  traceability: {
+    decisionId: "decision-2",
+    diagnosisId: "diagnosis-2",
+    capabilities: ["cash-intelligence"],
+    evidenceReferences: ["cash-projection"],
+    businessFactIds: ["fact-2"],
+  },
+  metadata: {
+    recommendationType: "cash_protection",
+    decisionPriority: "critical",
+  },
+  createdAt: "2026-07-09T09:00:00.000Z",
+};
+
+runTest("materializeExecutionWorkflowFromRecommendation materializa ponta a ponta pelo caminho genérico (16.6A/16.6B) — antes disso produzia 0 resultado", () => {
+  const result = materializeExecutionWorkflowFromRecommendation({ recommendation: genericRecommendation, ...baseInput });
+
+  assertTrue(result.success, "materialização de uma Recommendation genérica deve ter sucesso");
+  assertTrue(result.workflow !== null, "workflow deve ser criado");
+  assertEqual(result.tasks.length, genericRecommendation.options.length, "1 task por RecommendationOption, via 1 PlaybookStep, via 1 Action");
+});
+
+runTest("cadeia PRINCIPLE 006 completa: sourceActionId de cada task aponta para uma Action real, nascida de um PlaybookStep real", () => {
+  const result = materializeExecutionWorkflowFromRecommendation({ recommendation: genericRecommendation, ...baseInput });
+
+  assertTrue(result.success, "fixture inválida se isto falhar");
+  const titles = result.tasks.map((task) => task.title).sort();
+  const optionTitles = genericRecommendation.options.map((option) => option.title).sort();
+  assertEqual(titles.join(","), optionTitles.join(","), "título de cada task deve rastrear até o título real da RecommendationOption que a originou, sem invenção em nenhum elo da cadeia");
+});
+
+runTest("materializeExecutionWorkflowFromRecommendation também funciona para o caminho curado (cash protection), sem regressão", () => {
+  const result = materializeExecutionWorkflowFromRecommendation({ recommendation: cashProtectionRecommendation, ...baseInput });
+
+  assertTrue(result.success, "materialização de uma Recommendation de cash protection deve continuar funcionando");
+  assertTrue(result.workflow !== null, "workflow deve ser criado");
+  assertEqual(result.tasks.length, 5, "template curado de cash protection sempre gera 5 steps/actions");
+});
+
+runTest("materializeExecutionWorkflowFromRecommendation é determinístico — nenhuma lógica nova, só composição", () => {
+  const first = materializeExecutionWorkflowFromRecommendation({ recommendation: genericRecommendation, ...baseInput });
+  const second = materializeExecutionWorkflowFromRecommendation({ recommendation: genericRecommendation, ...baseInput });
+
+  assertEqual(first.workflow?.id, second.workflow?.id, "mesmo id de workflow em duas chamadas com a mesma Recommendation");
+  assertEqual(
+    first.tasks.map((task) => task.id).sort().join(","),
+    second.tasks.map((task) => task.id).sort().join(","),
+    "mesmos ids de task em duas chamadas com a mesma Recommendation"
+  );
 });
 
 function runTest(name: string, testCase: () => void): void {
