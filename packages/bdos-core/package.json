@@ -26,7 +26,8 @@
     "./advisor/copilot/copilot-deterministic-turn-builder": "./src/advisor/copilot/copilot-deterministic-turn-builder.ts",
     "./advisor/copilot/copilot-intent-router": "./src/advisor/copilot/copilot-intent-router.ts",
     "./advisor/copilot/copilot-comparison-context": "./src/advisor/copilot/copilot-comparison-context.ts",
-    "./advisor/copilot/copilot-turn-orchestrator": "./src/advisor/copilot/copilot-turn-orchestrator.ts"
+    "./advisor/copilot/copilot-turn-orchestrator": "./src/advisor/copilot/copilot-turn-orchestrator.ts",
+    "./advisor/copilot/copilot-approval-orchestrator": "./src/advisor/copilot/copilot-approval-orchestrator.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

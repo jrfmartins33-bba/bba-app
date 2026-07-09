@@ -1,7 +1,9 @@
 import type { EngineeringAdvisorPromptContext } from "../advisor-prompt-context.types";
+import { ExecutionTaskStatus, type ExecutionTask, type ExecutionWorkflow } from "../../services/execution-management";
 import {
   CLARIFY_LIST_INTRO,
   COPILOT_RULE_BASED_MODEL,
+  buildApprovalTurn,
   buildClarifyTurn,
   buildUnsupportedActionTurn
 } from "./copilot-deterministic-turn-builder";
@@ -59,6 +61,73 @@ runTest("buildUnsupportedActionTurn nunca sugere que uma ação foi executada e 
   assertEqual(turn.model, COPILOT_RULE_BASED_MODEL, "model deve ser o sentinela rule-based");
   assertTrue(turn.content.toLowerCase().includes("não consigo executar"), "conteúdo deve deixar claro que a ação não foi executada");
   assertTrue(turn.contextSnapshot !== null && turn.confidence !== null && turn.explainability !== null, "trilha de auditoria completa mesmo para uma recusa");
+});
+
+const workflow: ExecutionWorkflow = {
+  id: "execution-workflow:action-plan:playbook:recommendation-1:generic:generic",
+  actionPlanId: "action-plan:playbook:recommendation-1:generic:generic",
+  name: "Regularizar geometria espacial do Bloco 3",
+  objective: "A geometria do Bloco 3 precisa ser regularizada antes da próxima medição.",
+  ownerRole: "",
+  createdAt: "2026-07-09T09:00:00.000Z",
+  metadata: {}
+};
+
+function executionTask(overrides: Partial<ExecutionTask> = {}): ExecutionTask {
+  return {
+    id: "execution-task:action-1",
+    workflowId: workflow.id,
+    sourceActionId: "action-1",
+    scheduleActivityId: null,
+    title: "Regularizar geometria espacial",
+    description: "Corrigir a geometria do SpatialObject associado ao Bloco 3.",
+    assignee: null,
+    dueDate: null,
+    status: ExecutionTaskStatus.NotStarted,
+    block: null,
+    evidenceReferences: [],
+    completedAt: null,
+    createdAt: "2026-07-09T09:00:00.000Z",
+    updatedAt: "2026-07-09T09:00:00.000Z",
+    metadata: {},
+    ...overrides
+  };
+}
+
+runTest("buildApprovalTurn nunca chama o Claude — usa o sentinela rule-based", () => {
+  const turn = buildApprovalTurn(context, null, workflow, [executionTask()]);
+  assertEqual(turn.model, COPILOT_RULE_BASED_MODEL, "model deve ser o sentinela rule-based");
+});
+
+runTest("buildApprovalTurn cita o nome real do workflow e a contagem real de tasks, sem invenção", () => {
+  const tasks = [executionTask({ id: "execution-task:action-1" }), executionTask({ id: "execution-task:action-2", sourceActionId: "action-2" })];
+  const turn = buildApprovalTurn(context, null, workflow, tasks);
+
+  assertTrue(turn.content.includes(workflow.name), "conteúdo deve citar o nome real do workflow");
+  assertTrue(turn.content.includes("2 tarefas"), "conteúdo deve citar a contagem real de tasks, no plural");
+});
+
+runTest("buildApprovalTurn usa singular quando há exatamente 1 task", () => {
+  const turn = buildApprovalTurn(context, null, workflow, [executionTask()]);
+  assertTrue(turn.content.includes("1 tarefa"), "conteúdo deve usar singular para exatamente 1 task, nunca '1 tarefas'");
+});
+
+runTest("buildApprovalTurn preenche os 4 campos exigidos pelo CHECK de trilha completa", () => {
+  const turn = buildApprovalTurn(context, "snapshot-1", workflow, [executionTask()]);
+
+  assertTrue(turn.contextSnapshot !== null, "context_snapshot precisa estar presente");
+  assertTrue(turn.confidence !== null, "confidence precisa estar presente");
+  assertTrue(turn.explainability !== null, "explainability precisa estar presente");
+  assertTrue(turn.model !== null && turn.model.length > 0, "model precisa estar presente");
+  assertEqual(turn.confidence.reasons[0], "recommendation_approved", "confidence.reasons deve citar o motivo dedicado à aprovação");
+  assertEqual(turn.decisionSnapshotId, "snapshot-1", "decisionSnapshotId deve ser repassado como recebido");
+});
+
+runTest("buildApprovalTurn não inventa decisions/recommendations na explainability — Recommendation real não carrega isNew/recurring", () => {
+  const turn = buildApprovalTurn(context, null, workflow, [executionTask()]);
+
+  assertEqual(turn.explainability.decisions.length, 0, "explainability.decisions deve ficar vazio — aprovação não é sobre citar Decisions");
+  assertEqual(turn.explainability.recommendations.length, 0, "explainability.recommendations deve ficar vazio — inventar isNew/recurring violaria a regra de honestidade");
 });
 
 function runTest(name: string, testCase: () => void): void {
