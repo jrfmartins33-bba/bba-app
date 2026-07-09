@@ -1,4 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { buildEngineeringAdvisorContext } from "@bba/bdos-core/advisor/advisor-context-builder";
+import type {
+  Decision,
+  EngineeringAdvisorContext,
+  Recommendation
+} from "@bba/bdos-core/advisor/advisor-context.types";
 
 // Advisor de Engenharia (Sprint 13.10, Home "Hoje") — camada de
 // orquestração pura: só lê o que os Sprints 13.4-13.9 já gravam
@@ -41,6 +47,7 @@ export interface EngineeringAdvisorBriefing {
   readonly engineeringProjectName: string | null;
   readonly items: ReadonlyArray<EngineeringAdvisorItem>;
   readonly narrative: string | null;
+  readonly context: EngineeringAdvisorContext | null;
 }
 
 const PROJECT_STUDIO_HREF = "/bba-project";
@@ -51,7 +58,7 @@ export const getEngineeringAdvisorBriefing = async (
 ): Promise<EngineeringAdvisorBriefing> => {
   const { data: latestSnapshot, error: latestError } = await supabase
     .from("decision_snapshots")
-    .select("id, engineering_project_id, computed_at, health_score, engineering_projects(name)")
+    .select("id, engineering_project_id, computed_at, health_score, decisions, recommendations, engineering_projects(name)")
     .eq("company_id", companyId)
     .order("computed_at", { ascending: false })
     .limit(1)
@@ -62,7 +69,14 @@ export const getEngineeringAdvisorBriefing = async (
   }
 
   if (!latestSnapshot) {
-    return { hasData: false, engineeringProjectId: null, engineeringProjectName: null, items: [], narrative: null };
+    return {
+      hasData: false,
+      engineeringProjectId: null,
+      engineeringProjectName: null,
+      items: [],
+      narrative: null,
+      context: null
+    };
   }
 
   const engineeringProjectId = latestSnapshot.engineering_project_id as string;
@@ -88,7 +102,7 @@ export const getEngineeringAdvisorBriefing = async (
         .maybeSingle(),
       supabase
         .from("recommendations")
-        .select("title, severity")
+        .select("title, severity, recommendation_ref_id")
         .eq("engineering_project_id", engineeringProjectId)
         .eq("status", "open"),
       supabase
@@ -191,11 +205,33 @@ export const getEngineeringAdvisorBriefing = async (
     });
   }
 
+  // Epic 14 (BBA Advisor Evolution), Sprint 14.1 — Candidate Set usa
+  // exatamente a mesma elegibilidade da query acima (`status = "open"`,
+  // ver openRecommendationsResult): não há uma segunda regra de filtro
+  // vivendo em bdos-core, só o resultado desta mesma query.
+  const eligibleRecommendationIds = new Set(
+    openRecommendations
+      .map((recommendation) => recommendation.recommendation_ref_id as string | null)
+      .filter((id): id is string => typeof id === "string")
+  );
+
+  const context = buildEngineeringAdvisorContext({
+    engineeringProjectId,
+    engineeringProjectName,
+    computedAt: latestSnapshot.computed_at as string,
+    healthScore: currentHealthScore as number,
+    previousHealthScore,
+    decisions: (latestSnapshot.decisions ?? []) as unknown as ReadonlyArray<Decision>,
+    recommendations: (latestSnapshot.recommendations ?? []) as unknown as ReadonlyArray<Recommendation>,
+    eligibleRecommendationIds
+  });
+
   return {
     hasData: true,
     engineeringProjectId,
     engineeringProjectName,
     items,
-    narrative: narrativeResult.data?.narrative ?? null
+    narrative: narrativeResult.data?.narrative ?? null,
+    context
   };
 };

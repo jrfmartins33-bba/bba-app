@@ -1,0 +1,84 @@
+name: Claude Code Review
+
+# Sprint-merge gate: runs Claude over each PR's diff and fails the job on
+# CONFIRMED correctness bugs (not style/nits — those stay in local
+# /code-review or /simplify runs). Requires an ANTHROPIC_API_KEY repository
+# secret (Settings -> Secrets and variables -> Actions) — the job is
+# skipped-with-warning if it's missing rather than failing CI outright.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+concurrency:
+  group: code-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: read
+
+jobs:
+  code-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude code review
+        if: ${{ env.ANTHROPIC_API_KEY != '' }}
+        uses: anthropics/claude-code-action@v1
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Review this pull request's diff against its base branch:
+            `git diff origin/${{ github.event.pull_request.base.ref }}...HEAD`
+
+            Report CONFIRMED correctness bugs only — real defects you'd bet
+            on, not style, not missing tests, not simplification ideas.
+            Same bar as /code-review at medium effort.
+
+            When done, write your findings as JSON to
+            `code-review-result.json` at the repo root, with exactly this
+            shape and nothing else in the file:
+            {"blocking_findings": <count of CONFIRMED correctness bugs>, "summary": "<one paragraph, plain text>"}
+
+            Do not modify any other file. Do not commit or push anything.
+          claude_args: |
+            --max-turns 25
+            --allowedTools "Bash,Read,Grep,Glob,Write"
+
+      - name: Warn if ANTHROPIC_API_KEY is missing
+        if: ${{ env.ANTHROPIC_API_KEY == '' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: echo "::warning::ANTHROPIC_API_KEY secret not set — skipping automated code review. Add it under Settings > Secrets and variables > Actions to enable this gate."
+
+      - name: Enforce gate
+        if: ${{ env.ANTHROPIC_API_KEY != '' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ ! -f code-review-result.json ]; then
+            echo "::warning::code-review-result.json was not produced — skipping gate, review this PR manually."
+            exit 0
+          fi
+          BLOCKING=$(node -e "console.log(JSON.parse(require('fs').readFileSync('code-review-result.json','utf8')).blocking_findings)")
+          SUMMARY=$(node -e "console.log(JSON.parse(require('fs').readFileSync('code-review-result.json','utf8')).summary)")
+          {
+            echo "### Claude Code Review"
+            echo "$SUMMARY"
+            echo ""
+            echo "Blocking findings: $BLOCKING"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$BLOCKING" -gt 0 ]; then
+            echo "::error::Claude found $BLOCKING blocking correctness issue(s) — see job summary."
+            exit 1
+          fi

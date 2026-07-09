@@ -68,3 +68,38 @@ export const requireAuthenticatedCompany = async (
 
   return { userId: user.id, companyId: profile.company_id as string };
 };
+
+export type AuthenticatedAdmin = {
+  userId: string;
+};
+
+// Advisor Lab (Sprint 14.2A) — único consumidor hoje. Mesmo padrão de
+// requireAuthenticatedCompany (revalida o JWT via getUser() a cada
+// chamada), mas checa profiles.role em vez de company_id: profiles.role
+// já é a coluna que a RLS (função is_bba_admin(), ver
+// supabase/migrations/202506280001_bba_app_core_schema.sql) usa para
+// liberar acesso cross-company — nenhuma tabela/coluna nova aqui.
+export const requireBbaAdmin = async (
+  supabase: SupabaseClient
+): Promise<AuthenticatedAdmin | null> => {
+  const {
+    data: { user },
+    error: userError
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return null;
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profileError || profile?.role !== "bba_admin") {
+    return null;
+  }
+
+  return { userId: user.id };
+};
