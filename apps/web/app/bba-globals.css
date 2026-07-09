@@ -2753,6 +2753,29 @@ button {
   margin: 0 0 12px;
 }
 
+/* Epic 16.8 — botão "Aprovar" por Recommendation citada num turno. */
+.decision-copilot-chat__recommendations {
+  border-top: 1px solid var(--app-divider);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+}
+
+.decision-copilot-chat__recommendation {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.decision-copilot-chat__recommendation-title {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
 .decision-copilot-chat__form {
   display: flex;
   gap: 8px;

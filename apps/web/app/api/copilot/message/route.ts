@@ -44,6 +44,12 @@ import { approveCopilotRecommendation } from "@/lib/bdos/copilot-approval-reposi
  * implicitamente) — um mismatch aqui significa que o cliente está
  * aprovando algo baseado num contexto que já não é o atual, e a
  * aprovação é recusada em vez de silenciosamente redirecionada.
+ *
+ * Epic 16.8 (botão "Aprovar" na UI): a resposta de toda chamada (Fase
+ * 1 e 16.7) ecoa `engineeringProjectId` no nível raiz — o cliente não
+ * tinha, até aqui, nenhuma forma de conhecer esse id para reenviá-lo
+ * numa aprovação. `sourceDecisionSnapshotId` já era coberto desde o
+ * 16.7 (`message.decisionSnapshotId`).
  */
 interface CopilotMessageRequestBody {
   readonly conversationId?: string;
@@ -207,6 +213,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
       return NextResponse.json({
         conversationId,
+        engineeringProjectId: briefing.engineeringProjectId,
         alreadyApproved: persisted.alreadyApproved,
         executionWorkflowId: persisted.workflowId,
         message: {
@@ -253,6 +260,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     return NextResponse.json({
       conversationId,
+      engineeringProjectId: briefing.engineeringProjectId,
       message: {
         id: assistantMessage.id,
         role: "assistant" as const,

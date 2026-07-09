@@ -27,6 +27,23 @@ import { Card } from "../Card";
  * recarregar a página). O endpoint de histórico
  * (`GET /api/copilot/messages`) já existe para quando isso for
  * priorizado — não implementado aqui por não ter sido pedido ainda.
+ *
+ * Epic 16.8 — botão "Aprovar" por Recommendation citada num turno
+ * assistant (`explainability.recommendations`, já retornado desde a
+ * Fase 1, só não lido pela UI até aqui). Clicar nunca envia texto —
+ * manda `approveRecommendationId`/`sourceDecisionSnapshotId`/
+ * `engineeringProjectId` estruturados (COPILOT_WORKFLOW_HANDOFF.md,
+ * Epic 16.7): o gesto de aprovação é sempre estrutural, nunca
+ * linguagem natural interpretada, então este componente nunca escreve
+ * "aprovo isso" na caixa de texto por baixo dos panos — é uma segunda
+ * ação de UI, paralela ao formulário de mensagem, que nunca toca
+ * `input`/`handleSubmit`. `sourceDecisionSnapshotId` vem do
+ * `decisionSnapshotId` do próprio turno que citou a Recommendation;
+ * `engineeringProjectId` vem do campo de mesmo nome que toda resposta
+ * de `/api/copilot/message` já ecoa no nível raiz (Fase 1 e 16.7,
+ * também ajustado no 16.8) — nenhum dos dois é adivinhado ou mantido
+ * como estado "mais recente" independente, exatamente o contrato que
+ * o servidor exige.
  */
 
 export interface DecisionCopilotReasoningStep {
@@ -39,12 +56,21 @@ export interface DecisionCopilotConfidence {
   readonly overall: "high" | "medium" | "low";
 }
 
+export interface DecisionCopilotRecommendationRef {
+  readonly id: string;
+  readonly title: string;
+}
+
 interface DecisionCopilotMessage {
   readonly id: string;
   readonly role: "user" | "assistant";
   readonly content: string;
   readonly reasoningChain?: ReadonlyArray<DecisionCopilotReasoningStep>;
   readonly confidence?: DecisionCopilotConfidence;
+  /** Só em turnos assistant — id do decision_snapshot que fundamentou este turno (16.7: exigido para aprovar uma Recommendation citada aqui). */
+  readonly decisionSnapshotId?: string | null;
+  /** Recommendations citadas neste turno (explainability.recommendations) — cada uma ganha um botão "Aprovar". */
+  readonly recommendations?: ReadonlyArray<DecisionCopilotRecommendationRef>;
   readonly pending?: boolean;
   readonly failed?: boolean;
 }
@@ -69,12 +95,37 @@ function nextLocalMessageId(): string {
   return `local-${localMessageIdCounter}`;
 }
 
+interface CopilotMessageResponsePayload {
+  readonly id: string | null;
+  readonly content: string;
+  readonly reasoningChain: ReadonlyArray<DecisionCopilotReasoningStep>;
+  readonly confidence: DecisionCopilotConfidence;
+  readonly explainability?: { readonly recommendations?: ReadonlyArray<DecisionCopilotRecommendationRef> };
+  readonly decisionSnapshotId?: string | null;
+}
+
+function toAssistantMessage(payload: CopilotMessageResponsePayload): DecisionCopilotMessage {
+  return {
+    id: payload.id ?? nextLocalMessageId(),
+    role: "assistant",
+    content: payload.content,
+    reasoningChain: payload.reasoningChain,
+    confidence: payload.confidence,
+    decisionSnapshotId: payload.decisionSnapshotId ?? null,
+    recommendations: payload.explainability?.recommendations ?? []
+  };
+}
+
 export function DecisionCopilotChat({ studioId, className }: DecisionCopilotChatProps) {
   const [messages, setMessages] = useState<ReadonlyArray<DecisionCopilotMessage>>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [engineeringProjectId, setEngineeringProjectId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
+  const [approvingRecommendationId, setApprovingRecommendationId] = useState<string | null>(null);
+  const [approvedRecommendationIds, setApprovedRecommendationIds] = useState<ReadonlySet<string>>(new Set());
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -126,31 +177,69 @@ export function DecisionCopilotChat({ studioId, className }: DecisionCopilotChat
 
       const data = (await response.json()) as {
         conversationId: string;
-        message: {
-          id: string;
-          content: string;
-          reasoningChain: ReadonlyArray<DecisionCopilotReasoningStep>;
-          confidence: DecisionCopilotConfidence;
-        };
+        engineeringProjectId: string | null;
+        message: CopilotMessageResponsePayload;
       };
 
       setConversationId(data.conversationId);
-      setMessages((current) => [
-        ...current,
-        {
-          id: data.message.id,
-          role: "assistant",
-          content: data.message.content,
-          reasoningChain: data.message.reasoningChain,
-          confidence: data.message.confidence
-        }
-      ]);
+      setEngineeringProjectId(data.engineeringProjectId);
+      setMessages((current) => [...current, toAssistantMessage(data.message)]);
     } catch {
       setMessages((current) =>
         current.map((message) => (message.id === userMessage.id ? { ...message, failed: true } : message))
       );
     } finally {
       setSending(false);
+    }
+  }
+
+  async function handleApprove(recommendationId: string, sourceDecisionSnapshotId: string | null) {
+    if (!conversationId || !engineeringProjectId || !sourceDecisionSnapshotId || approvingRecommendationId) {
+      return;
+    }
+
+    setApprovingRecommendationId(recommendationId);
+    setApprovalError(null);
+
+    try {
+      const response = await fetch("/api/copilot/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId,
+          studioId,
+          approveRecommendationId: recommendationId,
+          sourceDecisionSnapshotId,
+          engineeringProjectId
+        })
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        setApprovalError(
+          payload?.error === "recommendation_not_found_in_context" ||
+            payload?.error === "duplicate_recommendation_in_context"
+            ? "Esta recomendação não está mais disponível no contexto atual — atualize a conversa e tente de novo."
+            : payload?.error === "decision_snapshot_mismatch" || payload?.error === "project_id_mismatch"
+              ? "O projeto foi atualizado desde esta resposta — atualize a conversa antes de aprovar."
+              : "Não foi possível registrar a aprovação. Tente novamente."
+        );
+        return;
+      }
+
+      const data = (await response.json()) as {
+        conversationId: string;
+        engineeringProjectId: string | null;
+        message: CopilotMessageResponsePayload;
+      };
+
+      setEngineeringProjectId(data.engineeringProjectId);
+      setApprovedRecommendationIds((current) => new Set(current).add(recommendationId));
+      setMessages((current) => [...current, toAssistantMessage(data.message)]);
+    } catch {
+      setApprovalError("Não foi possível registrar a aprovação. Tente novamente.");
+    } finally {
+      setApprovingRecommendationId(null);
     }
   }
 
@@ -167,12 +256,22 @@ export function DecisionCopilotChat({ studioId, className }: DecisionCopilotChat
             Pergunte algo sobre este projeto — por exemplo, &quot;por que esse projeto está em risco?&quot;
           </p>
         ) : (
-          messages.map((message) => <DecisionCopilotMessageBubble key={message.id} message={message} />)
+          messages.map((message) => (
+            <DecisionCopilotMessageBubble
+              key={message.id}
+              message={message}
+              engineeringProjectId={engineeringProjectId}
+              approvedRecommendationIds={approvedRecommendationIds}
+              approvingRecommendationId={approvingRecommendationId}
+              onApprove={handleApprove}
+            />
+          ))
         )}
         {sending && <p className="decision-copilot-chat__typing">BBA Advisor está analisando...</p>}
       </div>
 
       {unavailableReason && <p className="decision-copilot-chat__unavailable">{unavailableReason}</p>}
+      {approvalError && <p className="decision-copilot-chat__unavailable">{approvalError}</p>}
 
       <form className="decision-copilot-chat__form" onSubmit={handleSubmit}>
         <input
@@ -191,7 +290,21 @@ export function DecisionCopilotChat({ studioId, className }: DecisionCopilotChat
   );
 }
 
-function DecisionCopilotMessageBubble({ message }: { message: DecisionCopilotMessage }) {
+interface DecisionCopilotMessageBubbleProps {
+  readonly message: DecisionCopilotMessage;
+  readonly engineeringProjectId: string | null;
+  readonly approvedRecommendationIds: ReadonlySet<string>;
+  readonly approvingRecommendationId: string | null;
+  readonly onApprove: (recommendationId: string, sourceDecisionSnapshotId: string | null) => void;
+}
+
+function DecisionCopilotMessageBubble({
+  message,
+  engineeringProjectId,
+  approvedRecommendationIds,
+  approvingRecommendationId,
+  onApprove
+}: DecisionCopilotMessageBubbleProps) {
   const [showReasoning, setShowReasoning] = useState(false);
 
   return (
@@ -231,6 +344,44 @@ function DecisionCopilotMessageBubble({ message }: { message: DecisionCopilotMes
           ))}
         </ul>
       )}
+
+      {
+        // Epic 16.8, ponto 1 da revisão do CPO: o bloco (e o botão
+        // dentro dele) só aparece quando as 3 condições exigidas pelo
+        // contrato de aprovação (COPILOT_WORKFLOW_HANDOFF.md) estão
+        // disponíveis ao mesmo tempo — nunca uma linha "órfã" com
+        // título mas sem forma de agir sobre ele.
+      }
+      {message.role === "assistant" &&
+        message.recommendations &&
+        message.recommendations.length > 0 &&
+        message.decisionSnapshotId &&
+        engineeringProjectId && (
+          <ul className="decision-copilot-chat__recommendations">
+            {message.recommendations.map((recommendation) => {
+              const isApproved = approvedRecommendationIds.has(recommendation.id);
+              const isApproving = approvingRecommendationId === recommendation.id;
+
+              return (
+                <li className="decision-copilot-chat__recommendation" key={recommendation.id}>
+                  <span className="decision-copilot-chat__recommendation-title">{recommendation.title}</span>
+                  {isApproved ? (
+                    <span className="status-badge status-badge--done">Aprovado</span>
+                  ) : (
+                    <button
+                      className="bba-button bba-button--primary bba-button--sm"
+                      disabled={isApproving || (approvingRecommendationId !== null && !isApproving)}
+                      onClick={() => onApprove(recommendation.id, message.decisionSnapshotId ?? null)}
+                      type="button"
+                    >
+                      {isApproving ? "Aprovando..." : "Aprovar"}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
       {message.failed && <span className="decision-copilot-chat__failed-hint">Não foi possível enviar. Tente novamente.</span>}
     </div>
