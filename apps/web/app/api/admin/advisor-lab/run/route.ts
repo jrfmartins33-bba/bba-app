@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseRouteHandlerClient, requireBbaAdmin } from "@/lib/supabase/server";
 import { getSnapshotDetailForLab } from "@/lib/bdos/advisor-lab-repository";
+import { getEngineeringAdvisorHistoricalFacts } from "@/lib/bdos/advisor-historical-facts-repository";
 import { buildEngineeringAdvisorContext } from "@bba/bdos-core/advisor/advisor-context-builder";
 import {
   narrateEngineeringBriefingWithDiagnostics,
@@ -73,7 +74,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   try {
-    const diagnostics = await narrateEngineeringBriefingWithDiagnostics(context);
+    const historicalFacts = await getEngineeringAdvisorHistoricalFacts(supabase, context);
+    const diagnostics = await narrateEngineeringBriefingWithDiagnostics(context, historicalFacts);
     const metrics = {
       model: diagnostics.model,
       latencyMs: diagnostics.latencyMs,
@@ -93,6 +95,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       return NextResponse.json({
         ok: false,
         context,
+        historicalFacts,
         systemPrompt: diagnostics.systemPrompt,
         userPrompt: diagnostics.userPrompt,
         rawText: diagnostics.rawText,
@@ -106,6 +109,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({
       ok: true,
       context,
+      historicalFacts,
       systemPrompt: diagnostics.systemPrompt,
       userPrompt: diagnostics.userPrompt,
       raw: diagnostics.raw,

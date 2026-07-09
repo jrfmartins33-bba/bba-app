@@ -10,7 +10,8 @@
     "./advisor/advisor-context.types": "./src/advisor/advisor-context.types.ts",
     "./advisor/advisor-context-builder": "./src/advisor/advisor-context-builder.ts",
     "./advisor/advisor-summary.types": "./src/advisor/advisor-summary.types.ts",
-    "./advisor/advisor-response-validator": "./src/advisor/advisor-response-validator.ts"
+    "./advisor/advisor-response-validator": "./src/advisor/advisor-response-validator.ts",
+    "./advisor/advisor-historical-facts.types": "./src/advisor/advisor-historical-facts.types.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { EngineeringAdvisorContext } from "./advisor-context.types";
+import type { EngineeringAdvisorHistoricalFacts } from "./advisor-historical-facts.types";
 import { buildEngineeringAdvisorPromptContext } from "./advisor-prompt-context-builder";
 import type { EngineeringAdvisorSummary } from "./advisor-summary.types";
 
@@ -29,10 +30,10 @@ const SYSTEM_PROMPT = `Você é o BBA Advisor, um analista que resume o estado d
 
 CONTEXTO RECEBIDO (JSON, única fonte de fatos permitida):
 - snapshot: dados gerais do projeto e Health Score.
-- decisions: Decisions já calculadas pelo BDOS, com evidence embutida.
-- recommendations: o Candidate Set de Recommendations elegíveis (nunca a lista completa do sistema).
-- evidenceIndex: evidências de cada Decision, indexadas por decisionId.
-- historySummary: fato histórico simples (ex.: "Health Score 72 → 81").
+- history: evolução temporal já calculada pelo BDOS — "previousHealthScore", "healthScoreDirection" ("up"/"down"/"stable"/"unknown") e "historySummary" (frase pronta).
+- decisions: Decisions já calculadas pelo BDOS, com evidence embutida. Cada uma traz "isNew" (não existia no snapshot anterior), "previousPriority" e "priorityChanged" — já calculados, nunca infira isso sozinho.
+- recommendations: o Candidate Set de Recommendations elegíveis (nunca a lista completa do sistema). Cada uma traz "isNew", "openSinceImportCount" (quantas importações ela já está aberta) e "recurring" (já sinaliza recorrência, limiar decidido pelo BDOS) — use esses campos, nunca estime por conta própria.
+- evidence: evidências de cada Decision, indexadas por decisionId.
 
 FORMATO DE SAÍDA — OBRIGATÓRIO:
 Responda SOMENTE com um objeto JSON válido, sem nenhum texto antes ou depois, sem markdown, exatamente neste formato:
@@ -49,6 +50,7 @@ REGRAS INEGOCIÁVEIS:
 - Máximo de 3 insights por resposta. Se houver mais de 3 pontos relevantes no Candidate Set, escolha os 3 mais críticos e ignore o restante.
 - "title": no máximo 80 caracteres.
 - "summary": no máximo 240 caracteres, em 1 única frase.
+- Ao falar de evolução (piorou/melhorou/continua/repetindo), use exclusivamente "history" e os campos temporais de "decisions"/"recommendations" — nunca infira tendência além do que esses campos já dizem explicitamente.
 - Nunca responda fora deste schema — nenhum texto, nenhum markdown, nenhuma explicação adicional.`;
 
 export interface EngineeringAdvisorNarrationResult {
@@ -77,8 +79,11 @@ function getClient(): Anthropic {
 // EngineeringAdvisorContext completo; este continua intacto e é o que o
 // Validator sempre recebe (chamado por quem invoca este módulo, com o
 // context original, não com o que foi serializado aqui).
-function buildUserPrompt(context: EngineeringAdvisorContext): string {
-  const promptContext = buildEngineeringAdvisorPromptContext(context);
+function buildUserPrompt(
+  context: EngineeringAdvisorContext,
+  historicalFacts: EngineeringAdvisorHistoricalFacts
+): string {
+  const promptContext = buildEngineeringAdvisorPromptContext(context, historicalFacts);
   return `Contexto do Advisor (JSON, única fonte permitida):\n${JSON.stringify(promptContext)}`;
 }
 
@@ -94,10 +99,13 @@ interface ClaudeCallResult {
 // de produção) e narrateEngineeringBriefingWithDiagnostics (Advisor Lab,
 // Sprint 14.2A) passam por aqui, então nunca podem divergir no prompt ou
 // na forma da chamada; só diferem no que cada uma extrai da resposta.
-async function callClaude(context: EngineeringAdvisorContext): Promise<ClaudeCallResult> {
+async function callClaude(
+  context: EngineeringAdvisorContext,
+  historicalFacts: EngineeringAdvisorHistoricalFacts
+): Promise<ClaudeCallResult> {
   const model = process.env.ANTHROPIC_ADVISOR_MODEL?.trim() || DEFAULT_MODEL;
   const client = getClient();
-  const userPrompt = buildUserPrompt(context);
+  const userPrompt = buildUserPrompt(context, historicalFacts);
 
   const startedAt = Date.now();
   const response = await client.messages.create({
@@ -128,9 +136,10 @@ function extractResponseText(response: Anthropic.Message): string {
 }
 
 export async function narrateEngineeringBriefing(
-  context: EngineeringAdvisorContext
+  context: EngineeringAdvisorContext,
+  historicalFacts: EngineeringAdvisorHistoricalFacts
 ): Promise<EngineeringAdvisorNarrationResult> {
-  const { response, model } = await callClaude(context);
+  const { response, model } = await callClaude(context, historicalFacts);
   const text = extractResponseText(response);
 
   return { raw: parseStructuredSummaryText(text), model };
@@ -171,9 +180,10 @@ export type EngineeringAdvisorNarrationDiagnostics =
     });
 
 export async function narrateEngineeringBriefingWithDiagnostics(
-  context: EngineeringAdvisorContext
+  context: EngineeringAdvisorContext,
+  historicalFacts: EngineeringAdvisorHistoricalFacts
 ): Promise<EngineeringAdvisorNarrationDiagnostics> {
-  const { response, model, systemPrompt, userPrompt, latencyMs } = await callClaude(context);
+  const { response, model, systemPrompt, userPrompt, latencyMs } = await callClaude(context, historicalFacts);
 
   const base: EngineeringAdvisorNarrationDiagnosticsBase = {
     model,

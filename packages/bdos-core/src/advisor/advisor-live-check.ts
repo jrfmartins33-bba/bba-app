@@ -11,8 +11,17 @@ import {
 } from "../domain/decision";
 import type { Recommendation } from "../engines/decision/recommendation";
 import type { EngineeringAdvisorContext } from "./advisor-context.types";
+import type { EngineeringAdvisorHistoricalFacts } from "./advisor-historical-facts.types";
 import { narrateEngineeringBriefing } from "./claude-narrator";
 import { validateEngineeringAdvisorSummary } from "./advisor-response-validator";
+
+// Sprint 14.3 — sem histórico real neste script manual (não busca banco);
+// fixture vazia equivale a "tudo é novo, nada recorrente", suficiente
+// para calibrar prompt/schema sem depender de dados persistidos.
+const EMPTY_HISTORICAL_FACTS: EngineeringAdvisorHistoricalFacts = {
+  previousDecisions: [],
+  recommendationOpenSinceImportCountByRefId: {},
+};
 
 // Epic 14 (BBA Advisor Evolution), Sprint 14.2 — live-check MANUAL, não é
 // Golden Test. Chama a API real do Claude (exige ANTHROPIC_API_KEY no
@@ -123,7 +132,7 @@ async function main(): Promise<void> {
     console.log(`\n=== ${scenario.name} ===`);
 
     try {
-      const narration = await narrateEngineeringBriefing(scenario.context);
+      const narration = await narrateEngineeringBriefing(scenario.context, EMPTY_HISTORICAL_FACTS);
       console.log("Resposta bruta do Claude:");
       console.log(JSON.stringify(narration.raw, null, 2));
 

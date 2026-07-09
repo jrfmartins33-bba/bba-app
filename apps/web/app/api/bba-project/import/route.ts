@@ -11,6 +11,7 @@ import { validateEngineeringAdvisorSummary } from "@bba/bdos-core/advisor/adviso
 import { computeHealthScore } from "@/components/bba-project/bba-project-insights";
 import { getSupabaseRouteHandlerClient, requireAuthenticatedCompany } from "@/lib/supabase/server";
 import { getEngineeringAdvisorBriefing } from "@/lib/bdos/advisor";
+import { getEngineeringAdvisorHistoricalFacts } from "@/lib/bdos/advisor-historical-facts-repository";
 import {
   ensureDefaultEngineeringProject,
   ensureEngenhariaWorkspace,
@@ -192,7 +193,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       throw new Error("Advisor sem contexto rico (nenhum decision snapshot disponível ainda).");
     }
 
-    const narration = await narrateEngineeringBriefing(briefing.context);
+    const historicalFacts = await getEngineeringAdvisorHistoricalFacts(supabase, briefing.context);
+    const narration = await narrateEngineeringBriefing(briefing.context, historicalFacts);
     const validation = validateEngineeringAdvisorSummary(narration.raw, briefing.context);
 
     if (!validation.valid) {

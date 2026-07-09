@@ -1,9 +1,11 @@
 import type { EngineeringAdvisorContext } from "./advisor-context.types";
+import type { EngineeringAdvisorHistoricalFacts } from "./advisor-historical-facts.types";
 import type {
   EngineeringAdvisorPromptContext,
   EngineeringAdvisorPromptDecision,
   EngineeringAdvisorPromptEvidence,
   EngineeringAdvisorPromptEvidenceIndex,
+  EngineeringAdvisorPromptHistory,
   EngineeringAdvisorPromptRecommendation
 } from "./advisor-prompt-context.types";
 
@@ -27,47 +29,102 @@ import type {
 // Claude, junto das decisions que elas referenciam e só a evidência
 // dessas decisions — fisicamente não há como o Claude gerar um insight
 // sobre uma recommendation que ele nunca recebeu.
+//
+// Sprint 14.3 (Engineering Advisor Memory): o contrato ganhou "history" e
+// campos temporais por item (isNew/previousPriority/priorityChanged em
+// decisions; isNew/openSinceImportCount/recurring em recommendations),
+// calculados aqui a partir de EngineeringAdvisorHistoricalFacts — dado
+// cru já buscado pelo app layer (snapshot anterior + contagem de imports
+// em aberto por recommendation_ref_id). Nenhuma composição de dois
+// contratos no Narrator: este é o único ponto que decide o que entra no
+// prompt, incluindo o histórico. Escopo continua limitado às top-3
+// recommendations já selecionadas — histórico nunca expande o universo
+// de itens nem escala com o tamanho da série (ver auditoria da 14.3).
 const PROMPT_RECOMMENDATION_LIMIT = 3;
+const RECOMMENDATION_RECURRING_THRESHOLD = 3;
 
 export function buildEngineeringAdvisorPromptContext(
-  context: EngineeringAdvisorContext
+  context: EngineeringAdvisorContext,
+  historicalFacts: EngineeringAdvisorHistoricalFacts
 ): EngineeringAdvisorPromptContext {
   const topRecommendations = context.recommendations.slice(0, PROMPT_RECOMMENDATION_LIMIT);
 
-  const recommendations: EngineeringAdvisorPromptRecommendation[] = topRecommendations.map(
-    (recommendation) => ({
+  const recommendations: EngineeringAdvisorPromptRecommendation[] = topRecommendations.map((recommendation) => {
+    const openSinceImportCount =
+      historicalFacts.recommendationOpenSinceImportCountByRefId[recommendation.id] ?? 1;
+
+    return {
       id: recommendation.id,
       decisionId: recommendation.decisionId,
       title: recommendation.title,
-      summary: recommendation.summary
-    })
-  );
+      summary: recommendation.summary,
+      isNew: openSinceImportCount <= 1,
+      openSinceImportCount,
+      recurring: openSinceImportCount >= RECOMMENDATION_RECURRING_THRESHOLD
+    };
+  });
 
   const referencedDecisionIds = new Set(topRecommendations.map((recommendation) => recommendation.decisionId));
   const relatedDecisions = context.decisions.filter((decision) => referencedDecisionIds.has(decision.id));
 
-  const decisions: EngineeringAdvisorPromptDecision[] = relatedDecisions.map((decision) => ({
-    id: decision.id,
-    title: decision.title,
-    summary: decision.summary,
-    priority: decision.priority
-  }));
+  const previousDecisionPriorityById = new Map(
+    historicalFacts.previousDecisions.map((decision) => [decision.id, decision.priority])
+  );
 
-  const evidenceIndex: Record<string, ReadonlyArray<EngineeringAdvisorPromptEvidence>> = {};
+  const decisions: EngineeringAdvisorPromptDecision[] = relatedDecisions.map((decision) => {
+    const previousPriority = previousDecisionPriorityById.get(decision.id) ?? null;
+
+    return {
+      id: decision.id,
+      title: decision.title,
+      summary: decision.summary,
+      priority: decision.priority,
+      isNew: previousPriority === null,
+      previousPriority,
+      priorityChanged: previousPriority !== null && previousPriority !== decision.priority
+    };
+  });
+
+  const evidence: Record<string, ReadonlyArray<EngineeringAdvisorPromptEvidence>> = {};
   for (const decision of relatedDecisions) {
     const evidenceList = context.evidenceIndex[decision.id] ?? [];
-    evidenceIndex[decision.id] = evidenceList.map((evidence) => ({
-      source: evidence.source,
-      sourceReference: evidence.sourceReference,
-      description: evidence.description
+    evidence[decision.id] = evidenceList.map((evidenceItem) => ({
+      source: evidenceItem.source,
+      sourceReference: evidenceItem.sourceReference,
+      description: evidenceItem.description
     }));
   }
 
-  return {
-    snapshot: context.snapshot,
-    decisions,
-    recommendations,
-    evidenceIndex: evidenceIndex as EngineeringAdvisorPromptEvidenceIndex,
+  const history: EngineeringAdvisorPromptHistory = {
+    previousHealthScore: context.snapshot.previousHealthScore,
+    healthScoreDirection: deriveHealthScoreDirection(
+      context.snapshot.healthScore,
+      context.snapshot.previousHealthScore
+    ),
     historySummary: context.historySummary
   };
+
+  return {
+    snapshot: context.snapshot,
+    history,
+    decisions,
+    recommendations,
+    evidence: evidence as EngineeringAdvisorPromptEvidenceIndex
+  };
+}
+
+function deriveHealthScoreDirection(
+  current: number,
+  previous: number | null
+): "up" | "down" | "stable" | "unknown" {
+  if (previous === null) {
+    return "unknown";
+  }
+  if (current > previous) {
+    return "up";
+  }
+  if (current < previous) {
+    return "down";
+  }
+  return "stable";
 }
