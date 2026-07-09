@@ -2,6 +2,7 @@ import type { Playbook, PlaybookStep } from "../playbook";
 import type {
   Action,
   ActionPlan,
+  ActionPlanMetadata,
   BuildActionPlansInput,
   BuildActionPlansResult,
   Checkpoint,
@@ -9,21 +10,28 @@ import type {
 
 const cashProtectionRecommendationType = "cash_protection";
 
+// Epic 16.6B — generaliza buildActionPlans: todo Playbook (curado ou
+// genérico, ver 16.6A) agora produz um ActionPlan real, nunca mais
+// null. createAction já era genérica (funciona para qualquer
+// PlaybookStep) e permanece inalterada — cada PlaybookStep ainda vira
+// exatamente 1 Action, com sourceStepId sempre obrigatório apontando
+// para um PlaybookStep real. A cadeia PRINCIPLE 006 (Decision ->
+// Recommendation -> Playbook -> ActionPlan -> Action -> ExecutionTask
+// -> EvidenceReference[]) permanece intacta nos dois caminhos. Ver
+// packages/bdos-core/docs/ACTIONPLAN_MATERIALIZATION_BOUNDARY.md.
 export function buildActionPlans(
   playbooks: BuildActionPlansInput,
 ): BuildActionPlansResult {
-  return playbooks.flatMap((playbook) => {
-    const actionPlan = buildActionPlan(playbook);
-
-    return actionPlan === null ? [] : [actionPlan];
-  });
+  return playbooks.map((playbook) => buildActionPlan(playbook));
 }
 
-function buildActionPlan(playbook: Playbook): ActionPlan | null {
-  if (!isCashProtectionPlaybook(playbook)) {
-    return null;
-  }
+function buildActionPlan(playbook: Playbook): ActionPlan {
+  return isCashProtectionPlaybook(playbook)
+    ? buildCashProtectionActionPlan(playbook)
+    : buildGenericActionPlan(playbook);
+}
 
+function buildCashProtectionActionPlan(playbook: Playbook): ActionPlan {
   const actionPlanId = `action-plan:${playbook.id}:cash-protection`;
 
   return {
@@ -37,18 +45,45 @@ function buildActionPlan(playbook: Playbook): ActionPlan | null {
     checkpoints: buildCashProtectionCheckpoints(actionPlanId, playbook),
     ownerRole: "Finance owner",
     status: "created",
-    metadata: {
-      playbookId: playbook.id,
-      recommendationId: playbook.recommendationId,
-      decisionId: getStringMetadata(playbook.metadata, "decisionId"),
-      diagnosisId: getStringMetadata(playbook.metadata, "diagnosisId"),
-      capability: getStringMetadata(playbook.metadata, "capability"),
-      capabilities: getStringArrayMetadata(playbook.metadata, "capabilities"),
-      businessFactIds: getStringArrayMetadata(
-        playbook.metadata,
-        "businessFactIds",
-      ),
-    },
+    metadata: buildActionPlanMetadata(playbook),
+  };
+}
+
+// Caminho genérico (Epic 16.6B) — checkpoints/ownerRole ficam vazios
+// de propósito: nenhum template curado existe fora de cash protection
+// para descrever "o que marca esse plano como concluído" ou "quem é o
+// dono" honestamente. Mesma regra de honestidade do 16.6A — nada aqui
+// é inventado.
+function buildGenericActionPlan(playbook: Playbook): ActionPlan {
+  const actionPlanId = `action-plan:${playbook.id}:generic`;
+
+  return {
+    id: actionPlanId,
+    playbookId: playbook.id,
+    name: playbook.name,
+    objective: playbook.objective,
+    actions: playbook.steps.map((step, index) =>
+      createAction(actionPlanId, step, index + 1),
+    ),
+    checkpoints: [],
+    ownerRole: "",
+    status: "created",
+    metadata: buildActionPlanMetadata(playbook),
+  };
+}
+
+function buildActionPlanMetadata(playbook: Playbook): ActionPlanMetadata {
+  return {
+    playbookId: playbook.id,
+    recommendationId: playbook.recommendationId,
+    decisionId: getStringMetadata(playbook.metadata, "decisionId"),
+    diagnosisId: getStringMetadata(playbook.metadata, "diagnosisId"),
+    capability: getStringMetadata(playbook.metadata, "capability"),
+    capabilities: getStringArrayMetadata(playbook.metadata, "capabilities"),
+    businessFactIds: getStringArrayMetadata(
+      playbook.metadata,
+      "businessFactIds",
+    ),
   };
 }
 
