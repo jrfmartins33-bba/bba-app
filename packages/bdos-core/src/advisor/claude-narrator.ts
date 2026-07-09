@@ -1,7 +1,9 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
+import { getAnthropicClient } from "./anthropic-client";
 import type { EngineeringAdvisorContext } from "./advisor-context.types";
 import type { EngineeringAdvisorHistoricalFacts } from "./advisor-historical-facts.types";
 import { buildEngineeringAdvisorPromptContext } from "./advisor-prompt-context-builder";
+import { parseJsonResponseText } from "./claude-json-response";
 import type { EngineeringAdvisorSummary } from "./advisor-summary.types";
 
 // BBA Advisor — narrador via Claude (Sprint 13.12, "diferencial BBA" V1;
@@ -58,22 +60,6 @@ export interface EngineeringAdvisorNarrationResult {
   readonly model: string;
 }
 
-let cachedClient: Anthropic | null = null;
-
-function getClient(): Anthropic {
-  if (cachedClient) {
-    return cachedClient;
-  }
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY não configurada.");
-  }
-
-  cachedClient = new Anthropic({ apiKey });
-  return cachedClient;
-}
-
 // Sprint 14.2B (Advisor Prompt Context Optimizer) — o que vai para o
 // Claude é a visão compacta (EngineeringAdvisorPromptContext), nunca o
 // EngineeringAdvisorContext completo; este continua intacto e é o que o
@@ -104,7 +90,7 @@ async function callClaude(
   historicalFacts: EngineeringAdvisorHistoricalFacts
 ): Promise<ClaudeCallResult> {
   const model = process.env.ANTHROPIC_ADVISOR_MODEL?.trim() || DEFAULT_MODEL;
-  const client = getClient();
+  const client = getAnthropicClient();
   const userPrompt = buildUserPrompt(context, historicalFacts);
 
   const startedAt = Date.now();
@@ -142,7 +128,7 @@ export async function narrateEngineeringBriefing(
   const { response, model } = await callClaude(context, historicalFacts);
   const text = extractResponseText(response);
 
-  return { raw: parseStructuredSummaryText(text), model };
+  return { raw: parseJsonResponseText(text), model };
 }
 
 // Epic 14 (BBA Advisor Evolution), Sprint 14.2A — Advisor Lab. Extensão
@@ -158,7 +144,7 @@ export async function narrateEngineeringBriefing(
 // conseguir EXIBIR o que deu errado — se o parse falhar, `ok: false`
 // ainda carrega rawText/parseError junto com stopReason/usage/responseId
 // já capturados, em vez de perder tudo numa exceção. Isso não muda
-// max_tokens, prompt, nem o parser em si (parseStructuredSummaryText
+// max_tokens, prompt, nem o parser em si (parseJsonResponseText
 // continua igual, só passa a ser chamado dentro de um try local aqui).
 interface EngineeringAdvisorNarrationDiagnosticsBase {
   readonly model: string;
@@ -205,7 +191,7 @@ export async function narrateEngineeringBriefingWithDiagnostics(
   }
 
   try {
-    return { ok: true, raw: parseStructuredSummaryText(text), ...base };
+    return { ok: true, raw: parseJsonResponseText(text), ...base };
   } catch (error) {
     return { ok: false, rawText: text, parseError: toErrorMessage(error), ...base };
   }
@@ -213,24 +199,6 @@ export async function narrateEngineeringBriefingWithDiagnostics(
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-// Sem tool_choice (Sprint 14.2 não implementa Tool Use), a adesão ao JSON
-// é só por instrução de prompt — o Claude pode envolver a resposta em
-// cercas de markdown (```json ... ```) apesar da instrução em contrário.
-// Stripamos isso defensivamente aqui; qualquer outro desvio de schema
-// (campo faltando, id inventado etc.) é responsabilidade do Response
-// Validator (advisor-response-validator.ts), não deste parser — este só
-// lida com "é JSON parseável ou não".
-function parseStructuredSummaryText(text: string): unknown {
-  const fenceMatch = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-  const jsonText = fenceMatch ? fenceMatch[1] : text;
-
-  try {
-    return JSON.parse(jsonText);
-  } catch (error) {
-    throw new Error(`Claude não retornou um JSON válido: ${error instanceof Error ? error.message : String(error)}`);
-  }
 }
 
 // Camada de redação pós-validação: advisor_narratives.narrative continua

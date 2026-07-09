@@ -48,6 +48,11 @@ export interface EngineeringAdvisorBriefing {
   readonly items: ReadonlyArray<EngineeringAdvisorItem>;
   readonly narrative: string | null;
   readonly context: EngineeringAdvisorContext | null;
+  // Decision Copilot (Epic 15) — precisa gravar qual decision_snapshot
+  // fundamentou cada turno (copilot_messages.decision_snapshot_id,
+  // nullable). Campo aditivo: nenhum consumidor existente (Home) lê
+  // isto, então não muda nada para eles.
+  readonly decisionSnapshotId: string | null;
 }
 
 const PROJECT_STUDIO_HREF = "/bba-project";
@@ -75,7 +80,8 @@ export const getEngineeringAdvisorBriefing = async (
       engineeringProjectName: null,
       items: [],
       narrative: null,
-      context: null
+      context: null,
+      decisionSnapshotId: null
     };
   }
 
@@ -232,6 +238,7 @@ export const getEngineeringAdvisorBriefing = async (
     engineeringProjectName,
     items,
     narrative: narrativeResult.data?.narrative ?? null,
-    context
+    context,
+    decisionSnapshotId: latestSnapshot.id as string
   };
 };

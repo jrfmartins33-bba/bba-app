@@ -2638,3 +2638,137 @@ button {
   font-style: italic;
   line-height: 1.6;
 }
+
+/* Decision Copilot (Epic 15, Fase 1) — chat conversacional, um padrão
+   de interação novo (não uma variação do decision-insight-card, ver
+   comentário em DecisionCopilotChat.tsx), mas reaproveitando os mesmos
+   tokens de cor e a mesma identidade "BBA Advisor" (ícone Sparkles em
+   --bba-gold-soft) do resto da plataforma. */
+.decision-copilot-chat__advisor {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.decision-copilot-chat__advisor-icon {
+  color: var(--bba-gold-soft);
+  flex-shrink: 0;
+}
+
+.decision-copilot-chat__advisor-name {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.decision-copilot-chat__thread {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.decision-copilot-chat__empty,
+.decision-copilot-chat__typing {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-style: italic;
+  margin: 0;
+}
+
+.decision-copilot-chat__message {
+  animation: motion-fade-in var(--motion-duration-fast) var(--motion-ease-enter) both;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.decision-copilot-chat__message p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.decision-copilot-chat__message--user {
+  background: rgba(185, 149, 79, 0.08);
+  border: 1px solid var(--app-divider);
+  margin-left: 24px;
+}
+
+.decision-copilot-chat__message--assistant {
+  background: rgba(18, 49, 95, 0.5);
+  border: 1px solid var(--bba-gold-dim);
+  margin-right: 24px;
+}
+
+.decision-copilot-chat__message--failed {
+  border-color: var(--status-red);
+}
+
+.decision-copilot-chat__failed-hint {
+  color: var(--status-red);
+  display: block;
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.decision-copilot-chat__meta {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.decision-copilot-chat__reasoning {
+  border-top: 1px solid var(--app-divider);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+}
+
+.decision-copilot-chat__reasoning li {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  gap: 2px;
+}
+
+.decision-copilot-chat__reasoning strong {
+  color: var(--text-primary);
+}
+
+.decision-copilot-chat__reasoning span {
+  color: var(--text-muted);
+}
+
+.decision-copilot-chat__unavailable {
+  color: var(--status-amber);
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
+.decision-copilot-chat__form {
+  display: flex;
+  gap: 8px;
+}
+
+.decision-copilot-chat__form input {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  flex: 1;
+  font-size: 13px;
+  padding: 8px 12px;
+}
+
+.decision-copilot-chat__form input:focus {
+  border-color: var(--bba-gold);
+  outline: none;
+}

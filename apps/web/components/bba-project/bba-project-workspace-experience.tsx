@@ -2,7 +2,7 @@
 
 import { useRef, useState, type RefObject } from "react";
 import { Clock, FileUp, Sparkles, TimerReset, TriangleAlert, UploadCloud } from "lucide-react";
-import { Card, ProgressBar } from "@bba/ui";
+import { Card, DecisionCopilotChat, ProgressBar } from "@bba/ui";
 import { activityIdFromSpatialObjectId, spatialObjectIdForActivity } from "./bba-project-ids";
 import {
   activityIdFromDecision,
@@ -376,6 +376,10 @@ function BbaProjectReadyView({
           recommendation={selectedRecommendation}
           status={advisorStatus}
         />
+      </div>
+
+      <div className="span-12">
+        <DecisionCopilotChat studioId="bba-project" />
       </div>
 
       <Card className="span-8 workspace-card bba-project-fade-in" title="Cronograma">
