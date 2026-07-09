@@ -22,7 +22,12 @@ export type EngineeringAdvisorConfidenceReason =
   // determinística (Clarifying Questions, unsupported_action), sem
   // insight validado a avaliar. Ver DECISION_COPILOT_PHASE2.md §2/§6.
   | "clarifying_question"
-  | "unsupported_action_request";
+  | "unsupported_action_request"
+  // Decision Copilot (Epic 16.7) — aprovação estrutural de uma
+  // Recommendation, materializada via Execution Engine. Também
+  // determinística (nunca chama o Claude). Ver
+  // COPILOT_WORKFLOW_HANDOFF.md.
+  | "recommendation_approved";
 
 export interface EngineeringAdvisorConfidenceMetrics {
   readonly insightCount: number;

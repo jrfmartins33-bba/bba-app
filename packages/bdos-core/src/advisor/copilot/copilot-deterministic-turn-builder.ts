@@ -5,6 +5,7 @@ import { CLARIFY_LIST_LIMIT, candidateTitle, topCopilotCandidates } from "./copi
 import { computeContextHash } from "./context-hash";
 import { buildCopilotReasoningChain } from "./copilot-reasoning-chain";
 import type { CopilotAssistantTurn } from "./copilot-turn.types";
+import type { ExecutionTask, ExecutionWorkflow } from "../../services/execution-management";
 
 // Decision Copilot (Epic 15, Fase 2) — turnos assistant que nunca
 // chamam o Claude (DECISION_COPILOT_PHASE2.md §2/§5/§6, regra
@@ -27,6 +28,16 @@ export const CLARIFY_LIST_INTRO = "Encontrei mais de uma opção relacionada. Vo
 
 const UNSUPPORTED_ACTION_MESSAGE =
   "Ainda não consigo executar ações — só interpreto o que o BDOS já calculou (Decisions, Recommendations, planos de ação). Nenhuma decisão foi alterada por esta mensagem.";
+
+// Workflow Handoff Approval Point (Epic 16.7, COPILOT_WORKFLOW_HANDOFF.md)
+// — mesmo tratamento para uma aprovação repetida (idempotente, ver
+// documento) e para a primeira aprovação: o texto não distingue os dois
+// casos, porque do ponto de vista do usuário o resultado é o mesmo
+// ("este workflow existe"), nunca um erro.
+function buildApprovalContent(workflow: ExecutionWorkflow, taskCount: number): string {
+  const taskWord = taskCount === 1 ? "tarefa" : "tarefas";
+  return `Aprovado. Criei um workflow de execução ("${workflow.name}") com ${taskCount} ${taskWord} a partir desta recomendação.`;
+}
 
 function degenerateConfidence(reason: EngineeringAdvisorConfidenceReason): EngineeringAdvisorConfidence {
   return {
@@ -115,4 +126,36 @@ export function buildUnsupportedActionTurn(
   };
 
   return buildDeterministicTurn(UNSUPPORTED_ACTION_MESSAGE, context, explanation, "unsupported_action_request", decisionSnapshotId);
+}
+
+// Workflow Handoff Approval Point (Epic 16.7) — turno gerado depois que
+// a aprovação estrutural (approveRecommendationId, nunca texto livre —
+// ver COPILOT_WORKFLOW_HANDOFF.md) já materializou o ExecutionWorkflow
+// (16.6C). Mesma disciplina de buildClarifyTurn/buildUnsupportedActionTurn:
+// nunca chama o Claude, `decisions`/`recommendations` da explanation
+// ficam vazios de propósito — EngineeringAdvisorExplanationRecommendation
+// exige isNew/recurring, que a Recommendation real (engines/decision) não
+// carrega; inventar esses campos aqui violaria a mesma regra de
+// honestidade já aplicada em buildGenericPlaybook (16.6A).
+export function buildApprovalTurn(
+  context: EngineeringAdvisorPromptContext,
+  decisionSnapshotId: string | null,
+  workflow: ExecutionWorkflow,
+  tasks: ReadonlyArray<ExecutionTask>
+): CopilotAssistantTurn {
+  const explanation: EngineeringAdvisorExplanation = {
+    insightTitle: "Recommendation aprovada",
+    decisions: [],
+    recommendations: [],
+    evidence: [],
+    missingReferences: { decisionIds: [], recommendationIds: [], evidenceDecisionIds: [] }
+  };
+
+  return buildDeterministicTurn(
+    buildApprovalContent(workflow, tasks.length),
+    context,
+    explanation,
+    "recommendation_approved",
+    decisionSnapshotId
+  );
 }

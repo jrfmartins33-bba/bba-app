@@ -16,16 +16,21 @@ import { createExecutionWorkflowAndTasks, listExecutionWorkflows } from "@/lib/b
  * não recebe engineeringProjectId como parâmetro, resolve via
  * getEngineeringAdvisorBriefing.
  *
- * ATENÇÃO — POST depende de um ActionPlan REAL, que hoje o BDOS não
- * persiste nem expõe de forma geral: `decision_snapshots` só grava
- * `decisions`/`recommendations` (JSONB); `buildActionPlans`
- * (engines/decision/action-plan-builder.ts) só está de fato ligado ao
- * caso "Cash Protection Playbook", não ao fluxo geral de
- * Recommendation que o Advisor/Copilot usam. Até essa lacuna ser
- * resolvida (Epic 16.6 — "ActionPlan Materialization Boundary"), esta
- * rota só pode ser exercitada com um ActionPlan sintético/de teste —
- * não é uma rota pronta para o Workflow Handoff real do Copilot (16.7)
- * ainda chamar.
+ * ATENÇÃO — POST espera um ActionPlan já pronto no corpo da
+ * requisição; quem o constrói é responsabilidade do chamador. Desde o
+ * Epic 16.6 (buildPlaybooks/buildActionPlans generalizados,
+ * ACTIONPLAN_MATERIALIZATION_BOUNDARY.md), qualquer Recommendation real
+ * já produz um ActionPlan real — mas o Workflow Handoff do Decision
+ * Copilot (Epic 16.7, COPILOT_WORKFLOW_HANDOFF.md) NÃO chama esta
+ * rota: ele usa `POST /api/copilot/message` com
+ * `approveRecommendationId` (materializeExecutionWorkflowFromRecommendation,
+ * 16.6C, direto), porque a aprovação exige persistir
+ * execution_workflows/execution_tasks/copilot_messages numa única
+ * transação (approve_copilot_recommendation, migration
+ * 20260709130000) — algo que esta rota, de propósito, não faz. Esta
+ * rota continua existindo para qualquer outro consumidor que já tenha
+ * um ActionPlan pronto e não precise dessa atomicidade cruzando o
+ * Copilot.
  */
 export const dynamic = "force-dynamic";
 

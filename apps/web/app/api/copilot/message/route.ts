@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAnthropicProviderError } from "@bba/bdos-core/advisor/copilot/copilot-turn-builder";
 import { resolveCopilotTurn } from "@bba/bdos-core/advisor/copilot/copilot-turn-orchestrator";
+import { resolveCopilotApprovalTurn } from "@bba/bdos-core/advisor/copilot/copilot-approval-orchestrator";
 import { getSupabaseRouteHandlerClient, requireAuthenticatedCompany } from "@/lib/supabase/server";
 import { getEngineeringAdvisorBriefing } from "@/lib/bdos/advisor";
 import { getEngineeringAdvisorHistoricalFacts } from "@/lib/bdos/advisor-historical-facts-repository";
@@ -12,6 +13,7 @@ import {
   listCopilotMessages,
   toCopilotConversationHistory
 } from "@/lib/bdos/copilot-repository";
+import { approveCopilotRecommendation } from "@/lib/bdos/copilot-approval-repository";
 
 /**
  * Decision Copilot (Epic 15) — único turno de conversa: recebe a
@@ -29,6 +31,19 @@ import {
  * getEngineeringAdvisorBriefing já resolve para a empresa autenticada,
  * em vez de escolher entre vários — um mismatch aqui é sinal de bug no
  * cliente, não uma segunda engineering_project válida sendo ignorada.
+ *
+ * Epic 16.7 (packages/bdos-core/docs/COPILOT_WORKFLOW_HANDOFF.md) —
+ * esta mesma rota também aceita um segundo caminho, mutuamente
+ * exclusivo com `message`: aprovação estrutural de uma Recommendation
+ * (`approveRecommendationId`). Esse caminho NUNCA chama
+ * classifyCopilotIntent/resolveCopilotTurn — é um gesto estrutural da
+ * UI (ex.: botão "Aprovar"), nunca linguagem natural interpretada.
+ * `sourceDecisionSnapshotId`/`engineeringProjectId` são obrigatórios
+ * junto de `approveRecommendationId` e validados contra o estado atual
+ * resolvido pelo servidor (nunca contra "o snapshot mais recente"
+ * implicitamente) — um mismatch aqui significa que o cliente está
+ * aprovando algo baseado num contexto que já não é o atual, e a
+ * aprovação é recusada em vez de silenciosamente redirecionada.
  */
 interface CopilotMessageRequestBody {
   readonly conversationId?: string;
@@ -40,7 +55,19 @@ interface CopilotMessageRequestBody {
   // — protege contra um cliente futuro (multi-projeto) que assuma o
   // projeto errado silenciosamente.
   readonly projectId?: string;
-  readonly message: string;
+  // Caminho conversacional (Fase 1 + Intent Router, Fase 2) — mutuamente
+  // exclusivo com o caminho de aprovação abaixo.
+  readonly message?: string;
+
+  // Caminho de aprovação estrutural (Epic 16.7) — mutuamente exclusivo
+  // com `message`. Os três campos abaixo são exigidos juntos.
+  readonly approveRecommendationId?: string;
+  readonly sourceDecisionSnapshotId?: string;
+  readonly engineeringProjectId?: string;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function isValidRequestBody(body: unknown): body is CopilotMessageRequestBody {
@@ -50,13 +77,29 @@ function isValidRequestBody(body: unknown): body is CopilotMessageRequestBody {
 
   const candidate = body as Record<string, unknown>;
 
-  return (
-    typeof candidate.studioId === "string" &&
-    typeof candidate.message === "string" &&
-    candidate.message.trim().length > 0 &&
-    (candidate.projectId === undefined || typeof candidate.projectId === "string") &&
-    (candidate.conversationId === undefined || typeof candidate.conversationId === "string")
-  );
+  if (typeof candidate.studioId !== "string") {
+    return false;
+  }
+  if (candidate.conversationId !== undefined && typeof candidate.conversationId !== "string") {
+    return false;
+  }
+  if (candidate.projectId !== undefined && typeof candidate.projectId !== "string") {
+    return false;
+  }
+
+  const hasMessage = isNonEmptyString(candidate.message);
+  const hasApproval = isNonEmptyString(candidate.approveRecommendationId);
+
+  // Mutuamente exclusivo: nem os dois presentes, nem nenhum dos dois.
+  if (hasMessage === hasApproval) {
+    return false;
+  }
+
+  if (hasApproval) {
+    return isNonEmptyString(candidate.sourceDecisionSnapshotId) && isNonEmptyString(candidate.engineeringProjectId);
+  }
+
+  return true;
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -84,12 +127,30 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const briefing = await getEngineeringAdvisorBriefing(supabase, auth.companyId);
 
-  if (!briefing.hasData || !briefing.context) {
+  if (!briefing.hasData || !briefing.context || !briefing.engineeringProjectId) {
     return NextResponse.json({ error: "no_advisor_context_available" }, { status: 409 });
   }
 
   if (body.projectId !== undefined && briefing.engineeringProjectId !== body.projectId) {
     return NextResponse.json({ error: "project_id_mismatch" }, { status: 409 });
+  }
+
+  const isApproval = body.approveRecommendationId !== undefined;
+
+  // Aprovação sempre acontece dentro de uma conversa que já existe —
+  // nunca cria uma conversa nova para um gesto de aprovação
+  // (COPILOT_WORKFLOW_HANDOFF.md: "resolução dentro do contexto
+  // congelado/auditável do turno anterior").
+  if (isApproval && !body.conversationId) {
+    return NextResponse.json({ error: "conversation_id_required_for_approval" }, { status: 400 });
+  }
+
+  if (isApproval && body.engineeringProjectId !== briefing.engineeringProjectId) {
+    return NextResponse.json({ error: "project_id_mismatch" }, { status: 409 });
+  }
+
+  if (isApproval && body.sourceDecisionSnapshotId !== briefing.decisionSnapshotId) {
+    return NextResponse.json({ error: "decision_snapshot_mismatch" }, { status: 409 });
   }
 
   try {
@@ -98,11 +159,67 @@ export async function POST(request: Request): Promise<NextResponse> {
       (
         await createCopilotConversation(supabase, {
           companyId: auth.companyId,
-          engineeringProjectId: briefing.engineeringProjectId as string,
+          engineeringProjectId: briefing.engineeringProjectId,
           studioId: body.studioId,
           createdBy: auth.userId
         })
       ).id;
+
+    const historicalFacts = await getEngineeringAdvisorHistoricalFacts(supabase, briefing.context);
+
+    if (isApproval) {
+      const outcome = resolveCopilotApprovalTurn(
+        briefing.context,
+        historicalFacts,
+        body.approveRecommendationId as string,
+        briefing.decisionSnapshotId,
+        new Date().toISOString(),
+        conversationId,
+        auth.userId
+      );
+
+      if (outcome.kind === "recommendation_not_found") {
+        return NextResponse.json({ error: "recommendation_not_found_in_context", conversationId }, { status: 404 });
+      }
+
+      if (outcome.kind === "duplicate_recommendation") {
+        return NextResponse.json({ error: "duplicate_recommendation_in_context", conversationId }, { status: 409 });
+      }
+
+      if (outcome.kind === "materialization_failed") {
+        console.error(
+          "[copilot-message] Falha ao materializar ExecutionWorkflow a partir da Recommendation aprovada.",
+          outcome.errors
+        );
+        return NextResponse.json({ error: "execution_workflow_materialization_failed", conversationId }, { status: 502 });
+      }
+
+      const persisted = await approveCopilotRecommendation(supabase, {
+        companyId: auth.companyId,
+        engineeringProjectId: briefing.engineeringProjectId,
+        decisionSnapshotId: briefing.decisionSnapshotId as string,
+        conversationId,
+        createdBy: auth.userId,
+        workflow: outcome.workflow,
+        tasks: outcome.tasks,
+        turn: outcome.turn
+      });
+
+      return NextResponse.json({
+        conversationId,
+        alreadyApproved: persisted.alreadyApproved,
+        executionWorkflowId: persisted.workflowId,
+        message: {
+          id: persisted.copilotMessageId,
+          role: "assistant" as const,
+          content: outcome.turn.content,
+          reasoningChain: outcome.turn.reasoningChain,
+          confidence: outcome.turn.confidence,
+          explainability: outcome.turn.explainability,
+          decisionSnapshotId: outcome.turn.decisionSnapshotId
+        }
+      });
+    }
 
     const priorMessages = body.conversationId ? await listCopilotMessages(supabase, conversationId) : [];
     const conversationHistory = toCopilotConversationHistory(priorMessages);
@@ -110,16 +227,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     await appendCopilotUserMessage(supabase, {
       companyId: auth.companyId,
       conversationId,
-      content: body.message
+      content: body.message as string
     });
-
-    const historicalFacts = await getEngineeringAdvisorHistoricalFacts(supabase, briefing.context);
 
     const outcome = await resolveCopilotTurn(
       briefing.context,
       historicalFacts,
       conversationHistory,
-      body.message,
+      body.message as string,
       briefing.decisionSnapshotId
     );
 
@@ -144,7 +259,8 @@ export async function POST(request: Request): Promise<NextResponse> {
         content: turn.content,
         reasoningChain: turn.reasoningChain,
         confidence: turn.confidence,
-        explainability: turn.explainability
+        explainability: turn.explainability,
+        decisionSnapshotId: turn.decisionSnapshotId
       }
     });
   } catch (error) {
