@@ -33,7 +33,13 @@ import {
 interface CopilotMessageRequestBody {
   readonly conversationId?: string;
   readonly studioId: string;
-  readonly projectId: string;
+  // Opcional: Fase 1 tem uma única engineering_project ativa por
+  // empresa, então o servidor já sabe qual é (via
+  // getEngineeringAdvisorBriefing) sem o cliente precisar buscá-la e
+  // repassá-la. Quando enviado, ainda é validado contra o projeto real
+  // — protege contra um cliente futuro (multi-projeto) que assuma o
+  // projeto errado silenciosamente.
+  readonly projectId?: string;
   readonly message: string;
 }
 
@@ -46,9 +52,9 @@ function isValidRequestBody(body: unknown): body is CopilotMessageRequestBody {
 
   return (
     typeof candidate.studioId === "string" &&
-    typeof candidate.projectId === "string" &&
     typeof candidate.message === "string" &&
     candidate.message.trim().length > 0 &&
+    (candidate.projectId === undefined || typeof candidate.projectId === "string") &&
     (candidate.conversationId === undefined || typeof candidate.conversationId === "string")
   );
 }
@@ -82,7 +88,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "no_advisor_context_available" }, { status: 409 });
   }
 
-  if (briefing.engineeringProjectId !== body.projectId) {
+  if (body.projectId !== undefined && briefing.engineeringProjectId !== body.projectId) {
     return NextResponse.json({ error: "project_id_mismatch" }, { status: 409 });
   }
 
@@ -92,7 +98,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       (
         await createCopilotConversation(supabase, {
           companyId: auth.companyId,
-          engineeringProjectId: body.projectId,
+          engineeringProjectId: briefing.engineeringProjectId as string,
           studioId: body.studioId,
           createdBy: auth.userId
         })

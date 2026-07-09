@@ -6,3 +6,4 @@ export * from "./StatusBadge";
 export * from "./TaskCard";
 export * from "./decision";
 export * from "./motion";
+export * from "./studio-shared";
