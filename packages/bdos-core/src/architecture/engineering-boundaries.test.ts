@@ -38,6 +38,12 @@ const OPERATIONAL_DOMAINS = [
   "bulletin-generator",
   "export-engine",
   "schedule-management",
+  // Execution Engine (Epic 16, Fase 16.2) — consome Action/ActionPlan
+  // (engines/decision/action-plan) e FieldEvidence
+  // (domain/field-evidence) só por id (string), nunca por import direto
+  // — mesmo padrão de Decision.evidence[].sourceReference. Ver
+  // packages/bdos-core/docs/EXECUTION_ENGINE.md.
+  "execution-management",
 ] as const;
 
 // Rule A — exact repo-relative directories an operational domain may never
