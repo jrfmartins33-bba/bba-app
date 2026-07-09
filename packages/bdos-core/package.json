@@ -15,7 +15,11 @@
     "./advisor/advisor-explanation.types": "./src/advisor/advisor-explanation.types.ts",
     "./advisor/advisor-explanation-builder": "./src/advisor/advisor-explanation-builder.ts",
     "./advisor/advisor-confidence.types": "./src/advisor/advisor-confidence.types.ts",
-    "./advisor/advisor-confidence-builder": "./src/advisor/advisor-confidence-builder.ts"
+    "./advisor/advisor-confidence-builder": "./src/advisor/advisor-confidence-builder.ts",
+    "./advisor/copilot/copilot-turn.types": "./src/advisor/copilot/copilot-turn.types.ts",
+    "./advisor/copilot/copilot-turn-builder": "./src/advisor/copilot/copilot-turn-builder.ts",
+    "./advisor/copilot/copilot-response-validator": "./src/advisor/copilot/copilot-response-validator.ts",
+    "./advisor/copilot/copilot-turn-assembler": "./src/advisor/copilot/copilot-turn-assembler.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
