@@ -1,6 +1,11 @@
 import type { ActionPlan } from "../../engines/decision/action-plan";
 import type { ExecutionTask, ExecutionWorkflow } from "../../domain/execution-management";
 
+// Reexportado por nome — apps/web nunca importa engines/decision/*
+// diretamente (mesma regra de domain/*, PLATFORM_ARCHITECTURE.md §4);
+// este subpath (services/execution-management) é a única porta.
+export type { Action, ActionPlan } from "../../engines/decision/action-plan";
+
 export type ExecutionServiceErrorStage = "workflow_creation" | "task_creation";
 
 export interface ExecutionServiceError {
