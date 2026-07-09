@@ -17,8 +17,16 @@ export interface PlaybookStep {
   readonly title: string;
   readonly description: string;
   readonly priority: PlaybookStepPriority;
-  readonly estimatedImpact: PlaybookEstimatedImpact;
-  readonly estimatedEffort: PlaybookEstimatedEffort;
+  // Opcionais (Epic 16.6A — ver
+  // packages/bdos-core/docs/ACTIONPLAN_MATERIALIZATION_BOUNDARY.md,
+  // regra de honestidade): atributos de enriquecimento, não de
+  // causalidade — a cadeia que PRINCIPLE 006 protege
+  // (RecommendationOption -> PlaybookStep -> Action) não depende
+  // deles. Templates curados (ex.: Cash Protection) podem preenchê-los;
+  // buildGenericPlaybook nunca inventa um valor quando não há dado
+  // real na Recommendation de origem.
+  readonly estimatedImpact?: PlaybookEstimatedImpact;
+  readonly estimatedEffort?: PlaybookEstimatedEffort;
 }
 
 export interface Playbook {
