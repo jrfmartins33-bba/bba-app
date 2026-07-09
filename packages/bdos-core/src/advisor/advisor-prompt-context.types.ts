@@ -1,5 +1,5 @@
 import type { DecisionId } from "../domain/decision";
-import type { RecommendationId } from "../engines/decision/recommendation";
+import type { RecommendationActionType, RecommendationId, RecommendationOptionId } from "../engines/decision/recommendation";
 import type { EngineeringAdvisorContextSnapshot } from "./advisor-context.types";
 
 // Epic 14 (BBA Advisor Evolution), Sprint 14.2B — Advisor Prompt Context
@@ -11,8 +11,18 @@ import type { EngineeringAdvisorContextSnapshot } from "./advisor-context.types"
 // buildEngineeringAdvisorPromptContext() — o Narrator só serializa.
 //
 // Só os campos que o system prompt realmente instrui o Claude a citar
-// sobrevivem aqui: nenhum "options", nenhum traceability.businessFactIds/
+// sobrevivem aqui: nenhum traceability.businessFactIds/
 // evidenceReferences, nenhum metadata de bookkeeping interno do BDOS.
+//
+// Exceção deliberada, Decision Copilot (Epic 15, Fase 2, Sub-sprint
+// 15.2C — DECISION_COPILOT_PHASE2.md §3): "comparisonOptions" reabre,
+// de propósito e só quando presente, as opções de UMA Recommendation
+// já resolvida como alvo de comparação pelo Intent Router
+// (copilot-intent-router.ts) — nunca "todas as opções de todas as
+// Recommendations". buildEngineeringAdvisorPromptContext() nunca
+// popula este campo sozinho; só copilot-comparison-context.ts o
+// adiciona, depois que o gate de elegibilidade do Router já resolveu
+// um alvo único.
 
 export interface EngineeringAdvisorPromptHistory {
   readonly previousHealthScore: number | null;
@@ -50,10 +60,27 @@ export type EngineeringAdvisorPromptEvidenceIndex = Readonly<
   Record<DecisionId, ReadonlyArray<EngineeringAdvisorPromptEvidence>>
 >;
 
+// Decision Copilot (Epic 15, Fase 2, 15.2C) — ver nota de exceção
+// deliberada no topo do arquivo. Estrutura idêntica a
+// RecommendationOption (engines/decision/recommendation), copiada aqui
+// (não reexportada) pela mesma razão do resto deste arquivo: só o
+// subconjunto que o system prompt de fato instrui a citar entra neste
+// contrato.
+export interface EngineeringAdvisorPromptRecommendationOption {
+  readonly id: RecommendationOptionId;
+  readonly type: RecommendationActionType;
+  readonly title: string;
+  readonly description: string;
+}
+
 export interface EngineeringAdvisorPromptContext {
   readonly snapshot: EngineeringAdvisorContextSnapshot;
   readonly history: EngineeringAdvisorPromptHistory;
   readonly decisions: ReadonlyArray<EngineeringAdvisorPromptDecision>;
   readonly recommendations: ReadonlyArray<EngineeringAdvisorPromptRecommendation>;
   readonly evidence: EngineeringAdvisorPromptEvidenceIndex;
+  // Presente só quando o Intent Router resolveu "compare" para uma
+  // Recommendation específica (ver nota de exceção acima). Ausente
+  // (undefined) em todo turno "answer"/"clarify"/"unsupported_action".
+  readonly comparisonOptions?: ReadonlyArray<EngineeringAdvisorPromptRecommendationOption>;
 }

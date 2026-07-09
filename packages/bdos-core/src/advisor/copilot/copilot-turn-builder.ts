@@ -5,15 +5,18 @@ import type { EngineeringAdvisorHistoricalFacts } from "../advisor-historical-fa
 import { buildEngineeringAdvisorPromptContext } from "../advisor-prompt-context-builder";
 import type { EngineeringAdvisorPromptContext } from "../advisor-prompt-context.types";
 import { parseJsonResponseText } from "../claude-json-response";
+import { withComparisonOptions } from "./copilot-comparison-context";
 import type { CopilotConversationHistoryEntry } from "./copilot-turn.types";
 
-// Decision Copilot (Epic 15, Fase 1) — camada de redação, mesmo papel de
+// Decision Copilot (Epic 15) — camada de redação, mesmo papel de
 // claude-narrator.ts, mas para um turno de conversa em vez de um resumo
 // de até 3 insights. Reusa o mesmo schema de saída
 // (EngineeringAdvisorSummary/insights) e o mesmo Prompt Context
 // Optimizer (buildEngineeringAdvisorPromptContext) — a única coisa nova
-// aqui é o SYSTEM_PROMPT (framing de pergunta-resposta, não de
-// narração) e o histórico de turnos anteriores na chamada.
+// na Fase 1 foi o SYSTEM_PROMPT (framing de pergunta-resposta, não de
+// narração) e o histórico de turnos anteriores na chamada; a Fase 2
+// (15.2C) acrescenta comparisonOptions quando o turno é uma comparação
+// já elegível (ver copilot-comparison-context.ts).
 //
 // Composição, não invenção (ver DECISION_COPILOT.md): nenhum novo
 // parser de JSON, nenhum novo cliente Anthropic — os dois já extraídos
@@ -46,14 +49,19 @@ REGRAS INEGOCIÁVEIS:
 - "title": rótulo curto (máximo 80 caracteres) que resume o assunto da pergunta — não repita a pergunta literalmente.
 - "summary": sua resposta de verdade à pergunta do usuário, em português do Brasil, tom direto e executivo. Pode ter mais de uma frase quando a pergunta exigir.
 - Ao falar de evolução (piorou/melhorou/continua/repetindo), use exclusivamente "history" e os campos temporais de "decisions"/"recommendations" — nunca infira tendência além do que esses campos já dizem explicitamente.
+- Se o contexto trouxer "comparisonOptions" (só aparece quando a pergunta pede uma comparação de alternativas para uma Recommendation específica), sua resposta precisa comparar essas opções entre si — diferenças, o que cada "type"/"title"/"description" implica — usando exclusivamente o que está descrito ali, sem inventar vantagem ou desvantagem que o texto não diga. As mesmas regras de citação continuam valendo (decisionIds/evidenceDecisionIds obrigatórios).
 - Nunca responda fora deste schema — nenhum texto, nenhum markdown, nenhuma explicação adicional.`;
 
 function buildContextualUserMessage(
   context: EngineeringAdvisorContext,
   historicalFacts: EngineeringAdvisorHistoricalFacts,
-  userMessage: string
+  userMessage: string,
+  comparisonRecommendationId: string | null
 ): { readonly promptContext: EngineeringAdvisorPromptContext; readonly text: string } {
-  const promptContext = buildEngineeringAdvisorPromptContext(context, historicalFacts);
+  const basePromptContext = buildEngineeringAdvisorPromptContext(context, historicalFacts);
+  const promptContext = comparisonRecommendationId
+    ? withComparisonOptions(basePromptContext, context, comparisonRecommendationId)
+    : basePromptContext;
   const text = `Contexto do Advisor (JSON, única fonte permitida):\n${JSON.stringify(promptContext)}\n\nPergunta do usuário:\n${userMessage}`;
   return { promptContext, text };
 }
@@ -73,11 +81,15 @@ export async function callClaudeForCopilotTurn(
   context: EngineeringAdvisorContext,
   historicalFacts: EngineeringAdvisorHistoricalFacts,
   conversationHistory: ReadonlyArray<CopilotConversationHistoryEntry>,
-  userMessage: string
+  userMessage: string,
+  // Epic 15, Fase 2 (15.2C) — id da Recommendation já resolvida pelo
+  // Intent Router como alvo de "compare"; null em todo turno
+  // answer/clarify/unsupported_action (ver copilot-turn-orchestrator.ts).
+  comparisonRecommendationId: string | null = null
 ): Promise<CopilotClaudeCallResult> {
   const model = process.env.ANTHROPIC_ADVISOR_MODEL?.trim() || DEFAULT_MODEL;
   const client = getAnthropicClient();
-  const { promptContext, text } = buildContextualUserMessage(context, historicalFacts, userMessage);
+  const { promptContext, text } = buildContextualUserMessage(context, historicalFacts, userMessage, comparisonRecommendationId);
 
   const messages: Array<{ role: "user" | "assistant"; content: string }> = [
     ...conversationHistory.map((entry) => ({ role: entry.role, content: entry.content })),
@@ -123,13 +135,15 @@ export async function runCopilotTurn(
   context: EngineeringAdvisorContext,
   historicalFacts: EngineeringAdvisorHistoricalFacts,
   conversationHistory: ReadonlyArray<CopilotConversationHistoryEntry>,
-  userMessage: string
+  userMessage: string,
+  comparisonRecommendationId: string | null = null
 ): Promise<CopilotTurnRawResult> {
   const { response, model, promptContext } = await callClaudeForCopilotTurn(
     context,
     historicalFacts,
     conversationHistory,
-    userMessage
+    userMessage,
+    comparisonRecommendationId
   );
   const text = extractResponseText(response);
 
