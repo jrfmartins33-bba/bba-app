@@ -1,4 +1,4 @@
-import type { Recommendation } from "../recommendation";
+import type { Recommendation, RecommendationOption } from "../recommendation";
 import type {
   BuildPlaybooksInput,
   BuildPlaybooksResult,
@@ -10,22 +10,32 @@ import type {
 } from "./playbook.types";
 
 const cashProtectionRecommendationType = "cash_protection";
+const DEFAULT_PLAYBOOK_STEP_PRIORITY: PlaybookStepPriority = "medium";
 
+// Epic 16.6A — generaliza buildPlaybooks: toda Recommendation agora
+// produz um Playbook real, nunca null. Cash Protection continua com o
+// template curado (steps/kpis/risks/successCriteria escritos por um
+// humano); qualquer outro tipo cai no caminho genérico
+// (buildGenericPlaybook), que nunca inventa dado que a Recommendation
+// não tem — ver a regra de honestidade em
+// packages/bdos-core/docs/ACTIONPLAN_MATERIALIZATION_BOUNDARY.md. A
+// cadeia PRINCIPLE 006 (Decision -> Recommendation -> Playbook ->
+// ActionPlan -> Action -> ExecutionTask -> EvidenceReference[])
+// permanece intacta nos dois caminhos: todo Action ainda nasce de um
+// PlaybookStep real, cash protection ou genérico.
 export function buildPlaybooks(
   recommendations: BuildPlaybooksInput,
 ): BuildPlaybooksResult {
-  return recommendations.flatMap((recommendation) => {
-    const playbook = buildPlaybook(recommendation);
-
-    return playbook === null ? [] : [playbook];
-  });
+  return recommendations.map((recommendation) => buildPlaybook(recommendation));
 }
 
-function buildPlaybook(recommendation: Recommendation): Playbook | null {
-  if (!isCashProtectionRecommendation(recommendation)) {
-    return null;
-  }
+function buildPlaybook(recommendation: Recommendation): Playbook {
+  return isCashProtectionRecommendation(recommendation)
+    ? buildCashProtectionPlaybook(recommendation)
+    : buildGenericPlaybook(recommendation);
+}
 
+function buildCashProtectionPlaybook(recommendation: Recommendation): Playbook {
   return {
     id: `playbook:${recommendation.id}:cash-protection`,
     name: "Cash Protection Playbook",
@@ -74,6 +84,67 @@ function isCashProtectionRecommendation(
     getStringMetadata(recommendation.metadata, "recommendationType") ===
     cashProtectionRecommendationType
   );
+}
+
+// Caminho genérico (Epic 16.6A) — 1 PlaybookStep por
+// RecommendationOption, título/descrição vindos exatamente da option.
+// kpis/risks/successCriteria ficam vazios de propósito: nada na
+// Recommendation descreve isso hoje, e inventar seria quebrar a regra
+// de honestidade. estimatedImpact/estimatedEffort de cada step ficam
+// undefined pelo mesmo motivo (agora opcionais em PlaybookStep).
+function buildGenericPlaybook(recommendation: Recommendation): Playbook {
+  const priority = getPlaybookStepPriority(recommendation.metadata);
+
+  return {
+    id: `playbook:${recommendation.id}:generic`,
+    name: recommendation.title,
+    objective: recommendation.summary,
+    description:
+      "Plano de ação derivado diretamente das opções desta Recommendation — nenhum step, KPI, risco ou critério de sucesso foi inventado.",
+    recommendationId: recommendation.id,
+    steps: recommendation.options.map((option) => createGenericStep(recommendation.id, option, priority)),
+    kpis: [],
+    risks: [],
+    successCriteria: [],
+    metadata: {
+      recommendationType: getStringMetadata(recommendation.metadata, "recommendationType"),
+      decisionId: recommendation.traceability.decisionId,
+      diagnosisId: recommendation.traceability.diagnosisId,
+      capabilities: recommendation.traceability.capabilities,
+      capability: recommendation.traceability.capabilities[0] ?? null,
+      evidenceReferences: recommendation.traceability.evidenceReferences,
+      businessFactIds: recommendation.traceability.businessFactIds,
+    },
+  };
+}
+
+function createGenericStep(
+  recommendationId: string,
+  option: RecommendationOption,
+  priority: PlaybookStepPriority,
+): PlaybookStep {
+  return {
+    id: `playbook:${recommendationId}:step:${option.id}`,
+    title: option.title,
+    description: option.description,
+    priority,
+  };
+}
+
+// Recommendation.metadata.decisionPriority já é gravado por
+// recommendation-builder.ts (decisionPriority: decision.priority) em
+// toda Recommendation real — propagado, nunca inventado. O fallback
+// "medium" é só defensivo, para um dado malformado/ausente que não
+// deveria acontecer com uma Recommendation construída pelo builder
+// real, nunca um caminho de dado desenhado.
+function getPlaybookStepPriority(metadata: Readonly<Record<string, unknown>>): PlaybookStepPriority {
+  const value = metadata.decisionPriority;
+
+  if (value === "critical" || value === "high" || value === "medium" || value === "low") {
+    return value;
+  }
+
+  return DEFAULT_PLAYBOOK_STEP_PRIORITY;
 }
 
 function buildCashProtectionSteps(
