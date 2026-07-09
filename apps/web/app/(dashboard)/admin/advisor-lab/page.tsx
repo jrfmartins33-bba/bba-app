@@ -78,6 +78,23 @@ interface Explanation {
   readonly missingReferences: ExplanationMissingReferences;
 }
 
+// Confidence Assessment (Sprint 14.5) — calculado inteiramente pelo BDOS,
+// depois do Validator e da Explainability. Nunca produzido pelo Claude.
+interface ConfidenceMetrics {
+  readonly insightCount: number;
+  readonly explainedInsightCount: number;
+  readonly traceabilityCoverage: number;
+  readonly evidenceCoverage: number;
+  readonly recommendationCoverage: number;
+  readonly missingReferenceCount: number;
+}
+
+interface Confidence {
+  readonly overall: "high" | "medium" | "low";
+  readonly reasons: ReadonlyArray<string>;
+  readonly metrics: ConfidenceMetrics;
+}
+
 // ok:false = Claude respondeu (temos prompts/métricas/context normalmente),
 // mas o texto não era JSON válido — diagnóstico mínimo (ver run/route.ts):
 // preserva rawText/parseError em vez de esconder atrás de um erro genérico.
@@ -91,6 +108,7 @@ type RunResult =
       readonly validator: ValidatorResult;
       readonly narrative: string | null;
       readonly explanations: ReadonlyArray<Explanation> | null;
+      readonly confidence: Confidence;
       readonly metrics: RunMetrics;
     }
   | {
@@ -415,6 +433,72 @@ export default function AdvisorLabPage() {
               </Card>
             </section>
           )}
+
+          {result.ok ? (
+            <section className="section-grid">
+              <Card className="span-12" title="Confidence Assessment">
+                <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "12px" }}>
+                  Calculado inteiramente pelo BDOS, depois do Validator e da Explainability — o Claude não produz
+                  nada disto.
+                </p>
+                <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "12px" }}>
+                  <StatusBadge
+                    status={
+                      result.confidence.overall === "high"
+                        ? "completed"
+                        : result.confidence.overall === "medium"
+                          ? "in_progress"
+                          : "cancelled"
+                    }
+                  >
+                    {result.confidence.overall.toUpperCase()}
+                  </StatusBadge>
+                  <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                    {result.confidence.metrics.insightCount} insight(s)
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: "24px", flexWrap: "wrap", fontSize: "13px", marginBottom: "12px" }}>
+                  <span>
+                    <strong>Traceability Coverage:</strong>{" "}
+                    {(result.confidence.metrics.traceabilityCoverage * 100).toFixed(0)}%
+                  </span>
+                  <span>
+                    <strong>Evidence Coverage:</strong> {(result.confidence.metrics.evidenceCoverage * 100).toFixed(0)}%
+                  </span>
+                  <span>
+                    <strong>Recommendation Coverage:</strong>{" "}
+                    {(result.confidence.metrics.recommendationCoverage * 100).toFixed(0)}%
+                  </span>
+                  <span>
+                    <strong>Validator Status:</strong> {result.validator.valid ? "VALID" : "INVALID"}
+                  </span>
+                  <span>
+                    <strong>Missing References:</strong> {result.confidence.metrics.missingReferenceCount}
+                  </span>
+                  <span>
+                    <strong>Explained Insights:</strong> {result.confidence.metrics.explainedInsightCount}/
+                    {result.confidence.metrics.insightCount}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  {result.confidence.reasons.map((reason) => (
+                    <span
+                      key={reason}
+                      style={{
+                        fontSize: "11px",
+                        padding: "2px 8px",
+                        borderRadius: "999px",
+                        border: "1px solid var(--app-divider)",
+                        color: "var(--text-muted)"
+                      }}
+                    >
+                      {reason}
+                    </span>
+                  ))}
+                </div>
+              </Card>
+            </section>
+          ) : null}
 
           {result.ok ? (
             <section className="section-grid">

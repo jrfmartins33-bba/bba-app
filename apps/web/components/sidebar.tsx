@@ -28,6 +28,7 @@ import {
   FileStack,
   ClipboardCheck,
   FileDown,
+  FlaskConical,
 } from 'lucide-react'
 import { WORKSPACE_NAV_CONFIG, type WorkspaceNavConfig } from './workspace-nav-config'
 
@@ -109,6 +110,12 @@ const NAV_STUDIOS = [
     label: 'Export Studio',
     icon: FileDown,
     description: 'PDF, Excel, APIs e integrações',
+  },
+  {
+    href: '/admin/advisor-lab',
+    label: 'Advisor Lab',
+    icon: FlaskConical,
+    description: 'Diagnóstico, auditoria e calibração do Advisor',
   },
 ]
 

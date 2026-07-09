@@ -9,6 +9,7 @@ import {
 } from "@bba/bdos-core/advisor/claude-narrator";
 import { validateEngineeringAdvisorSummary } from "@bba/bdos-core/advisor/advisor-response-validator";
 import { buildEngineeringAdvisorExplanations } from "@bba/bdos-core/advisor/advisor-explanation-builder";
+import { buildEngineeringAdvisorConfidence } from "@bba/bdos-core/advisor/advisor-confidence-builder";
 import type { Decision, EngineeringAdvisorContext, Recommendation } from "@bba/bdos-core/advisor/advisor-context.types";
 
 // Advisor Lab (Sprint 14.2A) — único ponto de execução manual do Advisor
@@ -115,6 +116,12 @@ export async function POST(request: Request): Promise<NextResponse> {
       ? buildEngineeringAdvisorExplanations(validation.summary, context, historicalFacts)
       : null;
 
+    // Confidence Assessment (Sprint 14.5) — sempre calculado (mesmo se o
+    // Validator reprovou: "low" também é um resultado informativo), nunca
+    // pelo Claude. Reusa só o que Explainability já contou
+    // (missingReferences), nenhuma consulta nova ao contexto.
+    const confidence = buildEngineeringAdvisorConfidence(validation, explanations, historicalFacts);
+
     return NextResponse.json({
       ok: true,
       context,
@@ -125,6 +132,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       validator: validation,
       narrative: validation.valid ? renderEngineeringAdvisorSummaryToText(validation.summary) : null,
       explanations,
+      confidence,
       metrics
     });
   } catch (error) {
