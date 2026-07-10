@@ -112,7 +112,7 @@ export default function WorkspacesPage() {
     <>
       <section className="page-header">
         <div>
-          <span className="workspaces-eyebrow">BBA Platform · Operational Decision Platform</span>
+          <span className="workspaces-eyebrow">BBA Platform · Sistema Operacional de Decisão</span>
           <h1>Workspaces</h1>
           <p>Escolha um workspace para continuar.</p>
         </div>

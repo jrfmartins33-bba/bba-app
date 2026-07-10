@@ -141,7 +141,7 @@ export default function MemoriasPage() {
     <>
       <section className="page-header">
         <div>
-          <span className="workspaces-eyebrow">BBA Platform · Operational Decision Platform</span>
+          <span className="workspaces-eyebrow">BBA Platform · Sistema Operacional de Decisão</span>
           <h1>Studio de Medições</h1>
           <p>Organize quantitativos, fórmulas e cálculos auditáveis da obra.</p>
         </div>
