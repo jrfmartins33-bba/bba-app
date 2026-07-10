@@ -68,8 +68,17 @@ export function detectSheetPlanningType(sheet: ExcelSheetDto): SheetDetectionRes
   };
 }
 
+/**
+ * Vence a linha com mais TIPOS distintos reconhecidos, não a linha com
+ * mais correspondências brutas — um cabeçalho real introduz várias
+ * categorias diferentes (código, nome, valor...), enquanto uma
+ * sub-linha de um cabeçalho em duas linhas costuma repetir um único
+ * tipo várias vezes (ex.: "FINANCEIRO" uma vez por coluna de período)
+ * e, por contagem bruta, venceria incorretamente a linha real. A
+ * contagem bruta só desempata entre linhas com a mesma diversidade.
+ */
 function findHeaderRow(sheet: ExcelSheetDto): { headerRowIndex: number | null; columns: ReadonlyArray<DetectedColumn> } {
-  let best: { rowIndex: number; columns: DetectedColumn[] } | null = null;
+  let best: { rowIndex: number; columns: DetectedColumn[]; distinctKinds: number } | null = null;
 
   sheet.rows.slice(0, ROWS_SCANNED_FOR_HEADER).forEach((row, rowIndex) => {
     const columns: DetectedColumn[] = [];
@@ -85,12 +94,16 @@ function findHeaderRow(sheet: ExcelSheetDto): { headerRowIndex: number | null; c
       }
     });
 
-    if (columns.length >= 2 && (best === null || columns.length > best.columns.length)) {
-      best = { rowIndex, columns };
+    const distinctKinds = new Set(columns.map((column) => column.kind)).size;
+    const isBetter =
+      best === null || distinctKinds > best.distinctKinds || (distinctKinds === best.distinctKinds && columns.length > best.columns.length);
+
+    if (columns.length >= 2 && isBetter) {
+      best = { rowIndex, columns, distinctKinds };
     }
   });
 
-  const resolved = best as { rowIndex: number; columns: DetectedColumn[] } | null;
+  const resolved = best as { rowIndex: number; columns: DetectedColumn[]; distinctKinds: number } | null;
   return resolved === null ? { headerRowIndex: null, columns: [] } : { headerRowIndex: resolved.rowIndex, columns: resolved.columns };
 }
 
