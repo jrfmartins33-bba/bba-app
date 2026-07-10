@@ -218,6 +218,15 @@ export interface ReasoningStep {
  * Recommendation, com a contagem real de cada estágio. Nenhum estágio é
  * novo; é a mesma sequência que `services/bba-project-import` já
  * executa.
+ *
+ * Epic 17.0 (vocabulário de produto) — os `label`s exibidos usam
+ * vocabulário de produto, nunca os nomes internos de arquitetura
+ * (BusinessFact/Diagnosis/Decision/Recommendation, em inglês). Cada um
+ * reaproveita, de propósito, uma palavra já usada em outro lugar desta
+ * mesma tela — "Confiança" já aparece nos cards executivos e no Modelo
+ * Espacial; "Decisão"/"Recomendação" já aparecem no bloco do Advisor —
+ * para que o mesmo conceito nunca tenha dois nomes diferentes em telas
+ * diferentes (`PRODUCT_VOCABULARY.md`, Risco 1).
  */
 export function buildReasoningChain(snapshot: BbaProjectSnapshot): ReadonlyArray<ReasoningStep> {
   return [
@@ -232,22 +241,22 @@ export function buildReasoningChain(snapshot: BbaProjectSnapshot): ReadonlyArray
       description: "objetos espaciais gerados"
     },
     {
-      label: "Business Facts",
+      label: "Confiança Espacial",
       count: snapshot.facts.length,
       description: "fatos de confiança espacial avaliados"
     },
     {
-      label: "Diagnosis",
+      label: "Diagnóstico",
       count: snapshot.diagnoses.length,
       description: "diagnósticos de risco identificados"
     },
     {
-      label: "Decision",
+      label: "Decisão",
       count: snapshot.decisions.length,
       description: "decisões abertas"
     },
     {
-      label: "Recommendation",
+      label: "Recomendação",
       count: snapshot.recommendations.length,
       description: "recomendações geradas"
     }

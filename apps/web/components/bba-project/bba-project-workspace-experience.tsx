@@ -446,7 +446,12 @@ function BbaProjectReadyView({
 
         {selectedActivity ? (
           <div className="bba-project-living-schedule">
-            <p className="workspace-section-label">Living Schedule</p>
+            {/* Epic 17.0 — "Living Schedule" era o nome interno do
+                recurso (services/bba-project-import/living-schedule.ts);
+                "Simulação de Cronograma" reaproveita "Cronograma", já
+                usado como título do card do cronograma nesta mesma
+                tela. */}
+            <p className="workspace-section-label">Simulação de Cronograma</p>
             <button
               className="bba-button bba-button--secondary bba-button--sm"
               disabled={simulatingDelay || selectedSchedule === null || selectedSchedule === undefined}
