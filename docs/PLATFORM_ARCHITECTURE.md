@@ -149,7 +149,8 @@ leitura.
 | `PlanningDataset` / `ScheduleActivity` | **Project Studio** | Studio de Finanças (curva S financeira), Field Studio (apontamento de execução) | Nenhum outro Studio recalcula CPM ou altera datas de linha de base. |
 | `Decision` / `Recommendation` | **Decision Engine** (não é um Studio) | Todos os Studios, via Advisor | Nenhum Studio grava uma Decision diretamente — só o Decision Engine produz. |
 | Evidência (foto/vídeo/documento) | **Studio de Evidências** | Studio de Medições (substanciar medição), Studio de Documentos | |
-| Medição / Boletim | **Studio de Medições** | Studio de Finanças (faturamento) | |
+| Medição / Boletim (`MeasurementBulletin`) | **Studio de Medições** | Studio de Finanças, via `MeasurementBulletinFinancialView` (somente leitura) | O documento formal é o único `MeasurementBulletin` canônico; qualquer referência em outro domínio (ex.: ciclo de certificação) aponta para ele por id, nunca duplica linhas/validações (Epic 19, Sprint 19.2). |
+| `WorkPackage` (identidade de EAP) | **`work-package-management`** (bounded context de plataforma, não é um Studio — mesmo sentido de "Decision Engine" acima) | Project Studio, Studio de Medições, Geo Studio, Execution Engine | Nenhum Studio persiste sua própria cópia de `WorkPackage`; correlação em tempo de import por `companyId + projeto/contrato + código normalizado` (find-or-create), id canônico é a referência depois disso (Epic 19, Sprint 19.2). |
 | Aprovação | **Studio de Aprovações** | Todos os Studios podem solicitar; o registro da decisão de aprovação pertence ao Studio de Aprovações | |
 | Fluxo de caixa / DRE | **Studio de Finanças** | Advisor (para narrativa cross-Studio na Home) | |
 
