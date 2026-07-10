@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import {
-  ENGINE_VERSION,
-  importPlanningSource,
-  PLANNING_DATASET_SCHEMA_VERSION,
-  type PlanningImportSourceType
-} from "@bba/bdos-core/services/bba-project-import";
+import { ENGINE_VERSION, importPlanningSource, PLANNING_DATASET_SCHEMA_VERSION } from "@bba/bdos-core/services/bba-project-import";
 import { narrateEngineeringBriefing, renderEngineeringAdvisorSummaryToText } from "@bba/bdos-core/advisor/claude-narrator";
 import { validateEngineeringAdvisorSummary } from "@bba/bdos-core/advisor/advisor-response-validator";
 import { computeHealthScore } from "@/components/bba-project/bba-project-insights";
@@ -20,8 +15,10 @@ import {
   insertPlanningDataset,
   insertPlanningImport,
   persistRecommendation,
+  updatePlanningImportStatus,
   uploadPlanningImportFile
 } from "@/lib/bdos/repository";
+import { detectPlanningImportSourceType } from "@/lib/bdos/planning-import-source-type";
 
 /**
  * BBA Project Studio — Sprint 1 (PARTE 9), com persistência real desde
@@ -77,7 +74,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const buffer = new Uint8Array(await file.arrayBuffer());
-  const sourceType = detectSourceType(file.name, file.type, buffer);
+  const sourceType = detectPlanningImportSourceType(file.name, file.type, buffer);
 
   if (sourceType === null) {
     return NextResponse.json({ error: "unsupported_file_type" }, { status: 400 });
@@ -110,7 +107,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       sourceType,
       fileName: file.name,
       storagePath,
-      uploadedBy: userId
+      uploadedBy: userId,
+      // Epic 18 — 'uploaded' explícito, não o DEFAULT 'pending_upload'
+      // do schema: neste ponto do fluxo antigo o upload já terminou de
+      // verdade (uploadPlanningImportFile já rodou acima). Sem isto,
+      // toda linha desta rota ficaria mentindo "pending_upload" para
+      // sempre — ver RESILIENT_PLANNING_IMPORT.md.
+      status: "uploaded"
     });
   } catch (error) {
     console.error("[bba-project-import] Falha ao persistir import.", error);
@@ -140,6 +143,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   let decisionSnapshotId: string;
 
   try {
+    await updatePlanningImportStatus(supabase, { id: planningImportId, companyId, status: "processing" });
+
     const planningDataset = await insertPlanningDataset(supabase, {
       companyId,
       engineeringProjectId,
@@ -178,8 +183,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   } catch (error) {
     console.error("[bba-project-import] Falha ao persistir planning dataset/decision snapshot/recommendations.", error);
+    await updatePlanningImportStatus(supabase, { id: planningImportId, companyId, status: "failed" });
     return NextResponse.json({ error: "persistence_failed" }, { status: 500 });
   }
+
+  await updatePlanningImportStatus(supabase, { id: planningImportId, companyId, status: "completed" });
 
   // BBA Advisor — narrativa via Claude (Sprint 13.12). Deliberadamente FORA
   // do try/catch acima: uma falha aqui (rede, quota, ANTHROPIC_API_KEY
@@ -229,26 +237,3 @@ function getRecommendationSeverity(recommendation: { metadata: Readonly<Record<s
   return typeof value === "string" && value.trim().length > 0 ? value : DEFAULT_RECOMMENDATION_SEVERITY;
 }
 
-function detectSourceType(fileName: string, mimeType: string, bytes: Uint8Array): PlanningImportSourceType | null {
-  const lowerName = fileName.toLowerCase();
-
-  if (lowerName.endsWith(".xml") || mimeType === "text/xml" || mimeType === "application/xml") {
-    return "ms-project-xml";
-  }
-
-  if (lowerName.endsWith(".xlsx") || mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
-    return "excel";
-  }
-
-  // Extensão/MIME ambíguos — verifica o conteúdo: .xlsx é sempre um ZIP
-  // ("PK" nos dois primeiros bytes); um XML sempre começa com "<".
-  if (bytes[0] === 0x50 && bytes[1] === 0x4b) {
-    return "excel";
-  }
-
-  if (bytes[0] === 0x3c) {
-    return "ms-project-xml";
-  }
-
-  return null;
-}
