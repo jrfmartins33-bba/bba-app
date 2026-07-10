@@ -48,7 +48,7 @@ REGRAS INEGOCIÁVEIS:
 - Todo insight precisa ter pelo menos uma Decision em "decisionIds" e pelo menos uma evidência em "evidenceDecisionIds" (subconjunto de "decisionIds").
 - Dentro de "recommendations", os campos "traceability.businessFactIds" e "traceability.evidenceReferences" são apenas referências internas — nunca descreva ou infira o conteúdo delas.
 - Se não houver nenhum insight relevante para reportar, responda {"insights": []}.
-- Escreva "title" e "summary" em português do Brasil, tom direto e executivo, sem jargão técnico.
+- Escreva "title" e "summary" em português do Brasil, tom direto e executivo, sem jargão técnico. Nunca cite nomes internos de campo/tipo do JSON de contexto (ex.: "Decision", "Recommendation", "BDOS") mesmo que apareçam nas chaves do contexto — descreva o que eles representam em linguagem de negócio (ex.: "decisão", "recomendação").
 - Máximo de 3 insights por resposta. Se houver mais de 3 pontos relevantes no Candidate Set, escolha os 3 mais críticos e ignore o restante.
 - "title": no máximo 80 caracteres.
 - "summary": no máximo 240 caracteres, em 1 única frase.

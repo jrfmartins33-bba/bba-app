@@ -152,7 +152,7 @@ export function DecisionCopilotChat({ studioId, className }: DecisionCopilotChat
         const payload = await response.json().catch(() => null);
         setUnavailableReason(
           payload?.error === "no_advisor_context_available"
-            ? "O Decision Copilot precisa de pelo menos um cronograma importado neste projeto para responder — importe um planejamento primeiro."
+            ? "O BBA Advisor precisa de pelo menos um cronograma importado neste projeto para responder — importe um planejamento primeiro."
             : "Não foi possível confirmar o projeto ativo para esta conversa."
         );
         setMessages((current) =>
@@ -244,7 +244,7 @@ export function DecisionCopilotChat({ studioId, className }: DecisionCopilotChat
   }
 
   return (
-    <Card className={cx("decision-copilot-chat", className)} title="Decision Copilot">
+    <Card className={cx("decision-copilot-chat", className)} title="BBA Advisor">
       <div className="decision-copilot-chat__advisor">
         <Sparkles aria-hidden="true" className="decision-copilot-chat__advisor-icon" size={18} />
         <span className="decision-copilot-chat__advisor-name">BBA Advisor</span>
@@ -275,7 +275,7 @@ export function DecisionCopilotChat({ studioId, className }: DecisionCopilotChat
 
       <form className="decision-copilot-chat__form" onSubmit={handleSubmit}>
         <input
-          aria-label="Pergunta para o Decision Copilot"
+          aria-label="Pergunta para o BBA Advisor"
           disabled={sending}
           onChange={(event) => setInput(event.target.value)}
           placeholder="Pergunte ao BBA Advisor..."

@@ -17,7 +17,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             />
             <div>
               <strong>BBA Platform</strong>
-              <span>Operational Decision Platform</span>
+              <span>Sistema Operacional de Decisão</span>
             </div>
           </div>
           <h1>Rotinas, tarefas e conversas em um unico ambiente.</h1>

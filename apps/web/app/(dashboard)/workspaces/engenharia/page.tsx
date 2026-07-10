@@ -159,7 +159,7 @@ export default function EngenhariaWorkspacePage() {
     <>
       <section className="page-header">
         <div>
-          <span className="workspaces-eyebrow">BBA Platform · Operational Decision Platform</span>
+          <span className="workspaces-eyebrow">BBA Platform · Sistema Operacional de Decisão</span>
           <div className="workspace-header-title">
             <h1>Workspace Engenharia</h1>
             <span className="status-badge status-badge--active">Beta</span>

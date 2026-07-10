@@ -56,7 +56,7 @@ export function PlaceholderSpatialMapView({ objects, selectedObjectId, onSelectO
       </div>
       <p className="workspace-map-placeholder__caption">
         Espaço reservado para integração futura com Google Maps, Mapbox, CesiumJS, Leaflet ou OpenLayers — cada
-        pino acima já representa um objeto espacial real, computado pelo BDOS.
+        pino acima já representa um objeto espacial real, computado pela plataforma.
       </p>
     </div>
   );

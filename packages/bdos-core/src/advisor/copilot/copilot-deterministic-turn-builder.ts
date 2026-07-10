@@ -18,6 +18,8 @@ import type { ExecutionTask, ExecutionWorkflow } from "../../services/execution-
 // por uma query simples (`WHERE model = 'copilot-rule-based-v1'`),
 // medir quantos turnos o Copilot resolveu sem gastar chamada à
 // Anthropic.
+// vocabulary-guard-allow: sentinela de coluna de banco (copilot_messages.model),
+// nunca renderizado — confirmado por grep em toda a UI (PRODUCT_VOCABULARY.md).
 export const COPILOT_RULE_BASED_MODEL = "copilot-rule-based-v1";
 
 // Prefixo fixo e estável: é o que permite ao Intent Router (§1)
@@ -26,8 +28,13 @@ export const COPILOT_RULE_BASED_MODEL = "copilot-rule-based-v1";
 // 2ª opção" na mensagem seguinte. Ver copilot-intent-router.ts.
 export const CLARIFY_LIST_INTRO = "Encontrei mais de uma opção relacionada. Você quer analisar:";
 
+// Epic 17.2B (vocabulário de produto) — "BBA Advisor" (nunca "BDOS",
+// termo interno) e "decisões, recomendações, planos de ação" (nunca
+// "Decisions, Recommendations", em inglês) — mesmo vocabulário de
+// produto usado em todo o resto da jornada de ouro
+// (PRODUCT_VOCABULARY.md).
 const UNSUPPORTED_ACTION_MESSAGE =
-  "Ainda não consigo executar ações — só interpreto o que o BDOS já calculou (Decisions, Recommendations, planos de ação). Nenhuma decisão foi alterada por esta mensagem.";
+  "Ainda não consigo executar ações — só interpreto o que o BBA Advisor já calculou (decisões, recomendações, planos de ação). Nenhuma decisão foi alterada por esta mensagem.";
 
 // Workflow Handoff Approval Point (Epic 16.7, COPILOT_WORKFLOW_HANDOFF.md)
 // — mesmo tratamento para uma aprovação repetida (idempotente, ver
@@ -117,6 +124,8 @@ export function buildClarifyTurn(
     missingReferences: { decisionIds: [], recommendationIds: [], evidenceDecisionIds: [] }
   };
 
+  // vocabulary-guard-allow: confidenceReason vira confidence.reasons[], campo de
+  // auditoria — nunca renderizado (a UI só lê confidence.overall para o badge).
   return buildDeterministicTurn(content, context, explanation, "clarifying_question", decisionSnapshotId);
 }
 
@@ -134,6 +143,7 @@ export function buildUnsupportedActionTurn(
     missingReferences: { decisionIds: [], recommendationIds: [], evidenceDecisionIds: [] }
   };
 
+  // vocabulary-guard-allow: confidenceReason, campo de auditoria — mesma nota acima.
   return buildDeterministicTurn(UNSUPPORTED_ACTION_MESSAGE, context, explanation, "unsupported_action_request", decisionSnapshotId);
 }
 
@@ -153,6 +163,8 @@ export function buildApprovalTurn(
   tasks: ReadonlyArray<ExecutionTask>
 ): CopilotAssistantTurn {
   const explanation: EngineeringAdvisorExplanation = {
+    // vocabulary-guard-allow: insightTitle nunca é lido pela UI (confirmado por
+    // grep em apps/web e packages/ui) — campo de auditoria, não de apresentação.
     insightTitle: "Recommendation aprovada",
     decisions: [],
     recommendations: [],
@@ -164,7 +176,7 @@ export function buildApprovalTurn(
     buildApprovalContent(workflow, tasks.length),
     context,
     explanation,
-    "recommendation_approved",
+    "recommendation_approved", // vocabulary-guard-allow: confidenceReason, campo de auditoria — nunca renderizado
     decisionSnapshotId
   );
 }
