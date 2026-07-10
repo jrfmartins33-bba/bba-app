@@ -34,9 +34,18 @@ const UNSUPPORTED_ACTION_MESSAGE =
 // documento) e para a primeira aprovação: o texto não distingue os dois
 // casos, porque do ponto de vista do usuário o resultado é o mesmo
 // ("este workflow existe"), nunca um erro.
+//
+// Epic 17.0 (vocabulário de produto) — "plano de execução" é o
+// vocabulário de produto para `ExecutionWorkflow` (nunca "workflow",
+// termo interno). Auditoria de modelo mental, não só terminológica: o
+// CTA que gera este texto é o botão "Aprovar" ao lado de uma
+// Recommendation — a confirmação precisa soar como continuação natural
+// desse clique ("aprovei, e agora existe um plano com tarefas"), nunca
+// introduzir um conceito que o usuário não pediu. "ExecutionTask"
+// também nunca aparece aqui — só "tarefa".
 function buildApprovalContent(workflow: ExecutionWorkflow, taskCount: number): string {
   const taskWord = taskCount === 1 ? "tarefa" : "tarefas";
-  return `Aprovado. Criei um workflow de execução ("${workflow.name}") com ${taskCount} ${taskWord} a partir desta recomendação.`;
+  return `Aprovado. Criei um plano de execução ("${workflow.name}") com ${taskCount} ${taskWord} a partir desta recomendação.`;
 }
 
 function degenerateConfidence(reason: EngineeringAdvisorConfidenceReason): EngineeringAdvisorConfidence {
