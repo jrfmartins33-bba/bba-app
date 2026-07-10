@@ -110,6 +110,25 @@ export const uploadPlanningImportFile = async (
   return storagePath;
 };
 
+export type PlanningImportStatus = "pending_upload" | "uploaded" | "processing" | "completed" | "failed";
+
+export interface PlanningImportRecord {
+  readonly id: string;
+  readonly companyId: string;
+  readonly engineeringProjectId: string;
+  readonly sourceType: "ms-project-xml" | "excel";
+  readonly fileName: string;
+  readonly storagePath: string;
+  readonly status: PlanningImportStatus;
+}
+
+// `status` é opcional de propósito: a rota nova (Epic 18,
+// prepare-upload) omite o campo e deixa o DEFAULT 'pending_upload' do
+// schema decidir (o upload ainda não aconteceu nesse ponto). A rota
+// antiga (/api/bba-project/import) passa 'uploaded' explicitamente,
+// porque nesse fluxo o upload já terminou antes deste INSERT rodar —
+// sem isso, toda linha da rota antiga ficaria mentindo
+// "pending_upload" para sempre (ver RESILIENT_PLANNING_IMPORT.md).
 export const insertPlanningImport = async (
   supabase: SupabaseClient,
   params: {
@@ -120,6 +139,7 @@ export const insertPlanningImport = async (
     fileName: string;
     storagePath: string;
     uploadedBy: string;
+    status?: PlanningImportStatus;
   }
 ): Promise<void> => {
   const { error } = await supabase.from("planning_imports").insert({
@@ -129,8 +149,63 @@ export const insertPlanningImport = async (
     source_type: params.sourceType,
     file_name: params.fileName,
     storage_path: params.storagePath,
-    uploaded_by: params.uploadedBy
+    uploaded_by: params.uploadedBy,
+    ...(params.status ? { status: params.status } : {})
   });
+
+  if (error) {
+    throw error;
+  }
+};
+
+// Epic 18 — resolve o planning_import pelo id, sempre escopado à
+// empresa autenticada (RLS já garante isso na query, mas o filtro
+// explícito documenta a intenção e evita depender só do RLS para
+// legibilidade). Nunca confia num storagePath vindo do cliente — quem
+// chama esta função sempre usa o storage_path que o PRÓPRIO servidor
+// persistiu no prepare-upload.
+export const getPlanningImportById = async (
+  supabase: SupabaseClient,
+  params: { id: string; companyId: string }
+): Promise<PlanningImportRecord | null> => {
+  const { data, error } = await supabase
+    .from("planning_imports")
+    .select("id, company_id, engineering_project_id, source_type, file_name, storage_path, status")
+    .eq("id", params.id)
+    .eq("company_id", params.companyId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    id: data.id as string,
+    companyId: data.company_id as string,
+    engineeringProjectId: data.engineering_project_id as string,
+    sourceType: data.source_type as "ms-project-xml" | "excel",
+    fileName: data.file_name as string,
+    storagePath: data.storage_path as string,
+    status: data.status as PlanningImportStatus
+  };
+};
+
+// Epic 18 — única forma de mudar o ciclo operacional de um
+// planning_import (nunca reescreve source_type/file_name/storage_path
+// — esses continuam proveniência imutável, ver RESILIENT_PLANNING_IMPORT.md).
+export const updatePlanningImportStatus = async (
+  supabase: SupabaseClient,
+  params: { id: string; companyId: string; status: PlanningImportStatus }
+): Promise<void> => {
+  const { error } = await supabase
+    .from("planning_imports")
+    .update({ status: params.status })
+    .eq("id", params.id)
+    .eq("company_id", params.companyId);
 
   if (error) {
     throw error;

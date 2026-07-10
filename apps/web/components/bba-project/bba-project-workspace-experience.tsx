@@ -3,6 +3,7 @@
 import { useRef, useState, type RefObject } from "react";
 import { Clock, FileUp, Sparkles, TimerReset, TriangleAlert, UploadCloud } from "lucide-react";
 import { Card, DecisionCopilotChat, ProgressBar } from "@bba/ui";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { activityIdFromSpatialObjectId, spatialObjectIdForActivity } from "./bba-project-ids";
 import {
   activityIdFromDecision,
@@ -29,15 +30,23 @@ import type { BbaProjectPlanningActivity, BbaProjectSnapshot } from "./bba-proje
  * experiência: a decisão aparece primeiro, o cronograma passa a
  * explicá-la.
  */
+// Epic 18 (Resilient Planning Import) — upload e processamento agora
+// são duas chamadas de rede reais e distintas (Etapa E do desenho,
+// packages/bdos-core/docs/RESILIENT_PLANNING_IMPORT.md): "Enviando
+// arquivo..." (fase `uploading`, sem sub-passos artificiais — a
+// duração real do upload varia genuinamente) e "Processando
+// planejamento..." (fase `processing`, abaixo). Os passos abaixo
+// descrevem só o que a chamada a `process` de fato faz — nenhum deles
+// finge cobrir o upload, que já terminou antes desta fase começar.
 const PROCESSING_STEPS = [
-  "Lendo arquivo...",
-  "Identificando estrutura de planejamento...",
-  "Conectando ao mapa...",
+  "Processando planejamento...",
   "Avaliando confiança espacial...",
-  "Gerando recomendações..."
+  "Gerando recomendações...",
+  "Gerando análise..."
 ];
 
 const STEP_DURATION_MS = 650;
+const UPLOAD_BUCKET_NAME = "bdos-imports";
 
 const PLANNING_TYPE_LABELS: Record<string, string> = {
   cronograma: "Cronograma",
@@ -51,7 +60,7 @@ const LIMITATION_NOTICE =
   "Alguns dados não estavam explícitos no arquivo de origem. O Project Studio importou o que pôde reconhecer sem inventar informações.";
 
 type EntryChoice = "pending" | "chosen";
-type Phase = "idle" | "processing" | "ready" | "error";
+type Phase = "idle" | "uploading" | "processing" | "ready" | "error";
 
 interface DelaySimulation {
   readonly projectDurationDays: number;
@@ -71,27 +80,37 @@ export function BbaProjectWorkspaceExperience() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const advisorRef = useRef<HTMLDivElement | null>(null);
 
+  // Epic 18 (Resilient Planning Import) — orquestra as 4 etapas do
+  // caminho novo (prepare-upload -> upload direto -> upload-complete
+  // -> process), substituindo o único POST multipart de antes. Ver
+  // packages/bdos-core/docs/RESILIENT_PLANNING_IMPORT.md. A rota antiga
+  // (/api/bba-project/import) continua existindo, intacta, como rede
+  // de segurança — só não é mais chamada por este componente.
   async function runImport(file: File) {
-    setPhase("processing");
-    setProcessingStepIndex(0);
     setErrorMessage(null);
     setDelaySimulation(null);
-
-    const stepTimer = window.setInterval(() => {
-      setProcessingStepIndex((current) => Math.min(current + 1, PROCESSING_STEPS.length - 1));
-    }, STEP_DURATION_MS);
-
-    const minimumDisplay = wait(PROCESSING_STEPS.length * STEP_DURATION_MS);
+    setPhase("uploading");
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      const prepareResponse = await fetch("/api/bba-project/imports/prepare-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: file.name,
+          contentType: file.type || "application/octet-stream",
+          sizeBytes: file.size
+        })
+      });
 
-      const [response] = await Promise.all([fetch("/api/bba-project/import", { method: "POST", body: formData }), minimumDisplay]);
+      if (prepareResponse.status === 413) {
+        setPhase("error");
+        setErrorMessage(
+          "Este arquivo excede o limite atual de importação direta. Estamos preparando o envio de arquivos maiores diretamente para o armazenamento seguro da plataforma."
+        );
+        return;
+      }
 
-      const result = (await response.json()) as BbaProjectSnapshot;
-
-      if (!response.ok || result.planningDataset.activities.length === 0) {
+      if (!prepareResponse.ok) {
         setPhase("error");
         setErrorMessage(
           "Não foi possível reconhecer nenhum item de planejamento neste arquivo. Verifique se é uma exportação XML do Microsoft Project ou uma planilha Excel de cronograma/curva S/físico-financeiro."
@@ -99,14 +118,79 @@ export function BbaProjectWorkspaceExperience() {
         return;
       }
 
-      setSnapshot(result);
-      setSelectedActivityId(firstAtRiskActivityId(result));
-      setPhase("ready");
+      const { planningImportId, storagePath } = (await prepareResponse.json()) as {
+        planningImportId: string;
+        storagePath: string;
+      };
+
+      const supabase = getSupabaseBrowserClient();
+      const { error: uploadError } = await supabase.storage.from(UPLOAD_BUCKET_NAME).upload(storagePath, file, {
+        contentType: file.type || "application/octet-stream",
+        upsert: false
+      });
+
+      if (uploadError) {
+        setPhase("error");
+        setErrorMessage("Falha ao enviar o arquivo para o armazenamento da plataforma. Tente novamente.");
+        return;
+      }
+
+      const uploadCompleteResponse = await fetch("/api/bba-project/imports/upload-complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planningImportId })
+      });
+
+      if (!uploadCompleteResponse.ok) {
+        setPhase("error");
+        setErrorMessage("Não foi possível confirmar o envio do arquivo. Tente novamente.");
+        return;
+      }
+
+      setPhase("processing");
+      setProcessingStepIndex(0);
+
+      const stepTimer = window.setInterval(() => {
+        setProcessingStepIndex((current) => Math.min(current + 1, PROCESSING_STEPS.length - 1));
+      }, STEP_DURATION_MS);
+      const minimumDisplay = wait(PROCESSING_STEPS.length * STEP_DURATION_MS);
+
+      try {
+        const [processResponse] = await Promise.all([
+          fetch("/api/bba-project/imports/process", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ planningImportId })
+          }),
+          minimumDisplay
+        ]);
+
+        let result: BbaProjectSnapshot;
+        try {
+          result = (await processResponse.json()) as BbaProjectSnapshot;
+        } catch {
+          setPhase("error");
+          setErrorMessage("Falha de comunicação ao importar o arquivo.");
+          return;
+        }
+
+        if (!processResponse.ok || result.planningDataset.activities.length === 0) {
+          setPhase("error");
+          setErrorMessage(
+            "Não foi possível reconhecer nenhum item de planejamento neste arquivo. Verifique se é uma exportação XML do Microsoft Project ou uma planilha Excel de cronograma/curva S/físico-financeiro."
+          );
+          return;
+        }
+
+        setSnapshot(result);
+        setSelectedActivityId(firstAtRiskActivityId(result));
+        setPhase("ready");
+      } finally {
+        window.clearInterval(stepTimer);
+      }
     } catch {
       setPhase("error");
       setErrorMessage("Falha de comunicação ao importar o arquivo.");
-    } finally {
-      window.clearInterval(stepTimer);
     }
   }
 
@@ -220,6 +304,20 @@ export function BbaProjectWorkspaceExperience() {
               type="file"
             />
           </div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (phase === "uploading") {
+    return (
+      <Card className="span-12 workspace-card bba-project-fade-in" title="Importar Planejamento">
+        <div className="workspace-map-placeholder">
+          <div className="workspace-map-placeholder__icon bba-project-processing-icon" aria-hidden="true">
+            <UploadCloud size={22} />
+          </div>
+          <p className="workspace-map-placeholder__text">Enviando arquivo...</p>
+          <ProgressBar animated color="gold" value={50} />
         </div>
       </Card>
     );
