@@ -266,6 +266,67 @@ Decision Copilot, e o faseamento do Epic 16) está descrita em
 
 ---
 
+## PRINCIPLE 007 — Domain Language Containment
+
+O vocabulário arquitetural do BDOS deve permanecer contido nas
+camadas de domínio, aplicação, persistência, integração, auditoria e
+documentação técnica.
+
+Toda superfície destinada ao usuário deve utilizar vocabulário de
+produto canônico, contextualizado para a jornada e adequado ao nível
+de conhecimento do usuário.
+
+Nenhum termo interno deve alcançar a interface sem uma decisão
+explícita de produto.
+
+**Diferente dos PRINCIPLES 001-006, este não é uma regra sobre como o
+domínio deve ser modelado — é uma regra sobre a fronteira entre o
+domínio e a apresentação.** Mesmo assim, pertence à mesma família: os
+seis princípios anteriores garantem que nada existe isolado de sua
+proveniência causal; este garante que a proveniência causal nunca
+vaza para quem não deveria precisar entendê-la para confiar no
+resultado.
+
+**Por que este princípio existe.** O levantamento do Epic 17
+(`packages/bdos-core/docs/GOLDEN_JOURNEY_VOCABULARY_AUDIT.md`)
+encontrou nomes internos de arquitetura (`Business Facts`,
+`Diagnosis`, `Decision`, `Recommendation`, "BDOS", "workflow de
+execução") aparecendo, sem tradução, em superfícies reais de produto —
+mesmo com a arquitetura tecnicamente correta por trás. O risco não é
+hipotético: é o motivo pelo qual o Epic 17 foi aberto.
+
+**O modelo de três camadas** (Domain Vocabulary → Product Vocabulary →
+User-Facing Copy) e o glossário canônico completo — termo a termo,
+com exposição classificada em Internal only / Developer-visible /
+Admin-visible / Product language / User-visible — vivem em
+`packages/bdos-core/docs/PRODUCT_VOCABULARY.md`. Este princípio nunca
+duplica esse conteúdo; só fixa a regra que o motiva.
+
+**O que este princípio explicitamente não faz** — não renomeia
+aggregates, tabelas, contratos de API ou nomes de função. Traduzir o
+código para "parecer amigável" ataca o sintoma errado: o problema
+nunca esteve no nome interno (`ExecutionWorkflow` é um nome correto e
+preciso *dentro* do domínio), esteve no vazamento desse nome para
+fora dele. Renomear a Camada 1 para consertar a Camada 3 destruiria
+precisão técnica sem resolver o vazamento em nenhum outro lugar onde
+o mesmo termo apareça.
+
+**Limite conhecido do enforcement — texto gerado por LLM.** Um guard
+estático (scanner textual, mesmo padrão de
+`engineering-boundaries.test.ts`) consegue garantir, com certeza, que
+nenhum termo da lista de proibidos apareça em código de apresentação
+estático — componentes React, mensagens de erro, turnos
+determinísticos do Copilot. Ele **não pode** garantir o mesmo para o
+texto que o Claude gera livremente (intents `answer`/`compare` do
+Decision Copilot) — ali, a proteção é o `SYSTEM_PROMPT` (revisão
+explícita da instrução "sem jargão técnico") mais amostragem de
+respostas reais, nunca um teste que trava o build. Este princípio não
+promete uma garantia que o mecanismo de verificação não sustenta —
+mesma disciplina de honestidade já aplicada em toda documentação do
+BDOS (nunca afirmar mais do que o código garante).
+
+---
+
 ## Estado de implementação (UI Sprint 7 — Geospatial Engine MVP)
 
 - ✅ Princípios documentados (este arquivo), incluindo PRINCIPLE 004.
