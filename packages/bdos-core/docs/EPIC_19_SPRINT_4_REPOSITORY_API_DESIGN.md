@@ -2,10 +2,169 @@
 
 > Mesma disciplina do Epic 18: relatório do estado atual, desenho dos
 > endpoints e estados, lista exata de arquivos, riscos — antes de
-> qualquer código. **Sprint 4.0 (Contract Freeze) concluída** — ver
-> seção própria abaixo: migration aplicada, tipos puros criados,
-> testes de schema rodando. 4A (Repository) e 4C (Parser) liberadas
-> para desenvolvimento paralelo. 4B/4D/4E ainda não iniciadas.
+> qualquer código. **Sprint 4.0 (Contract Freeze) concluída.** 4A
+> (Repository) e 4C (Parser) **implementadas e aprovadas para commit —
+> a pendência bloqueante de reconciliação financeira (ver "Revisão
+> 19.4A/4C" e "3.1 — Resolução" abaixo) foi corrigida: o parser agora
+> lê o bloco "CONTROLE FINANCEIRO – MEDIÇÃO" (autoritativo, detectado
+> semanticamente) em vez da grade histórica MED-NN, e uma invariante
+> permanente (`official_period_total_mismatch`, blocking) impede que
+> qualquer futuro boletim seja tratado como importado com confiança
+> sem reconciliar com o total que o próprio arquivo declara.** 4B/4D/4E
+> não iniciadas.
+
+## Revisão 19.4A/4C — achados
+
+Três pontos levantados na revisão do código (não só do relato).
+
+### 1. `findOrCreateManagedServiceItem` prometia mais do que o banco garante
+
+Corrigido. Renomeada para `findMatchingManagedServiceItemOrCreate`,
+retornando `{ item, outcome: "matched" | "created" }` em vez de só o
+registro — força quem chama a enxergar explicitamente que um "matched"
+é uma correlação heurística por `(engineering_project_id, code)`, não
+uma identidade garantida (ao contrário de `findOrCreateWorkPackage`,
+que continua com esse nome porque a `UNIQUE` real existe).
+
+Respostas às perguntas da revisão, documentadas agora no próprio
+código (comentário extenso na função):
+
+- **Campos do SELECT**: `engineering_project_id` + `code`, nada mais.
+- **Identidade considerada equivalente**: só o texto do código —
+  `description`/`unit` do que já existe nunca são comparados contra o
+  que acabou de ser declarado.
+- **Códigos repetidos legítimos podem ser confundidos?** Sim — esse é
+  o risco real. Se o mesmo código aparecer para dois itens
+  genuinamente diferentes (o motivo real de a constraint ter sido
+  removida), a função retorna o primeiro match, e o outcome `"matched"`
+  é o sinal para o Application Service (Sprint 4D) decidir se aceita
+  a correlação (comparando `item.description`/`item.unit` contra o
+  declarado) ou trata como um item novo — decisão de negócio, fora do
+  repository.
+- **Retentativas do mesmo import evitam duplicação?** No caso
+  sequencial comum, sim (a segunda chamada encontra a linha já criada
+  pela primeira). Concorrência real (duas chamadas simultâneas) não é
+  protegida — sem constraint no banco, não há nada a capturar.
+- **Idempotência apoiada em identificador estável da origem?** Não.
+  Nada liga a linha a `measurement_bulletin_import_id` nem a
+  `sourceLocation` — só ao código textual.
+
+Não recriamos no repository a unicidade removida conscientemente do
+banco na Sprint 3 — a correção foi de honestidade de contrato (nome +
+tipo de retorno), não de tentar simular atomicidade que não existe.
+
+### 2. Dependência de `xlsx-reader.ts` (measurement-workspace → schedule-management)
+
+Avaliação, não refatoração (conforme pedido):
+
+- **Contém só leitura mecânica de XLSX?** Confirmado — busca por
+  termos de cronograma/planejamento no arquivo retorna zero
+  ocorrências de código real, só um comentário documentando que
+  `planning-dataset.ts` nunca importa este arquivo (o inverso do que
+  se poderia temer).
+- **Expõe tipos ou conceitos de cronograma?** Não — os únicos exports
+  são `readXlsxWorkbook` e os tipos `ExcelCellValue`/`ExcelSheetRow`/
+  `ExcelSheetDto`/`ExcelWorkbookDto`, genéricos (linha/célula/aba/
+  workbook), sem nenhum conceito de atividade, cronograma ou Curva S.
+- **A dependência é só técnica?** Sim, pelas duas respostas acima.
+- **Extrair agora ou registrar como dívida?** Registrar como dívida,
+  como pedido. O destino de longo prazo mais coerente é uma área
+  compartilhada de infraestrutura (ex.: `packages/bdos-core/src/domain/shared/spreadsheet/`
+  ou nome equivalente já usado no monorepo) — hoje o arquivo só está
+  em `schedule-management/adapters/excel-import/` por ter sido escrito
+  primeiro ali, não porque pertence semanticamente ao Project Studio.
+  "O guard passou" confirma só que nenhuma regra atual bloqueia — não
+  que a fronteira é a ideal a longo prazo.
+
+### 3. Validação financeira do parser — achado bloqueante, não resolvido
+
+A auditabilidade estrutural está confirmada com números exatos (ver
+"Resultado estruturado do teste contra o BM_08" abaixo) — 190 abas
+reconciliam exatamente, contagem de linhas reconcilia exatamente,
+nenhuma linha essencial virou warning por engano (as 6 são rodapé real:
+total geral, arredondamento contratual, texto de certificação/assinatura).
+
+**Mas a reconciliação financeira falhou, e não sei ainda por quê.** A
+soma de `declaredTotalValue` das 39 linhas extraídas para MED-08 é
+R$ 905.974,94; o próprio arquivo declara, no rodapé da mesma aba,
+"Importa o presente Boletim de Medição na quantia de R$ 252.654,78" —
+uma diferença de R$ 653.320,16, não uma diferença de arredondamento.
+
+Investiguei duas hipóteses e nenhuma resolveu:
+
+- **Hipótese "coluna cumulativa, não por período"**: descartada —
+  inspecionei os valores de FISICO de itens reais (ex.: `01.02.02`,
+  aluguel de contêiner por mês) ao longo de MED-01..MED-11 e eles não
+  são monotonicamente crescentes (1,1,1,3,3,12,6,1,2,0,2) — não é uma
+  coluna de acumulado, os valores por período são genuinamente
+  independentes.
+- **Cruzamento com a aba irmã "BOLETIM FÍSICO FINANCEIRO"**: essa aba
+  tem sua própria coluna "NO PERIODO (R$)", mas somar essa coluna
+  também não reconcilia (R$ 1.312.562,99) — e pior, essa aba mistura
+  linhas agregadoras (que já trazem o total somado dos filhos, ex.:
+  `01.00.00` tem `NO PERIODO (R$) = 42.015,69`) com linhas de itens
+  folha na mesma coluna. Uma soma ingênua ali dupla-contaria por
+  natureza — o que sugere que o modelo contábil real deste arquivo
+  envolve hierarquia de rollup, e possivelmente BDI, administração
+  local ou outra alocação que ainda não identifiquei.
+
+**Não ajustei a extração para forçar um número mais próximo do
+declarado** — isso seria exatamente o tipo de "preencher lacuna
+silenciosamente" que este Epic rejeita desde a Sprint 0. O parser
+extrai fielmente o que cada célula contém (isso está comprovado); o
+que não está comprovado é que meu entendimento de qual célula
+representa "o valor financeiro oficial deste item neste período" está
+certo.
+
+**Isto bloqueava a aprovação do parser como estava.** Não era um
+problema de implementação (o código fazia o que eu quis que fizesse) —
+era um problema de eu não ter ainda o modelo contábil correto do
+documento.
+
+### 3.1 — Resolução
+
+Investigação com leitura de fórmulas do arquivo real (fora do parser
+de produção, só para diagnóstico) encontrou a causa raiz: a aba tem
+**duas estruturas financeiras paralelas**, não uma.
+
+- **Bloco "CONTROLE FINANCEIRO – MEDIÇÃO"** (colunas `QUANTITATIVO`/
+  `VALOR (R$)`, `H:I` no BM_08) — ligado por fórmula a
+  `'BOLETIM FÍSICO FINANCEIRO'!I/M`, reconcilia exatamente com
+  `I348 = SUM(I12:I347) = R$ 252.654,78`, com o texto de certificação
+  do boletim (`B349`, que lê da mesma célula `I348`) e com
+  `RESUMO!I5` (via uma cadeia de soma totalmente independente por
+  grupo de EAP). **Esta é a fonte autoritativa.**
+- **Grade histórica MED-NN** (`FISICO`/`FINANCEIRO` por período,
+  colunas `W:AR`, incluindo `AK:AL` para MED-08) — preenchida à mão,
+  sem fórmula, soma bruta `R$ 964.483,89` para MED-08. Diverge da
+  fonte oficial em 55 linhas (às vezes tem valor onde a oficial tem
+  zero, às vezes o inverso). **Não é autoritativa.**
+
+O parser (`bulletin-sheet-detector.ts`/`bulletin-import.ts`) foi
+corrigido para: (1) detectar o bloco oficial **semanticamente** (texto
+do cabeçalho "CONTROLE FINANCEIRO – MEDIÇÃO" → `QUANTITATIVO`/`VALOR`,
+nunca por posição fixa de coluna) e usá-lo como única fonte de
+`ParsedMeasurementLine`; (2) manter a grade MED-NN só como evidência de
+auditoria, nunca como fonte — uma divergência vira issue
+`historical_grid_not_authoritative` (warning), sem nunca ajustar
+nenhum dos dois valores; (3) tratar colunas de texto residual sem
+cabeçalho reconhecido (achado real: coluna `N`, texto órfão sem
+fórmula, e coluna `A`, marcações manuais "X") como issue
+`orphan_legacy_column_detected` (warning, uma por aba, nunca
+participam de identidade/descrição); (4) adicionar uma invariante
+permanente `official_period_total_mismatch` (**blocking**): a soma das
+linhas extraídas do bloco oficial é comparada com o total que o
+PRÓPRIO arquivo declara (a linha "TOTAL...", nunca a nossa soma
+comparada com ela mesma) — qualquer divergência acima de 1 centavo, ou
+a ausência da linha de total, bloqueia a importação em vez de deixar
+passar silenciosamente. Contra o BM_08 real: soma das linhas
+extraídas = total declarado = R$ 252.654,78, diferença R$ 0,00.
+
+O número intermediário R$ 905.974,94 (mencionado acima) era a soma das
+39 linhas que o parser *anterior* considerava medíveis, lendo a coluna
+errada — não é um terceiro valor financeiro do documento, é evidência
+do comportamento defeituoso já corrigido; não deve aparecer em UI
+futura, só a comparação entre valor oficial e grade histórica.
 
 ## A. Estado atual
 
@@ -282,6 +441,84 @@ período declarado e oficial armazenados de forma independente
 7/7 nas três. A suíte anterior (`bulletin-finalization-guard.test.mjs`,
 15 testes) foi re-executada depois desta migration para confirmar
 ausência de regressão — 15/15.
+
+## Resultado estruturado do teste contra o BM_08 real
+
+Não gerei um documento separado — é o output de um script de
+diagnóstico (descartado depois, mesma disciplina de todo o Epic 18/19)
+rodado com `npx tsx` a partir de `packages/bdos-core`, usando o
+arquivo real (`BM_08_LAGOA DO ARROZ _R_00.xlsx`, não commitado).
+**Atualizado após a correção da 3.1** — números abaixo já refletem o
+parser corrigido (bloco oficial, não a grade histórica).
+
+```
+bulletinNumber: 8
+declaredPeriod: { startDate: "2026-06-01", endDate: "2026-06-30", labels: [MED-01..MED-11] }
+selectedSheet: "BOLETIM DE MEDIÇÃO 08"
+inspectedSheetCount: 190
+officialPeriodColumn: bloco "CONTROLE FINANCEIRO – MEDIÇÃO" -> QUANTITATIVO (H) / VALOR (R$) (I)
+
+workPackages: 336 (300 folha + 36 agregadores)
+serviceItems: 300
+measurementLines: 15  (itens com quantidade E/OU valor oficial ≠ 0/nulo --
+                        critério combinado, não "quantidade=0 descarta")
+
+soma financeira das linhas importadas: R$ 252.654,78
+total declarado pelo próprio arquivo (linha "TOTAL GERAL (R$)"): R$ 252.654,78
+diferença: R$ 0,00  -- official_period_total_mismatch não disparou.
+
+grade histórica MED-08 (W:AR, auditoria, não usada como fonte):
+  soma bruta: R$ 964.483,89 -- diverge da oficial em R$ 711.829,11,
+  reportado como historical_grid_not_authoritative (warning).
+
+issues (8, todas warning neste arquivo real -- nenhuma blocking):
+  missing_work_package_code: 1        (linha "ARREDONDAMENTO CONTRATUAL", sem código)
+  unrecognized_line: 5                 (TOTAL GERAL + 4 linhas de texto de
+                                         certificação/assinatura, sem nome)
+  historical_grid_not_authoritative: 1
+  orphan_legacy_column_detected: 1     (colunas A -- 61 marcações "X", 0
+                                         coincidências -- e N -- 256 valores,
+                                         93 coincidências -- reportadas
+                                         separadamente na mesma issue)
+
+skippedSheets por motivo (189 total, 190 inspecionadas - 1 selecionada):
+  hidden_sheet_not_selected: 172
+  calculation_memory_deferred: 15
+  summary_sheet_not_measurement_lines: 1  (aba "RESUMO")
+  duplicate_candidate: 1                   (aba "BOLETIM FÍSICO FINANCEIRO")
+  -- as 7 razões congeladas na Sprint 4.0 são um union type TypeScript;
+     nenhum valor fora desse conjunto é sequer compilável, não só
+     "não observado neste arquivo" -- é uma garantia do compilador,
+     não uma observação empírica.
+```
+
+**Reconciliação de linhas (nada some em silêncio)**: 926 linhas de
+dado varridas na aba = 336 classificadas (viraram `workPackages`) + 6
+parciais (viraram `issues`) + 584 em branco (ausência real, sem código
+nem nome — não é perda). Os três números somam exatamente 926.
+
+**Como agregador é diferenciado de medível**: ausência de valor na
+coluna `UND.` (unidade) — confirmado contra o arquivo real: linhas
+como `01.00.00`/`01.01.00` (grupos) não têm unidade; `01.01.01`
+("CAPINA MANUAL", M2) tem. 36 agregadores, 300 medíveis, soma 336,
+bate com `workPackages.length`.
+
+**Células de erro/fórmula**: o arquivo real tem células `#REF!` (vistas
+em outro bloco da mesma aba, colunas 14/15 de "CONTROLE FINANCEIRO —
+MEDIÇÃO", não usado por este parser). Nas colunas do período alvo
+(MED-08, colunas 36/37), zero células `#REF!` foram encontradas —
+`readNumber` trata qualquer célula não-numérica como `null` (nunca
+inventa um número), então mesmo se houvesse, o resultado seria `null`,
+nunca um valor incorreto.
+
+**Percentual/measurement_type**: nenhum item do catálogo tem unidade
+que sugira medição por percentual (`%`) — todos os 300 `serviceItems`
+têm unidade física real (M2, M, M3, UNID, etc.). O parser não infere
+`measurementType` do arquivo (todo item nasce implícito como
+`quantity`, o `DEFAULT` do schema) — não é um bug, é um gap real: se
+algum boletim futuro tiver itens medidos por percentual, esta versão
+do parser não os distingue. Registrado como lacuna conhecida, não
+resolvida nesta sprint (o BM_08 real não expôs a necessidade ainda).
 
 ## O que não é decidido aqui, aguardando aprovação
 

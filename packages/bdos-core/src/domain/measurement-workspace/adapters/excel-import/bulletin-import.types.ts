@@ -106,7 +106,11 @@ export type MeasurementImportIssueCode =
   | "missing_service_item_code"
   | "missing_quantity_and_value"
   | "ambiguous_period_label"
-  | "duplicate_service_item_in_sheet";
+  | "duplicate_service_item_in_sheet"
+  | "official_measurement_block_not_found"
+  | "historical_grid_not_authoritative"
+  | "orphan_legacy_column_detected"
+  | "official_period_total_mismatch";
 
 export interface MeasurementImportIssue {
   readonly code: MeasurementImportIssueCode;
