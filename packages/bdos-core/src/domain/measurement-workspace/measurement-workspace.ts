@@ -524,7 +524,15 @@ function isMutableStatus(status: MeasurementWorkspaceStatus): boolean {
   );
 }
 
-function canAdvanceStatus(
+// Exportada (Sprint 4D.2) para que processMeasurementBulletinImport
+// (apps/web) valide a transição Draft -> InProgress sem precisar
+// reconstruir o aggregate rico que advanceMeasurementWorkspaceStatus
+// exige (lines/summary/trace/reference/period -- shape incompatível
+// com o modelo normalizado que measurement-repository.ts persiste).
+// A tabela de transições continua sendo a única fonte de verdade;
+// isto evita duplicar a regra como uma constante solta no Application
+// Service.
+export function canAdvanceStatus(
   fromStatus: MeasurementWorkspaceStatus,
   toStatus: MeasurementWorkspaceStatus,
 ): boolean {

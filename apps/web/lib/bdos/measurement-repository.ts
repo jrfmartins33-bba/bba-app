@@ -521,6 +521,33 @@ export const getMeasurementWorkspaceById = async (
   return data ? toMeasurementWorkspaceRecord(data) : null;
 };
 
+// Sprint 4D.2 -- primitiva nova para period_number_conflict (Parte IX
+// do desenho, aprovada mas não implementada na 19.4D.1 por falta desta
+// consulta). Usada só em MODO FRESCO: nesse modo não existe workspace
+// para o import atual ainda, então qualquer linha devolvida aqui já é,
+// por construção, de um import DIFERENTE -- não precisa filtrar o
+// import atual manualmente. Não impõe unicidade nenhuma (o schema não
+// tem essa constraint, deliberadamente -- remedição de período é
+// legítima); só permite ao Application Service DETECTAR a colisão
+// para sinalizar como warning, nunca para bloquear.
+export const listMeasurementWorkspacesByProjectAndPeriod = async (
+  supabase: SupabaseClient,
+  params: { companyId: string; engineeringProjectId: string; periodNumber: number }
+): Promise<ReadonlyArray<MeasurementWorkspaceRecord>> => {
+  const { data, error } = await supabase
+    .from("measurement_workspaces")
+    .select(selectMeasurementWorkspaceColumns)
+    .eq("company_id", params.companyId)
+    .eq("engineering_project_id", params.engineeringProjectId)
+    .eq("period_number", params.periodNumber);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map(toMeasurementWorkspaceRecord);
+};
+
 // Primitiva de idempotência (Sprint 4.0): resolve o workspace já
 // vinculado a um import, se existir. O que fazer com o resultado
 // (already_completed / resumed / workspace_closed / ...) é decisão do

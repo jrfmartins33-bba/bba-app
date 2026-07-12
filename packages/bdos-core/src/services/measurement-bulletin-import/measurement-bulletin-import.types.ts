@@ -107,11 +107,17 @@ export interface ProcessMeasurementBulletinImportInput {
  * inserir → em `unique_violation`, reler o existente → nunca criar
  * identidade alternativa nem gerar código novo silenciosamente.
  */
+// "workspace_ready_for_review" -- correção 1 da revisão de arquitetura
+// registrada em EPIC_19_SPRINT_4D_APPLICATION_SERVICE_DESIGN.md: um
+// workspace em ReadyForReview nunca é retomado automaticamente, mesmo
+// que a intenção seja só completar linhas ausentes -- exige ação
+// humana explícita, fora deste caso de uso.
 export type ProcessMeasurementBulletinImportOutcomeKind =
   | "completed"
   | "already_completed"
   | "already_processing"
   | "resumed"
+  | "workspace_ready_for_review"
   | "workspace_closed"
   | "workspace_cancelled"
   | "failed";
@@ -120,6 +126,12 @@ export interface ProcessMeasurementBulletinImportOutcome {
   readonly kind: ProcessMeasurementBulletinImportOutcomeKind;
   readonly measurementWorkspaceId: string | null;
   readonly issues: ReadonlyArray<MeasurementImportIssue>;
+  // Sprint 4D.2 -- aditivo ao contrato congelado da 4.0. `null` só nos
+  // early exits que genuinamente não têm análise para mostrar
+  // (already_processing, workspace_ready_for_review, workspace_closed,
+  // workspace_cancelled). already_completed/resumed/completed/failed
+  // (por gate) sempre carregam o snapshot persistido.
+  readonly analysisResult: MeasurementAnalysisResult | null;
 }
 
 export interface ProcessMeasurementBulletinImportSuccess {
@@ -135,6 +147,11 @@ export type ProcessMeasurementBulletinImportErrorCode =
 export interface ProcessMeasurementBulletinImportFailure {
   readonly success: false;
   readonly error: ProcessMeasurementBulletinImportErrorCode;
+  // Sprint 4D.2 -- aditivo. Presente para download_failed/parse_failed
+  // (um FailedMeasurementAnalysisResult foi persistido antes de
+  // devolver o erro); ausente para import_not_found (nada foi
+  // persistido, porque o import nem foi encontrado).
+  readonly analysisResult?: MeasurementAnalysisResult;
 }
 
 export type ProcessMeasurementBulletinImportResult =
