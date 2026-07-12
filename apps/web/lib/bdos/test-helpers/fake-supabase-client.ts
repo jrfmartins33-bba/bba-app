@@ -186,6 +186,22 @@ class FakeStorageBucket {
       error: null
     };
   }
+
+  // Simula supabase.storage.from(bucket).list(folderPath, { search }) --
+  // usado por confirmMeasurementBulletinUpload para confirmar a
+  // existência do objeto sem baixá-lo (mesmo padrão do Epic 18).
+  // `__files` guarda o path completo como chave; aqui simulamos a
+  // listagem de "pasta" filtrando por prefixo e projetando só o nome
+  // do objeto (último segmento), como a API real devolve.
+  async list(folderPath: string, options?: { search?: string }): Promise<{ data: Array<{ name: string }> | null; error: { message: string } | null }> {
+    const prefix = `${folderPath}/`;
+    const names = Object.keys(this.client.__files)
+      .filter((path) => path.startsWith(prefix))
+      .map((path) => path.slice(prefix.length))
+      .filter((name) => !options?.search || name === options.search);
+
+    return { data: names.map((name) => ({ name })), error: null };
+  }
 }
 
 export interface FakeSupabaseClient {
