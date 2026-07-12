@@ -28,6 +28,13 @@ export interface MeasurementBulletinImportRecord {
   readonly fileName: string;
   readonly storagePath: string;
   readonly status: MeasurementBulletinImportStatus;
+  // Snapshot imutável da última execução (Sprint 4D.0, R2) -- unknown
+  // porque este repository nunca interpreta a forma do JSON, mesma
+  // disciplina do restante do arquivo para colunas JSONB. Consumidor
+  // imediato: o caminho already_completed da idempotência (Sprint
+  // 4D.2) precisa devolver o resultado já persistido sem reprocessar
+  // o arquivo nem fazer uma segunda consulta só para esta coluna.
+  readonly analysisResult: unknown | null;
 }
 
 // `status` opcional, mesmo raciocínio de insertPlanningImport
@@ -60,13 +67,30 @@ export const insertMeasurementBulletinImport = async (
   }
 };
 
+const selectMeasurementBulletinImportColumns =
+  "id, company_id, engineering_project_id, file_name, storage_path, status, analysis_result";
+
+// analysisResult passa verbatim -- este repository não valida nem faz
+// cast para MeasurementAnalysisResult; essa é responsabilidade do
+// Application Service (Sprint 4D.2), o único lugar que conhece a
+// forma exata do contrato.
+const toMeasurementBulletinImportRecord = (data: Record<string, unknown>): MeasurementBulletinImportRecord => ({
+  id: data.id as string,
+  companyId: data.company_id as string,
+  engineeringProjectId: data.engineering_project_id as string,
+  fileName: data.file_name as string,
+  storagePath: data.storage_path as string,
+  status: data.status as MeasurementBulletinImportStatus,
+  analysisResult: data.analysis_result ?? null
+});
+
 export const getMeasurementBulletinImportById = async (
   supabase: SupabaseClient,
   params: { id: string; companyId: string }
 ): Promise<MeasurementBulletinImportRecord | null> => {
   const { data, error } = await supabase
     .from("measurement_bulletin_imports")
-    .select("id, company_id, engineering_project_id, file_name, storage_path, status")
+    .select(selectMeasurementBulletinImportColumns)
     .eq("id", params.id)
     .eq("company_id", params.companyId)
     .maybeSingle();
@@ -75,18 +99,7 @@ export const getMeasurementBulletinImportById = async (
     throw error;
   }
 
-  if (!data) {
-    return null;
-  }
-
-  return {
-    id: data.id as string,
-    companyId: data.company_id as string,
-    engineeringProjectId: data.engineering_project_id as string,
-    fileName: data.file_name as string,
-    storagePath: data.storage_path as string,
-    status: data.status as MeasurementBulletinImportStatus
-  };
+  return data ? toMeasurementBulletinImportRecord(data) : null;
 };
 
 export const updateMeasurementBulletinImportStatus = async (
@@ -102,6 +115,85 @@ export const updateMeasurementBulletinImportStatus = async (
   if (error) {
     throw error;
   }
+};
+
+// Correção 4 (revisão de arquitetura da Sprint 4D) — claim atômico:
+// UPDATE ... WHERE status IN ('uploaded', 'failed') é uma única
+// instrução SQL via PostgREST, portanto atômica no Postgres. Duas
+// chamadas concorrentes para o mesmo import nunca reivindicam a mesma
+// linha -- a que perder a corrida encontra 0 linhas afetadas.
+// maybeSingle() com 0 linhas retorna null sem erro; o Application
+// Service interpreta null como "não pude reivindicar" (already_processing
+// ou status inesperado), nunca como sucesso silencioso. Não tenta
+// distinguir os dois motivos aqui -- essa distinção, se vier a
+// importar, é decisão do Application Service (Sprint 4D.2), não deste
+// repository.
+export const claimMeasurementBulletinImportForProcessing = async (
+  supabase: SupabaseClient,
+  params: { id: string; companyId: string }
+): Promise<MeasurementBulletinImportRecord | null> => {
+  const { data, error } = await supabase
+    .from("measurement_bulletin_imports")
+    .update({ status: "processing" })
+    .eq("id", params.id)
+    .eq("company_id", params.companyId)
+    .in("status", ["uploaded", "failed"])
+    .select(selectMeasurementBulletinImportColumns)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ? toMeasurementBulletinImportRecord(data) : null;
+};
+
+export type MeasurementBulletinImportFinalStatus = "completed" | "failed";
+
+// Correção 5 -- analysis_result e o status final (completed/failed)
+// são gravados na MESMA atualização de linha, nunca em duas chamadas
+// separadas. Evita as duas inconsistências que a versão anterior do
+// desenho permitia: um import completed sem resultado, ou um
+// resultado persistido enquanto o status ainda mostra processing.
+// analysisResult é gravado verbatim (JSONB) -- este repository nunca
+// interpreta sua forma, mesma disciplina de insertMeasurementBulletin
+// para lines/totals/validationIssues. O snapshot é imutável por
+// execução (Parte XII, R2): uma retomada que produz um novo resultado
+// simplesmente substitui o valor desta coluna, não acumula histórico.
+//
+// Guarda simétrica ao claim: só finaliza uma linha que está
+// efetivamente em 'processing' (`.in("status", ["processing"])`,
+// mesma mecânica atômica de claimMeasurementBulletinImportForProcessing).
+// Sem isso, uma chamada indevida ou duplicada (ex.: bug no Application
+// Service, ou uma segunda finalização de uma execução já concluída)
+// poderia sobrescrever silenciosamente um import já `completed`/`failed`
+// com um resultado obsoleto. `null` de volta significa "não havia
+// nada em processing para finalizar" -- nunca esperado no fluxo normal
+// (finalize sempre segue um claim bem-sucedido na mesma execução); o
+// Application Service deve tratar como anomalia, não como sucesso.
+export const finalizeMeasurementBulletinImportWithResult = async (
+  supabase: SupabaseClient,
+  params: {
+    id: string;
+    companyId: string;
+    status: MeasurementBulletinImportFinalStatus;
+    analysisResult: unknown;
+  }
+): Promise<MeasurementBulletinImportRecord | null> => {
+  const { data, error } = await supabase
+    .from("measurement_bulletin_imports")
+    .update({ status: params.status, analysis_result: params.analysisResult })
+    .eq("id", params.id)
+    .eq("company_id", params.companyId)
+    .in("status", ["processing"])
+    .select(selectMeasurementBulletinImportColumns)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ? toMeasurementBulletinImportRecord(data) : null;
 };
 
 // ---------------------------------------------------------------
@@ -485,10 +577,17 @@ export interface MeasurementWorkspaceLineRecord {
   readonly declaredQuantity: number | null;
   readonly declaredUnitValue: number | null;
   readonly declaredTotalValue: number | null;
+  // R1 (Sprint 4D.0) — rastreabilidade até a célula de origem. Nulos
+  // no Caminho A (lançamento nativo, ainda não implementado neste
+  // Epic) ou quando o parser não expõe granularidade de coluna.
+  readonly sourceSheetName: string | null;
+  readonly sourceRowNumber: number | null;
+  readonly sourcePhysicalColumn: string | null;
+  readonly sourceFinancialColumn: string | null;
 }
 
 const selectMeasurementWorkspaceLineColumns =
-  "id, measurement_workspace_id, managed_service_item_id, quantity, unit_value, total_value, declared_quantity, declared_unit_value, declared_total_value";
+  "id, measurement_workspace_id, managed_service_item_id, quantity, unit_value, total_value, declared_quantity, declared_unit_value, declared_total_value, source_sheet_name, source_row_number, source_physical_column, source_financial_column";
 
 const toMeasurementWorkspaceLineRecord = (data: Record<string, unknown>): MeasurementWorkspaceLineRecord => ({
   id: data.id as string,
@@ -499,7 +598,11 @@ const toMeasurementWorkspaceLineRecord = (data: Record<string, unknown>): Measur
   totalValue: Number(data.total_value),
   declaredQuantity: data.declared_quantity === null ? null : Number(data.declared_quantity),
   declaredUnitValue: data.declared_unit_value === null ? null : Number(data.declared_unit_value),
-  declaredTotalValue: data.declared_total_value === null ? null : Number(data.declared_total_value)
+  declaredTotalValue: data.declared_total_value === null ? null : Number(data.declared_total_value),
+  sourceSheetName: (data.source_sheet_name as string | null) ?? null,
+  sourceRowNumber: data.source_row_number === null || data.source_row_number === undefined ? null : Number(data.source_row_number),
+  sourcePhysicalColumn: (data.source_physical_column as string | null) ?? null,
+  sourceFinancialColumn: (data.source_financial_column as string | null) ?? null
 });
 
 // total_value é sempre passado pelo Application Service já recalculado
@@ -508,6 +611,13 @@ const toMeasurementWorkspaceLineRecord = (data: Record<string, unknown>): Measur
 // conhece a forma interna do que grava). UNIQUE(measurement_workspace_id,
 // managed_service_item_id) já existente é a última linha de defesa
 // contra duas linhas para o mesmo item no mesmo workspace.
+//
+// source_* são parâmetros obrigatórios (não opcionais), mesmo padrão
+// de declared_quantity/declared_unit_value/declared_total_value --
+// deliberado (R1 tratado como obrigatório, não opcional, na revisão
+// de arquitetura): força quem chama a decidir explicitamente a origem
+// de cada linha (null é uma resposta válida no Caminho A; omitir não
+// é uma opção silenciosa).
 export const insertMeasurementWorkspaceLine = async (
   supabase: SupabaseClient,
   params: {
@@ -520,6 +630,10 @@ export const insertMeasurementWorkspaceLine = async (
     declaredQuantity: number | null;
     declaredUnitValue: number | null;
     declaredTotalValue: number | null;
+    sourceSheetName: string | null;
+    sourceRowNumber: number | null;
+    sourcePhysicalColumn: string | null;
+    sourceFinancialColumn: string | null;
     notes?: string;
   }
 ): Promise<MeasurementWorkspaceLineRecord> => {
@@ -535,6 +649,10 @@ export const insertMeasurementWorkspaceLine = async (
       declared_quantity: params.declaredQuantity,
       declared_unit_value: params.declaredUnitValue,
       declared_total_value: params.declaredTotalValue,
+      source_sheet_name: params.sourceSheetName,
+      source_row_number: params.sourceRowNumber,
+      source_physical_column: params.sourcePhysicalColumn,
+      source_financial_column: params.sourceFinancialColumn,
       ...(params.notes ? { notes: params.notes } : {})
     })
     .select(selectMeasurementWorkspaceLineColumns)
@@ -547,6 +665,94 @@ export const insertMeasurementWorkspaceLine = async (
   return toMeasurementWorkspaceLineRecord(data);
 };
 
+// Correção 2 (revisão de arquitetura da Sprint 4D) — lê a linha
+// persistida para um (workspace, item) específico, para que uma
+// colisão 23505 em insertMeasurementWorkspaceLine possa ser comparada
+// contra o que já está gravado, nunca tratada como "está tudo certo"
+// por padrão. UNIQUE(measurement_workspace_id, managed_service_item_id)
+// garante que no máximo uma linha existe para o par.
+export const getMeasurementWorkspaceLineByWorkspaceAndServiceItem = async (
+  supabase: SupabaseClient,
+  params: { measurementWorkspaceId: string; managedServiceItemId: string }
+): Promise<MeasurementWorkspaceLineRecord | null> => {
+  const { data, error } = await supabase
+    .from("measurement_workspace_lines")
+    .select(selectMeasurementWorkspaceLineColumns)
+    .eq("measurement_workspace_id", params.measurementWorkspaceId)
+    .eq("managed_service_item_id", params.managedServiceItemId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ? toMeasurementWorkspaceLineRecord(data) : null;
+};
+
+// Correção 2 -- atualização explícita, nunca um segundo INSERT. Só
+// deve ser chamada pelo Application Service depois de comparar a
+// linha existente (getMeasurementWorkspaceLineByWorkspaceAndServiceItem)
+// contra os valores pretendidos e concluir que divergem; uma linha
+// idêntica é already_present, sem escrita nenhuma.
+//
+// Filtra por `id` E `measurement_workspace_id` -- `id` já é chave
+// primária (suficiente para o banco), mas o segundo filtro protege o
+// contrato semântico da função ("atualizar esta linha dentro deste
+// workspace") contra um erro de programação que passe um `id` de
+// outro workspace: em vez de atualizar silenciosamente a linha errada
+// (que existiria de qualquer forma, só em outro workspace),
+// `measurement_workspace_id` incompatível faz o filtro não casar
+// nenhuma linha. maybeSingle() (não single()) porque "zero linhas" é
+// um resultado válido dessa guarda, não necessariamente um erro de
+// infraestrutura -- o Application Service deve tratar `null` como
+// anomalia de consistência (id inexistente ou de outro workspace),
+// nunca como sucesso silencioso.
+export const updateMeasurementWorkspaceLine = async (
+  supabase: SupabaseClient,
+  params: {
+    id: string;
+    measurementWorkspaceId: string;
+    quantity: number;
+    unitValue: number;
+    totalValue: number;
+    declaredQuantity: number | null;
+    declaredUnitValue: number | null;
+    declaredTotalValue: number | null;
+    sourceSheetName: string | null;
+    sourceRowNumber: number | null;
+    sourcePhysicalColumn: string | null;
+    sourceFinancialColumn: string | null;
+  }
+): Promise<MeasurementWorkspaceLineRecord | null> => {
+  const { data, error } = await supabase
+    .from("measurement_workspace_lines")
+    .update({
+      quantity: params.quantity,
+      unit_value: params.unitValue,
+      total_value: params.totalValue,
+      declared_quantity: params.declaredQuantity,
+      declared_unit_value: params.declaredUnitValue,
+      declared_total_value: params.declaredTotalValue,
+      source_sheet_name: params.sourceSheetName,
+      source_row_number: params.sourceRowNumber,
+      source_physical_column: params.sourcePhysicalColumn,
+      source_financial_column: params.sourceFinancialColumn
+    })
+    .eq("id", params.id)
+    .eq("measurement_workspace_id", params.measurementWorkspaceId)
+    .select(selectMeasurementWorkspaceLineColumns)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ? toMeasurementWorkspaceLineRecord(data) : null;
+};
+
+// Releitura das linhas persistidas (correção 2 / correção 5) — o
+// Application Service usa esta função, nunca o DTO do parser em
+// memória, para calcular recalculatedTotal depois da materialização.
 export const listMeasurementWorkspaceLines = async (
   supabase: SupabaseClient,
   params: { measurementWorkspaceId: string }
