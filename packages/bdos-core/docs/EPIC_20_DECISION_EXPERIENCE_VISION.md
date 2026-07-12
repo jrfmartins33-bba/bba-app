@@ -204,17 +204,38 @@ LLM (se usado) apenas fraseando, nunca decidindo o conteúdo.
 
 ## E. Decision Brief — estrutura completa
 
-| Campo | Fonte real hoje | Determinístico ou narrado |
-|---|---|---|
-| **Situação** | `declaredBulletinNumber`, `declaredPeriod`, `status` | Determinístico |
-| **Conclusão** | Função de `status` (`reconciled`/`needs_review`/`failed`) × contagem de issues `blocking` | Determinístico; frase natural pode ser narrada, nunca a posição em si |
-| **O que mudou** | Comparação com boletim anterior do mesmo projeto | **Não disponível hoje** — só existe um período real importado (BM_08); sem 2º período real, não há base para comparar (ver seção M) |
-| **O que preocupa** | `structuralIssues[]`, ordenado por severidade (`blocking` primeiro) | Determinístico — a ordenação e a lista; a frase de cada item pode ser narrada a partir do `message` já existente |
-| **Evidências** | `structuralIssues[].sourceLocation` (aba/linha/coluna), `officialPeriodTotal`/`recalculatedTotal` | Determinístico, já persistido |
-| **Impacto** | `totalDifference`, `workPackages.created/matched`, `serviceItems.created/matched`, `lines.skippedZeroValue` | Determinístico |
-| **Alternativas** | Hoje: enviar / revisar antes de enviar. Não há terceira via real ainda (ex.: "enviar com ressalva formal" não existe como estado do domínio) | Determinístico, mas o cardápio de alternativas é hoje binário — não inventar um terceiro caminho que o domínio não sustenta |
-| **Recomendação** | Mapeamento direto de `status` + severidade das issues abertas | Determinístico |
-| **Confiança** | Reaproveitar o padrão de `advisor-confidence-builder.ts`: cobertura de rastreabilidade (toda issue tem `sourceLocation`? toda linha tem origem?), não uma opinião do modelo | Determinístico, mesmo mecanismo já validado |
+> **Nota de Produto (nomenclatura provisória)**: "Relatório Executivo"
+> é o nome de superfície (Camada 3, `PRODUCT_VOCABULARY.md`) usado na
+> UI a partir desta revisão — decisão deliberada de **não otimizar
+> nomes cedo demais**: primeiro validar que o conceito gera valor
+> percebido real, depois refinar a linguagem. `DecisionBrief` continua
+> sendo o nome técnico interno (Camada 1), nunca exposto ao usuário.
+> Quando os módulos de Planejamento, Financeiro, Contratos e Riscos
+> também estiverem implementados, uma revisão completa da taxonomia e
+> da nomenclatura do BDOS deve consolidar uma linguagem proprietária e
+> consistente em toda a plataforma — não antes.
+
+| Campo (UI) | Campo (tipo) | Fonte real hoje | Determinístico ou narrado |
+|---|---|---|---|
+| **Situação** | `situacao` | `declaredBulletinNumber`, `declaredPeriod`, `status` | Determinístico |
+| **Conclusão** | `conclusao` | Função de `status` (`reconciled`/`needs_review`/`failed`) × contagem de issues `blocking` | Determinístico; frase natural pode ser narrada, nunca a posição em si |
+| **O que mudou** | `oQueMudou` | Comparação com boletim anterior do mesmo projeto | **Não disponível hoje** — só existe um período real importado (BM_08); sem 2º período real, não há base para comparar (ver seção M) — declarado explicitamente, nunca omitido |
+| **O que merece atenção** | `preocupacoes[]` (cada item já carrega `ifAddressed`/`ifIgnored` — a consequência de agir/não agir, seção 8 do brief original) | `structuralIssues[]`, ordenado por severidade (`blocking` primeiro) | Determinístico — a ordenação e a lista; a frase de cada item pode ser narrada a partir do `message` já existente |
+| **Evidências** | `evidencias[]` | `structuralIssues[].sourceLocation` (aba/linha/coluna), `officialPeriodTotal`/`recalculatedTotal` | Determinístico, já persistido |
+| **Impacto Financeiro** | `impacto` | `totalDifference`, `workPackages.created/matched`, `serviceItems.created/matched`, `lines.skippedZeroValue` | Determinístico |
+| **Alternativas** | `alternativas[]` | Hoje: enviar / revisar antes de enviar. Não há terceira via real ainda (ex.: "enviar com ressalva formal" não existe como estado do domínio) | Determinístico, mas o cardápio de alternativas é hoje binário — não inventar um terceiro caminho que o domínio não sustenta |
+| **Recomendação** | `recomendacao` (inclui `nextActions[]` — itens acionáveis derivados diretamente das issues abertas, ex.: "revisar item X342") | Mapeamento direto de `status` + severidade das issues abertas | Determinístico |
+| **Confiança da Análise** | `confianca` | Reaproveita o padrão de `advisor-confidence-builder.ts`: cobertura de rastreabilidade (toda issue tem `sourceLocation`? toda linha tem origem?), não uma opinião do modelo | Determinístico, mesmo mecanismo já validado |
+
+**O que deliberadamente não entra neste objeto** (proposta inicial de
+enriquecimento revisada): `Trend`, `DecisionHistory`, `DecisionTimeline`
+não viram campos deste tipo. Um objeto gerado a cada processamento não
+deveria carregar campos estruturalmente vazios para 100% dos casos
+reais de hoje — isso violaria "lacunas não são preenchidas
+silenciosamente" na direção oposta (fingir estrutura que não existe).
+Eles nascem como **agregados irmãos**, referenciando o mesmo caso por
+id, quando tiverem dado real para sustentá-los — ver nota de
+Accountability abaixo.
 
 ## F. Tipos de conclusão possíveis (reais, com os dados de hoje)
 
@@ -404,6 +425,21 @@ maioria não rastreia além do nome do arquivo).
 - **Memória de Decisões (seção 9) é 100% visão futura** — nenhum dado
   histórico estruturado de decisões passadas existe hoje, em nenhum
   Studio.
+- **Decision Accountability — refinamento adicionado nesta revisão,
+  ainda 100% visão futura.** Além de "o que aconteceu" (Linha da
+  Decisão) e "o que já aconteceu antes" (Memória de Decisões), a
+  Memória de Decisões deve registrar dois campos que hoje não têm
+  nenhum lugar para existir: **quem decidiu** (usuário, diretor, ou a
+  posição do BDOS aceita sem alteração humana) e **qual foi o
+  resultado real**, preenchido não no momento da análise, mas
+  **meses depois** (ex.: "a decisão foi correta" / "gerou glosa").
+  Isto não é uma sétima seção do Decision Brief — é um agregado
+  próprio (`DecisionAccountability`/`DecisionOutcome`), que nasce em
+  aberto e é fechado por um evento futuro, fora do ciclo de vida de
+  qualquer processamento único. É, de longe, o diferencial mais difícil
+  de copiar deste Epic: nenhum concorrente acumula "quais das minhas
+  recomendações realmente deram certo" — e só se torna real depois de
+  meses de uso real da plataforma, nunca simulável.
 
 ## N. Roadmap do Epic 20 (produto, sem código)
 
