@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./decision-brief": "./src/decision-brief/index.ts",
     "./services/geospatial-product-integration": "./src/services/geospatial-product-integration/index.ts",
     "./services/bba-project-import": "./src/services/bba-project-import/index.ts",
     "./services/execution-management": "./src/services/execution-management/index.ts",
