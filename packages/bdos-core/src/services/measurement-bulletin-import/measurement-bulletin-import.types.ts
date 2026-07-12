@@ -18,6 +18,7 @@
 import type {
   MeasurementImportIssue,
   ParsedMeasurementBulletin,
+  ParsedSkippedSheet,
 } from "../../domain/measurement-workspace/adapters/excel-import/bulletin-import.types";
 
 // ---------------------------------------------------------------
@@ -235,5 +236,100 @@ export interface FinalizeMeasurementBulletinFailure {
 export type FinalizeMeasurementBulletinResult =
   | FinalizeMeasurementBulletinSuccess
   | FinalizeMeasurementBulletinFailure;
+
+// ---------------------------------------------------------------
+// MeasurementAnalysisResult (Sprint 4D.0 — tipos versionados,
+// congelados pela revisão de arquitetura registrada em
+// EPIC_19_SPRINT_4D_APPLICATION_SERVICE_DESIGN.md, Parte X e
+// correção 3. Groundwork apenas: o wiring completo — este tipo
+// entrando em ProcessMeasurementBulletinImportResult e sendo de fato
+// produzido/persistido — é escopo da Sprint 4D.2, não desta.
+//
+// União discriminada por `status`, não uma interface única com
+// `measurementWorkspaceId: string` obrigatório: o gate de
+// reconciliação pode recusar um boletim antes da criação do
+// workspace em MODO FRESCO, então um resultado de falha pode
+// legitimamente não ter workspace. `schemaVersion`/`parserKey`/
+// `generatedAt` são obrigatórios em ambos os ramos para que um
+// resultado antigo, uma vez persistido em
+// measurement_bulletin_imports.analysis_result, nunca seja
+// interpretado como se tivesse sido produzido pelo parser/schema
+// atual.
+// ---------------------------------------------------------------
+
+export const MEASUREMENT_ANALYSIS_RESULT_SCHEMA_VERSION = 1 as const;
+export const MEASUREMENT_ANALYSIS_PARSER_KEY = "dnocs-measurement-bulletin-v1" as const;
+
+/**
+ * ISO 8601 com timezone UTC (formato de `Date.prototype.toISOString()`)
+ * -- alias de domínio só para deixar o contrato explícito; sem isso,
+ * daqui a meses ninguém saberia, só olhando `generatedAt: string`, se
+ * é UTC, local, epoch ou RFC3339. Mesmo padrão já usado alhures neste
+ * pacote (ex.: `MeasurementDate`, `ExecutionDateTime`) -- alias local
+ * por módulo, não um tipo global compartilhado.
+ */
+export type MeasurementAnalysisDateTime = string;
+
+interface MeasurementAnalysisResultBase {
+  readonly schemaVersion: typeof MEASUREMENT_ANALYSIS_RESULT_SCHEMA_VERSION;
+  readonly parserKey: typeof MEASUREMENT_ANALYSIS_PARSER_KEY;
+  readonly generatedAt: MeasurementAnalysisDateTime;
+
+  readonly measurementBulletinImportId: string;
+  readonly engineeringProjectId: string;
+
+  readonly declaredBulletinNumber: number | null;
+  readonly declaredPeriod: {
+    readonly startDate: string | null;
+    readonly endDate: string | null;
+    readonly labels: ReadonlyArray<string>;
+  } | null;
+
+  /** Passthrough direto do parser -- não reprocessado, não reinterpretado. */
+  readonly structuralIssues: ReadonlyArray<MeasurementImportIssue>;
+  readonly skippedSheets: ReadonlyArray<ParsedSkippedSheet>;
+}
+
+export interface ReconciledOrNeedsReviewMeasurementAnalysisResult extends MeasurementAnalysisResultBase {
+  readonly status: "reconciled" | "needs_review";
+  readonly measurementWorkspaceId: string;
+
+  /**
+   * Calculado a partir das linhas relidas do banco após a
+   * materialização, nunca do DTO do parser em memória.
+   * `totalDifference = recalculatedTotal - officialPeriodTotal`;
+   * `status = "reconciled"` exige, além de nenhuma issue blocking,
+   * `abs(totalDifference) <= 0.01` -- tolerância explícita de 1
+   * centavo, nunca igualdade binária de ponto flutuante.
+   */
+  readonly officialPeriodTotal: number;
+  readonly recalculatedTotal: number;
+  readonly totalDifference: number;
+
+  readonly workPackages: { readonly created: number; readonly matched: number };
+  readonly serviceItems: { readonly created: number; readonly matched: number };
+  readonly lines: {
+    readonly imported: number;
+    /** Colisão 23505 com valores idênticos aos já persistidos. */
+    readonly alreadyPresent: number;
+    /** Colisão 23505 com valores divergentes, atualizados explicitamente. */
+    readonly updated: number;
+    readonly skippedZeroValue: number;
+  };
+}
+
+export interface FailedMeasurementAnalysisResult extends MeasurementAnalysisResultBase {
+  readonly status: "failed";
+  /**
+   * Nulo quando o gate de reconciliação recusa antes da criação do
+   * workspace em MODO FRESCO. Não-nulo quando a falha ocorre em MODO
+   * RETOMADA ou após o workspace já existir.
+   */
+  readonly measurementWorkspaceId: string | null;
+}
+
+export type MeasurementAnalysisResult =
+  | ReconciledOrNeedsReviewMeasurementAnalysisResult
+  | FailedMeasurementAnalysisResult;
 
 export type { ParsedMeasurementBulletin };
