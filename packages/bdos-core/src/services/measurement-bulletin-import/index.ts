@@ -1,4 +1,5 @@
 export * from "./measurement-bulletin-import.types";
+export * from "./measurement-decision-brief-builder";
 
 // Único subpath autorizado a expor o parser do Boletim de Medição e
 // seus tipos para fora de bdos-core (PLATFORM_ARCHITECTURE.md §4:

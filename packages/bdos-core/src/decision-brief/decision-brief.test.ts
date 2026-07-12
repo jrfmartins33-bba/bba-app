@@ -4,6 +4,8 @@ import {
   type DecisionBrief,
   type DecisionBriefReadiness,
   type DecisionBriefSourceReference,
+  type ReliabilityIndexResult,
+  type ReliabilityIndexUnavailable,
 } from "./index";
 
 // Epic 20 (Decision Experience), Sprint 20.1A -- primeiro contrato
@@ -74,10 +76,12 @@ function buildSampleDecisionBrief(overrides?: { readonly schemaVersion?: string;
     ],
     evidenceReferences: [sampleSourceReferenceWithColumn, sampleSourceReferenceWithoutColumn],
     confidence: {
+      status: "available",
       score: 82,
       level: "attention",
       label: "Confiança alta, com ressalvas",
-      factors: [{ label: "Impedimentos bloqueantes", penalty: 0, available: true, unavailableReason: null }]
+      factors: [{ label: "Impedimentos bloqueantes", penalty: 0, available: true, unavailableReason: null }],
+      modelVersion: "sample-reliability-model-v0"
     }
   };
 }
@@ -138,6 +142,41 @@ runTest("DecisionBriefSourceReference não depende de fieldEvidenceId (garantia 
 runTest("barrel index.ts expõe os símbolos públicos esperados", () => {
   assertEqual(typeof DECISION_BRIEF_SCHEMA_VERSION, "string", "DECISION_BRIEF_SCHEMA_VERSION exportado pelo barrel");
   assertTrue(Array.isArray(DECISION_BRIEF_READINESS_VALUES), "DECISION_BRIEF_READINESS_VALUES exportado pelo barrel");
+});
+
+// ReliabilityIndexResult -- união discriminada por `status`
+// (correção pós-revisão de arquitetura: "indisponível" nunca pode ser
+// confundido com um resultado calculado). Ambos os variants validados
+// estruturalmente aqui -- nenhuma fórmula fictícia para o variant
+// `available`, só a forma do tipo.
+
+const availableSample: ReliabilityIndexResult = {
+  status: "available",
+  score: 82,
+  level: "attention",
+  label: "Confiança alta, com ressalvas",
+  factors: [{ label: "Impedimentos bloqueantes", penalty: 0, available: true, unavailableReason: null }],
+  modelVersion: "sample-reliability-model-v0"
+};
+
+const unavailableSample: ReliabilityIndexUnavailable = {
+  status: "unavailable",
+  reason: "calculation_model_not_defined"
+};
+
+runTest("ReliabilityIndexResult variant available carrega score/level/factors/modelVersion", () => {
+  assertEqual(availableSample.status, "available", "status available");
+  assertEqual(availableSample.score, 82, "score preservado");
+  assertEqual(availableSample.level, "attention", "level preservado");
+  assertEqual(availableSample.modelVersion, "sample-reliability-model-v0", "modelVersion preservado");
+});
+
+runTest("ReliabilityIndexResult variant unavailable nunca carrega score ou level -- indisponível não é zero nem nível neutro", () => {
+  const keys = Object.keys(unavailableSample).sort();
+  assertEqual(JSON.stringify(keys), JSON.stringify(["reason", "status"]), "unavailable só tem status/reason, nenhum campo numérico substituto");
+  assertTrue(!("score" in unavailableSample), "unavailable nunca tem score");
+  assertTrue(!("level" in unavailableSample), "unavailable nunca tem level");
+  assertEqual(unavailableSample.reason, "calculation_model_not_defined", "reason preservado");
 });
 
 function runTest(name: string, testCase: () => void): void {
