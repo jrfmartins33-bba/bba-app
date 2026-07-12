@@ -133,6 +133,8 @@ export function importBulletinExcel(input: BulletinImportInput): BulletinImportR
     workPackages,
     serviceItems,
     lines,
+    officialPeriodTotal,
+    declaredOfficialTotal,
     skippedSheets,
     issues
   };
@@ -152,6 +154,8 @@ function emptyResult(input: BulletinImportInput, skippedSheets: ReadonlyArray<Pa
       workPackages: [],
       serviceItems: [],
       lines: [],
+      officialPeriodTotal: 0,
+      declaredOfficialTotal: null,
       skippedSheets,
       issues
     }

@@ -110,7 +110,20 @@ export type MeasurementImportIssueCode =
   | "official_measurement_block_not_found"
   | "historical_grid_not_authoritative"
   | "orphan_legacy_column_detected"
-  | "official_period_total_mismatch";
+  | "official_period_total_mismatch"
+  // As três abaixo nunca são emitidas por este parser -- nascem no
+  // Application Service (Sprint 4D.2, EPIC_19_SPRINT_4D_APPLICATION_SERVICE_DESIGN.md,
+  // R3 e Parte IX) ao correlacionar dados contra o que já existe
+  // persistido. Vivem no mesmo union porque MeasurementImportIssue/
+  // structuralIssues é o mesmo envelope compartilhado por parser e
+  // Application Service -- um consumidor (UI, Advisor) não deveria
+  // precisar saber qual camada emitiu qual código.
+  | "service_item_description_mismatch"
+  | "service_item_unit_mismatch"
+  // Warning, nunca blocking -- duas medições reivindicando o mesmo
+  // período no mesmo projeto pode ser remedição legítima, não
+  // necessariamente um erro.
+  | "period_number_conflict";
 
 export interface MeasurementImportIssue {
   readonly code: MeasurementImportIssueCode;
@@ -156,6 +169,31 @@ export interface ParsedMeasurementBulletin {
   readonly workPackages: ReadonlyArray<ParsedWorkPackage>;
   readonly serviceItems: ReadonlyArray<ParsedManagedServiceItem>;
   readonly lines: ReadonlyArray<ParsedMeasurementLine>;
+
+  /**
+   * Soma bruta da coluna oficial (VALOR) do bloco financeiro,
+   * acumulada sobre TODA linha reconhecida da tabela (agregadora ou
+   * folha) -- igual ao `SUM()` do próprio arquivo, não apenas às
+   * linhas que viram `ParsedMeasurementLine` (itens agregadores e
+   * itens não medidos no período não geram linha, mas ainda entram
+   * nesta soma se tiverem valor na coluna oficial). É o número que
+   * `official_period_total_mismatch`/`historical_grid_not_authoritative`
+   * já usam internamente para reconciliar -- exposto aqui em vez de
+   * recalculado por fora, para que Application Services nunca
+   * dupliquem essa varredura com um critério possivelmente diferente.
+   * `0` se o bloco financeiro oficial não foi localizado (ver issue
+   * `official_measurement_block_not_found`).
+   */
+  readonly officialPeriodTotal: number;
+
+  /**
+   * Total que o PRÓPRIO arquivo declara (linha "TOTAL...", ex.: "TOTAL
+   * GERAL (R$)"), independente da soma calculada em
+   * `officialPeriodTotal` -- é o valor contra o qual
+   * `official_period_total_mismatch` compara. `null` se nenhuma linha
+   * de total foi encontrada na aba.
+   */
+  readonly declaredOfficialTotal: number | null;
 
   readonly skippedSheets: ReadonlyArray<ParsedSkippedSheet>;
   readonly issues: ReadonlyArray<MeasurementImportIssue>;
