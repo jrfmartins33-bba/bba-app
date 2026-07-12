@@ -28,6 +28,11 @@ export interface MeasurementBulletinImportRecord {
   readonly fileName: string;
   readonly storagePath: string;
   readonly status: MeasurementBulletinImportStatus;
+  // Achado real (E2E contra o BM_08, Sprint 4B): measurement_workspaces.created_by
+  // referencia profiles(id), não company_id -- o Application Service
+  // precisa do uploader original para não violar
+  // measurement_workspaces_created_by_fkey ao criar o workspace.
+  readonly uploadedBy: string;
   // Snapshot imutável da última execução (Sprint 4D.0, R2) -- unknown
   // porque este repository nunca interpreta a forma do JSON, mesma
   // disciplina do restante do arquivo para colunas JSONB. Consumidor
@@ -68,7 +73,7 @@ export const insertMeasurementBulletinImport = async (
 };
 
 const selectMeasurementBulletinImportColumns =
-  "id, company_id, engineering_project_id, file_name, storage_path, status, analysis_result";
+  "id, company_id, engineering_project_id, file_name, storage_path, status, analysis_result, uploaded_by";
 
 // analysisResult passa verbatim -- este repository não valida nem faz
 // cast para MeasurementAnalysisResult; essa é responsabilidade do
@@ -79,6 +84,7 @@ const toMeasurementBulletinImportRecord = (data: Record<string, unknown>): Measu
   companyId: data.company_id as string,
   engineeringProjectId: data.engineering_project_id as string,
   fileName: data.file_name as string,
+  uploadedBy: data.uploaded_by as string,
   storagePath: data.storage_path as string,
   status: data.status as MeasurementBulletinImportStatus,
   analysisResult: data.analysis_result ?? null

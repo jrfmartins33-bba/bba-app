@@ -358,7 +358,13 @@ export async function processMeasurementBulletinImport(
         periodNumber: parsed.declaredBulletinNumber as number,
         startDate: parsed.declaredPeriod.startDate,
         endDate: parsed.declaredPeriod.endDate,
-        createdBy: companyId,
+        // Bug real, achado só pelo E2E contra Postgres de verdade (o
+        // fake client de teste não simula foreign keys): created_by
+        // referencia profiles(id), não company_id.
+        // measurement_bulletin_imports.uploaded_by (quem fez o upload
+        // original, sempre um profile real) é o valor correto aqui --
+        // nunca companyId.
+        createdBy: claimed.uploadedBy,
         declaredBulletinNumber: parsed.declaredBulletinNumber,
         declaredPeriodStart: parsed.declaredPeriod.startDate,
         declaredPeriodEnd: parsed.declaredPeriod.endDate
