@@ -100,6 +100,18 @@ const AUTHORIZED_BUSINESS_FACTS_SEAM =
 const AUTHORIZED_SPATIAL_OBJECT_SEAM =
   "domain/spatial-object/adapters/work-package-management";
 
+// Rule F — Epic 20 (Decision Experience), Sprint 20.1A:
+// `decision-brief/` is a generic executive-reading contract, sibling to
+// every Engine, never dependent on one. It must never import an
+// operational domain directly (same list Rule A protects), never the
+// Decision Engine's own Executive Intelligence family (reuses
+// FORBIDDEN_SEGMENTS_FOR_OPERATIONAL — decision-brief is a different
+// concept from DecisionCase/ExecutiveBrief, see
+// EPIC_20_SPRINT_1_MEASUREMENT_DECISION_BRIEF_DESIGN.md, Parte II), and
+// never `advisor/*` or `services/*` — no LLM dependency, and builders
+// (which import decision-brief) live in services/*, never the reverse.
+const FORBIDDEN_SEGMENTS_FOR_DECISION_BRIEF: ReadonlyArray<string> = [...FORBIDDEN_SEGMENTS_FOR_OPERATIONAL, "advisor", "services"];
+
 // Rule D — Export Engine must stay conceptual: no filesystem, no binary
 // encoding, no real document generation library, no Template Engine.
 const EXACT_FORBIDDEN_SPECIFIERS_FOR_EXPORT_ENGINE: ReadonlyArray<string> = [
@@ -128,7 +140,7 @@ interface ImportRef {
 }
 
 interface Violation {
-  readonly rule: "A" | "B" | "C" | "D" | "E";
+  readonly rule: "A" | "B" | "C" | "D" | "E" | "F";
   readonly file: string;
   readonly line: number;
   readonly specifier: string;
@@ -182,6 +194,14 @@ runTest(
   () => {
     const violations = findSpatialObjectViolations();
     assertNoViolations(violations, "Rule E violation(s) found");
+  },
+);
+
+runTest(
+  "Rule F: decision-brief does not import operational domains, the Decision Engine family, advisor or services",
+  () => {
+    const violations = findDecisionBriefViolations();
+    assertNoViolations(violations, "Rule F violation(s) found");
   },
 );
 
@@ -325,6 +345,50 @@ function findSpatialObjectViolations(): ReadonlyArray<Violation> {
           line: ref.line,
           specifier: ref.specifier,
           reason: `Spatial Object imports operational domain "${hitDomain}" directly outside "${AUTHORIZED_SPATIAL_OBJECT_SEAM}"`,
+        });
+      }
+    });
+  });
+
+  return violations;
+}
+
+function findDecisionBriefViolations(): ReadonlyArray<Violation> {
+  const violations: Violation[] = [];
+  const files = listTsFiles(join(SRC_ROOT, "decision-brief"));
+
+  files.forEach((file) => {
+    readImportsFromFile(file).forEach((ref) => {
+      if (!ref.specifier.startsWith(".")) {
+        return;
+      }
+
+      const relPath = resolveRelativeSpecifier(file, ref.specifier);
+
+      const hitOperationalDomain = OPERATIONAL_DOMAINS.find((domain) =>
+        isUnderSegment(relPath, `domain/${domain}`),
+      );
+      if (hitOperationalDomain !== undefined) {
+        violations.push({
+          rule: "F",
+          file: toRepoRelative(file),
+          line: ref.line,
+          specifier: ref.specifier,
+          reason: `decision-brief imports operational domain "${hitOperationalDomain}" directly`,
+        });
+        return;
+      }
+
+      const hitSegment = FORBIDDEN_SEGMENTS_FOR_DECISION_BRIEF.find((segment) =>
+        isUnderSegment(relPath, segment),
+      );
+      if (hitSegment !== undefined) {
+        violations.push({
+          rule: "F",
+          file: toRepoRelative(file),
+          line: ref.line,
+          specifier: ref.specifier,
+          reason: `decision-brief resolves into forbidden layer "${hitSegment}"`,
         });
       }
     });
