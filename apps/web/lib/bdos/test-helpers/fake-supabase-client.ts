@@ -37,13 +37,17 @@ interface PostgrestLikeError {
   readonly message: string;
 }
 
-type FilterOp = { readonly column: string; readonly kind: "eq"; readonly value: unknown } | { readonly column: string; readonly kind: "in"; readonly values: ReadonlyArray<unknown> };
+type FilterOp =
+  | { readonly column: string; readonly kind: "eq"; readonly value: unknown }
+  | { readonly column: string; readonly kind: "in"; readonly values: ReadonlyArray<unknown> }
+  | { readonly column: string; readonly kind: "not_is_null" };
 
 class FakeQueryBuilder implements PromiseLike<{ data: unknown; error: PostgrestLikeError | null }> {
   private readonly filters: FilterOp[] = [];
   private mode: "select" | "insert" | "update" = "select";
   private payload: Record<string, unknown> | null = null;
   private wantsSingleRow = false;
+  private orderBy: { readonly column: string; readonly ascending: boolean } | null = null;
 
   constructor(
     private readonly rows: Record<string, unknown>[],
@@ -73,6 +77,24 @@ class FakeQueryBuilder implements PromiseLike<{ data: unknown; error: PostgrestL
 
   in(column: string, values: ReadonlyArray<unknown>): this {
     this.filters.push({ column, kind: "in", values });
+    return this;
+  }
+
+  /**
+   * Só o subconjunto real usado em produção: `.not(column, "is", null)`
+   * (`measurement-repository.ts`, listMeasurementBulletinImportsByCompany)
+   * -- nenhum outro operador/valor de `.not()` é suportado.
+   */
+  not(column: string, operator: string, value: unknown): this {
+    if (operator !== "is" || value !== null) {
+      throw new Error(`FakeSupabaseClient: .not("${column}", "${operator}", ${JSON.stringify(value)}) não suportado -- só .not(column, "is", null).`);
+    }
+    this.filters.push({ column, kind: "not_is_null" });
+    return this;
+  }
+
+  order(column: string, options?: { readonly ascending?: boolean }): this {
+    this.orderBy = { column, ascending: options?.ascending ?? true };
     return this;
   }
 
@@ -110,6 +132,9 @@ class FakeQueryBuilder implements PromiseLike<{ data: unknown; error: PostgrestL
     return this.filters.every((filter) => {
       if (filter.kind === "eq") {
         return row[filter.column] === filter.value;
+      }
+      if (filter.kind === "not_is_null") {
+        return row[filter.column] !== null && row[filter.column] !== undefined;
       }
       return filter.values.includes(row[filter.column]);
     });
@@ -159,6 +184,16 @@ class FakeQueryBuilder implements PromiseLike<{ data: unknown; error: PostgrestL
 
     // select
     const matching = this.rows.filter((row) => this.matchesFilters(row));
+    if (this.orderBy !== null) {
+      const { column, ascending } = this.orderBy;
+      matching.sort((a, b) => {
+        const left = a[column];
+        const right = b[column];
+        if (left === right) return 0;
+        const result = (left as string | number) < (right as string | number) ? -1 : 1;
+        return ascending ? result : -result;
+      });
+    }
     return { data: matching, error: null };
   }
 }

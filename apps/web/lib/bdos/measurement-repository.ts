@@ -108,6 +108,89 @@ export const getMeasurementBulletinImportById = async (
   return data ? toMeasurementBulletinImportRecord(data) : null;
 };
 
+// Epic 20 (Decision Experience), Sprint 20.1E.1A -- select próprio,
+// nunca reaproveita selectMeasurementBulletinImportColumns/
+// MeasurementBulletinImportRecord (usados por getMeasurementBulletinImportById
+// e pelo fluxo de processamento do Epic 19): esta consulta precisa de
+// uploaded_at/updated_at (não expostos ali) e nunca pode arrastar o
+// JSON de analysis_result inteiro do banco só para calcular um
+// boolean -- por isso hasAnalysisResult vem de uma segunda consulta
+// leve (só `id`), nunca do payload completo.
+export interface MeasurementBulletinImportSummary {
+  readonly id: string;
+  readonly fileName: string;
+  readonly status: MeasurementBulletinImportStatus;
+  readonly uploadedAt: string;
+  readonly updatedAt: string;
+  /**
+   * `analysis_result IS NOT NULL` -- nunca `status === "completed"`.
+   * Achado real do Epic 19: `finalizeAsFailed` persiste
+   * `analysis_result` (um `FailedMeasurementAnalysisResult`) mesmo
+   * quando `status` vira `"failed"` (gates de bloqueio,
+   * measurement-bulletin-import-service.ts) -- por isso a análise
+   * pode estar disponível mesmo sem `status: "completed"`. Mesmo
+   * sinal que 20.1C (`getMeasurementDecisionBrief`) já usa para
+   * decidir `analysis_not_available`.
+   */
+  readonly hasAnalysisResult: boolean;
+}
+
+const selectMeasurementBulletinImportSummaryColumns = "id, file_name, status, uploaded_at, updated_at";
+
+const toMeasurementBulletinImportSummary = (data: Record<string, unknown>, hasAnalysisResult: boolean): MeasurementBulletinImportSummary => ({
+  id: data.id as string,
+  fileName: data.file_name as string,
+  status: data.status as MeasurementBulletinImportStatus,
+  uploadedAt: data.uploaded_at as string,
+  updatedAt: data.updated_at as string,
+  hasAnalysisResult
+});
+
+/**
+ * Tenant-scoped, sem paginação -- nenhuma infraestrutura de paginação
+ * existe hoje em nenhuma rota de listagem do projeto
+ * (advisor-lab/projects, execution/tasks); inventar um `limit`
+ * arbitrário aqui seria Categoria C. Ordenação por `uploaded_at`
+ * descendente -- mesmo critério já usado por `advisor.ts` para achar
+ * o `planning_import` mais recente do projeto.
+ *
+ * Duas consultas leves em vez de uma view/RPC nova: não existe hoje
+ * uma coluna booleana persistida `analysis_available`, e criar uma
+ * (migration/view) ampliaria o escopo desta Sprint. Consistência
+ * transitória entre as duas leituras é aceitável -- esta listagem é
+ * navegação, nunca a fonte da decisão (a rota de detalhe, 20.1D,
+ * continua sendo a fonte real de `analysisAvailable` no momento em
+ * que o usuário abre um boletim específico).
+ */
+export const listMeasurementBulletinImportsByCompany = async (
+  supabase: SupabaseClient,
+  params: { companyId: string }
+): Promise<ReadonlyArray<MeasurementBulletinImportSummary>> => {
+  const { data, error } = await supabase
+    .from("measurement_bulletin_imports")
+    .select(selectMeasurementBulletinImportSummaryColumns)
+    .eq("company_id", params.companyId)
+    .order("uploaded_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const { data: rowsWithAnalysis, error: analysisError } = await supabase
+    .from("measurement_bulletin_imports")
+    .select("id")
+    .eq("company_id", params.companyId)
+    .not("analysis_result", "is", null);
+
+  if (analysisError) {
+    throw analysisError;
+  }
+
+  const idsWithAnalysis = new Set((rowsWithAnalysis ?? []).map((row: Record<string, unknown>) => row.id as string));
+
+  return (data ?? []).map((row) => toMeasurementBulletinImportSummary(row as Record<string, unknown>, idsWithAnalysis.has((row as Record<string, unknown>).id as string)));
+};
+
 export const updateMeasurementBulletinImportStatus = async (
   supabase: SupabaseClient,
   params: { id: string; companyId: string; status: MeasurementBulletinImportStatus }
