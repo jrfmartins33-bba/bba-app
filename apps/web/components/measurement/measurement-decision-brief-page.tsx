@@ -2,22 +2,25 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@bba/ui";
 import { useBbaStore } from "@bba/lib";
 import type { DecisionBrief } from "@bba/bdos-core/decision-brief";
 import { fetchMeasurementDecisionBrief } from "./measurement-decision-brief-client";
 import { MeasurementDecisionBriefHeader } from "./measurement-decision-brief-header";
 import { MeasurementDecisionBriefSkeleton } from "./measurement-decision-brief-skeleton";
 import { MeasurementDecisionBriefErrorState, type MeasurementDecisionBriefErrorVariant } from "./measurement-decision-brief-error-state";
+import { MeasurementDecisionHero } from "./measurement-decision-hero";
+import { MeasurementKeyDecisionsSection } from "./measurement-key-decisions-section";
+import { MeasurementRecommendedActionsSection } from "./measurement-recommended-actions-section";
 
 /**
- * Epic 20 (Decision Experience), Sprint 20.1E.2 — page shell do
- * Relatório Executivo. Carrega o `DecisionBrief` via
- * `GET /api/measurement/imports/[id]/decision-brief` e trata todos os
- * resultados HTTP -- ainda não apresenta Conclusão Executiva,
- * Principais Decisões, Itens Críticos, métricas ou evidências (Sprints
- * seguintes). Nenhum outro campo do Brief carregado é lido aqui além
- * de `metadata.generatedAt`, usado só no cabeçalho.
+ * Epic 20 (Decision Experience), Sprint 20.1E.2 (page shell/estados) +
+ * 20.1E.3 (Decision Hero, Principais Decisões, Ações Recomendadas).
+ * Carrega o `DecisionBrief` via
+ * `GET /api/measurement/imports/[id]/decision-brief`, trata todos os
+ * resultados HTTP e apresenta `situation`/`executiveConclusion`/
+ * `keyDecisions`/`nextActions`/`confidence` exatamente como o Brief
+ * entrega -- ainda não apresenta Itens Críticos, métricas,
+ * detalhamento ou evidências (Sprints seguintes).
  */
 
 type PageState =
@@ -74,9 +77,15 @@ export function MeasurementDecisionBriefPage({ measurementBulletinImportId }: { 
         ) : null}
 
         {state.status === "loaded" ? (
-          <Card className="span-12 workspace-card" title="Relatório Executivo">
-            <p className="workspace-card__description">Relatório carregado com sucesso.</p>
-          </Card>
+          <>
+            <MeasurementDecisionHero
+              confidence={state.brief.confidence}
+              executiveConclusion={state.brief.executiveConclusion}
+              situation={state.brief.situation}
+            />
+            <MeasurementKeyDecisionsSection keyDecisions={state.brief.keyDecisions} />
+            <MeasurementRecommendedActionsSection nextActions={state.brief.nextActions} />
+          </>
         ) : null}
       </section>
     </>
