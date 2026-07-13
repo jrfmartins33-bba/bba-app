@@ -3185,3 +3185,92 @@ button {
   line-height: 1.6;
   overflow-wrap: break-word;
 }
+
+/* ══════════════════════════════════════════
+   MEDIÇÕES E DETALHAMENTO — Sprint 20.1E.5
+   Fatos executivos, não widgets de BI. Reaproveita tokens de texto
+   e espaçamento já existentes, nenhuma cor nova.
+══════════════════════════════════════════ */
+
+.measurement-summary-empty {
+  margin: 0;
+  color: var(--text-secondary-strong);
+  font-size: 13px;
+}
+
+.measurement-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+.measurement-summary-list__row {
+  align-items: baseline;
+  border-top: 1px solid var(--app-divider);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.measurement-summary-list__row:first-child {
+  border-top: none;
+}
+
+.measurement-summary-list__label {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.measurement-summary-list__value {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  margin: 0;
+  text-align: right;
+}
+
+.measurement-details-empty {
+  margin: 0;
+  color: var(--text-secondary-strong);
+  font-size: 13px;
+}
+
+.measurement-details__trigger {
+  align-items: center;
+  background: transparent;
+  border: none;
+  color: var(--bba-gold-soft);
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 4px 0;
+}
+
+.measurement-details__trigger:focus-visible {
+  outline: 2px solid var(--bba-gold);
+  outline-offset: 2px;
+}
+
+.measurement-details__chevron {
+  transition: transform var(--fast, 0.2s) var(--ease, ease);
+}
+
+.measurement-details__trigger[aria-expanded="true"] .measurement-details__chevron {
+  transform: rotate(180deg);
+}
+
+.measurement-details__body {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 12px 0 0;
+  max-width: 68ch;
+  white-space: pre-line;
+}
