@@ -425,6 +425,18 @@ maioria não rastreia além do nome do arquivo).
 - **Memória de Decisões (seção 9) é 100% visão futura** — nenhum dado
   histórico estruturado de decisões passadas existe hoje, em nenhum
   Studio.
+- **"Medido vs. contratado" (comparação do valor acumulado da obra
+  contra o valor total do contrato) não pode ser prometido ainda,
+  mesmo que parte do dado já exista.** `EngineeringContract.
+  contractValue` é um campo real
+  (`domain/engineering-contract/engineering-contract.types.ts:65`),
+  mas o Decision Brief de Medições não está ligado a ele (só conhece
+  `engineeringProjectId`, nunca consulta o contrato), e não existe
+  hoje nenhum cálculo de valor acumulado medido somando todos os
+  boletins de um mesmo projeto — o Brief é sempre escopado a um único
+  boletim. Mostrar esse gráfico agora exigiria fabricar um dos dois
+  números. Fica como candidato de Sprint futura (seção N), não como
+  lacuna a preencher na v1.
 - **Decision Accountability — refinamento adicionado nesta revisão,
   ainda 100% visão futura.** Além de "o que aconteceu" (Linha da
   Decisão) e "o que já aconteceu antes" (Memória de Decisões), a
@@ -512,6 +524,16 @@ o consomem, não o reconstroem.
   mesmo projeto existir, o campo já declarado em 20.1 passa a ter
   conteúdo real, sem exigir retrabalho de UI — só a comparação em si
   precisa ser implementada.
+- **"Medido vs. contratado" (valor acumulado da obra × valor total do
+  contrato)** — ideia levantada na validação visual do 20.1E.6
+  (Relatório Executivo de Medições). Trabalho necessário: (1) ligar
+  `engineeringProjectId` → `EngineeringContract` para ler
+  `contractValue`; (2) um serviço novo que some o valor recalculado de
+  todos os boletins já processados do mesmo projeto (hoje o Brief só
+  enxerga um boletim por vez); (3) expor os dois números como campo
+  novo do contrato do Decision Brief. Só depois disso a UI pode
+  desenhar o gráfico (a área hoje vazia ao lado da Conclusão
+  Executiva), com os dois valores 100% reais — nunca antes.
 
 **Fora de escopo deste Epic, explicitamente**: Memória de Decisões
 entre obras (seção 9), Studio de Evidências integrado, modelo de risco
