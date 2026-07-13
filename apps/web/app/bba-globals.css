@@ -4,30 +4,6 @@
   Aplicar via: import './bba-globals.css' no layout.tsx raiz
 */
 
-@font-face {
-  font-family: "Henderson BCG Sans";
-  src: url("/fonts/BCGHenSansRegular.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Henderson BCG Sans";
-  src: url("/fonts/BCGHenSansLight.woff2") format("woff2");
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Henderson BCG Sans";
-  src: url("/fonts/BCGHenSansBold.woff2") format("woff2");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
 :root {
   /* ── Paleta BBA ── */
   --bba-navy:        #0c1f3f;
@@ -68,7 +44,7 @@
   --status-blue-bg:  rgba(96, 165, 250, 0.12);
 
   /* ── Tipografia ── */
-  --font-sans: "Henderson BCG Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
 
   /* ── Motion ── */
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
@@ -2813,4 +2789,28 @@ button {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* ══════════════════════════════════════════
+   MEDIÇÕES — RELATÓRIO EXECUTIVO (page shell) — Sprint 20.1E.2
+   Reaproveita `.workspace-card`/`.bba-button` — só o espaçamento do
+   skeleton e das ações de erro é novo.
+══════════════════════════════════════════ */
+
+.measurement-decision-brief-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.measurement-decision-brief-skeleton__row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.measurement-decision-brief-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
