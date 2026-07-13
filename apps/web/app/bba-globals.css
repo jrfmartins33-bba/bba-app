@@ -2855,24 +2855,32 @@ button {
   align-items: center;
   display: inline-flex;
   gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
   font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
+  width: fit-content;
 }
 
 .measurement-decision-hero--positive .measurement-decision-hero__marker {
+  background: rgba(34, 197, 94, 0.14);
   color: var(--status-green);
 }
 
 .measurement-decision-hero--caution .measurement-decision-hero__marker {
+  background: rgba(245, 158, 11, 0.14);
   color: var(--status-amber);
 }
 
 .measurement-decision-hero--negative .measurement-decision-hero__marker {
+  background: rgba(239, 68, 68, 0.14);
   color: var(--status-red);
 }
 
 .measurement-decision-hero--neutral .measurement-decision-hero__marker {
+  background: rgba(96, 165, 250, 0.14);
   color: var(--status-blue);
 }
 
@@ -2892,9 +2900,116 @@ button {
   max-width: 68ch;
 }
 
-.measurement-decision-hero__situation {
+/* Sprint 20.1E.6 (segunda iteração) — três números executivos com
+   ícone, preenchendo o espaço que antes ficava vazio ao lado do
+   número. `--ok`/`--warn`/`--gold` reaproveitam os mesmos tons de
+   status já usados no marcador do Hero e nos blocos do Item Crítico. */
+.measurement-decision-hero__stats {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.measurement-decision-hero__stat {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--app-border);
+  border-left: 3px solid var(--app-divider);
+  border-radius: 10px;
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.measurement-decision-hero__stat--ok { border-left-color: var(--status-green); }
+.measurement-decision-hero__stat--warn { border-left-color: var(--status-amber); }
+.measurement-decision-hero__stat--gold { border-left-color: var(--bba-gold); }
+
+.measurement-decision-hero__stat-icon {
+  align-items: center;
+  border-radius: 9px;
+  display: grid;
+  flex-shrink: 0;
+  height: 38px;
+  place-items: center;
+  width: 38px;
+}
+
+.measurement-decision-hero__stat--ok .measurement-decision-hero__stat-icon { background: rgba(34, 197, 94, 0.14); color: var(--status-green); }
+.measurement-decision-hero__stat--warn .measurement-decision-hero__stat-icon { background: rgba(245, 158, 11, 0.14); color: var(--status-amber); }
+.measurement-decision-hero__stat--gold .measurement-decision-hero__stat-icon { background: var(--bba-gold-dim); color: var(--bba-gold-soft); }
+
+.measurement-decision-hero__stat-body { min-width: 0; }
+
+.measurement-decision-hero__stat-value {
+  display: block;
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+.measurement-decision-hero__stat--ok .measurement-decision-hero__stat-value { color: var(--status-green); }
+.measurement-decision-hero__stat--warn .measurement-decision-hero__stat-value { color: var(--status-amber); }
+.measurement-decision-hero__stat--gold .measurement-decision-hero__stat-value { color: var(--bba-gold-soft); }
+
+.measurement-decision-hero__stat-label {
+  color: var(--text-secondary);
+  display: block;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.measurement-decision-hero__next-step {
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.measurement-decision-hero__next-step-icon {
+  align-items: center;
+  background: var(--bba-gold);
+  border-radius: 8px;
+  color: #1a1204;
+  display: grid;
+  flex-shrink: 0;
+  height: 28px;
+  place-items: center;
+  width: 28px;
+}
+
+.measurement-decision-hero__next-step-body span {
+  color: var(--bba-gold-soft);
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.measurement-decision-hero__next-step-body p {
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 3px 0 0;
+}
+
+.measurement-decision-hero__foot {
   border-top: 1px solid var(--app-divider);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  justify-content: space-between;
   padding-top: 12px;
+}
+
+.measurement-decision-hero__situation {
+  max-width: 58ch;
 }
 
 .measurement-decision-hero__situation-title {
@@ -2911,7 +3026,6 @@ button {
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.6;
-  max-width: 68ch;
 }
 
 .measurement-decision-hero__disclaimer {
@@ -2939,18 +3053,96 @@ button {
   color: var(--text-secondary-strong);
 }
 
-.measurement-key-decisions-list {
+/* ══════════════════════════════════════════
+   MEDIÇÕES — COMO CHEGAMOS AQUI (Decision Flow) — Sprint 20.1E.6
+   (segunda iteração). 4 estados conectados -- mesma contagem de
+   severidade do Hero, nenhum passo novo em relação ao que o contrato
+   já garante.
+══════════════════════════════════════════ */
+
+.measurement-decision-flow {
+  align-items: stretch;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.measurement-decision-flow__step {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  display: flex;
+  flex: 1 1 160px;
+  font-size: 13.5px;
+  font-weight: 700;
+  justify-content: center;
+  padding: 14px 16px;
+  text-align: center;
+}
+
+.measurement-decision-flow__step--warn { border-color: rgba(245, 158, 11, 0.4); color: var(--status-amber); }
+.measurement-decision-flow__step--gold { border-color: var(--bba-gold-dim); color: var(--bba-gold-soft); }
+
+/* Passo final: mesmo tom do marcador do Hero (translateReadiness) --
+   nunca hardcoded, porque readiness nem sempre é "caution". */
+.measurement-decision-flow__step--result-positive { background: rgba(34, 197, 94, 0.1); border-color: rgba(34, 197, 94, 0.5); color: var(--status-green); }
+.measurement-decision-flow__step--result-caution { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.5); color: var(--status-amber); }
+.measurement-decision-flow__step--result-negative { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.5); color: var(--status-red); }
+.measurement-decision-flow__step--result-neutral { background: rgba(96, 165, 250, 0.1); border-color: rgba(96, 165, 250, 0.5); color: var(--status-blue); }
+
+.measurement-decision-flow__arrow {
+  align-items: center;
+  color: var(--bba-gold);
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 16px;
+  justify-content: center;
+  width: 18px;
+}
+
+.measurement-key-decisions-list {
+  display: grid;
   gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
 .measurement-key-decisions-list__item {
-  border-left: 2px solid var(--app-divider);
-  padding-left: 14px;
+  border: 1px solid var(--app-border);
+  border-left: 3px solid var(--app-divider);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.measurement-key-decisions-list__item--recommended {
+  border-left-color: var(--bba-gold);
+}
+
+.measurement-key-decisions-list__icon {
+  align-items: center;
+  border: 1px solid var(--bba-gold-dim);
+  border-radius: 6px;
+  background: rgba(185, 149, 79, 0.1);
+  color: var(--bba-gold-soft);
+  display: flex;
+  flex-shrink: 0;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.measurement-key-decisions-list__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .measurement-key-decisions-list__tag {
@@ -2984,50 +3176,94 @@ button {
   max-width: 68ch;
 }
 
-/* Ações Recomendadas -- linha executiva numerada em vez de card por
-   item (evita massa densa de texto contínuo quando há muitas ações;
-   nenhum dado/ordem muda, só a apresentação). */
+/* Ações Recomendadas -- card executivo por item (Sprint 20.1E.6,
+   PRINCIPLE 008): cada ação escaneável isoladamente, em vez de uma
+   lista densa separada só por linhas divisórias. Nenhum dado/ordem
+   muda, só a apresentação. */
 .measurement-recommended-actions-list {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 12px;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
 .measurement-recommended-actions-list__item {
-  align-items: flex-start;
-  display: flex;
-  gap: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-.measurement-recommended-actions-list__item + .measurement-recommended-actions-list__item {
-  padding-top: 22px;
-  border-top: 1px solid var(--app-divider);
+/* Sprint 20.1E.6 (segunda iteração) -- recolhido por padrão, mesmo
+   padrão de progressive disclosure do Item Crítico (antes, o
+   rationale ficava sempre visível). */
+.measurement-recommended-actions-list__trigger {
+  align-items: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 14px;
+  text-align: left;
+  width: 100%;
+}
+
+.measurement-recommended-actions-list__trigger:focus-visible {
+  outline: 2px solid var(--bba-gold);
+  outline-offset: -2px;
+}
+
+.measurement-recommended-actions-list__icon {
+  align-items: center;
+  border: 1px solid var(--bba-gold-dim);
+  border-radius: 6px;
+  background: rgba(185, 149, 79, 0.1);
+  color: var(--bba-gold-soft);
+  display: flex;
+  flex-shrink: 0;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
 }
 
 .measurement-recommended-actions-list__index {
   flex-shrink: 0;
-  min-width: 26px;
+  min-width: 22px;
   color: var(--bba-gold-soft);
   font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-.measurement-recommended-actions-list__body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-width: 68ch;
-}
-
 .measurement-recommended-actions-list__title {
-  margin: 0;
   color: var(--text-primary);
+  flex: 1;
   font-size: 14px;
   font-weight: 600;
+  min-width: 160px;
+}
+
+.measurement-recommended-actions-list__chevron {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: transform var(--fast, 0.2s) var(--ease, ease);
+}
+
+.measurement-recommended-actions-list__trigger[aria-expanded="true"] .measurement-recommended-actions-list__chevron {
+  transform: rotate(180deg);
+}
+
+.measurement-recommended-actions-list__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 16px 16px 54px;
 }
 
 .measurement-recommended-actions-list__rationale {
@@ -3035,6 +3271,7 @@ button {
   color: var(--text-secondary-strong);
   font-size: 13px;
   line-height: 1.6;
+  max-width: 68ch;
 }
 
 /* ══════════════════════════════════════════
@@ -3045,10 +3282,43 @@ button {
    dedicado (mesmo padrão do restante da página).
 ══════════════════════════════════════════ */
 
-.measurement-critical-items-count {
+.measurement-section-count {
   color: var(--text-secondary-strong);
   font-size: 12px;
   font-weight: 700;
+}
+
+/* Sprint 20.1E.6 (segunda iteração) -- controle real de "ver mais",
+   compartilhado entre Itens Críticos e Ações Recomendadas. */
+.measurement-ver-mais {
+  align-items: center;
+  background: transparent;
+  border: 1px dashed var(--app-border);
+  border-radius: 10px;
+  color: var(--bba-gold-soft);
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 10px;
+  min-height: 44px;
+  padding: 10px 14px;
+  width: 100%;
+}
+
+.measurement-ver-mais:focus-visible {
+  outline: 2px solid var(--bba-gold);
+  outline-offset: 2px;
+}
+
+.measurement-ver-mais[aria-expanded="true"] .measurement-ver-mais__chevron {
+  transform: rotate(180deg);
+}
+
+.measurement-ver-mais__chevron {
+  transition: transform var(--fast, 0.2s) var(--ease, ease);
 }
 
 .measurement-critical-items-empty {
@@ -3109,14 +3379,21 @@ button {
 
 .measurement-critical-item__severity {
   align-items: center;
+  background: rgba(245, 158, 11, 0.12);
+  border-radius: 5px;
   display: inline-flex;
   flex-shrink: 0;
-  gap: 6px;
-  font-size: 12px;
+  gap: 5px;
+  font-size: 10.5px;
   font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 3px 7px;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .measurement-critical-item--blocking .measurement-critical-item__severity {
+  background: rgba(239, 68, 68, 0.12);
   color: var(--status-red);
 }
 
@@ -3145,23 +3422,57 @@ button {
 .measurement-critical-item__content {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 4px 12px 16px 42px;
+  gap: 12px;
+  padding: 4px 12px 16px 12px;
+}
+
+/* Sprint 20.1E.6 (segunda iteração) -- "O problema" + "Onde está"
+   (quando existe) lado a lado; auto-fit resolve sozinho o caso de só
+   existir "O problema" (fica largura cheia), sem modificador extra. */
+.measurement-critical-item__primary-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .measurement-critical-item__block {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+.measurement-critical-item__block--positive {
+  background: rgba(34, 197, 94, 0.06);
+  border-color: rgba(34, 197, 94, 0.28);
+}
+
+.measurement-critical-item__block--negative {
+  background: rgba(239, 68, 68, 0.06);
+  border-color: rgba(239, 68, 68, 0.28);
 }
 
 .measurement-critical-item__block-label {
+  align-items: center;
+  display: flex;
+  gap: 6px;
   margin: 0;
   color: var(--text-secondary-strong);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.measurement-critical-item__block--positive .measurement-critical-item__block-label {
+  color: var(--status-green);
+}
+
+.measurement-critical-item__block--negative .measurement-critical-item__block-label {
+  color: var(--status-red);
 }
 
 .measurement-critical-item__block-body {
@@ -3178,14 +3489,6 @@ button {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 
-.measurement-critical-item__origin-line {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.6;
-  overflow-wrap: break-word;
-}
-
 /* ══════════════════════════════════════════
    MEDIÇÕES E DETALHAMENTO — Sprint 20.1E.5
    Fatos executivos, não widgets de BI. Reaproveita tokens de texto
@@ -3199,38 +3502,35 @@ button {
 }
 
 .measurement-summary-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   margin: 0;
 }
 
 .measurement-summary-list__row {
-  align-items: baseline;
-  border-top: 1px solid var(--app-divider);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  justify-content: space-between;
-  padding: 10px 0;
-}
-
-.measurement-summary-list__row:first-child {
-  border-top: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
 }
 
 .measurement-summary-list__label {
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12px;
+  overflow-wrap: break-word;
 }
 
 .measurement-summary-list__value {
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: clamp(17px, 1.6vw, 20px);
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: 700;
   margin: 0;
-  text-align: right;
+  white-space: nowrap;
 }
 
 .measurement-details-empty {
@@ -3267,10 +3567,74 @@ button {
 }
 
 .measurement-details__body {
+  border-left: 2px solid var(--app-divider);
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.7;
   margin: 12px 0 0;
   max-width: 68ch;
+  padding-left: 12px;
   white-space: pre-line;
+}
+
+/* ══════════════════════════════════════════
+   MEDIÇÕES — LOCALIZADOR DE CÉLULA (Cell Reference) — Sprint 20.1E.6
+   (segunda iteração, protótipo validado com a fixture real do BM_08).
+   Substitui a origem documental por toggle (Sprint 20.1E.6, primeira
+   iteração): agora é um crachá sempre visível, no vocabulário da
+   própria planilha (linha/coluna como cabeçalho de Excel) -- fundo
+   claro deliberado, contraste proposital contra o resto da página
+   escura, para reforçar "isto veio literalmente do arquivo".
+══════════════════════════════════════════ */
+
+.measurement-cell-ref-compact {
+  align-items: center;
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.measurement-cell-ref-compact__badge {
+  background: #e8e4d8;
+  border-radius: 4px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  color: #292620;
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 3px 7px;
+}
+
+.measurement-cell-ref-full {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.measurement-cell-ref-full__group {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.measurement-cell-ref-full__sheet {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.measurement-cell-ref-full__badge {
+  background: #e8e4d8;
+  border-radius: 4px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  color: #292620;
+  flex-shrink: 0;
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 3px 8px;
 }

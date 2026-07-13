@@ -9,20 +9,28 @@ import { MeasurementDecisionBriefHeader } from "./measurement-decision-brief-hea
 import { MeasurementDecisionBriefSkeleton } from "./measurement-decision-brief-skeleton";
 import { MeasurementDecisionBriefErrorState, type MeasurementDecisionBriefErrorVariant } from "./measurement-decision-brief-error-state";
 import { MeasurementDecisionHero } from "./measurement-decision-hero";
+import { MeasurementDecisionFlowSection } from "./measurement-decision-flow-section";
 import { MeasurementKeyDecisionsSection } from "./measurement-key-decisions-section";
-import { MeasurementRecommendedActionsSection } from "./measurement-recommended-actions-section";
 import { MeasurementCriticalItemsSection } from "./measurement-critical-items-section";
+import { MeasurementRecommendedActionsSection } from "./measurement-recommended-actions-section";
 import { MeasurementSummarySection } from "./measurement-summary-section";
 import { MeasurementDetailsSection } from "./measurement-details-section";
 
 /**
  * Epic 20 (Decision Experience), Sprint 20.1E.2 (page shell/estados) +
  * 20.1E.3 (Decision Hero, Principais Decisões, Ações Recomendadas) +
- * 20.1E.4 (Itens Críticos) + 20.1E.5 (Medições, Detalhamento). Carrega
- * o `DecisionBrief` via `GET /api/measurement/imports/[id]/decision-brief`,
- * trata todos os resultados HTTP e apresenta o Brief completo, campo a
- * campo, exatamente como entregue -- ainda não apresenta a Evidence
- * Lineage completa (Sprint seguinte).
+ * 20.1E.4 (Itens Críticos) + 20.1E.5 (Medições, Detalhamento) +
+ * 20.1E.6 (padrão visual human-first, PRINCIPLE 008 -- protótipo
+ * validado com a fixture real do BM_08, aprovado antes desta
+ * implementação). Ordem final: Hero, Como chegamos aqui, Caminho
+ * recomendado, O que precisa de atenção (Itens Críticos), Ações
+ * Recomendadas, Visão Executiva, Detalhamento -- Itens Críticos agora
+ * precede Ações Recomendadas (invertido em relação às Sprints
+ * anteriores), decisão do protótipo aprovado, não um ajuste
+ * incidental. Carrega o `DecisionBrief` via
+ * `GET /api/measurement/imports/[id]/decision-brief`, trata todos os
+ * resultados HTTP e apresenta o Brief completo, campo a campo,
+ * exatamente como entregue.
  */
 
 type PageState =
@@ -82,12 +90,19 @@ export function MeasurementDecisionBriefPage({ measurementBulletinImportId }: { 
           <>
             <MeasurementDecisionHero
               confidence={state.brief.confidence}
+              criticalItems={state.brief.criticalItems}
               executiveConclusion={state.brief.executiveConclusion}
+              nextActions={state.brief.nextActions}
               situation={state.brief.situation}
             />
+            <MeasurementDecisionFlowSection
+              criticalItems={state.brief.criticalItems}
+              nextActions={state.brief.nextActions}
+              readiness={state.brief.executiveConclusion.readiness}
+            />
             <MeasurementKeyDecisionsSection keyDecisions={state.brief.keyDecisions} />
-            <MeasurementRecommendedActionsSection nextActions={state.brief.nextActions} />
             <MeasurementCriticalItemsSection criticalItems={state.brief.criticalItems} />
+            <MeasurementRecommendedActionsSection nextActions={state.brief.nextActions} />
             <MeasurementSummarySection keyMetrics={state.brief.keyMetrics} />
             <MeasurementDetailsSection details={state.brief.details} />
           </>
