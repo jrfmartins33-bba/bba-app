@@ -11,16 +11,18 @@ import { MeasurementDecisionBriefErrorState, type MeasurementDecisionBriefErrorV
 import { MeasurementDecisionHero } from "./measurement-decision-hero";
 import { MeasurementKeyDecisionsSection } from "./measurement-key-decisions-section";
 import { MeasurementRecommendedActionsSection } from "./measurement-recommended-actions-section";
+import { MeasurementCriticalItemsSection } from "./measurement-critical-items-section";
 
 /**
  * Epic 20 (Decision Experience), Sprint 20.1E.2 (page shell/estados) +
- * 20.1E.3 (Decision Hero, Principais Decisões, Ações Recomendadas).
- * Carrega o `DecisionBrief` via
+ * 20.1E.3 (Decision Hero, Principais Decisões, Ações Recomendadas) +
+ * 20.1E.4 (Itens Críticos). Carrega o `DecisionBrief` via
  * `GET /api/measurement/imports/[id]/decision-brief`, trata todos os
  * resultados HTTP e apresenta `situation`/`executiveConclusion`/
- * `keyDecisions`/`nextActions`/`confidence` exatamente como o Brief
- * entrega -- ainda não apresenta Itens Críticos, métricas,
- * detalhamento ou evidências (Sprints seguintes).
+ * `keyDecisions`/`nextActions`/`criticalItems`/`confidence`
+ * exatamente como o Brief entrega -- ainda não apresenta métricas,
+ * detalhamento geral ou a Evidence Lineage completa (Sprints
+ * seguintes).
  */
 
 type PageState =
@@ -85,6 +87,7 @@ export function MeasurementDecisionBriefPage({ measurementBulletinImportId }: { 
             />
             <MeasurementKeyDecisionsSection keyDecisions={state.brief.keyDecisions} />
             <MeasurementRecommendedActionsSection nextActions={state.brief.nextActions} />
+            <MeasurementCriticalItemsSection criticalItems={state.brief.criticalItems} />
           </>
         ) : null}
       </section>

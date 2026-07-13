@@ -3036,3 +3036,152 @@ button {
   font-size: 13px;
   line-height: 1.6;
 }
+
+/* ══════════════════════════════════════════
+   MEDIÇÕES — ITENS CRÍTICOS (Decision Stack) — Sprint 20.1E.4
+   Sequência executiva recolhida por padrão -- reaproveita os tokens
+   --status-*, --text-secondary-strong e --bba-gold já existentes,
+   nenhuma cor nova. Responsivo via flex-wrap/auto-fit, sem breakpoint
+   dedicado (mesmo padrão do restante da página).
+══════════════════════════════════════════ */
+
+.measurement-critical-items-count {
+  color: var(--text-secondary-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.measurement-critical-items-empty {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  color: var(--status-green);
+  font-size: 14px;
+}
+
+.measurement-critical-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.measurement-critical-item {
+  border-left: 3px solid var(--app-border);
+}
+
+.measurement-critical-item--blocking {
+  border-left-color: var(--status-red);
+}
+
+.measurement-critical-item--warning {
+  border-left-color: var(--status-amber);
+}
+
+.measurement-critical-item__trigger {
+  align-items: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.measurement-critical-item__trigger:focus-visible {
+  outline: 2px solid var(--bba-gold);
+  outline-offset: -2px;
+}
+
+.measurement-critical-item__index {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.measurement-critical-item__severity {
+  align-items: center;
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.measurement-critical-item--blocking .measurement-critical-item__severity {
+  color: var(--status-red);
+}
+
+.measurement-critical-item--warning .measurement-critical-item__severity {
+  color: var(--status-amber);
+}
+
+.measurement-critical-item__title {
+  color: var(--text-primary);
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 160px;
+}
+
+.measurement-critical-item__chevron {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform var(--fast, 0.2s) var(--ease, ease);
+}
+
+.measurement-critical-item__trigger[aria-expanded="true"] .measurement-critical-item__chevron {
+  transform: rotate(180deg);
+}
+
+.measurement-critical-item__content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 12px 16px 42px;
+}
+
+.measurement-critical-item__block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.measurement-critical-item__block-label {
+  margin: 0;
+  color: var(--text-secondary-strong);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.measurement-critical-item__block-body {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 68ch;
+}
+
+.measurement-critical-item__consequences {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.measurement-critical-item__origin-line {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+}
