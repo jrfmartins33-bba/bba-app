@@ -19,11 +19,13 @@ const RECOMMENDED_ACTIONS_SOURCE = readFileSync(join(currentDir, "measurement-re
 const CRITICAL_ITEMS_SECTION_SOURCE = readFileSync(join(currentDir, "measurement-critical-items-section.tsx"), "utf8");
 const CRITICAL_ITEM_SOURCE = readFileSync(join(currentDir, "measurement-critical-item.tsx"), "utf8");
 const CRITICAL_ITEM_VM_SOURCE = readFileSync(join(currentDir, "measurement-critical-item-view-model.ts"), "utf8");
+const SUMMARY_SOURCE = readFileSync(join(currentDir, "measurement-summary-section.tsx"), "utf8");
+const DETAILS_SOURCE = readFileSync(join(currentDir, "measurement-details-section.tsx"), "utf8");
 const ROUTE_PAGE_SOURCE = readFileSync(
   join(currentDir, "..", "..", "app", "(dashboard)", "medicoes", "[measurementBulletinImportId]", "page.tsx"),
   "utf8"
 );
-const RENDER_SOURCE = `${PAGE_SOURCE}\n${HEADER_SOURCE}\n${SKELETON_SOURCE}\n${ERROR_STATE_SOURCE}\n${HERO_SOURCE}\n${CONFIDENCE_NOTE_SOURCE}\n${KEY_DECISIONS_SOURCE}\n${RECOMMENDED_ACTIONS_SOURCE}\n${CRITICAL_ITEMS_SECTION_SOURCE}\n${CRITICAL_ITEM_SOURCE}\n${CRITICAL_ITEM_VM_SOURCE}\n${ROUTE_PAGE_SOURCE}`;
+const RENDER_SOURCE = `${PAGE_SOURCE}\n${HEADER_SOURCE}\n${SKELETON_SOURCE}\n${ERROR_STATE_SOURCE}\n${HERO_SOURCE}\n${CONFIDENCE_NOTE_SOURCE}\n${KEY_DECISIONS_SOURCE}\n${RECOMMENDED_ACTIONS_SOURCE}\n${CRITICAL_ITEMS_SECTION_SOURCE}\n${CRITICAL_ITEM_SOURCE}\n${CRITICAL_ITEM_VM_SOURCE}\n${SUMMARY_SOURCE}\n${DETAILS_SOURCE}\n${ROUTE_PAGE_SOURCE}`;
 
 async function main(): Promise<void> {
   await runTest("cabeçalho exibe generatedAt com o rótulo correto", () => {
@@ -64,14 +66,62 @@ async function main(): Promise<void> {
     assertTrue(!/ActionPlan|ExecutionTask|ExecutionWorkflow/.test(RENDER_SOURCE), "nextActions é só descritivo -- nenhum aggregate nesta Sprint");
   });
 
-  await runTest("métricas e detalhamento geral ainda não são renderizados", () => {
-    assertTrue(!/keyMetrics|\bdetails\b/.test(RENDER_SOURCE), "esses campos pertencem a Sprints futuras, não a esta");
-  });
-
-  await runTest("Itens Críticos vem depois de Ações Recomendadas na composição da página", () => {
+  await runTest("Itens Críticos vem depois de Ações Recomendadas, Medições depois de Itens Críticos, Detalhamento depois de Medições", () => {
     const recommendedIndex = PAGE_SOURCE.indexOf("MeasurementRecommendedActionsSection");
     const criticalIndex = PAGE_SOURCE.indexOf("MeasurementCriticalItemsSection");
-    assertTrue(recommendedIndex !== -1 && criticalIndex !== -1 && criticalIndex > recommendedIndex, "ordem final: Hero, Decisões, Ações, Itens Críticos");
+    const summaryIndex = PAGE_SOURCE.indexOf("MeasurementSummarySection");
+    const detailsIndex = PAGE_SOURCE.indexOf("MeasurementDetailsSection");
+    assertTrue(
+      recommendedIndex !== -1 && criticalIndex > recommendedIndex && summaryIndex > criticalIndex && detailsIndex > summaryIndex,
+      "ordem final: Hero, Decisões, Ações, Itens Críticos, Medições, Detalhamento"
+    );
+  });
+
+  await runTest("Medições (keyMetrics) preserva a ordem, sem sort/reverse/filter baseado em conteúdo", () => {
+    assertTrue(!/\.sort\(|\.reverse\(|\.filter\(/.test(SUMMARY_SOURCE), "keyMetrics deve ser apresentado exatamente como veio");
+  });
+
+  await runTest("Medições nunca calcula, soma, converte para número ou formata moeda na UI", () => {
+    assertTrue(
+      !/Number\(|parseFloat\(|parseInt\(|Intl\.NumberFormat|toLocaleString\(|\+\s*metric|metric\.value\s*\*|metric\.value\s*-/.test(SUMMARY_SOURCE),
+      "value já vem formatado do builder -- a UI só exibe"
+    );
+  });
+
+  await runTest("label e value de cada métrica vêm diretamente do Brief", () => {
+    assertTrue(SUMMARY_SOURCE.includes("metric.label") && SUMMARY_SOURCE.includes("metric.value"), "sem recomposição de texto");
+  });
+
+  await runTest("Medições nunca fica vazia silenciosamente -- estado vazio explícito, sem linguagem de erro", () => {
+    assertTrue(SUMMARY_SOURCE.includes("Nenhuma métrica executiva disponível para esta análise."), "texto aprovado deve estar presente");
+    assertTrue(!/Sem dados|Erro|Análise incompleta/i.test(SUMMARY_SOURCE), "nenhuma linguagem de erro no estado vazio");
+  });
+
+  await runTest("Medições não usa gráfico, KPI card ou vocabulário técnico em inglês", () => {
+    assertTrue(!/chart|kpi|dashboard/i.test(SUMMARY_SOURCE), "seção deve parecer resumo executivo, não painel de BI");
+  });
+
+  await runTest("Detalhamento (details) não expõe JSON, chaves técnicas ou Object.entries genérico", () => {
+    assertTrue(!/JSON\.stringify|Object\.entries|Object\.keys/.test(DETAILS_SOURCE), "details é {title, body} -- nenhum renderer genérico de objeto");
+  });
+
+  await runTest("Detalhamento vem diretamente de details.body, sem resumo/truncamento em JavaScript", () => {
+    assertTrue(DETAILS_SOURCE.includes("details.body"), "conteúdo deve vir direto do Brief");
+    assertTrue(!/details\.body\.(slice|substring|split)\(/.test(DETAILS_SOURCE), "nenhum truncamento/resumo do texto do builder");
+  });
+
+  await runTest("Detalhamento começa recolhido (useState(false)) e usa botão real com aria-expanded/aria-controls", () => {
+    assertTrue(DETAILS_SOURCE.includes("useState(false)"), "deve começar recolhido");
+    assertTrue(DETAILS_SOURCE.includes("aria-expanded") && DETAILS_SOURCE.includes("aria-controls"), "expansão deve ser acessível");
+  });
+
+  await runTest("Detalhamento não inventa tabela nem reproduz a planilha", () => {
+    assertTrue(!/<table|<thead|<tbody/i.test(DETAILS_SOURCE), "details não é dado tabular -- nenhuma tabela inventada");
+  });
+
+  await runTest("Detalhamento tem estado vazio explícito, sem linguagem de erro", () => {
+    assertTrue(DETAILS_SOURCE.includes("Nenhum detalhamento adicional disponível."), "texto aprovado deve estar presente");
+    assertTrue(!/Erro ao carregar|Sem análise|Não processado|Dados insuficientes/i.test(DETAILS_SOURCE), "nenhuma linguagem de erro no estado vazio");
   });
 
   await runTest("itens críticos começam recolhidos (useState(false))", () => {
