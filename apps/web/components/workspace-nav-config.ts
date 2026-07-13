@@ -2,7 +2,6 @@ import {
   BarChart3,
   Banknote,
   ClipboardCheck,
-  ClipboardList,
   FileDown,
   FileStack,
   FolderSearch,
@@ -32,9 +31,9 @@ import {
  * exists for that section, adding its `href` here is the only change
  * needed for it to become a fully working, route-aware nav link.
  *
- * Studios (Project/Geo/Studio de Evidências/Studio de Medições) são
+ * Studios (Project/Geo/Studio de Evidências/Medições) são
  * capacidades de plataforma com rota própria de nível superior
- * (`/bba-project`, `/geoespacial`, `/evidencias`, `/memorias`), mas só
+ * (`/bba-project`, `/geoespacial`, `/evidencias`, `/medicoes`), mas só
  * aparecem na Sidebar quando o usuário está dentro do Workspace ao qual
  * pertencem (ver docs/PLATFORM_ARCHITECTURE.md, seção 9) — por isso
  * seus `href` continuam apontando para a rota de nível superior, e é a
@@ -71,8 +70,7 @@ export const WORKSPACE_NAV_CONFIG: ReadonlyArray<WorkspaceNavConfig> = [
       { label: "Execução", icon: Wrench },
       { label: "Geo Studio", icon: Map, href: "/geoespacial" },
       { label: "Studio de Evidências", icon: FolderSearch, href: "/evidencias" },
-      { label: "Studio de Medições", icon: ClipboardList, href: "/memorias" },
-      { label: "Medições", icon: Ruler },
+      { label: "Medições", icon: Ruler, href: "/medicoes" },
       { label: "Documentos", icon: FileStack },
       { label: "Aprovações", icon: ClipboardCheck },
       { label: "Exportações", icon: FileDown },

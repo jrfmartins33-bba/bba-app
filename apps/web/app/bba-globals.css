@@ -2795,3 +2795,22 @@ button {
   border-color: var(--bba-gold);
   outline: none;
 }
+
+/* ══════════════════════════════════════════
+   MEDIÇÕES — Sprint 20.1E.1B
+   Central executiva de Boletins de Medição. Reaproveita
+   `.workspace-card`/`.workspace-fact-list`/`.motion-skeleton` — apenas o
+   espaçamento entre cartões da lista é novo.
+══════════════════════════════════════════ */
+
+.measurement-imports-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.measurement-imports-item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

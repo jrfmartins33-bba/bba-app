@@ -16,7 +16,7 @@ import { dirname, join, relative, resolve } from "node:path";
 
 const COMPONENTS_ROOT = resolve(__dirname, "..", "components");
 
-const STUDIO_COMPONENT_FOLDERS = ["bba-project", "geospatial"] as const;
+const STUDIO_COMPONENT_FOLDERS = ["bba-project", "geospatial", "measurement"] as const;
 
 interface ImportRef {
   readonly specifier: string;
