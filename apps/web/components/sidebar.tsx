@@ -23,7 +23,7 @@ import {
   GanttChartSquare,
   Map,
   FolderSearch,
-  ClipboardList,
+  Ruler,
   HardHat,
   FileStack,
   ClipboardCheck,
@@ -81,10 +81,10 @@ const NAV_STUDIOS = [
     description: 'Fotografias, vídeos e registros de campo',
   },
   {
-    href: '/memorias',
-    label: 'Studio de Medições',
-    icon: ClipboardList,
-    description: 'Memórias de cálculo e quantitativos',
+    href: '/medicoes',
+    label: 'Medições',
+    icon: Ruler,
+    description: 'Boletins de Medição e Relatórios Executivos',
   },
   {
     label: 'Studio de Finanças',

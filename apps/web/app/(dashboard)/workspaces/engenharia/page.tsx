@@ -5,7 +5,6 @@ import {
   Banknote,
   Calculator,
   ClipboardCheck,
-  ClipboardList,
   FileDown,
   FileStack,
   FolderSearch,
@@ -36,7 +35,7 @@ interface CapabilityCard {
  * Este Workspace é o contexto do projeto ativo (Barragem Lagoa do Arroz,
  * 2F Engenharia) — os cards abaixo abrem os Studios relevantes para ele
  * (ver docs/PLATFORM_ARCHITECTURE.md, seção 9). Project/Geo/Studio de
- * Evidências/Studio de Medições têm rota própria de nível superior, mas
+ * Evidências/Medições têm rota própria de nível superior, mas
  * só aparecem na Sidebar quando o usuário está dentro deste Workspace —
  * a visão de todos os Studios de uma vez é exclusiva do Admin BBA. BBA
  * Advisor não é um card de destino — vive contextualizado dentro de
@@ -86,20 +85,13 @@ const CAPABILITIES: CapabilityCard[] = [
     href: "/evidencias"
   },
   {
-    id: "measure-studio",
-    title: "Studio de Medições",
-    description: "Cálculo estruturado de quantitativos, fórmulas e trilhas auditáveis.",
-    status: "Pronto",
-    icon: ClipboardList,
-    href: "/memorias"
-  },
-  {
     id: "medicoes",
     title: "Medições",
     description:
       "Organização de boletins, quantitativos executados e acompanhamento da evolução da obra.",
-    status: "Em desenvolvimento",
-    icon: Ruler
+    status: "Pronto",
+    icon: Ruler,
+    href: "/medicoes"
   },
   {
     id: "documentos",
