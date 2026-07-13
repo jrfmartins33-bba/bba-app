@@ -327,6 +327,87 @@ BDOS (nunca afirmar mais do que o código garante).
 
 ---
 
+## PRINCIPLE 008 — Human-First Visual Decision UX
+
+O BDOS é desenvolvido para pessoas que administram negócios — MEIs,
+PMEs, gestores, responsáveis financeiros, engenheiros e profissionais
+administrativos — não para pessoas que conhecem sua arquitetura
+interna. Toda interface que apresenta análise, recomendação ou
+decisão deve transformar complexidade técnica em compreensão visual,
+objetiva e acionável, respondendo rapidamente:
+
+- **O que está acontecendo?**
+- **Isso exige atenção?**
+- **O que devo fazer?**
+- **Onde está o problema, o contexto ou a origem relevante?**
+
+Compreensão vem antes do detalhe: o resumo (status, prioridade, ação
+principal) precisa ser legível sem leitura longa. Na experiência
+executiva principal, o detalhamento técnico — explicação completa,
+origem documental e rastreabilidade — fica subordinado e disponível
+sob demanda (PRINCIPLE 003), sem competir em peso visual com a
+conclusão.
+
+**Guardrail central, não observação secundária:** todo apoio visual
+deve representar um dado, estado, relação ou decisão real já
+fornecida pelo sistema. A UI pode apresentar e organizar; nunca pode
+calcular, completar, inferir ou fabricar significado para preencher
+espaço. O visual reorganiza e apresenta o que o BDOS já decidiu;
+nunca decide nem completa lacunas por conta própria. Regra resumida:
+**o BDOS decide, explica com linguagem humana e mostra visualmente o
+que importa** — nunca o inverso. A lista de exemplos proibidos vive
+em `packages/bdos-core/docs/HUMAN_FIRST_VISUAL_UX.md`, não aqui.
+
+Mobile não é uma versão reduzida posterior: é condição de aceitação.
+A hierarquia decisória (o que está acontecendo, o que fazer) precisa
+permanecer compreensível em tela pequena, mesmo quando a disposição
+visual muda.
+
+**Por que este princípio existe — evidência concreta, não
+hipotética.** A correção do Sprint 20.1E.6 (Epic 20, Relatório
+Executivo de Medições) é o caso real que o motiva: uma implementação
+tecnicamente correta (projeção fiel de `criticalItems`/`nextActions`/
+`evidenceReferences`, sem nenhum dado inventado) consolidava a origem
+documental numa seção final separada, organizada pela estrutura do
+contrato (`sourceType`/`sourceId`/`locator`) em vez de pela leitura
+humana — repetindo Ações Recomendadas e Itens Críticos e aumentando a
+carga cognitiva sem agregar entendimento. A correção não mudou
+nenhuma regra de negócio: moveu a origem para dentro do contexto que
+ela sustenta e trocou vocabulário de contrato por vocabulário humano
+("O que foi encontrado", "Ao corrigir"). É o mesmo tipo de lacuna que
+motivou PRINCIPLE 007 — ali, a palavra vazava; aqui, é a estrutura do
+contrato que vazava para a experiência.
+
+**Reconciliação com PRINCIPLE 003 (Progressive Disclosure).**
+PRINCIPLE 003 já exige que o detalhe apareça só sob demanda. PRINCIPLE
+008 vai um passo além: mesmo o resumo ainda recolhido precisa ter
+peso visual (status, prioridade, ação), não só uma frase de texto
+corrido esperando expansão. 003 rege *quando* o detalhe aparece; 008
+rege *como* mesmo o que não foi expandido precisa ser legível em
+poucos segundos.
+
+**Reconciliação com PRINCIPLE 007 (Domain Language Containment).**
+007 rege escolha de palavra; 008 rege estrutura de apresentação. Uma
+tela pode usar vocabulário humano correto e ainda falhar em 008 se
+for uma parede de texto — foi exatamente o caso do 20.1E.6 antes da
+correção.
+
+**Limite conhecido do enforcement.** Diferente de PRINCIPLE 007 (que
+tem guard estático real), este princípio não é verificável por
+scanner de texto — é hierarquia visual, não vocabulário proibido.
+Guards automatizados podem confirmar aspectos estruturais (ausência
+de termo proibido, componente recolhido por padrão, ausência de
+cálculo no frontend, acessibilidade básica), mas não podem garantir
+honestamente entendimento em cinco segundos, equilíbrio entre texto e
+visual, ou adequação ao público MEI/PME — isso depende de revisão de
+produto e validação visual com dados reais, a cada Sprint. O
+detalhamento operacional (as quatro camadas, regras anti-ERP, padrões
+comprovados e o checklist de revisão) vive em
+`packages/bdos-core/docs/HUMAN_FIRST_VISUAL_UX.md`. Este princípio
+nunca duplica esse conteúdo; só fixa a regra que o motiva.
+
+---
+
 ## Estado de implementação (UI Sprint 7 — Geospatial Engine MVP)
 
 - ✅ Princípios documentados (este arquivo), incluindo PRINCIPLE 004.
