@@ -16,11 +16,14 @@ const HERO_SOURCE = readFileSync(join(currentDir, "measurement-decision-hero.tsx
 const CONFIDENCE_NOTE_SOURCE = readFileSync(join(currentDir, "measurement-confidence-note.tsx"), "utf8");
 const KEY_DECISIONS_SOURCE = readFileSync(join(currentDir, "measurement-key-decisions-section.tsx"), "utf8");
 const RECOMMENDED_ACTIONS_SOURCE = readFileSync(join(currentDir, "measurement-recommended-actions-section.tsx"), "utf8");
+const CRITICAL_ITEMS_SECTION_SOURCE = readFileSync(join(currentDir, "measurement-critical-items-section.tsx"), "utf8");
+const CRITICAL_ITEM_SOURCE = readFileSync(join(currentDir, "measurement-critical-item.tsx"), "utf8");
+const CRITICAL_ITEM_VM_SOURCE = readFileSync(join(currentDir, "measurement-critical-item-view-model.ts"), "utf8");
 const ROUTE_PAGE_SOURCE = readFileSync(
   join(currentDir, "..", "..", "app", "(dashboard)", "medicoes", "[measurementBulletinImportId]", "page.tsx"),
   "utf8"
 );
-const RENDER_SOURCE = `${PAGE_SOURCE}\n${HEADER_SOURCE}\n${SKELETON_SOURCE}\n${ERROR_STATE_SOURCE}\n${HERO_SOURCE}\n${CONFIDENCE_NOTE_SOURCE}\n${KEY_DECISIONS_SOURCE}\n${RECOMMENDED_ACTIONS_SOURCE}\n${ROUTE_PAGE_SOURCE}`;
+const RENDER_SOURCE = `${PAGE_SOURCE}\n${HEADER_SOURCE}\n${SKELETON_SOURCE}\n${ERROR_STATE_SOURCE}\n${HERO_SOURCE}\n${CONFIDENCE_NOTE_SOURCE}\n${KEY_DECISIONS_SOURCE}\n${RECOMMENDED_ACTIONS_SOURCE}\n${CRITICAL_ITEMS_SECTION_SOURCE}\n${CRITICAL_ITEM_SOURCE}\n${CRITICAL_ITEM_VM_SOURCE}\n${ROUTE_PAGE_SOURCE}`;
 
 async function main(): Promise<void> {
   await runTest("cabeçalho exibe generatedAt com o rótulo correto", () => {
@@ -61,11 +64,68 @@ async function main(): Promise<void> {
     assertTrue(!/ActionPlan|ExecutionTask|ExecutionWorkflow/.test(RENDER_SOURCE), "nextActions é só descritivo -- nenhum aggregate nesta Sprint");
   });
 
-  await runTest("itens críticos, métricas, detalhamento e evidências ainda não são renderizados", () => {
+  await runTest("métricas e detalhamento geral ainda não são renderizados", () => {
+    assertTrue(!/keyMetrics|\bdetails\b/.test(RENDER_SOURCE), "esses campos pertencem a Sprints futuras, não a esta");
+  });
+
+  await runTest("Itens Críticos vem depois de Ações Recomendadas na composição da página", () => {
+    const recommendedIndex = PAGE_SOURCE.indexOf("MeasurementRecommendedActionsSection");
+    const criticalIndex = PAGE_SOURCE.indexOf("MeasurementCriticalItemsSection");
+    assertTrue(recommendedIndex !== -1 && criticalIndex !== -1 && criticalIndex > recommendedIndex, "ordem final: Hero, Decisões, Ações, Itens Críticos");
+  });
+
+  await runTest("itens críticos começam recolhidos (useState(false))", () => {
+    assertTrue(CRITICAL_ITEM_SOURCE.includes("useState(false)"), "cada item deve começar recolhido");
+  });
+
+  await runTest("cada item crítico tem estado próprio -- nenhum isOpen/onToggle recebido do pai (accordion compartilhado não foi pedido)", () => {
+    assertTrue(!/isOpen|onToggle/.test(CRITICAL_ITEM_SOURCE), "estado deve ser local a cada item, não elevado/compartilhado");
+    assertTrue(!/isOpen|onToggle/.test(CRITICAL_ITEMS_SECTION_SOURCE), "a seção não deve controlar qual item está aberto");
+  });
+
+  await runTest("título e fato técnico vêm diretamente do Brief, sem transformação de texto", () => {
+    assertTrue(CRITICAL_ITEM_SOURCE.includes("item.title") && CRITICAL_ITEM_SOURCE.includes("item.body"), "title/body devem vir direto do item");
+    assertTrue(!/item\.(title|body)\.(toLowerCase|toUpperCase|slice|substring|replace|trim)\(/.test(CRITICAL_ITEM_SOURCE), "nenhuma transformação de texto -- nem correção de gramática/plural/moeda");
+  });
+
+  await runTest("consequências vêm diretamente do Brief, sem fallback textual quando ausentes", () => {
     assertTrue(
-      !/criticalItems|keyMetrics|\bdetails\b|evidenceReferences/.test(RENDER_SOURCE),
-      "esses campos pertencem às Sprints 20.1E.4 e 20.1E.6, não a esta"
+      CRITICAL_ITEM_SOURCE.includes("item.consequenceIfAddressed") && CRITICAL_ITEM_SOURCE.includes("item.consequenceIfIgnored"),
+      "consequências devem vir direto do item"
     );
+    assertTrue(!/N\/A|Sem consequência|Nenhuma consequência/i.test(CRITICAL_ITEM_SOURCE), "nenhum fallback textual inventado para consequência ausente");
+  });
+
+  await runTest("ambas as consequências ausentes omitem toda a área (nenhum bloco vazio)", () => {
+    assertTrue(CRITICAL_ITEM_SOURCE.includes("hasConsequences"), "deve existir um guard explícito antes de renderizar a área de consequências");
+  });
+
+  await runTest("referência vazia omite a área de origem; sourceId/sourceType nunca aparecem", () => {
+    assertTrue(CRITICAL_ITEM_SOURCE.includes("referenceGroups.length > 0"), "área de origem só aparece quando há referência");
+    assertTrue(!RENDER_SOURCE.includes(".sourceType") && !RENDER_SOURCE.includes("sourceId"), "sourceId/sourceType são metadata técnica, não UI");
+  });
+
+  await runTest("nenhuma navegação, drawer, download ou botão de abrir planilha/célula nesta Sprint", () => {
+    assertTrue(!/drawer|modal|download/i.test(RENDER_SOURCE), "origem é só leitura nesta Sprint -- interação pertence ao 20.1E.6");
+    assertTrue(!/Abrir planilha|Ver célula/i.test(RENDER_SOURCE), "nenhum botão de navegação para a planilha ainda");
+  });
+
+  await runTest("nenhum vínculo inferido entre item crítico e nextActions (sem campo estrutural no contrato)", () => {
+    assertTrue(!CRITICAL_ITEM_SOURCE.includes("nextActions") && !CRITICAL_ITEMS_SECTION_SOURCE.includes("nextActions"), "sem criticalItemId no contrato, a UI não pode inventar essa relação");
+  });
+
+  await runTest("nenhum botão de aprovação/execução nos itens críticos", () => {
+    assertTrue(!/Aprovar|Executar|Criar tarefa|type="checkbox"/i.test(CRITICAL_ITEM_SOURCE), "itens críticos são só leitura");
+  });
+
+  await runTest("estado vazio explícito quando criticalItems está vazio, sem linguagem de aprovação", () => {
+    assertTrue(CRITICAL_ITEMS_SECTION_SOURCE.includes("Nenhum item crítico identificado."), "deve existir estado vazio explícito e positivo");
+    assertTrue(!/Aprovad|Certificad|100% conforme|Sem riscos/i.test(CRITICAL_ITEMS_SECTION_SOURCE), "estado vazio não pode soar como aprovação formal");
+  });
+
+  await runTest("Itens Críticos não ordena nem filtra o array recebido", () => {
+    assertTrue(!/\.sort\(|\.reverse\(|\.filter\(/.test(CRITICAL_ITEMS_SECTION_SOURCE), "criticalItems deve ser apresentado exatamente como veio");
+    assertTrue(!/\.sort\(|\.reverse\(/.test(CRITICAL_ITEM_SOURCE), "evidenceReferences não pode ser reordenado");
   });
 
   await runTest("placeholder 'em construção' do 20.1E.1B foi removido", () => {
