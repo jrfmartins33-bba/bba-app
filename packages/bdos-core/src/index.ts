@@ -902,3 +902,5 @@ export * from "./engines/decision/builder";
 export * from "./engines/decision/recommendation";
 export * from "./engines/decision/playbook";
 export * from "./engines/decision/action-plan";
+export * from "./domain/procurement-case";
+export * from "./domain/budget-version";

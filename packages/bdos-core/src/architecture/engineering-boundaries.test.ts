@@ -44,6 +44,14 @@ const OPERATIONAL_DOMAINS = [
   // — mesmo padrão de Decision.evidence[].sourceReference. Ver
   // packages/bdos-core/docs/EXECUTION_ENGINE.md.
   "execution-management",
+  // Epic 21, Sprint 21.3B — primeira fatia de domínio puro de Engenharia
+  // de Custos e Licitações. Ver
+  // packages/bdos-core/docs/EPIC_21_DOMAIN_IMPLEMENTATION_MAP.md.
+  // "budget-version" referencia identidades de "procurement-case"
+  // (direção acíclica Orçamento → Licitação); "procurement-case" não
+  // importa "budget-version".
+  "procurement-case",
+  "budget-version",
 ] as const;
 
 // Rule A — exact repo-relative directories an operational domain may never
