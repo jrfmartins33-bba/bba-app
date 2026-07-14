@@ -1,63 +1,117 @@
 /**
  * Fixture real, linha a linha, do orçamento oficial da Lagoa do Arroz —
- * DNOCS, Pregão Eletrônico 90006/2025 (Sprint 21.3B, complemento).
+ * DNOCS, Pregão Eletrônico 90006/2025 (Sprint 21.3B, complementos 1 e 2).
  *
  * FONTE PRIMÁRIA (planilha oficial, não a proposta vencedora nem a
  * planilha corrigida):
  * 20250412-Orçamento_Lagoa_do_Arroz_sem_desoneração - atualizado abril 2025 - rev 2.xlsx
  *
  * - Aba utilizada: "ORÇAMENTO"
- * - Linhas de cabeçalho: 4-5 (two-row merged header)
- * - Intervalo de linhas de dados examinado: 6-352
+ * - Linhas de cabeçalho: 4-5 (cabeçalho mesclado em duas linhas)
+ * - Intervalo de linhas de dados examinado: 6-352 (347 linhas)
  * - Linha do total geral declarado na fonte: 353 ("TOTAL GERAL (R$)")
  * - SHA-256 do arquivo original: 75bfcdd60111e8c72e1fc2033395b1e9793738b730c156584fac2043ce5de6b4
- * - Extraído em: 2026-07-14T13:43:11.662Z
+ * - Extraído em: 2026-07-14T14:17:14.074Z
  *
  * Critérios de classificação (a partir do próprio código hierárquico da
  * coluna "ITEM" da planilha, formato XX.YY.ZZ):
- * - YY="00" e ZZ="00"  → Grupo (ex.: "01.00.00").
- * - ZZ="00" (YY≠"00")  → Subgrupo, pai = Grupo "XX.00.00" (ex.: "01.01.00").
+ * - YY="00" e ZZ="00"  → Grupo (ex.: "01.00.00"); `parentResolutionMethod`
+ *   = "TopLevelNoParent".
+ * - ZZ="00" (YY≠"00")  → Subgrupo, pai = Grupo "XX.00.00" (ex.: "01.01.00");
+ *   `parentResolutionMethod` = "HierarchicalCode".
  * - ZZ≠"00"            → Item de Serviço; pai = Subgrupo "XX.YY.00" quando
  *   YY≠"00", ou o próprio Grupo "XX.00.00" quando YY="00" (caso real
  *   confirmado: item "05.00.01" está diretamente sob o Grupo "05.00.00",
- *   sem Subgrupo intermediário).
+ *   sem Subgrupo intermediário); `parentResolutionMethod` = "HierarchicalCode".
  * - Sem código hierárquico (célula "ITEM" vazia) mas com "TIPO" e
- *   "DESCRIÇÃO" preenchidos → Item de Serviço sem código externo na
- *   coluna hierárquica (caso real: `COT-015`, linha 151 da planilha). O
- *   pai é a seção (Subgrupo, ou Grupo na ausência de Subgrupo) vigente na
- *   posição em que a linha aparece na planilha — lido da própria
- *   estrutura do documento, nunca suposto.
+ *   "DESCRIÇÃO" preenchidos → Item de Serviço sem código externo na coluna
+ *   hierárquica (caso real: `COT-015`, linha 151 da planilha). O pai é a
+ *   seção (Subgrupo, ou Grupo na ausência de Subgrupo) vigente na posição
+ *   em que a linha aparece na planilha — lido da própria estrutura do
+ *   documento, nunca suposto; `parentResolutionMethod` =
+ *   "DocumentPositionSection". Para `COT-015` especificamente: pai
+ *   resolvido como "04.03.00", linha original 151, sem código hierárquico
+ *   próprio, código externo de fonte "COT-015" — a relação NÃO está
+ *   explicitamente codificada no próprio `COT-015`, é inferida da posição
+ *   documental, exatamente como `parentResolutionMethod` declara.
+ *
+ * Precisão econômica: nenhuma conversão nesta fixture usa `Math.round`.
+ * `quantidade`, `custoUnitarioSemBdiReais`, `bdiPercent`,
+ * `precoUnitarioComBdiReais` e `totalComBdiReais` são preservados como
+ * texto decimal exato (nunca `number`), evitando perda de precisão ou
+ * formatação da fonte. Os quatro primeiros são proveniência apenas — esta
+ * Sprint não calcula quantidade × preço unitário. `totalComBdiReais` é o
+ * valor econômico usado (convertido para centavos inteiros no momento da
+ * carga, a partir do texto decimal exato, nunca por arredondamento).
+ *
+ * Descrição: `descricao` é uma união discriminada que diferencia
+ * explicitamente descrição confirmada na fonte
+ * (`{ status: "ConfirmedFromSource", text }`) de descrição ausente na
+ * fonte oficial (`{ status: "AbsentFromSource" }`, sem campo `text`) — 8
+ * linhas reais, todas do tipo "Cotação", têm a célula de descrição vazia
+ * na própria planilha. Nenhum texto é produzido por este arquivo para
+ * essas 8 linhas; um eventual rótulo de apresentação é responsabilidade
+ * exclusiva do carregador (`lagoa-do-arroz.official-fixture-loader.ts`),
+ * nunca desta fixture.
+ *
+ * Identidade: esta fixture NÃO atribui identidade interna — apenas
+ * preserva `sourceRowNumber` (posição original na planilha) como
+ * metadado de proveniência. A identidade interna de cada Linha do
+ * Orçamento é atribuída somente pelo carregador, via sequência sintética
+ * própria da carga, nunca a partir do código externo ou do número da
+ * linha da fonte.
+ *
+ * Reconciliação: as 347 linhas examinadas (6-352) se dividem em 336
+ * incluídas como registros de domínio (`LAGOA_DO_ARROZ_OFFICIAL_LINES`) e
+ * 11 excluídas com motivo objetivo, listadas em
+ * `LAGOA_DO_ARROZ_EXCLUDED_LINES` — nenhuma das 347 linhas fica sem
+ * destino conhecido.
  *
  * Nenhum valor, código, descrição, quantidade, unidade ou associação
- * hierárquica foi inventado. `sourceRowNumber` preserva a posição
- * original na planilha; `externalSourceCode` preserva o código externo
- * real (coluna "CÓDIGO"/"FONTE DE PESQUISA") separadamente da identidade
- * interna, que é atribuída somente no momento de carregar esta fixture no
- * modelo de domínio (nunca a partir do código externo).
- *
- * `totalComBdiReais`: para Grupo, é o subtotal DECLARADO na fonte
- * (coluna "TOTAL C/BDI" da linha do Grupo) — preservado apenas para
- * conferência, nunca somado como parcela própria. Para Subgrupo, a fonte
- * não declara total próprio (sempre `null`). Para Item de Serviço, é o
- * valor real da linha, folha econômica que efetivamente contribui para o
- * total calculado.
+ * hierárquica foi inventado.
  */
+
+export type LagoaDoArrozDescription =
+  | { readonly status: "ConfirmedFromSource"; readonly text: string }
+  | { readonly status: "AbsentFromSource" };
+
+export type LagoaDoArrozParentResolutionMethod = "HierarchicalCode" | "DocumentPositionSection" | "TopLevelNoParent";
 
 export interface LagoaDoArrozOfficialLine {
   readonly sourceRowNumber: number;
   readonly hierarchicalCode: string | null;
   readonly classification: "Grupo" | "Subgrupo" | "ServiceItem";
   readonly parentHierarchicalCode: string | null;
+  readonly parentResolutionMethod: LagoaDoArrozParentResolutionMethod;
   readonly externalSourceCode: string | null;
   readonly fonte: string | null;
   readonly tipo: string | null;
-  readonly descricao: string;
+  readonly descricao: LagoaDoArrozDescription;
   readonly unidade: string | null;
-  readonly quantidade: number | null;
-  readonly custoUnitarioSemBdiReais: number | null;
-  readonly bdiPercent: number | null;
-  readonly precoUnitarioComBdiReais: number | null;
-  readonly totalComBdiReais: number | null;
+  /** Texto decimal exato — proveniência apenas, não usado em cálculo econômico nesta Sprint. */
+  readonly quantidade: string | null;
+  /** Texto decimal exato — proveniência apenas. */
+  readonly custoUnitarioSemBdiReais: string | null;
+  /** Texto decimal exato — proveniência apenas. */
+  readonly bdiPercent: string | null;
+  /** Texto decimal exato — proveniência apenas. */
+  readonly precoUnitarioComBdiReais: string | null;
+  /** Texto decimal exato — valor econômico real (Item de Serviço) ou subtotal declarado apenas para conferência (Grupo). */
+  readonly totalComBdiReais: string | null;
+}
+
+export type LagoaDoArrozExcludedReason = "BlankSeparatorRow" | "DocumentaryFootnote" | "ZeroValueArtifactRow";
+
+/**
+ * Manifesto de reconciliação das linhas examinadas que NÃO geraram
+ * registro de domínio — nenhuma representa Grupo, Subgrupo ou Item de
+ * Serviço econômico.
+ */
+export interface LagoaDoArrozExcludedLine {
+  readonly sourceRowNumber: number;
+  readonly reason: LagoaDoArrozExcludedReason;
+  readonly classificacaoDocumentalObservada: string;
+  readonly observedContent: string | null;
 }
 
 export const LAGOA_DO_ARROZ_SOURCE_PROVENANCE = {
@@ -66,12 +120,13 @@ export const LAGOA_DO_ARROZ_SOURCE_PROVENANCE = {
   sheetName: "ORÇAMENTO",
   sha256: "75bfcdd60111e8c72e1fc2033395b1e9793738b730c156584fac2043ce5de6b4",
   dataRowRange: "6-352",
+  totalExaminedRows: 347,
   totalRowNumber: 353,
-  extractedAt: "2026-07-14T13:43:11.662Z",
+  extractedAt: "2026-07-14T14:17:14.074Z",
 } as const;
 
-/** Total geral declarado na própria planilha (linha 353, "TOTAL GERAL (R$)"), em reais. */
-export const LAGOA_DO_ARROZ_DECLARED_TOTAL_REAIS = 9809087.18;
+/** Total geral declarado na própria planilha (linha 353, "TOTAL GERAL (R$)"), como texto decimal exato. */
+export const LAGOA_DO_ARROZ_DECLARED_TOTAL_DECIMAL = "9809087.18";
 
 export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLine> = [
   {
@@ -79,26 +134,34 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "01.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
+    "parentResolutionMethod": "TopLevelNoParent",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "SERVIÇOS PRELIMINARES E IMPLANTAÇÃO DO CANTEIRO DE OBRAS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SERVIÇOS PRELIMINARES E IMPLANTAÇÃO DO CANTEIRO DE OBRAS"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
-    "totalComBdiReais": 2006878.46
+    "totalComBdiReais": "2006878.46"
   },
   {
     "sourceRowNumber": 7,
     "hierarchicalCode": "01.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "01.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Serviços Preliminares",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Serviços Preliminares"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -111,90 +174,114 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "01.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4915744",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "CAPINA MANUAL",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAPINA MANUAL"
+    },
     "unidade": "M2",
-    "quantidade": 430.92,
-    "custoUnitarioSemBdiReais": 0.68,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 0.84,
-    "totalComBdiReais": 361.97
+    "quantidade": "430.92",
+    "custoUnitarioSemBdiReais": "0.68",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "0.84",
+    "totalComBdiReais": "361.97"
   },
   {
     "sourceRowNumber": 9,
     "hierarchicalCode": "01.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "CERCA-6 FIOS",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CERCA COM 6 FIOS DE ARAME FARPADO E MOURÃO DE CONCRETO DE SEÇÃO QUADRADA DE 11 CM A CADA 2,5 M E ESTICADOR DE 15 CM A CADA 50 M - AREIA E BRITA COMERCIAIS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CERCA COM 6 FIOS DE ARAME FARPADO E MOURÃO DE CONCRETO DE SEÇÃO QUADRADA DE 11 CM A CADA 2,5 M E ESTICADOR DE 15 CM A CADA 50 M - AREIA E BRITA COMERCIAIS"
+    },
     "unidade": "M",
-    "quantidade": 81.6,
-    "custoUnitarioSemBdiReais": 40.35,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 50.1,
-    "totalComBdiReais": 4088.16
+    "quantidade": "81.6",
+    "custoUnitarioSemBdiReais": "40.35",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "50.1",
+    "totalComBdiReais": "4088.16"
   },
   {
     "sourceRowNumber": 10,
     "hierarchicalCode": "01.01.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "85189",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "PORTAO EM TUBO DE ACO GALVANIZADO DIN 2440/NBR 5580, PAINEL UNICO, DIMENSOES 4,0X2,0M, INCLUSIVE CADEADO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PORTAO EM TUBO DE ACO GALVANIZADO DIN 2440/NBR 5580, PAINEL UNICO, DIMENSOES 4,0X2,0M, INCLUSIVE CADEADO"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 1852.65,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2300.62,
-    "totalComBdiReais": 2300.62
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "1852.65",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2300.62",
+    "totalComBdiReais": "2300.62"
   },
   {
     "sourceRowNumber": 11,
     "hierarchicalCode": "01.01.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "903807",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO DA CENTRAL DE BRITAGEM COM CAPACIDADE DE 80 M³/H",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO DA CENTRAL DE BRITAGEM COM CAPACIDADE DE 80 M³/H"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 107868.65,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 133951.28,
-    "totalComBdiReais": 133951.28
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "107868.65",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "133951.28",
+    "totalComBdiReais": "133951.28"
   },
   {
     "sourceRowNumber": 12,
     "hierarchicalCode": "01.01.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "LIC-JAZIDA",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "OBTENÇÃO DAS LICENÇAS DE EXPLORAÇÃO E AMBIENTAL DAS JAZIDAS DA OBRA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "OBTENÇÃO DAS LICENÇAS DE EXPLORAÇÃO E AMBIENTAL DAS JAZIDAS DA OBRA"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 71318.77,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 88563.64,
-    "totalComBdiReais": 88563.64
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "71318.77",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "88563.64",
+    "totalComBdiReais": "88563.64"
   },
   {
     "sourceRowNumber": 13,
     "hierarchicalCode": "01.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "01.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Edificações para o Canteiro de Obras",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Edificações para o Canteiro de Obras"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -207,202 +294,254 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "01.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73847/002",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "ALUGUEL CONTAINER/ESCRIT/WC C/1 VASO/1 LAV/1 MIC/4 CHUV LARG =2,20M COMPR=6,20M ALT=2,50M CHAPA ACO NERV TRAPEZ FORROC/ ISOL TERMO ACUST CHASSIS REFORC PISO COMPENS NAVAL INCL INST ELETR/HIDRO-SANIT EXCL TRANSP/CARGA/DESCARGA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ALUGUEL CONTAINER/ESCRIT/WC C/1 VASO/1 LAV/1 MIC/4 CHUV LARG =2,20M COMPR=6,20M ALT=2,50M CHAPA ACO NERV TRAPEZ FORROC/ ISOL TERMO ACUST CHASSIS REFORC PISO COMPENS NAVAL INCL INST ELETR/HIDRO-SANIT EXCL TRANSP/CARGA/DESCARGA"
+    },
     "unidade": "MÊS",
-    "quantidade": 9,
-    "custoUnitarioSemBdiReais": 919.93,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1142.36,
-    "totalComBdiReais": 10281.24
+    "quantidade": "9",
+    "custoUnitarioSemBdiReais": "919.93",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1142.36",
+    "totalComBdiReais": "10281.24"
   },
   {
     "sourceRowNumber": 15,
     "hierarchicalCode": "01.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73847/004",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "ALUGUEL CONTAINER PARA ESCRITÓRIO/DEPÓSITO C/ BANHEIRO OU IMÓVEL COM A MESMA FINALIDADE",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ALUGUEL CONTAINER PARA ESCRITÓRIO/DEPÓSITO C/ BANHEIRO OU IMÓVEL COM A MESMA FINALIDADE"
+    },
     "unidade": "MÊS",
-    "quantidade": 9,
-    "custoUnitarioSemBdiReais": 1196.15,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1485.37,
-    "totalComBdiReais": 13368.33
+    "quantidade": "9",
+    "custoUnitarioSemBdiReais": "1196.15",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1485.37",
+    "totalComBdiReais": "13368.33"
   },
   {
     "sourceRowNumber": 16,
     "hierarchicalCode": "01.02.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73803/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "GALPAO ABERTO PARA OFICINA E DEPOSITO DE CANTEIRO DE OBRAS, EM MADEIRA DE LEI",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "GALPAO ABERTO PARA OFICINA E DEPOSITO DE CANTEIRO DE OBRAS, EM MADEIRA DE LEI"
+    },
     "unidade": null,
-    "quantidade": 24,
-    "custoUnitarioSemBdiReais": 372.53,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 462.6,
-    "totalComBdiReais": 11102.4
+    "quantidade": "24",
+    "custoUnitarioSemBdiReais": "372.53",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "462.6",
+    "totalComBdiReais": "11102.4"
   },
   {
     "sourceRowNumber": 17,
     "hierarchicalCode": "01.02.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74210/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "BARRACAO PARA DEPOSITO EM TABUAS DE MADEIRA, COBERTURA EM FIBROCIMENTO 4 MM, INCLUSO PISO ARGAMASSA TRAÇO 1:6 (CIMENTO E AREIA)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "BARRACAO PARA DEPOSITO EM TABUAS DE MADEIRA, COBERTURA EM FIBROCIMENTO 4 MM, INCLUSO PISO ARGAMASSA TRAÇO 1:6 (CIMENTO E AREIA)"
+    },
     "unidade": null,
-    "quantidade": 9,
-    "custoUnitarioSemBdiReais": 610.1,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 757.62,
-    "totalComBdiReais": 6818.58
+    "quantidade": "9",
+    "custoUnitarioSemBdiReais": "610.1",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "757.62",
+    "totalComBdiReais": "6818.58"
   },
   {
     "sourceRowNumber": 18,
     "hierarchicalCode": "01.02.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74216/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "RAMAL PREDIAL DE ESGOTO EM TUBO PVC ESGOTO DN 100MM - FORNECIMENTO, INSTALACAO, ESCAVACAO E REATERRO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "RAMAL PREDIAL DE ESGOTO EM TUBO PVC ESGOTO DN 100MM - FORNECIMENTO, INSTALACAO, ESCAVACAO E REATERRO"
+    },
     "unidade": "M",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 121.28,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 150.6,
-    "totalComBdiReais": 150.6
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "121.28",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "150.6",
+    "totalComBdiReais": "150.6"
   },
   {
     "sourceRowNumber": 19,
     "hierarchicalCode": "01.02.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74198/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "SUMIDOURO EM ALVENARIA DE TIJOLO CERAMICO MACICO DIAMETRO 1,20M E ALTURA 5,00M, COM TAMPA EM CONCRETO ARMADO DIAMETRO 1,40M E ESPESSURA 10CM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SUMIDOURO EM ALVENARIA DE TIJOLO CERAMICO MACICO DIAMETRO 1,20M E ALTURA 5,00M, COM TAMPA EM CONCRETO ARMADO DIAMETRO 1,40M E ESPESSURA 10CM"
+    },
     "unidade": "UNID",
-    "quantidade": 20,
-    "custoUnitarioSemBdiReais": 1702.23,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2113.82,
-    "totalComBdiReais": 42276.4
+    "quantidade": "20",
+    "custoUnitarioSemBdiReais": "1702.23",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2113.82",
+    "totalComBdiReais": "42276.4"
   },
   {
     "sourceRowNumber": 20,
     "hierarchicalCode": "01.02.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74197/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "FOSSA SEPTICA EM ALVENARIA DE TIJOLO CERAMICO MACICO DIMENSOES EXTERNAS 1,90X1,10X1,40M, 1.500 LITROS, REVESTIDA INTERNAMENTE COM BARRA LISA, COM TAMPA EM CONCRETO ARMADO COM ESPESSURA 8CM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FOSSA SEPTICA EM ALVENARIA DE TIJOLO CERAMICO MACICO DIMENSOES EXTERNAS 1,90X1,10X1,40M, 1.500 LITROS, REVESTIDA INTERNAMENTE COM BARRA LISA, COM TAMPA EM CONCRETO ARMADO COM ESPESSURA 8CM"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 2240.16,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2781.83,
-    "totalComBdiReais": 2781.83
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "2240.16",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2781.83",
+    "totalComBdiReais": "2781.83"
   },
   {
     "sourceRowNumber": 21,
     "hierarchicalCode": "01.02.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74253/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "RAMAL PREDIAL EM TUBO PEAD 20MM - FORNECIMENTO, INSTALAÇÃO, ESCAVAÇÃO E REATERRO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "RAMAL PREDIAL EM TUBO PEAD 20MM - FORNECIMENTO, INSTALAÇÃO, ESCAVAÇÃO E REATERRO"
+    },
     "unidade": "M",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 32.27,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 40.07,
-    "totalComBdiReais": 40.07
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "32.27",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "40.07",
+    "totalComBdiReais": "40.07"
   },
   {
     "sourceRowNumber": 22,
     "hierarchicalCode": "01.02.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "102623",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CAIXA D´ÁGUA EM POLIETILENO, 1000 LITROS (INCLUSOS TUBOS, CONEXÕES E TORNEIRA DE BÓIA) - FORNECIMENTO E INSTALAÇÃO. AF_06/2021",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAIXA D´ÁGUA EM POLIETILENO, 1000 LITROS (INCLUSOS TUBOS, CONEXÕES E TORNEIRA DE BÓIA) - FORNECIMENTO E INSTALAÇÃO. AF_06/2021"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 821.51,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1020.15,
-    "totalComBdiReais": 1020.15
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "821.51",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1020.15",
+    "totalComBdiReais": "1020.15"
   },
   {
     "sourceRowNumber": 23,
     "hierarchicalCode": "01.02.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73960/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTAL/LIGACAO PROVISORIA ELETRICA BAIXA TENSAO P/CANT OBRA OBRA,M3-CHAVE 100A CARGA 3KWH,20CV EXCL FORN MEDIDOR",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTAL/LIGACAO PROVISORIA ELETRICA BAIXA TENSAO P/CANT OBRA OBRA,M3-CHAVE 100A CARGA 3KWH,20CV EXCL FORN MEDIDOR"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 2668.72,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 3314.01,
-    "totalComBdiReais": 3314.01
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "2668.72",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "3314.01",
+    "totalComBdiReais": "3314.01"
   },
   {
     "sourceRowNumber": 24,
     "hierarchicalCode": "01.02.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "GERADOR",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "LOCACAO DE GRUPO GERADOR ACIMA DE * 20 A 80* KVA, MOTOR DIESEL, REBOCAVEL, ACIONAMENTO MANUAL  (12 hs/dia)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LOCACAO DE GRUPO GERADOR ACIMA DE * 20 A 80* KVA, MOTOR DIESEL, REBOCAVEL, ACIONAMENTO MANUAL  (12 hs/dia)"
+    },
     "unidade": "MÊS",
-    "quantidade": 18,
-    "custoUnitarioSemBdiReais": 6071.52,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 7539.61,
-    "totalComBdiReais": 135712.98
+    "quantidade": "18",
+    "custoUnitarioSemBdiReais": "6071.52",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "7539.61",
+    "totalComBdiReais": "135712.98"
   },
   {
     "sourceRowNumber": 25,
     "hierarchicalCode": "01.02.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "F020000013",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "LOCAÇÃO DE BANHEIRO QUIMICO COM 3 LIMPEZAS SEMANAIS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LOCAÇÃO DE BANHEIRO QUIMICO COM 3 LIMPEZAS SEMANAIS"
+    },
     "unidade": "MÊS",
-    "quantidade": 27,
-    "custoUnitarioSemBdiReais": 428.72,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 494.22,
-    "totalComBdiReais": 13343.94
+    "quantidade": "27",
+    "custoUnitarioSemBdiReais": "428.72",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "494.22",
+    "totalComBdiReais": "13343.94"
   },
   {
     "sourceRowNumber": 26,
     "hierarchicalCode": "01.03.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "01.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Mobilização e Desmobilização (Equipamentos e Pessoal)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Mobilização e Desmobilização (Equipamentos e Pessoal)"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -415,90 +554,114 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "01.03.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "TRANSP-1",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "MOBILIZAÇÃO E DESMOBILIZAÇÃO - TRANSPORTE DOS EQUIPAMENTOS MOTORIZADOS - RODOVIA PAVIMENTADA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MOBILIZAÇÃO E DESMOBILIZAÇÃO - TRANSPORTE DOS EQUIPAMENTOS MOTORIZADOS - RODOVIA PAVIMENTADA"
+    },
     "unidade": "TONxKM",
-    "quantidade": 141400.8,
-    "custoUnitarioSemBdiReais": 0.73,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 0.9,
-    "totalComBdiReais": 127260.72
+    "quantidade": "141400.8",
+    "custoUnitarioSemBdiReais": "0.73",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "0.9",
+    "totalComBdiReais": "127260.72"
   },
   {
     "sourceRowNumber": 28,
     "hierarchicalCode": "01.03.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "TRANSP-2",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "MOBILIZAÇÃO E DESMOBILIZAÇÃO - TRANSPORTE DOS EQUIPAMENTOS MOTORIZADOS - RODOVIA REVESTIMENTO PRIMÁRIO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MOBILIZAÇÃO E DESMOBILIZAÇÃO - TRANSPORTE DOS EQUIPAMENTOS MOTORIZADOS - RODOVIA REVESTIMENTO PRIMÁRIO"
+    },
     "unidade": "TONxKM",
-    "quantidade": 4693.68,
-    "custoUnitarioSemBdiReais": 0.89,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1.1,
-    "totalComBdiReais": 5163.04
+    "quantidade": "4693.68",
+    "custoUnitarioSemBdiReais": "0.89",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1.1",
+    "totalComBdiReais": "5163.04"
   },
   {
     "sourceRowNumber": 29,
     "hierarchicalCode": "01.03.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "TRANSP-3",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "MOBILIZAÇÃO E DESMOBILIZAÇÃO - TRANSPORTE COM CAVALO MECÂNICO DOS EQUIPAMENTOS PESADOS - RODOVIA PAVIMENTADA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MOBILIZAÇÃO E DESMOBILIZAÇÃO - TRANSPORTE COM CAVALO MECÂNICO DOS EQUIPAMENTOS PESADOS - RODOVIA PAVIMENTADA"
+    },
     "unidade": "TONxKM",
-    "quantidade": 287764.04,
-    "custoUnitarioSemBdiReais": 0.56,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 0.69,
-    "totalComBdiReais": 198557.18
+    "quantidade": "287764.04",
+    "custoUnitarioSemBdiReais": "0.56",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "0.69",
+    "totalComBdiReais": "198557.18"
   },
   {
     "sourceRowNumber": 30,
     "hierarchicalCode": "01.03.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "TRANSP-4",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "MOBILIZAÇÃO E DESMOBILIZAÇÃO - TRANSPORTE COM CAVALO MECÂNICO DOS EQUIPAMENTOS PESADOS - RODOVIA REVESTIMENTO PRIMÁRIO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MOBILIZAÇÃO E DESMOBILIZAÇÃO - TRANSPORTE COM CAVALO MECÂNICO DOS EQUIPAMENTOS PESADOS - RODOVIA REVESTIMENTO PRIMÁRIO"
+    },
     "unidade": "TONxKM",
-    "quantidade": 9552.08,
-    "custoUnitarioSemBdiReais": 0.69,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 0.85,
-    "totalComBdiReais": 8119.26
+    "quantidade": "9552.08",
+    "custoUnitarioSemBdiReais": "0.69",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "0.85",
+    "totalComBdiReais": "8119.26"
   },
   {
     "sourceRowNumber": 31,
     "hierarchicalCode": "01.03.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "PESSOAL",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "MOBILIZAÇÃO E DESMOBILIZAÇÃO DE PESSOAL",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MOBILIZAÇÃO E DESMOBILIZAÇÃO DE PESSOAL"
+    },
     "unidade": "UNID",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 700,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 869.26,
-    "totalComBdiReais": 1738.52
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "700",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "869.26",
+    "totalComBdiReais": "1738.52"
   },
   {
     "sourceRowNumber": 32,
     "hierarchicalCode": "01.04.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "01.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Administração Local da Obra",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Administração Local da Obra"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -511,26 +674,34 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "01.04.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "ADM-LOC",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "ADMINISTRAÇÃO LOCAL",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ADMINISTRAÇÃO LOCAL"
+    },
     "unidade": "UNID",
-    "quantidade": 100,
-    "custoUnitarioSemBdiReais": 8478.35,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 10528.41,
-    "totalComBdiReais": 1052841
+    "quantidade": "100",
+    "custoUnitarioSemBdiReais": "8478.35",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "10528.41",
+    "totalComBdiReais": "1052841"
   },
   {
     "sourceRowNumber": 35,
     "hierarchicalCode": "01.05.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "01.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Placa da Obra e Sinalização",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Placa da Obra e Sinalização"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -543,74 +714,94 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "01.05.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.05.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74209/1",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "PLACA DE OBRA EM CHAPA DE ACO GALVANIZADO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PLACA DE OBRA EM CHAPA DE ACO GALVANIZADO"
+    },
     "unidade": "M2",
-    "quantidade": 12.8,
-    "custoUnitarioSemBdiReais": 522.62,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 648.98,
-    "totalComBdiReais": 8306.94
+    "quantidade": "12.8",
+    "custoUnitarioSemBdiReais": "522.62",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "648.98",
+    "totalComBdiReais": "8306.94"
   },
   {
     "sourceRowNumber": 37,
     "hierarchicalCode": "01.05.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.05.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5213441",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "PLACA DE REGULAMENTAÇÃO EM AÇO D = 0,80 M - PELÍCULA RETRORREFLETIVA TIPO I + SI - FORNECIMENTO E IMPLANTAÇÃO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PLACA DE REGULAMENTAÇÃO EM AÇO D = 0,80 M - PELÍCULA RETRORREFLETIVA TIPO I + SI - FORNECIMENTO E IMPLANTAÇÃO"
+    },
     "unidade": "UN",
-    "quantidade": 5,
-    "custoUnitarioSemBdiReais": 461.68,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 573.31,
-    "totalComBdiReais": 2866.55
+    "quantidade": "5",
+    "custoUnitarioSemBdiReais": "461.68",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "573.31",
+    "totalComBdiReais": "2866.55"
   },
   {
     "sourceRowNumber": 38,
     "hierarchicalCode": "01.05.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.05.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5213489",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "PLACA EM AÇO - 2,00 X 1,00 M - PELÍCULA RETRORREFLETIVA TIPO I + I - FORNECIMENTO E IMPLANTAÇÃO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PLACA EM AÇO - 2,00 X 1,00 M - PELÍCULA RETRORREFLETIVA TIPO I + I - FORNECIMENTO E IMPLANTAÇÃO"
+    },
     "unidade": "UN",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 899.9,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1117.49,
-    "totalComBdiReais": 2234.98
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "899.9",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1117.49",
+    "totalComBdiReais": "2234.98"
   },
   {
     "sourceRowNumber": 39,
     "hierarchicalCode": "01.05.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.05.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5216111",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "SUPORTE PARA PLACA DE SINALIZAÇÃO EM MADEIRA DE LEI TRATADA 8 X 8 CM - FORNECIMENTO E IMPLANTAÇÃO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SUPORTE PARA PLACA DE SINALIZAÇÃO EM MADEIRA DE LEI TRATADA 8 X 8 CM - FORNECIMENTO E IMPLANTAÇÃO"
+    },
     "unidade": "UN",
-    "quantidade": 9,
-    "custoUnitarioSemBdiReais": 114.64,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 142.35,
-    "totalComBdiReais": 1281.15
+    "quantidade": "9",
+    "custoUnitarioSemBdiReais": "114.64",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "142.35",
+    "totalComBdiReais": "1281.15"
   },
   {
     "sourceRowNumber": 40,
     "hierarchicalCode": "01.06.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "01.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Caminho de Serviço",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Caminho de Serviço"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -623,42 +814,54 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "01.06.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.06.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "CAMIN-SERV",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CAMINHO DE SERVIÇO C/ FAIXA DE 6,00m, COMPACTAÇÃO COM ESPESSURA DE 15cm, PARA AS OBRAS E JAZIDAS C/ REVESTIMENTO EM MATERIAL APIÇARRADO ATÉ DMT DE 4000m",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAMINHO DE SERVIÇO C/ FAIXA DE 6,00m, COMPACTAÇÃO COM ESPESSURA DE 15cm, PARA AS OBRAS E JAZIDAS C/ REVESTIMENTO EM MATERIAL APIÇARRADO ATÉ DMT DE 4000m"
+    },
     "unidade": "KM",
-    "quantidade": 4,
-    "custoUnitarioSemBdiReais": 25977,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 32258.23,
-    "totalComBdiReais": 129032.92
+    "quantidade": "4",
+    "custoUnitarioSemBdiReais": "25977",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "32258.23",
+    "totalComBdiReais": "129032.92"
   },
   {
     "sourceRowNumber": 43,
     "hierarchicalCode": "02.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
+    "parentResolutionMethod": "TopLevelNoParent",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "TERRAPLANAGEM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TERRAPLANAGEM"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
-    "totalComBdiReais": 3714416.029999999
+    "totalComBdiReais": "3714416.029999999"
   },
   {
     "sourceRowNumber": 44,
     "hierarchicalCode": "02.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "02.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Desmatamento e Limpeza - Talude de Montante, Jusante e Coroamento da Barragem",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Desmatamento e Limpeza - Talude de Montante, Jusante e Coroamento da Barragem"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -671,58 +874,74 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "02.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "LIMPEZA",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "DESMATAMENTO, DESTOCAMENTO, LIMPEZA MANUAL DOS TALUDES COM CORTE DE ÁRVORES COMPREENDENDO: DERRUBADA, QUEIMA, ENLEIRAMENTO E REQUEIMA - (expurgo do material desmatado - DMT até 5km)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "DESMATAMENTO, DESTOCAMENTO, LIMPEZA MANUAL DOS TALUDES COM CORTE DE ÁRVORES COMPREENDENDO: DERRUBADA, QUEIMA, ENLEIRAMENTO E REQUEIMA - (expurgo do material desmatado - DMT até 5km)"
+    },
     "unidade": "M2",
-    "quantidade": 40442.18,
-    "custoUnitarioSemBdiReais": 2.42,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 3,
-    "totalComBdiReais": 121326.54
+    "quantidade": "40442.18",
+    "custoUnitarioSemBdiReais": "2.42",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "3",
+    "totalComBdiReais": "121326.54"
   },
   {
     "sourceRowNumber": 46,
     "hierarchicalCode": "02.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "72898",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CARGA E DESCARGA MECANIZADAS DE ENTULHO EM CAMINHAO BASCULANTE 6 M3 - (expurgo do material desmatado - DMT até 5km)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CARGA E DESCARGA MECANIZADAS DE ENTULHO EM CAMINHAO BASCULANTE 6 M3 - (expurgo do material desmatado - DMT até 5km)"
+    },
     "unidade": "M3",
-    "quantidade": 404.42,
-    "custoUnitarioSemBdiReais": 4.77,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 5.92,
-    "totalComBdiReais": 2394.16
+    "quantidade": "404.42",
+    "custoUnitarioSemBdiReais": "4.77",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "5.92",
+    "totalComBdiReais": "2394.16"
   },
   {
     "sourceRowNumber": 47,
     "hierarchicalCode": "02.01.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5915320",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "TRANSPORTE COM CAMINHÃO BASCULANTE DE 14 M³ - RODOVIA EM REVESTIMENTO PRIMÁRIO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TRANSPORTE COM CAMINHÃO BASCULANTE DE 14 M³ - RODOVIA EM REVESTIMENTO PRIMÁRIO"
+    },
     "unidade": "TKM",
-    "quantidade": 808.8400000000001,
-    "custoUnitarioSemBdiReais": 0.71,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 0.88,
-    "totalComBdiReais": 711.77
+    "quantidade": "808.8400000000001",
+    "custoUnitarioSemBdiReais": "0.71",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "0.88",
+    "totalComBdiReais": "711.77"
   },
   {
     "sourceRowNumber": 48,
     "hierarchicalCode": "02.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "02.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Coroamento - Recuperação e Aterro de Adequação aos Muros Guias",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Coroamento - Recuperação e Aterro de Adequação aos Muros Guias"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -735,250 +954,314 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "02.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "ESCARIF",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "ESCARIFICAÇÃO E REGULARIZAÇÃO DO REVESTIMENTO DO COROAMENTO (e=25 cm) - (e= 25 cm)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESCARIFICAÇÃO E REGULARIZAÇÃO DO REVESTIMENTO DO COROAMENTO (e=25 cm) - (e= 25 cm)"
+    },
     "unidade": "m²",
-    "quantidade": 4800,
-    "custoUnitarioSemBdiReais": 1.501810631688466,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1.86,
-    "totalComBdiReais": 8928
+    "quantidade": "4800",
+    "custoUnitarioSemBdiReais": "1.501810631688466",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1.86",
+    "totalComBdiReais": "8928"
   },
   {
     "sourceRowNumber": 50,
     "hierarchicalCode": "02.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5914351",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "CARGA, MANOBRA E DESCARGA DE AGREGADOS OU SOLOS EM CAMINHÃO BASCULANTE DE 14 M³ - CARGA COM CARREGADEIRA DE 3,40 M³ E DESCARGA LIVRE",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CARGA, MANOBRA E DESCARGA DE AGREGADOS OU SOLOS EM CAMINHÃO BASCULANTE DE 14 M³ - CARGA COM CARREGADEIRA DE 3,40 M³ E DESCARGA LIVRE"
+    },
     "unidade": "T",
-    "quantidade": 1800,
-    "custoUnitarioSemBdiReais": 2.67,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 3.31,
-    "totalComBdiReais": 5958
+    "quantidade": "1800",
+    "custoUnitarioSemBdiReais": "2.67",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "3.31",
+    "totalComBdiReais": "5958"
   },
   {
     "sourceRowNumber": 51,
     "hierarchicalCode": "02.02.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5915320",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "TRANSPORTE COM CAMINHÃO BASCULANTE DE 14 M³ - RODOVIA EM REVESTIMENTO PRIMÁRIO - (dmt=2 km)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TRANSPORTE COM CAMINHÃO BASCULANTE DE 14 M³ - RODOVIA EM REVESTIMENTO PRIMÁRIO - (dmt=2 km)"
+    },
     "unidade": "TKM",
-    "quantidade": 3600,
-    "custoUnitarioSemBdiReais": 0.71,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 0.88,
-    "totalComBdiReais": 3168
+    "quantidade": "3600",
+    "custoUnitarioSemBdiReais": "0.71",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "0.88",
+    "totalComBdiReais": "3168"
   },
   {
     "sourceRowNumber": 52,
     "hierarchicalCode": "02.02.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4011221",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "BASE ESTABILIZADA GRANULOMETRICAMENTE COM MISTURA DE SOLOS NA PISTA COM MATERIAL DE JAZIDA - 100% PROCTOR MODIFICADO - (e= 15 cm)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "BASE ESTABILIZADA GRANULOMETRICAMENTE COM MISTURA DE SOLOS NA PISTA COM MATERIAL DE JAZIDA - 100% PROCTOR MODIFICADO - (e= 15 cm)"
+    },
     "unidade": "M3",
-    "quantidade": 720,
-    "custoUnitarioSemBdiReais": 15.37,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 19.08,
-    "totalComBdiReais": 13737.6
+    "quantidade": "720",
+    "custoUnitarioSemBdiReais": "15.37",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "19.08",
+    "totalComBdiReais": "13737.6"
   },
   {
     "sourceRowNumber": 53,
     "hierarchicalCode": "02.02.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5915320",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "TRANSPORTE COM CAMINHÃO BASCULANTE DE 14 M³ - RODOVIA EM REVESTIMENTO PRIMÁRIO - (dmt=2 km)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TRANSPORTE COM CAMINHÃO BASCULANTE DE 14 M³ - RODOVIA EM REVESTIMENTO PRIMÁRIO - (dmt=2 km)"
+    },
     "unidade": "TKM",
-    "quantidade": 2304,
-    "custoUnitarioSemBdiReais": 0.71,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 0.88,
-    "totalComBdiReais": 2027.52
+    "quantidade": "2304",
+    "custoUnitarioSemBdiReais": "0.71",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "0.88",
+    "totalComBdiReais": "2027.52"
   },
   {
     "sourceRowNumber": 54,
     "hierarchicalCode": "02.02.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4413942",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "ESPALHAMENTO DE MATERIAL EM BOTA-FORA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESPALHAMENTO DE MATERIAL EM BOTA-FORA"
+    },
     "unidade": "M3",
-    "quantidade": 720,
-    "custoUnitarioSemBdiReais": 1.96,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2.43,
-    "totalComBdiReais": 1749.6
+    "quantidade": "720",
+    "custoUnitarioSemBdiReais": "1.96",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2.43",
+    "totalComBdiReais": "1749.6"
   },
   {
     "sourceRowNumber": 55,
     "hierarchicalCode": "02.02.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5502978",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "COMPACTAÇÃO DE ATERROS A 100% DO PROCTOR NORMAL",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "COMPACTAÇÃO DE ATERROS A 100% DO PROCTOR NORMAL"
+    },
     "unidade": "M3",
-    "quantidade": 720,
-    "custoUnitarioSemBdiReais": 4.94,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 6.13,
-    "totalComBdiReais": 4413.6
+    "quantidade": "720",
+    "custoUnitarioSemBdiReais": "4.94",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "6.13",
+    "totalComBdiReais": "4413.6"
   },
   {
     "sourceRowNumber": 56,
     "hierarchicalCode": "02.02.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "92398",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "EXECUÇÃO DE PAVIMENTO EM PISO INTERTRAVADO, COM BLOCO RETANGULAR COR NATURAL DE 20 X 10 CM, ESPESSURA 8 CM. AF_10/2022 - (piso intertravado 16 faces)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "EXECUÇÃO DE PAVIMENTO EM PISO INTERTRAVADO, COM BLOCO RETANGULAR COR NATURAL DE 20 X 10 CM, ESPESSURA 8 CM. AF_10/2022 - (piso intertravado 16 faces)"
+    },
     "unidade": "M2",
-    "quantidade": 4800,
-    "custoUnitarioSemBdiReais": 78.45,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 97.41,
-    "totalComBdiReais": 467568
+    "quantidade": "4800",
+    "custoUnitarioSemBdiReais": "78.45",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "97.41",
+    "totalComBdiReais": "467568"
   },
   {
     "sourceRowNumber": 57,
     "hierarchicalCode": "02.02.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5915013",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "TRANSPORTE COM CAMINHÃO CARROCERIA COM CAPACIDADE DE 11 T E COM GUINDAUTO DE 45 T.M - RODOVIA EM REVESTIMENTO PRIMÁRIO - (DMT  bloquete = 11,8 km)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TRANSPORTE COM CAMINHÃO CARROCERIA COM CAPACIDADE DE 11 T E COM GUINDAUTO DE 45 T.M - RODOVIA EM REVESTIMENTO PRIMÁRIO - (DMT  bloquete = 11,8 km)"
+    },
     "unidade": "TKM",
-    "quantidade": 10874.880000000001,
-    "custoUnitarioSemBdiReais": 1.61,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1.99,
-    "totalComBdiReais": 21641.01
+    "quantidade": "10874.880000000001",
+    "custoUnitarioSemBdiReais": "1.61",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1.99",
+    "totalComBdiReais": "21641.01"
   },
   {
     "sourceRowNumber": 58,
     "hierarchicalCode": "02.02.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5915014",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "TRANSPORTE COM CAMINHÃO CARROCERIA COM CAPACIDADE DE 11 T E COM GUINDAUTO DE 45 T.M - RODOVIA PAVIMENTADA - (DMT  bloquete = 5,10 km)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TRANSPORTE COM CAMINHÃO CARROCERIA COM CAPACIDADE DE 11 T E COM GUINDAUTO DE 45 T.M - RODOVIA PAVIMENTADA - (DMT  bloquete = 5,10 km)"
+    },
     "unidade": "TKM",
-    "quantidade": 4700.159999999998,
-    "custoUnitarioSemBdiReais": 1.32,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1.63,
-    "totalComBdiReais": 7661.26
+    "quantidade": "4700.159999999998",
+    "custoUnitarioSemBdiReais": "1.32",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1.63",
+    "totalComBdiReais": "7661.26"
   },
   {
     "sourceRowNumber": 59,
     "hierarchicalCode": "02.02.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "94273",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "ASSENTAMENTO DE GUIA (MEIO-FIO) EM TRECHO RETO, CONFECCIONADA EM CONCRETO PRÉ-FABRICADO, DIMENSÕES 100X15X13X30 CM (COMPRIMENTO X BASE INFERIOR X BASE SUPERIOR X ALTURA). AF_01/2024",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ASSENTAMENTO DE GUIA (MEIO-FIO) EM TRECHO RETO, CONFECCIONADA EM CONCRETO PRÉ-FABRICADO, DIMENSÕES 100X15X13X30 CM (COMPRIMENTO X BASE INFERIOR X BASE SUPERIOR X ALTURA). AF_01/2024"
+    },
     "unidade": "M",
-    "quantidade": 1200,
-    "custoUnitarioSemBdiReais": 39.28,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 48.77,
-    "totalComBdiReais": 58524
+    "quantidade": "1200",
+    "custoUnitarioSemBdiReais": "39.28",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "48.77",
+    "totalComBdiReais": "58524"
   },
   {
     "sourceRowNumber": 60,
     "hierarchicalCode": "02.02.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4915723",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "CAIAÇÃO MANUAL COM FIXADOR DE CAL",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAIAÇÃO MANUAL COM FIXADOR DE CAL"
+    },
     "unidade": "M2",
-    "quantidade": 312,
-    "custoUnitarioSemBdiReais": 3,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 3.72,
-    "totalComBdiReais": 1160.64
+    "quantidade": "312",
+    "custoUnitarioSemBdiReais": "3",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "3.72",
+    "totalComBdiReais": "1160.64"
   },
   {
     "sourceRowNumber": 61,
     "hierarchicalCode": "02.02.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "3713604",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "DEFENSA SEMIMALEÁVEL SIMPLES - FORNECIMENTO E IMPLANTAÇÃO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "DEFENSA SEMIMALEÁVEL SIMPLES - FORNECIMENTO E IMPLANTAÇÃO"
+    },
     "unidade": "M",
-    "quantidade": 1200,
-    "custoUnitarioSemBdiReais": 381.56,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 473.82,
-    "totalComBdiReais": 568584
+    "quantidade": "1200",
+    "custoUnitarioSemBdiReais": "381.56",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "473.82",
+    "totalComBdiReais": "568584"
   },
   {
     "sourceRowNumber": 62,
     "hierarchicalCode": "02.02.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5914614",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "TRANSPORTE COM CAMINHÃO CARROCERIA COM CAPACIDADE DE 7 T E COM GUINDAUTO DE 20 T.M - RODOVIA PAVIMENTADA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TRANSPORTE COM CAMINHÃO CARROCERIA COM CAPACIDADE DE 7 T E COM GUINDAUTO DE 20 T.M - RODOVIA PAVIMENTADA"
+    },
     "unidade": "TKM",
-    "quantidade": 12710.7,
-    "custoUnitarioSemBdiReais": 1.72,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2.13,
-    "totalComBdiReais": 27073.79
+    "quantidade": "12710.7",
+    "custoUnitarioSemBdiReais": "1.72",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2.13",
+    "totalComBdiReais": "27073.79"
   },
   {
     "sourceRowNumber": 63,
     "hierarchicalCode": "02.02.15",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5914599",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "Transporte com caminhão carroceria com capacidade de 7 t e com guindauto de 20 t.m - rodovia em revestimento primário ( transporte de Defensas)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Transporte com caminhão carroceria com capacidade de 7 t e com guindauto de 20 t.m - rodovia em revestimento primário ( transporte de Defensas)"
+    },
     "unidade": "TKM",
-    "quantidade": 414.99,
-    "custoUnitarioSemBdiReais": 2.09,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2.59,
-    "totalComBdiReais": 1074.82
+    "quantidade": "414.99",
+    "custoUnitarioSemBdiReais": "2.09",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2.59",
+    "totalComBdiReais": "1074.82"
   },
   {
     "sourceRowNumber": 64,
     "hierarchicalCode": "02.03.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "02.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Taludes de Montate e Jusante - Recuperação",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Taludes de Montate e Jusante - Recuperação"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -991,154 +1274,194 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "02.03.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4805750",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "ESCAVAÇÃO MANUAL EM MATERIAL DE 1ª CATEGORIA NA PROFUNDIDADE DE ATÉ 1 M - (recuperação das áreas com processos erosivos)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESCAVAÇÃO MANUAL EM MATERIAL DE 1ª CATEGORIA NA PROFUNDIDADE DE ATÉ 1 M - (recuperação das áreas com processos erosivos)"
+    },
     "unidade": "M3",
-    "quantidade": 2426.53,
-    "custoUnitarioSemBdiReais": 40.62,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 50.44,
-    "totalComBdiReais": 122394.17
+    "quantidade": "2426.53",
+    "custoUnitarioSemBdiReais": "40.62",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "50.44",
+    "totalComBdiReais": "122394.17"
   },
   {
     "sourceRowNumber": 66,
     "hierarchicalCode": "02.03.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4915733",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "RECOMPOSIÇÃO MANUAL DE ATERRO COM MATERIAL DE JAZIDA - (recuperação das áreas com processos erosivos)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "RECOMPOSIÇÃO MANUAL DE ATERRO COM MATERIAL DE JAZIDA - (recuperação das áreas com processos erosivos)"
+    },
     "unidade": "M3",
-    "quantidade": 2426.53,
-    "custoUnitarioSemBdiReais": 36.78,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 45.67,
-    "totalComBdiReais": 110819.62
+    "quantidade": "2426.53",
+    "custoUnitarioSemBdiReais": "36.78",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "45.67",
+    "totalComBdiReais": "110819.62"
   },
   {
     "sourceRowNumber": 67,
     "hierarchicalCode": "02.03.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "100974",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CARGA, MANOBRA E DESCARGA DE SOLOS E MATERIAIS GRANULARES EM CAMINHÃO BASCULANTE 10 M³ - CARGA COM PÁ CARREGADEIRA (CAÇAMBA DE 1,7 A 2,8 M³ / 128 HP) E DESCARGA LIVRE (UNIDADE: M3). AF_07/2020 - (volume da brita e pedra de mão para o enrocamento)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CARGA, MANOBRA E DESCARGA DE SOLOS E MATERIAIS GRANULARES EM CAMINHÃO BASCULANTE 10 M³ - CARGA COM PÁ CARREGADEIRA (CAÇAMBA DE 1,7 A 2,8 M³ / 128 HP) E DESCARGA LIVRE (UNIDADE: M3). AF_07/2020 - (volume da brita e pedra de mão para o enrocamento)"
+    },
     "unidade": "M3",
-    "quantidade": 15830.7,
-    "custoUnitarioSemBdiReais": 8.51,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 10.56,
-    "totalComBdiReais": 167172.19
+    "quantidade": "15830.7",
+    "custoUnitarioSemBdiReais": "8.51",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "10.56",
+    "totalComBdiReais": "167172.19"
   },
   {
     "sourceRowNumber": 68,
     "hierarchicalCode": "02.03.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5915320",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "TRANSPORTE COM CAMINHÃO BASCULANTE DE 14 M³ - RODOVIA EM REVESTIMENTO PRIMÁRIO - transporte dos agregados e pedra de mão para proteção do talude (jazida para barragem)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TRANSPORTE COM CAMINHÃO BASCULANTE DE 14 M³ - RODOVIA EM REVESTIMENTO PRIMÁRIO - transporte dos agregados e pedra de mão para proteção do talude (jazida para barragem)"
+    },
     "unidade": "TKM",
-    "quantidade": 50658.24,
-    "custoUnitarioSemBdiReais": 0.71,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 0.88,
-    "totalComBdiReais": 44579.25
+    "quantidade": "50658.24",
+    "custoUnitarioSemBdiReais": "0.71",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "0.88",
+    "totalComBdiReais": "44579.25"
   },
   {
     "sourceRowNumber": 69,
     "hierarchicalCode": "02.03.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "6176",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "EXECUÇÃO DE TRANSIÇÃO DE BRITA E/OU AREIA, EXCLUSIVE A BRITA E AREIA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "EXECUÇÃO DE TRANSIÇÃO DE BRITA E/OU AREIA, EXCLUSIVE A BRITA E AREIA"
+    },
     "unidade": "M3",
-    "quantidade": 13136.22,
-    "custoUnitarioSemBdiReais": 7.41,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 9.2,
-    "totalComBdiReais": 120853.22
+    "quantidade": "13136.22",
+    "custoUnitarioSemBdiReais": "7.41",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "9.2",
+    "totalComBdiReais": "120853.22"
   },
   {
     "sourceRowNumber": 70,
     "hierarchicalCode": "02.03.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "ENROC-MECAN",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "ENROCAMENTO DE PEDRA ESPALHADA E COMPACTADA MECANICAMENTE (DIÂMETRO MÍNIMO DE 40 CM) - PEDRA DE MÃO PRODUZIDA – FORNECIMENTO E ASSENTAMENTO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ENROCAMENTO DE PEDRA ESPALHADA E COMPACTADA MECANICAMENTE (DIÂMETRO MÍNIMO DE 40 CM) - PEDRA DE MÃO PRODUZIDA – FORNECIMENTO E ASSENTAMENTO"
+    },
     "unidade": "M3",
-    "quantidade": 13136.22,
-    "custoUnitarioSemBdiReais": 57.8,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 71.77,
-    "totalComBdiReais": 942786.5
+    "quantidade": "13136.22",
+    "custoUnitarioSemBdiReais": "57.8",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "71.77",
+    "totalComBdiReais": "942786.5"
   },
   {
     "sourceRowNumber": 71,
     "hierarchicalCode": "02.03.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5502109",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "ESCAVAÇÃO, CARGA E TRANSPORTE DE MATERIAL DE 1ª CATEGORIA - DMT DE 50 A 200 M - CAMINHO DE SERVIÇO EM LEITO NATURAL - COM ESCAVADEIRA E CAMINHÃO BASCULANTE DE 14 M³",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESCAVAÇÃO, CARGA E TRANSPORTE DE MATERIAL DE 1ª CATEGORIA - DMT DE 50 A 200 M - CAMINHO DE SERVIÇO EM LEITO NATURAL - COM ESCAVADEIRA E CAMINHÃO BASCULANTE DE 14 M³"
+    },
     "unidade": "M3",
-    "quantidade": 2447.25,
-    "custoUnitarioSemBdiReais": 5.84,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 7.25,
-    "totalComBdiReais": 17742.56
+    "quantidade": "2447.25",
+    "custoUnitarioSemBdiReais": "5.84",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "7.25",
+    "totalComBdiReais": "17742.56"
   },
   {
     "sourceRowNumber": 72,
     "hierarchicalCode": "02.03.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "100574",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "ESPALHAMENTO DE MATERIAL COM TRATOR DE ESTEIRAS. AF_09/2024",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESPALHAMENTO DE MATERIAL COM TRATOR DE ESTEIRAS. AF_09/2024"
+    },
     "unidade": "M3",
-    "quantidade": 2447.25,
-    "custoUnitarioSemBdiReais": 1.35,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1.67,
-    "totalComBdiReais": 4086.9
+    "quantidade": "2447.25",
+    "custoUnitarioSemBdiReais": "1.35",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1.67",
+    "totalComBdiReais": "4086.9"
   },
   {
     "sourceRowNumber": 73,
     "hierarchicalCode": "02.03.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5502768",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "ESCAVAÇÃO, CARGA E TRANSPORTE DE MATERIAL DE 3ª CATEGORIA - DMT DE 50 A 200 M - CAMINHO DE SERVIÇO EM REVESTIMENTO PRIMÁRIO - COM CAMINHÃO BASCULANTE DE 12 M³",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESCAVAÇÃO, CARGA E TRANSPORTE DE MATERIAL DE 3ª CATEGORIA - DMT DE 50 A 200 M - CAMINHO DE SERVIÇO EM REVESTIMENTO PRIMÁRIO - COM CAMINHÃO BASCULANTE DE 12 M³"
+    },
     "unidade": "M3",
-    "quantidade": 13136.22,
-    "custoUnitarioSemBdiReais": 41.84,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 51.95,
-    "totalComBdiReais": 682426.62
+    "quantidade": "13136.22",
+    "custoUnitarioSemBdiReais": "41.84",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "51.95",
+    "totalComBdiReais": "682426.62"
   },
   {
     "sourceRowNumber": 74,
     "hierarchicalCode": "02.04.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "02.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Drenagem Superficial do Coroamento e Área de Jusante - Recuperação",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Drenagem Superficial do Coroamento e Área de Jusante - Recuperação"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -1151,266 +1474,334 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "02.04.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "1600436",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "DEMOLIÇÃO MANUAL DE CONCRETO SIMPLES",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "DEMOLIÇÃO MANUAL DE CONCRETO SIMPLES"
+    },
     "unidade": "M3",
-    "quantidade": 38.92,
-    "custoUnitarioSemBdiReais": 374,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 464.43,
-    "totalComBdiReais": 18075.61
+    "quantidade": "38.92",
+    "custoUnitarioSemBdiReais": "374",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "464.43",
+    "totalComBdiReais": "18075.61"
   },
   {
     "sourceRowNumber": 76,
     "hierarchicalCode": "02.04.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74023/005",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "TRANSPORTE HORIZONTAL DE MATERIAIS DIVERSOS A 100M",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TRANSPORTE HORIZONTAL DE MATERIAIS DIVERSOS A 100M"
+    },
     "unidade": "M3",
-    "quantidade": 38.92,
-    "custoUnitarioSemBdiReais": 81.08,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 100.68,
-    "totalComBdiReais": 3918.46
+    "quantidade": "38.92",
+    "custoUnitarioSemBdiReais": "81.08",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "100.68",
+    "totalComBdiReais": "3918.46"
   },
   {
     "sourceRowNumber": 77,
     "hierarchicalCode": "02.04.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74007/002",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "FORMA TABUAS MADEIRA 3A P/ PECAS CONCRETO ARM, REAPR 2X, INCL MONTAGEM E DESMONTAGEM.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FORMA TABUAS MADEIRA 3A P/ PECAS CONCRETO ARM, REAPR 2X, INCL MONTAGEM E DESMONTAGEM."
+    },
     "unidade": "M2",
-    "quantidade": 310.5,
-    "custoUnitarioSemBdiReais": 94.93,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 117.88,
-    "totalComBdiReais": 36601.74
+    "quantidade": "310.5",
+    "custoUnitarioSemBdiReais": "94.93",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "117.88",
+    "totalComBdiReais": "36601.74"
   },
   {
     "sourceRowNumber": 78,
     "hierarchicalCode": "02.04.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "1107889",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "CONCRETO FCK = 15 MPA - CONFECÇÃO EM BETONEIRA E LANÇAMENTO MANUAL - AREIA EXTRAÍDA E BRITA PRODUZIDA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CONCRETO FCK = 15 MPA - CONFECÇÃO EM BETONEIRA E LANÇAMENTO MANUAL - AREIA EXTRAÍDA E BRITA PRODUZIDA"
+    },
     "unidade": "M3",
-    "quantidade": 38.92,
-    "custoUnitarioSemBdiReais": 297.46,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 369.38,
-    "totalComBdiReais": 14376.26
+    "quantidade": "38.92",
+    "custoUnitarioSemBdiReais": "297.46",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "369.38",
+    "totalComBdiReais": "14376.26"
   },
   {
     "sourceRowNumber": 79,
     "hierarchicalCode": "02.04.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4915708",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "LIMPEZA DE SARJETA E MEIO-FIO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LIMPEZA DE SARJETA E MEIO-FIO"
+    },
     "unidade": "M",
-    "quantidade": 1200,
-    "custoUnitarioSemBdiReais": 0.67,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 0.83,
-    "totalComBdiReais": 996
+    "quantidade": "1200",
+    "custoUnitarioSemBdiReais": "0.67",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "0.83",
+    "totalComBdiReais": "996"
   },
   {
     "sourceRowNumber": 80,
     "hierarchicalCode": "02.04.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4915710",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "LIMPEZA DE VALA DE DRENAGEM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LIMPEZA DE VALA DE DRENAGEM"
+    },
     "unidade": "M",
-    "quantidade": 376,
-    "custoUnitarioSemBdiReais": 4,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 4.96,
-    "totalComBdiReais": 1864.96
+    "quantidade": "376",
+    "custoUnitarioSemBdiReais": "4",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "4.96",
+    "totalComBdiReais": "1864.96"
   },
   {
     "sourceRowNumber": 81,
     "hierarchicalCode": "02.04.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4915711",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "LIMPEZA DE DESCIDA D'ÁGUA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LIMPEZA DE DESCIDA D'ÁGUA"
+    },
     "unidade": "M",
-    "quantidade": 345,
-    "custoUnitarioSemBdiReais": 1.33,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1.65,
-    "totalComBdiReais": 569.25
+    "quantidade": "345",
+    "custoUnitarioSemBdiReais": "1.33",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1.65",
+    "totalComBdiReais": "569.25"
   },
   {
     "sourceRowNumber": 82,
     "hierarchicalCode": "02.04.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4915712",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "LIMPEZA DE BUEIRO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LIMPEZA DE BUEIRO"
+    },
     "unidade": "M3",
-    "quantidade": 1.06,
-    "custoUnitarioSemBdiReais": 19.99,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 24.82,
-    "totalComBdiReais": 26.3
+    "quantidade": "1.06",
+    "custoUnitarioSemBdiReais": "19.99",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "24.82",
+    "totalComBdiReais": "26.3"
   },
   {
     "sourceRowNumber": 83,
     "hierarchicalCode": "02.04.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "72219",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "DEMOLICAO DE ALVENARIA DE BLOCOS DE PEDRA NATURAL",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "DEMOLICAO DE ALVENARIA DE BLOCOS DE PEDRA NATURAL"
+    },
     "unidade": "M3",
-    "quantidade": 6.94,
-    "custoUnitarioSemBdiReais": 131.75,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 163.6,
-    "totalComBdiReais": 1135.38
+    "quantidade": "6.94",
+    "custoUnitarioSemBdiReais": "131.75",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "163.6",
+    "totalComBdiReais": "1135.38"
   },
   {
     "sourceRowNumber": 84,
     "hierarchicalCode": "02.04.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "1506056",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "PEDRA ARGAMASSADA COM CIMENTO E AREIA 1:3 - AREIA EXTRAÍDA E PEDRA DE MÃO PRODUZIDA - CONFECÇÃO E ASSENTAMENTO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PEDRA ARGAMASSADA COM CIMENTO E AREIA 1:3 - AREIA EXTRAÍDA E PEDRA DE MÃO PRODUZIDA - CONFECÇÃO E ASSENTAMENTO"
+    },
     "unidade": "M3",
-    "quantidade": 6.94,
-    "custoUnitarioSemBdiReais": 281.19,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 349.18,
-    "totalComBdiReais": 2423.3
+    "quantidade": "6.94",
+    "custoUnitarioSemBdiReais": "281.19",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "349.18",
+    "totalComBdiReais": "2423.3"
   },
   {
     "sourceRowNumber": 85,
     "hierarchicalCode": "02.04.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4915723",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "CAIAÇÃO MANUAL COM FIXADOR DE CAL",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAIAÇÃO MANUAL COM FIXADOR DE CAL"
+    },
     "unidade": "M2",
-    "quantidade": 2040,
-    "custoUnitarioSemBdiReais": 3,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 3.72,
-    "totalComBdiReais": 7588.8
+    "quantidade": "2040",
+    "custoUnitarioSemBdiReais": "3",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "3.72",
+    "totalComBdiReais": "7588.8"
   },
   {
     "sourceRowNumber": 86,
     "hierarchicalCode": "02.04.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "100574",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "ESPALHAMENTO DE MATERIAL COM TRATOR DE ESTEIRAS. AF_09/2024",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESPALHAMENTO DE MATERIAL COM TRATOR DE ESTEIRAS. AF_09/2024"
+    },
     "unidade": "M3",
-    "quantidade": 29.19,
-    "custoUnitarioSemBdiReais": 1.35,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1.67,
-    "totalComBdiReais": 48.74
+    "quantidade": "29.19",
+    "custoUnitarioSemBdiReais": "1.35",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1.67",
+    "totalComBdiReais": "48.74"
   },
   {
     "sourceRowNumber": 87,
     "hierarchicalCode": "02.04.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "93358",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "ESCAVAÇÃO MANUAL DE VALA. AF_09/2024",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESCAVAÇÃO MANUAL DE VALA. AF_09/2024"
+    },
     "unidade": "M3",
-    "quantidade": 96.62,
-    "custoUnitarioSemBdiReais": 80.18,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 99.56,
-    "totalComBdiReais": 9619.48
+    "quantidade": "96.62",
+    "custoUnitarioSemBdiReais": "80.18",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "99.56",
+    "totalComBdiReais": "9619.48"
   },
   {
     "sourceRowNumber": 88,
     "hierarchicalCode": "02.04.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "CALHA U",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CALHA DE DRENAGEM EM CONCRETO ARMADO TIPO \"U\"",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CALHA DE DRENAGEM EM CONCRETO ARMADO TIPO \"U\""
+    },
     "unidade": "M",
-    "quantidade": 268.4,
-    "custoUnitarioSemBdiReais": 257.95,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 320.32,
-    "totalComBdiReais": 85973.88
+    "quantidade": "268.4",
+    "custoUnitarioSemBdiReais": "257.95",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "320.32",
+    "totalComBdiReais": "85973.88"
   },
   {
     "sourceRowNumber": 89,
     "hierarchicalCode": "02.04.15",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4815671",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "REATERRO E COMPACTAÇÃO COM SOQUETE VIBRATÓRIO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "REATERRO E COMPACTAÇÃO COM SOQUETE VIBRATÓRIO"
+    },
     "unidade": "M3",
-    "quantidade": 32.21,
-    "custoUnitarioSemBdiReais": 15.87,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 19.7,
-    "totalComBdiReais": 634.53
+    "quantidade": "32.21",
+    "custoUnitarioSemBdiReais": "15.87",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "19.7",
+    "totalComBdiReais": "634.53"
   },
   {
     "sourceRowNumber": 91,
     "hierarchicalCode": "03.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
+    "parentResolutionMethod": "TopLevelNoParent",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "OBRAS CIVIS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "OBRAS CIVIS"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
-    "totalComBdiReais": 657754.9799999999
+    "totalComBdiReais": "657754.9799999999"
   },
   {
     "sourceRowNumber": 92,
     "hierarchicalCode": "03.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "03.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Casa de Comando de Jusante - Recuperação",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Casa de Comando de Jusante - Recuperação"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -1423,250 +1814,314 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "03.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73801/002",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "DEMOLICAO DE CAMADA DE ASSENTAMENTO/CONTRAPISO COM USO DE PONTEIRO, ESPESSURA ATE 4CM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "DEMOLICAO DE CAMADA DE ASSENTAMENTO/CONTRAPISO COM USO DE PONTEIRO, ESPESSURA ATE 4CM"
+    },
     "unidade": "M2",
-    "quantidade": 18,
-    "custoUnitarioSemBdiReais": 30.4,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 37.75,
-    "totalComBdiReais": 679.5
+    "quantidade": "18",
+    "custoUnitarioSemBdiReais": "30.4",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "37.75",
+    "totalComBdiReais": "679.5"
   },
   {
     "sourceRowNumber": 94,
     "hierarchicalCode": "03.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73802/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "DEMOLICAO DE REVESTIMENTO DE ARGAMASSA DE CAL E AREIA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "DEMOLICAO DE REVESTIMENTO DE ARGAMASSA DE CAL E AREIA"
+    },
     "unidade": "M2",
-    "quantidade": 66,
-    "custoUnitarioSemBdiReais": 10.13,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 12.57,
-    "totalComBdiReais": 829.62
+    "quantidade": "66",
+    "custoUnitarioSemBdiReais": "10.13",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "12.57",
+    "totalComBdiReais": "829.62"
   },
   {
     "sourceRowNumber": 95,
     "hierarchicalCode": "03.01.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74023/005",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "TRANSPORTE HORIZONTAL DE MATERIAIS DIVERSOS A 100M",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TRANSPORTE HORIZONTAL DE MATERIAIS DIVERSOS A 100M"
+    },
     "unidade": "M3",
-    "quantidade": 2.04,
-    "custoUnitarioSemBdiReais": 81.08,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 100.68,
-    "totalComBdiReais": 205.38
+    "quantidade": "2.04",
+    "custoUnitarioSemBdiReais": "81.08",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "100.68",
+    "totalComBdiReais": "205.38"
   },
   {
     "sourceRowNumber": 96,
     "hierarchicalCode": "03.01.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "83534",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "LASTRO DE CONCRETO, PREPARO MECÂNICO, INCLUSOS ADITIVO IMPERMEABILIZANTE, LANÇAMENTO E ADENSAMENTO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LASTRO DE CONCRETO, PREPARO MECÂNICO, INCLUSOS ADITIVO IMPERMEABILIZANTE, LANÇAMENTO E ADENSAMENTO"
+    },
     "unidade": "M3",
-    "quantidade": 0.72,
-    "custoUnitarioSemBdiReais": 770.57,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 956.89,
-    "totalComBdiReais": 688.96
+    "quantidade": "0.72",
+    "custoUnitarioSemBdiReais": "770.57",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "956.89",
+    "totalComBdiReais": "688.96"
   },
   {
     "sourceRowNumber": 97,
     "hierarchicalCode": "03.01.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74079/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "PISO CIMENTADO TRACO 1:4 (CIMENTO E AREIA) COM ACABAMENTO LISO ESPESSURA 2,0CM COM JUNTAS PLASTICAS DE DILATACAO E PREPARO MANUAL DA ARGAMASSA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PISO CIMENTADO TRACO 1:4 (CIMENTO E AREIA) COM ACABAMENTO LISO ESPESSURA 2,0CM COM JUNTAS PLASTICAS DE DILATACAO E PREPARO MANUAL DA ARGAMASSA"
+    },
     "unidade": "M2",
-    "quantidade": 18,
-    "custoUnitarioSemBdiReais": 75.22,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 93.4,
-    "totalComBdiReais": 1681.2
+    "quantidade": "18",
+    "custoUnitarioSemBdiReais": "75.22",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "93.4",
+    "totalComBdiReais": "1681.2"
   },
   {
     "sourceRowNumber": 98,
     "hierarchicalCode": "03.01.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "87873",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CHAPISCO APLICADO EM ALVENARIAS E ESTRUTURAS DE CONCRETO INTERNAS, COM ROLO PARA TEXTURA ACRÍLICA.  ARGAMASSA TRAÇO 1:4 E EMULSÃO POLIMÉRICA (ADESIVO) COM PREPARO MANUAL. AF_06/2014",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CHAPISCO APLICADO EM ALVENARIAS E ESTRUTURAS DE CONCRETO INTERNAS, COM ROLO PARA TEXTURA ACRÍLICA.  ARGAMASSA TRAÇO 1:4 E EMULSÃO POLIMÉRICA (ADESIVO) COM PREPARO MANUAL. AF_06/2014"
+    },
     "unidade": "M2",
-    "quantidade": 66,
-    "custoUnitarioSemBdiReais": 6.98,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 8.66,
-    "totalComBdiReais": 571.56
+    "quantidade": "66",
+    "custoUnitarioSemBdiReais": "6.98",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "8.66",
+    "totalComBdiReais": "571.56"
   },
   {
     "sourceRowNumber": 99,
     "hierarchicalCode": "03.01.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "84076",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "REBOCO TRACO 1:3 (CIMENTO E AREIA MEDIA NAO PENEIRADA), PREPARO MANUAL DA ARGAMASSA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "REBOCO TRACO 1:3 (CIMENTO E AREIA MEDIA NAO PENEIRADA), PREPARO MANUAL DA ARGAMASSA"
+    },
     "unidade": "M2",
-    "quantidade": 66,
-    "custoUnitarioSemBdiReais": 35.03,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 43.5,
-    "totalComBdiReais": 2871
+    "quantidade": "66",
+    "custoUnitarioSemBdiReais": "35.03",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "43.5",
+    "totalComBdiReais": "2871"
   },
   {
     "sourceRowNumber": 100,
     "hierarchicalCode": "03.01.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "88489",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "PINTURA LÁTEX ACRÍLICA PREMIUM, APLICAÇÃO MANUAL EM PAREDES, DUAS DEMÃOS. AF_04/2023",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PINTURA LÁTEX ACRÍLICA PREMIUM, APLICAÇÃO MANUAL EM PAREDES, DUAS DEMÃOS. AF_04/2023"
+    },
     "unidade": "M2",
-    "quantidade": 360,
-    "custoUnitarioSemBdiReais": 12.2,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 15.14,
-    "totalComBdiReais": 5450.4
+    "quantidade": "360",
+    "custoUnitarioSemBdiReais": "12.2",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "15.14",
+    "totalComBdiReais": "5450.4"
   },
   {
     "sourceRowNumber": 101,
     "hierarchicalCode": "03.01.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "88488",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "PINTURA LÁTEX ACRÍLICA PREMIUM, APLICAÇÃO MANUAL EM TETO, DUAS DEMÃOS. AF_04/2023",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PINTURA LÁTEX ACRÍLICA PREMIUM, APLICAÇÃO MANUAL EM TETO, DUAS DEMÃOS. AF_04/2023"
+    },
     "unidade": "M2",
-    "quantidade": 55,
-    "custoUnitarioSemBdiReais": 14.33,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 17.79,
-    "totalComBdiReais": 978.45
+    "quantidade": "55",
+    "custoUnitarioSemBdiReais": "14.33",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "17.79",
+    "totalComBdiReais": "978.45"
   },
   {
     "sourceRowNumber": 102,
     "hierarchicalCode": "03.01.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "2419790",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "JATEAMENTO DE CHAPA DE AÇO COM O USO DE GRANALHAS DE AÇO GRAU SA 2 1/2",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "JATEAMENTO DE CHAPA DE AÇO COM O USO DE GRANALHAS DE AÇO GRAU SA 2 1/2"
+    },
     "unidade": "M2",
-    "quantidade": 27.3,
-    "custoUnitarioSemBdiReais": 10.41,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 12.92,
-    "totalComBdiReais": 352.71
+    "quantidade": "27.3",
+    "custoUnitarioSemBdiReais": "10.41",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "12.92",
+    "totalComBdiReais": "352.71"
   },
   {
     "sourceRowNumber": 103,
     "hierarchicalCode": "03.01.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73865/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "FUNDO PREPARADOR PRIMER A BASE DE EPOXI, PARA ESTRUTURA METALICA, UMA DEMAO, ESPESSURA DE 25 MICRA.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FUNDO PREPARADOR PRIMER A BASE DE EPOXI, PARA ESTRUTURA METALICA, UMA DEMAO, ESPESSURA DE 25 MICRA."
+    },
     "unidade": "M2",
-    "quantidade": 27.3,
-    "custoUnitarioSemBdiReais": 15.4,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 19.12,
-    "totalComBdiReais": 521.97
+    "quantidade": "27.3",
+    "custoUnitarioSemBdiReais": "15.4",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "19.12",
+    "totalComBdiReais": "521.97"
   },
   {
     "sourceRowNumber": 104,
     "hierarchicalCode": "03.01.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73924/3",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "PINTURA ESMALTE FOSCO, DUAS DEMAOS, SOBRE SUPERFICIE METALICA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PINTURA ESMALTE FOSCO, DUAS DEMAOS, SOBRE SUPERFICIE METALICA"
+    },
     "unidade": "M2",
-    "quantidade": 27.3,
-    "custoUnitarioSemBdiReais": 31.23,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 38.78,
-    "totalComBdiReais": 1058.69
+    "quantidade": "27.3",
+    "custoUnitarioSemBdiReais": "31.23",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "38.78",
+    "totalComBdiReais": "1058.69"
   },
   {
     "sourceRowNumber": 105,
     "hierarchicalCode": "03.01.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74100/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "PORTAO DE FERRO COM VARA 1/2\", COM REQUADRO E CADEADO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PORTAO DE FERRO COM VARA 1/2\", COM REQUADRO E CADEADO"
+    },
     "unidade": "M2",
-    "quantidade": 2.1,
-    "custoUnitarioSemBdiReais": 753.82,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 936.09,
-    "totalComBdiReais": 1965.78
+    "quantidade": "2.1",
+    "custoUnitarioSemBdiReais": "753.82",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "936.09",
+    "totalComBdiReais": "1965.78"
   },
   {
     "sourceRowNumber": 106,
     "hierarchicalCode": "03.01.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "84656",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "TRATAMENTO EM CONCRETO COM ESTUQUE E LIXAMENTO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TRATAMENTO EM CONCRETO COM ESTUQUE E LIXAMENTO"
+    },
     "unidade": "M2",
-    "quantidade": 50,
-    "custoUnitarioSemBdiReais": 41.15,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 51.1,
-    "totalComBdiReais": 2555
+    "quantidade": "50",
+    "custoUnitarioSemBdiReais": "41.15",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "51.1",
+    "totalComBdiReais": "2555"
   },
   {
     "sourceRowNumber": 107,
     "hierarchicalCode": "03.01.15",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "79514/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "PINTURA EPOXI, TRES DEMAOS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PINTURA EPOXI, TRES DEMAOS"
+    },
     "unidade": "M2",
-    "quantidade": 50,
-    "custoUnitarioSemBdiReais": 69.82,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 86.7,
-    "totalComBdiReais": 4335
+    "quantidade": "50",
+    "custoUnitarioSemBdiReais": "69.82",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "86.7",
+    "totalComBdiReais": "4335"
   },
   {
     "sourceRowNumber": 108,
     "hierarchicalCode": "03.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "03.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Vertedouro - Recuperação Civil",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Vertedouro - Recuperação Civil"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -1679,218 +2134,274 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "03.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "98525",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "LIMPEZA MECANIZADA DE CAMADA VEGETAL, VEGETAÇÃO E PEQUENAS ÁRVORES (DIÂMETRO DE TRONCO MENOR QUE 0,20 M), COM TRATOR DE ESTEIRAS. AF_03/2024",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LIMPEZA MECANIZADA DE CAMADA VEGETAL, VEGETAÇÃO E PEQUENAS ÁRVORES (DIÂMETRO DE TRONCO MENOR QUE 0,20 M), COM TRATOR DE ESTEIRAS. AF_03/2024"
+    },
     "unidade": "M2",
-    "quantidade": 560,
-    "custoUnitarioSemBdiReais": 0.62,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 0.76,
-    "totalComBdiReais": 425.6
+    "quantidade": "560",
+    "custoUnitarioSemBdiReais": "0.62",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "0.76",
+    "totalComBdiReais": "425.6"
   },
   {
     "sourceRowNumber": 110,
     "hierarchicalCode": "03.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5502135",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "ESCAVAÇÃO, CARGA E TRANSPORTE DE MATERIAL DE 1ª CATEGORIA - DMT DE 50 A 200 M - CAMINHO DE SERVIÇO EM REVESTIMENTO PRIMÁRIO - COM ESCAVADEIRA E CAMINHÃO BASCULANTE DE 14 M³",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESCAVAÇÃO, CARGA E TRANSPORTE DE MATERIAL DE 1ª CATEGORIA - DMT DE 50 A 200 M - CAMINHO DE SERVIÇO EM REVESTIMENTO PRIMÁRIO - COM ESCAVADEIRA E CAMINHÃO BASCULANTE DE 14 M³"
+    },
     "unidade": "M3",
-    "quantidade": 829.96,
-    "custoUnitarioSemBdiReais": 5.15,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 6.39,
-    "totalComBdiReais": 5303.44
+    "quantidade": "829.96",
+    "custoUnitarioSemBdiReais": "5.15",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "6.39",
+    "totalComBdiReais": "5303.44"
   },
   {
     "sourceRowNumber": 111,
     "hierarchicalCode": "03.02.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5502611",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "ESCAVAÇÃO, CARGA E TRANSPORTE DE MATERIAL DE 2ª CATEGORIA - DMT DE 50 A 200 M - CAMINHO DE SERVIÇO EM REVESTIMENTO PRIMÁRIO - COM ESCAVADEIRA E CAMINHÃO BASCULANTE DE 14 M³",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESCAVAÇÃO, CARGA E TRANSPORTE DE MATERIAL DE 2ª CATEGORIA - DMT DE 50 A 200 M - CAMINHO DE SERVIÇO EM REVESTIMENTO PRIMÁRIO - COM ESCAVADEIRA E CAMINHÃO BASCULANTE DE 14 M³"
+    },
     "unidade": "M3",
-    "quantidade": 1383.26,
-    "custoUnitarioSemBdiReais": 7.87,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 9.77,
-    "totalComBdiReais": 13514.45
+    "quantidade": "1383.26",
+    "custoUnitarioSemBdiReais": "7.87",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "9.77",
+    "totalComBdiReais": "13514.45"
   },
   {
     "sourceRowNumber": 112,
     "hierarchicalCode": "03.02.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5502768",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "ESCAVAÇÃO, CARGA E TRANSPORTE DE MATERIAL DE 3ª CATEGORIA - DMT DE 50 A 200 M - CAMINHO DE SERVIÇO EM REVESTIMENTO PRIMÁRIO - COM CAMINHÃO BASCULANTE DE 12 M³",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESCAVAÇÃO, CARGA E TRANSPORTE DE MATERIAL DE 3ª CATEGORIA - DMT DE 50 A 200 M - CAMINHO DE SERVIÇO EM REVESTIMENTO PRIMÁRIO - COM CAMINHÃO BASCULANTE DE 12 M³"
+    },
     "unidade": "M3",
-    "quantidade": 3374.43,
-    "custoUnitarioSemBdiReais": 41.84,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 51.95,
-    "totalComBdiReais": 175301.63
+    "quantidade": "3374.43",
+    "custoUnitarioSemBdiReais": "41.84",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "51.95",
+    "totalComBdiReais": "175301.63"
   },
   {
     "sourceRowNumber": 113,
     "hierarchicalCode": "03.02.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5914335",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "TRANSPORTE DE MATERIAL DE 3ª CATEGORIA COM CAMINHÃO BASCULANTE DE 12 M³ PARA ROCHA - RODOVIA EM REVESTIMENTO PRIMÁRIO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TRANSPORTE DE MATERIAL DE 3ª CATEGORIA COM CAMINHÃO BASCULANTE DE 12 M³ PARA ROCHA - RODOVIA EM REVESTIMENTO PRIMÁRIO"
+    },
     "unidade": "TKM",
-    "quantidade": 1061.76,
-    "custoUnitarioSemBdiReais": 0.93,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1.15,
-    "totalComBdiReais": 1221.02
+    "quantidade": "1061.76",
+    "custoUnitarioSemBdiReais": "0.93",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1.15",
+    "totalComBdiReais": "1221.02"
   },
   {
     "sourceRowNumber": 114,
     "hierarchicalCode": "03.02.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73844/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "MURO DE ARRIMO DE ALVENARIA DE PEDRA ARGAMASSADA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MURO DE ARRIMO DE ALVENARIA DE PEDRA ARGAMASSADA"
+    },
     "unidade": "M3",
-    "quantidade": 331.8,
-    "custoUnitarioSemBdiReais": 688.14,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 854.53,
-    "totalComBdiReais": 283533.05
+    "quantidade": "331.8",
+    "custoUnitarioSemBdiReais": "688.14",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "854.53",
+    "totalComBdiReais": "283533.05"
   },
   {
     "sourceRowNumber": 115,
     "hierarchicalCode": "03.02.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "84076",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "REBOCO TRACO 1:3 (CIMENTO E AREIA MEDIA NAO PENEIRADA), PREPARO MANUAL DA ARGAMASSA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "REBOCO TRACO 1:3 (CIMENTO E AREIA MEDIA NAO PENEIRADA), PREPARO MANUAL DA ARGAMASSA"
+    },
     "unidade": "M2",
-    "quantidade": 336,
-    "custoUnitarioSemBdiReais": 35.03,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 43.5,
-    "totalComBdiReais": 14616
+    "quantidade": "336",
+    "custoUnitarioSemBdiReais": "35.03",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "43.5",
+    "totalComBdiReais": "14616"
   },
   {
     "sourceRowNumber": 116,
     "hierarchicalCode": "03.02.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "1107889",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "CONCRETO FCK = 15 MPA - CONFECÇÃO EM BETONEIRA E LANÇAMENTO MANUAL - AREIA EXTRAÍDA E BRITA PRODUZIDA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CONCRETO FCK = 15 MPA - CONFECÇÃO EM BETONEIRA E LANÇAMENTO MANUAL - AREIA EXTRAÍDA E BRITA PRODUZIDA"
+    },
     "unidade": "M3",
-    "quantidade": 126,
-    "custoUnitarioSemBdiReais": 297.46,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 369.38,
-    "totalComBdiReais": 46541.88
+    "quantidade": "126",
+    "custoUnitarioSemBdiReais": "297.46",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "369.38",
+    "totalComBdiReais": "46541.88"
   },
   {
     "sourceRowNumber": 117,
     "hierarchicalCode": "03.02.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74007/002",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "FORMA TABUAS MADEIRA 3A P/ PECAS CONCRETO ARM, REAPR 2X, INCL MONTAGEM E DESMONTAGEM.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FORMA TABUAS MADEIRA 3A P/ PECAS CONCRETO ARM, REAPR 2X, INCL MONTAGEM E DESMONTAGEM."
+    },
     "unidade": "M2",
-    "quantidade": 206.64,
-    "custoUnitarioSemBdiReais": 94.93,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 117.88,
-    "totalComBdiReais": 24358.72
+    "quantidade": "206.64",
+    "custoUnitarioSemBdiReais": "94.93",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "117.88",
+    "totalComBdiReais": "24358.72"
   },
   {
     "sourceRowNumber": 118,
     "hierarchicalCode": "03.02.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "72921",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "REATERRO DE VALA COM MATERIAL GRANULAR DE EMPRESTIMO ADENSADO E VIBRADO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "REATERRO DE VALA COM MATERIAL GRANULAR DE EMPRESTIMO ADENSADO E VIBRADO"
+    },
     "unidade": "M3",
-    "quantidade": 443.9,
-    "custoUnitarioSemBdiReais": 106.52,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 132.27,
-    "totalComBdiReais": 58714.65
+    "quantidade": "443.9",
+    "custoUnitarioSemBdiReais": "106.52",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "132.27",
+    "totalComBdiReais": "58714.65"
   },
   {
     "sourceRowNumber": 119,
     "hierarchicalCode": "03.02.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "83532",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "LASTRO DE CONCRETO, PREPARO MECÂNICO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LASTRO DE CONCRETO, PREPARO MECÂNICO"
+    },
     "unidade": "M3",
-    "quantidade": 0.21,
-    "custoUnitarioSemBdiReais": 567.37,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 704.56,
-    "totalComBdiReais": 147.95
+    "quantidade": "0.21",
+    "custoUnitarioSemBdiReais": "567.37",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "704.56",
+    "totalComBdiReais": "147.95"
   },
   {
     "sourceRowNumber": 120,
     "hierarchicalCode": "03.02.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "100574",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "ESPALHAMENTO DE MATERIAL COM TRATOR DE ESTEIRAS. AF_09/2024",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESPALHAMENTO DE MATERIAL COM TRATOR DE ESTEIRAS. AF_09/2024"
+    },
     "unidade": "M3",
-    "quantidade": 5587.65,
-    "custoUnitarioSemBdiReais": 1.35,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1.67,
-    "totalComBdiReais": 9331.37
+    "quantidade": "5587.65",
+    "custoUnitarioSemBdiReais": "1.35",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1.67",
+    "totalComBdiReais": "9331.37"
   },
   {
     "sourceRowNumber": 122,
     "hierarchicalCode": "04.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
+    "parentResolutionMethod": "TopLevelNoParent",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "RECUPERAÇÃO DO EQUIPAMENTO HIDROMECÂNICO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "RECUPERAÇÃO DO EQUIPAMENTO HIDROMECÂNICO"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
-    "totalComBdiReais": 1795601.71
+    "totalComBdiReais": "1795601.71"
   },
   {
     "sourceRowNumber": 123,
     "hierarchicalCode": "04.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "04.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Equipamentos de Controle de Vazão de Montante",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Equipamentos de Controle de Vazão de Montante"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -1903,58 +2414,72 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "04.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "COT-002",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "",
+    "descricao": {
+      "status": "AbsentFromSource"
+    },
     "unidade": "UND",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 121737.9,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 140339.45,
-    "totalComBdiReais": 140339.45
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "121737.9",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "140339.45",
+    "totalComBdiReais": "140339.45"
   },
   {
     "sourceRowNumber": 125,
     "hierarchicalCode": "04.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "COT-003",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "",
+    "descricao": {
+      "status": "AbsentFromSource"
+    },
     "unidade": "UND",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 85832.46,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 98947.65,
-    "totalComBdiReais": 98947.65
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "85832.46",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "98947.65",
+    "totalComBdiReais": "98947.65"
   },
   {
     "sourceRowNumber": 126,
     "hierarchicalCode": "04.01.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "INST-COMPORTA",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO DE COMPORTA DESLIZANTE DE 1000 X 1000 MM, EM AÇO ASTM A36 INCLUINDO PEDESTAL DE ACIONAMENTO, HASTES, GUIAS DE DESLIZAMENTO E ACIONADOR (TODOS MATERIAIS/PEÇAS PARA INSTALAÇÃO ESTÃO INCLUSOS)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO DE COMPORTA DESLIZANTE DE 1000 X 1000 MM, EM AÇO ASTM A36 INCLUINDO PEDESTAL DE ACIONAMENTO, HASTES, GUIAS DE DESLIZAMENTO E ACIONADOR (TODOS MATERIAIS/PEÇAS PARA INSTALAÇÃO ESTÃO INCLUSOS)"
+    },
     "unidade": "UNID",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 48439.44,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 60152.09,
-    "totalComBdiReais": 120304.18
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "48439.44",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "60152.09",
+    "totalComBdiReais": "120304.18"
   },
   {
     "sourceRowNumber": 127,
     "hierarchicalCode": "04.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "04.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Equipamentos de Controle de Vazão de Jusante",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Equipamentos de Controle de Vazão de Jusante"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -1967,362 +2492,450 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "04.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "COT-004",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "",
+    "descricao": {
+      "status": "AbsentFromSource"
+    },
     "unidade": "CJ",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 200822.15,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 231507.77,
-    "totalComBdiReais": 694523.31
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "200822.15",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "231507.77",
+    "totalComBdiReais": "694523.31"
   },
   {
     "sourceRowNumber": 129,
     "hierarchicalCode": "04.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "COT-005",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "",
+    "descricao": {
+      "status": "AbsentFromSource"
+    },
     "unidade": "CJ",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 135400,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 156089.12,
-    "totalComBdiReais": 156089.12
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "135400",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "156089.12",
+    "totalComBdiReais": "156089.12"
   },
   {
     "sourceRowNumber": 130,
     "hierarchicalCode": "04.02.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "COT-006",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "",
+    "descricao": {
+      "status": "AbsentFromSource"
+    },
     "unidade": "UND",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 18050.2,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 20808.27,
-    "totalComBdiReais": 62424.81
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "18050.2",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "20808.27",
+    "totalComBdiReais": "62424.81"
   },
   {
     "sourceRowNumber": 131,
     "hierarchicalCode": "04.02.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "COT-007",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "",
+    "descricao": {
+      "status": "AbsentFromSource"
+    },
     "unidade": "UND",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 29983.83,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 34565.35,
-    "totalComBdiReais": 103696.05
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "29983.83",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "34565.35",
+    "totalComBdiReais": "103696.05"
   },
   {
     "sourceRowNumber": 132,
     "hierarchicalCode": "04.02.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "COT-008",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "FORNECIMENTO DE UM TÊ FLANGE/FLANGE/FLANGE, DIÂMETRO 800 MM PN10 EM FERRO FUNDIDO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FORNECIMENTO DE UM TÊ FLANGE/FLANGE/FLANGE, DIÂMETRO 800 MM PN10 EM FERRO FUNDIDO"
+    },
     "unidade": "UND",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 36129.34,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 41649.9,
-    "totalComBdiReais": 41649.9
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "36129.34",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "41649.9",
+    "totalComBdiReais": "41649.9"
   },
   {
     "sourceRowNumber": 133,
     "hierarchicalCode": "04.02.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "COT-009",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "FORNECIMENTO DE UM TUBO FLANGE/FLANGE DIÂMETRO DE 300 MM EM X 1500 MM DE COMPRIMENTO EM FERRO FUNDIDO K7",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FORNECIMENTO DE UM TUBO FLANGE/FLANGE DIÂMETRO DE 300 MM EM X 1500 MM DE COMPRIMENTO EM FERRO FUNDIDO K7"
+    },
     "unidade": "UND",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 4783.9,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 5514.87,
-    "totalComBdiReais": 5514.87
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "4783.9",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "5514.87",
+    "totalComBdiReais": "5514.87"
   },
   {
     "sourceRowNumber": 134,
     "hierarchicalCode": "04.02.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "COT-010",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "FORNECIMENTO DE UM TUBO FLANGE/FLANGE DIÂMETRO DE 300 MM EM X 6000 MM DE COMPRIMENTO EM FERRO FUNDIDO K7",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FORNECIMENTO DE UM TUBO FLANGE/FLANGE DIÂMETRO DE 300 MM EM X 6000 MM DE COMPRIMENTO EM FERRO FUNDIDO K7"
+    },
     "unidade": "UND",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 9147.56,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 10545.3,
-    "totalComBdiReais": 10545.3
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "9147.56",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "10545.3",
+    "totalComBdiReais": "10545.3"
   },
   {
     "sourceRowNumber": 135,
     "hierarchicalCode": "04.02.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "COT-011",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "FORNECIMENTO DE UM TÊ FLANGE/FLANGE/FLANGE, DIÂMETRO 300 MM PN10 EM FERRO FUNDIDO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FORNECIMENTO DE UM TÊ FLANGE/FLANGE/FLANGE, DIÂMETRO 300 MM PN10 EM FERRO FUNDIDO"
+    },
     "unidade": "UND",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 4220.7,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 4865.62,
-    "totalComBdiReais": 4865.62
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "4220.7",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "4865.62",
+    "totalComBdiReais": "4865.62"
   },
   {
     "sourceRowNumber": 136,
     "hierarchicalCode": "04.02.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "COT-012",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "FORNECIMENTO DE UMA VÁLVULA BORBOLETA DIÂMETRO DE 300 MM, PN 10, ACIONADA POR ATUADOR ELÉTRICO PREPARADO PARA RETIRADA DE DADOS PARA CONTROLE E COMANDO À DISTÂNCIA.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FORNECIMENTO DE UMA VÁLVULA BORBOLETA DIÂMETRO DE 300 MM, PN 10, ACIONADA POR ATUADOR ELÉTRICO PREPARADO PARA RETIRADA DE DADOS PARA CONTROLE E COMANDO À DISTÂNCIA."
+    },
     "unidade": "CJ",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 56517.37,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 65153.22,
-    "totalComBdiReais": 65153.22
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "56517.37",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "65153.22",
+    "totalComBdiReais": "65153.22"
   },
   {
     "sourceRowNumber": 137,
     "hierarchicalCode": "04.02.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "COT-013",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "FORNECIMENTO DE UM TUBO FLANGE/FLANGE DIÂMETRO DE 100 MM EM X 3000 MM DE COMPRIMENTO EM FERRO FUNDIDO K7",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FORNECIMENTO DE UM TUBO FLANGE/FLANGE DIÂMETRO DE 100 MM EM X 3000 MM DE COMPRIMENTO EM FERRO FUNDIDO K7"
+    },
     "unidade": "UND",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 3049.98,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 3516.01,
-    "totalComBdiReais": 7032.02
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "3049.98",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "3516.01",
+    "totalComBdiReais": "7032.02"
   },
   {
     "sourceRowNumber": 138,
     "hierarchicalCode": "04.02.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "COT-014",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "FORNECIMENTO DE CURVA FLANGE/FLANGE DIÂMETRO 100 MM EM FERRO FUNDIDO K7.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FORNECIMENTO DE CURVA FLANGE/FLANGE DIÂMETRO 100 MM EM FERRO FUNDIDO K7."
+    },
     "unidade": "UND",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 414.73,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 478.1,
-    "totalComBdiReais": 956.2
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "414.73",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "478.1",
+    "totalComBdiReais": "956.2"
   },
   {
     "sourceRowNumber": 139,
     "hierarchicalCode": "04.02.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "GAV-800",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO DE REGISTRO GAVETA , DN 800 MM, SÉRIE , FLANGES PN-10, ACIONADA POR ATUADOR ELÉTRICO PREPARADO PARA RETIRADA DE DADOS PARA CONTROLE E COMANDO À DISTÂNCIA, INCLUSIVE ACESSÓRIOS DE FIXAÇÃO E ARRUELAS DE VEDAÇÃO P/ FLANGE.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO DE REGISTRO GAVETA , DN 800 MM, SÉRIE , FLANGES PN-10, ACIONADA POR ATUADOR ELÉTRICO PREPARADO PARA RETIRADA DE DADOS PARA CONTROLE E COMANDO À DISTÂNCIA, INCLUSIVE ACESSÓRIOS DE FIXAÇÃO E ARRUELAS DE VEDAÇÃO P/ FLANGE."
+    },
     "unidade": "UNID",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 1484.5,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1843.45,
-    "totalComBdiReais": 5530.35
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "1484.5",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1843.45",
+    "totalComBdiReais": "5530.35"
   },
   {
     "sourceRowNumber": 140,
     "hierarchicalCode": "04.02.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "VALV-800",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO DE VÁLVULA BORBOLETA EM FOFO, FLANGEADA, DN 800 MM, FLANGES PN-10, ACIONADA POR ATUADOR ELÉTRICO PREPARADO PARA RETIRADA DE DADOS PARA CONTROLE E COMANDO À DISTÂNCIA, INCLUSIVE ACESSÓRIOS DE FIXAÇÃO E ARRUELAS DE VEDAÇÃO P/ FLANGE.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO DE VÁLVULA BORBOLETA EM FOFO, FLANGEADA, DN 800 MM, FLANGES PN-10, ACIONADA POR ATUADOR ELÉTRICO PREPARADO PARA RETIRADA DE DADOS PARA CONTROLE E COMANDO À DISTÂNCIA, INCLUSIVE ACESSÓRIOS DE FIXAÇÃO E ARRUELAS DE VEDAÇÃO P/ FLANGE."
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 1484.5,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1843.45,
-    "totalComBdiReais": 1843.45
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "1484.5",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1843.45",
+    "totalComBdiReais": "1843.45"
   },
   {
     "sourceRowNumber": 141,
     "hierarchicalCode": "04.02.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "INST-TUBO1",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO E SOLDAGEM DE TUBO FLANGE/FLANGE DIÂMETRO DE 800 MM EM CHAPAS DE 3/8” DE ESPESSURA X 500 MM DE COMPRIMENTO, INCLUSIVE PARAFUSOS, PORCAS E ARRUELA DE VEDAÇÃO PARA FLANGE  (INCLUSO PINTURA E TODOS OS MATERIAIS/SERVIÇOS)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO E SOLDAGEM DE TUBO FLANGE/FLANGE DIÂMETRO DE 800 MM EM CHAPAS DE 3/8” DE ESPESSURA X 500 MM DE COMPRIMENTO, INCLUSIVE PARAFUSOS, PORCAS E ARRUELA DE VEDAÇÃO PARA FLANGE  (INCLUSO PINTURA E TODOS OS MATERIAIS/SERVIÇOS)"
+    },
     "unidade": "UNID",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 2635.06,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 3272.21,
-    "totalComBdiReais": 9816.63
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "2635.06",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "3272.21",
+    "totalComBdiReais": "9816.63"
   },
   {
     "sourceRowNumber": 142,
     "hierarchicalCode": "04.02.15",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "INST-TUBO2",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO E SOLDAGEM DE TUBO FLANGE/FLANGE DIÂMETRO DE 800 MM EM CHAPAS DE 3/8” DE ESPESSURA X 3500 MM DE COMPRIMENTO, INCLUSIVE PARAFUSOS, PORCAS E ARRUELA DE VEDAÇÃO PARA FLANGE  (INCLUSO PINTURA E TODOS OS MATERIAIS/SERVIÇOS)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO E SOLDAGEM DE TUBO FLANGE/FLANGE DIÂMETRO DE 800 MM EM CHAPAS DE 3/8” DE ESPESSURA X 3500 MM DE COMPRIMENTO, INCLUSIVE PARAFUSOS, PORCAS E ARRUELA DE VEDAÇÃO PARA FLANGE  (INCLUSO PINTURA E TODOS OS MATERIAIS/SERVIÇOS)"
+    },
     "unidade": "UNID",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 5814.53,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 7220.48,
-    "totalComBdiReais": 21661.44
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "5814.53",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "7220.48",
+    "totalComBdiReais": "21661.44"
   },
   {
     "sourceRowNumber": 143,
     "hierarchicalCode": "04.02.16",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "TÊE-800",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO DE TÊE FLANGEADO EM AÇO CARBONO ESTRUTURAL ESP 5/16\", DN 500 x 150 MM, COMPRIMENTO 1,00 M, ALTURA DO PESCOÇO = 250 MM, FLANGES PN-10, INCLUSIVE PARAFUSOS, PORCAS, ARRUELAS DE VEDAÇÃO PARA FLANGES E PINTURA EPÓXI (INCLUSO TODOS OS MATERIAIS/SERVIÇOS)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO DE TÊE FLANGEADO EM AÇO CARBONO ESTRUTURAL ESP 5/16\", DN 500 x 150 MM, COMPRIMENTO 1,00 M, ALTURA DO PESCOÇO = 250 MM, FLANGES PN-10, INCLUSIVE PARAFUSOS, PORCAS, ARRUELAS DE VEDAÇÃO PARA FLANGES E PINTURA EPÓXI (INCLUSO TODOS OS MATERIAIS/SERVIÇOS)"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 5125.95,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 6365.4,
-    "totalComBdiReais": 6365.4
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "5125.95",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "6365.4",
+    "totalComBdiReais": "6365.4"
   },
   {
     "sourceRowNumber": 144,
     "hierarchicalCode": "04.02.17",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "TUBO-K7",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO DE TUBO FLANGE/FLANGE, DIÂMETRO DE 300 MM EM X 1500 MM DE COMPRIMENTO EM FERRO FUNDIDO K7 (INCLUSO PINTURA E TODOS OS MATERIAIS/SERVIÇOS)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO DE TUBO FLANGE/FLANGE, DIÂMETRO DE 300 MM EM X 1500 MM DE COMPRIMENTO EM FERRO FUNDIDO K7 (INCLUSO PINTURA E TODOS OS MATERIAIS/SERVIÇOS)"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 1171.32,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1454.54,
-    "totalComBdiReais": 1454.54
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "1171.32",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1454.54",
+    "totalComBdiReais": "1454.54"
   },
   {
     "sourceRowNumber": 145,
     "hierarchicalCode": "04.02.18",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "TUBO-K7.1",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO DE TUBO FLANGE/FLANGE, DIÂMETRO DE 300 MM EM X 6000 MM DE COMPRIMENTO EM FERRO FUNDIDO K7 (INCLUSO PINTURA E TODOS OS MATERIAIS/SERVIÇOS)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO DE TUBO FLANGE/FLANGE, DIÂMETRO DE 300 MM EM X 6000 MM DE COMPRIMENTO EM FERRO FUNDIDO K7 (INCLUSO PINTURA E TODOS OS MATERIAIS/SERVIÇOS)"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 1834.36,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2277.9,
-    "totalComBdiReais": 2277.9
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "1834.36",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2277.9",
+    "totalComBdiReais": "2277.9"
   },
   {
     "sourceRowNumber": 146,
     "hierarchicalCode": "04.02.19",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "TÊE-300",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO DE TÊE FLANGEADO EM AÇO CARBONO ESTRUTURAL ESP 5/16\", DN 500 x 150 MM, COMPRIMENTO 1,00 M, ALTURA DO PESCOÇO = 250 MM, FLANGES PN-10, INCLUSIVE PARAFUSOS, PORCAS, ARRUELAS DE VEDAÇÃO PARA FLANGES E PINTURA EPÓXI (INCLUSO TODOS OS MATERIAIS/SERVIÇOS)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO DE TÊE FLANGEADO EM AÇO CARBONO ESTRUTURAL ESP 5/16\", DN 500 x 150 MM, COMPRIMENTO 1,00 M, ALTURA DO PESCOÇO = 250 MM, FLANGES PN-10, INCLUSIVE PARAFUSOS, PORCAS, ARRUELAS DE VEDAÇÃO PARA FLANGES E PINTURA EPÓXI (INCLUSO TODOS OS MATERIAIS/SERVIÇOS)"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 2280.49,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2831.91,
-    "totalComBdiReais": 2831.91
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "2280.49",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2831.91",
+    "totalComBdiReais": "2831.91"
   },
   {
     "sourceRowNumber": 147,
     "hierarchicalCode": "04.02.20",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "VALV-300",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO DE VÁLVULA BORBOLETA, FLANGEADA, DN 300 MM, FLANGES PN-10, ACIONADA POR ATUADOR ELÉTRICO PREPARADO PARA RETIRADA DE DADOS PARA CONTROLE E COMANDO À DISTÂNCIA, INCLUSIVE ACESSÓRIOS DE FIXAÇÃO E ARRUELAS DE VEDAÇÃO P/ FLANGE.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO DE VÁLVULA BORBOLETA, FLANGEADA, DN 300 MM, FLANGES PN-10, ACIONADA POR ATUADOR ELÉTRICO PREPARADO PARA RETIRADA DE DADOS PARA CONTROLE E COMANDO À DISTÂNCIA, INCLUSIVE ACESSÓRIOS DE FIXAÇÃO E ARRUELAS DE VEDAÇÃO P/ FLANGE."
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 1228.52,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1525.57,
-    "totalComBdiReais": 1525.57
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "1228.52",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1525.57",
+    "totalComBdiReais": "1525.57"
   },
   {
     "sourceRowNumber": 148,
     "hierarchicalCode": "04.02.21",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "TUBO-K7.2",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO DE TUBO FLANGE/FLANGE, DIÂMETRO DE 100 MM EM X 3000 MM DE COMPRIMENTO EM FERRO FUNDIDO K7 (INCLUSO PINTURA E TODOS OS MATERIAIS/SERVIÇOS)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO DE TUBO FLANGE/FLANGE, DIÂMETRO DE 100 MM EM X 3000 MM DE COMPRIMENTO EM FERRO FUNDIDO K7 (INCLUSO PINTURA E TODOS OS MATERIAIS/SERVIÇOS)"
+    },
     "unidade": "UNID",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 593.54,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 737.05,
-    "totalComBdiReais": 1474.1
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "593.54",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "737.05",
+    "totalComBdiReais": "1474.1"
   },
   {
     "sourceRowNumber": 149,
     "hierarchicalCode": "04.02.22",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "INST-CURVA",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO E MONTAGEM DECURVA FLANGE/FLANGE DIÂMETRO 100 MM EM FERRO FUNDIDO K7, INCLUSIVE PARAFUSOS, PORCAS E ARRUELA DE VEDAÇÃO PARA FLANGE  (INCLUSO PINTURA E TODOS OS MATERIAIS/SERVIÇOS)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO E MONTAGEM DECURVA FLANGE/FLANGE DIÂMETRO 100 MM EM FERRO FUNDIDO K7, INCLUSIVE PARAFUSOS, PORCAS E ARRUELA DE VEDAÇÃO PARA FLANGE  (INCLUSO PINTURA E TODOS OS MATERIAIS/SERVIÇOS)"
+    },
     "unidade": "UNID",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 348.58,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 432.86,
-    "totalComBdiReais": 865.72
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "348.58",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "432.86",
+    "totalComBdiReais": "865.72"
   },
   {
     "sourceRowNumber": 150,
     "hierarchicalCode": "04.03.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "04.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Diversos",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Diversos"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -2335,506 +2948,632 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": null,
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.03.00",
+    "parentResolutionMethod": "DocumentPositionSection",
     "externalSourceCode": "COT-015",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "EQUIPE DE MERGULHADORES, EQUIPAMENTOS DE MERGULHO, EMBARCAÇÃO AUXILIAR, TALHAS, TIFORS, CABOS DE AÇO, ANILHAS, CABOS DE NYLON, FERRAMENTAS DIVERSAS, MACACOS HIDRÁULICOS, GUINCHOS E OUTROS EQUIPAMENTOS SIMILARES PARA EXECUÇÃO DE SERVIÇOS SUBAQUÁTICOS DE APOIO À OBRA DE RECUPERAÇÃO HIDROMECÂNICA (DER-SP)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "EQUIPE DE MERGULHADORES, EQUIPAMENTOS DE MERGULHO, EMBARCAÇÃO AUXILIAR, TALHAS, TIFORS, CABOS DE AÇO, ANILHAS, CABOS DE NYLON, FERRAMENTAS DIVERSAS, MACACOS HIDRÁULICOS, GUINCHOS E OUTROS EQUIPAMENTOS SIMILARES PARA EXECUÇÃO DE SERVIÇOS SUBAQUÁTICOS DE APOIO À OBRA DE RECUPERAÇÃO HIDROMECÂNICA (DER-SP)"
+    },
     "unidade": "DIA",
-    "quantidade": 60,
-    "custoUnitarioSemBdiReais": 3295.07,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 3798.55,
-    "totalComBdiReais": 227913
+    "quantidade": "60",
+    "custoUnitarioSemBdiReais": "3295.07",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "3798.55",
+    "totalComBdiReais": "227913"
   },
   {
     "sourceRowNumber": 153,
     "hierarchicalCode": "05.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
+    "parentResolutionMethod": "TopLevelNoParent",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "INSTRUMENTAÇÃO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTRUMENTAÇÃO"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
-    "totalComBdiReais": 69530.78
+    "totalComBdiReais": "69530.78"
   },
   {
     "sourceRowNumber": 154,
     "hierarchicalCode": "05.00.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "05.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "MARCO-TOP",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "MARCOS TOPOGRÁFICOS DE SUPERFÍCIE",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MARCOS TOPOGRÁFICOS DE SUPERFÍCIE"
+    },
     "unidade": "UNID",
-    "quantidade": 5,
-    "custoUnitarioSemBdiReais": 409.98,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 509.11,
-    "totalComBdiReais": 2545.55
+    "quantidade": "5",
+    "custoUnitarioSemBdiReais": "409.98",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "509.11",
+    "totalComBdiReais": "2545.55"
   },
   {
     "sourceRowNumber": 155,
     "hierarchicalCode": "05.00.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "05.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "PIEZOM-01",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "FORNECIMENTO DE PIEZOMETROS TIPO CASAGRANDE, COM PERFURAÇÃO E INSTALAÇÃO  - (PROF. DE 16,82 m)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FORNECIMENTO DE PIEZOMETROS TIPO CASAGRANDE, COM PERFURAÇÃO E INSTALAÇÃO  - (PROF. DE 16,82 m)"
+    },
     "unidade": "UNID",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 10126.9,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 12575.58,
-    "totalComBdiReais": 37726.74
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "10126.9",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "12575.58",
+    "totalComBdiReais": "37726.74"
   },
   {
     "sourceRowNumber": 156,
     "hierarchicalCode": "05.00.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "05.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "PIEZOM-02",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "FORNECIMENTO DE PIEZOMETROS TIPO CASAGRANDE, COM PERFURAÇÃO E INSTALAÇÃO  - (PROF. DE 5,46 m)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FORNECIMENTO DE PIEZOMETROS TIPO CASAGRANDE, COM PERFURAÇÃO E INSTALAÇÃO  - (PROF. DE 5,46 m)"
+    },
     "unidade": "UNID",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 6438.04,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 7994.75,
-    "totalComBdiReais": 23984.25
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "6438.04",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "7994.75",
+    "totalComBdiReais": "23984.25"
   },
   {
     "sourceRowNumber": 157,
     "hierarchicalCode": "05.00.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "05.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "REGUA",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "FORNECIMENTO E INSTALAÇÃO DE RÉGUA LIMNIMÉTRICA PADRÃO  ANA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FORNECIMENTO E INSTALAÇÃO DE RÉGUA LIMNIMÉTRICA PADRÃO  ANA"
+    },
     "unidade": "UNID",
-    "quantidade": 12,
-    "custoUnitarioSemBdiReais": 353.94,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 439.52,
-    "totalComBdiReais": 5274.24
+    "quantidade": "12",
+    "custoUnitarioSemBdiReais": "353.94",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "439.52",
+    "totalComBdiReais": "5274.24"
   },
   {
     "sourceRowNumber": 159,
     "hierarchicalCode": "06.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
+    "parentResolutionMethod": "TopLevelNoParent",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "AUTOMAÇÃO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "AUTOMAÇÃO"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
-    "totalComBdiReais": 811894.6899999998
+    "totalComBdiReais": "811894.6899999998"
   },
   {
     "sourceRowNumber": 160,
     "hierarchicalCode": "06.00.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-001",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "QUADRO DE AUTOMAÇÃO DA UAC COM CLP S7-1200 1214C DC/DC/DC, MODULO COMUNICAÇÃO RS-485 CM1241, EXPANSÃO DE 8 ENTRADAS ANALÓGICAS SM1231, EXPANSÃO DE 8 ENTRADAS DIGITAIS SM1221, EXPANSÃO DE 8 ENTRADAS E 8 SAÍDAS DIGITAIS SM1223, FONTE 24VCC 60W, NOBREAK 24VCC 6ª, SWITCH SCLANCE 6 PORTAS 2 PORTAS POE, IHM KP-300 PN 3\" MONO, RÁDIO UBIQUITI AIRMAX NANOSTATION2 MIMO, RÁDIO MODEM COM GPS, BATERIA SELADA, LÂMPADA, PROTETOR DE SURTO, DISJUNTORES, CONECTORES, CABOS, RELES, BORNES, TOMADA DE SOBREPOR, SENSOR DE INTRUSÃO TIPO MICRO SWITCH, CANALETAS, TRILHO, CAIXA DE MONTAGEM METÁLICA COM CHAPA DE MONTAGEM DE 1,5MM, PINTURA EM EPÓXI NA COR CINZA, ACESSÓRIO E MONTAGEM.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "QUADRO DE AUTOMAÇÃO DA UAC COM CLP S7-1200 1214C DC/DC/DC, MODULO COMUNICAÇÃO RS-485 CM1241, EXPANSÃO DE 8 ENTRADAS ANALÓGICAS SM1231, EXPANSÃO DE 8 ENTRADAS DIGITAIS SM1221, EXPANSÃO DE 8 ENTRADAS E 8 SAÍDAS DIGITAIS SM1223, FONTE 24VCC 60W, NOBREAK 24VCC 6ª, SWITCH SCLANCE 6 PORTAS 2 PORTAS POE, IHM KP-300 PN 3\" MONO, RÁDIO UBIQUITI AIRMAX NANOSTATION2 MIMO, RÁDIO MODEM COM GPS, BATERIA SELADA, LÂMPADA, PROTETOR DE SURTO, DISJUNTORES, CONECTORES, CABOS, RELES, BORNES, TOMADA DE SOBREPOR, SENSOR DE INTRUSÃO TIPO MICRO SWITCH, CANALETAS, TRILHO, CAIXA DE MONTAGEM METÁLICA COM CHAPA DE MONTAGEM DE 1,5MM, PINTURA EM EPÓXI NA COR CINZA, ACESSÓRIO E MONTAGEM."
+    },
     "unidade": "CJ",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 113032.31,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 130303.64,
-    "totalComBdiReais": 130303.64
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "113032.31",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "130303.64",
+    "totalComBdiReais": "130303.64"
   },
   {
     "sourceRowNumber": 161,
     "hierarchicalCode": "06.00.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-002",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "QUADRO DE COMANDO DE VÁLVULA COM RELE FALTA DE FASE E ASSIMETRIA ENTRE FASES, DISJUNTORES MOTOR, DISJUNTOR 1P 2P E 3P, CONTATOR DE POTENCIA BOBINA 220V/60HZ, CONTATORES AUXILIARES, SINALEIROS,  COMUTADORES COM RETENÇÃO, BLOCOS DE CONTATO, BORNES, TRILHO DIN, CANALETA, CAIXA DE MONTAGEM METÁLICA COM CHAPA DE MONTAGEM DE 1,5MM, PINTURA EM EPÓXI NA COR CINZA, ACESSÓRIO E MONTAGEM.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "QUADRO DE COMANDO DE VÁLVULA COM RELE FALTA DE FASE E ASSIMETRIA ENTRE FASES, DISJUNTORES MOTOR, DISJUNTOR 1P 2P E 3P, CONTATOR DE POTENCIA BOBINA 220V/60HZ, CONTATORES AUXILIARES, SINALEIROS,  COMUTADORES COM RETENÇÃO, BLOCOS DE CONTATO, BORNES, TRILHO DIN, CANALETA, CAIXA DE MONTAGEM METÁLICA COM CHAPA DE MONTAGEM DE 1,5MM, PINTURA EM EPÓXI NA COR CINZA, ACESSÓRIO E MONTAGEM."
+    },
     "unidade": "CJ",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 55632,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 64132.56,
-    "totalComBdiReais": 64132.56
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "55632",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "64132.56",
+    "totalComBdiReais": "64132.56"
   },
   {
     "sourceRowNumber": 162,
     "hierarchicalCode": "06.00.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-003",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "QUADRO DE SENSORES COM CLP S7-1200 1214C DC/DC/DC, MODULO COMUNICAÇÃO RS-485 CM1241, FONTE 24VCC 60W, NOBREAK 24VCC 6A, RÁDIO UBIQUITI AIRMAX NANOSTATION2 MIMO, BATERIA SELADA, LÂMPADA, PROTETOR DE SURTO, DISJUNTORES, CONECTORES, CABOS, RELES, BORNES, TOMADA DE SOBREPOR, SENSOR DE INTRUSÃO TIPO MICRO SWITCH, CANALETAS, TRILHO, CAIXA DE MONTAGEM METÁLICA COM CHAPA DE MONTAGEM DE 1,5MM, PINTURA EM EPÓXI NA COR CINZA, ACESSÓRIO E MONTAGEM.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "QUADRO DE SENSORES COM CLP S7-1200 1214C DC/DC/DC, MODULO COMUNICAÇÃO RS-485 CM1241, FONTE 24VCC 60W, NOBREAK 24VCC 6A, RÁDIO UBIQUITI AIRMAX NANOSTATION2 MIMO, BATERIA SELADA, LÂMPADA, PROTETOR DE SURTO, DISJUNTORES, CONECTORES, CABOS, RELES, BORNES, TOMADA DE SOBREPOR, SENSOR DE INTRUSÃO TIPO MICRO SWITCH, CANALETAS, TRILHO, CAIXA DE MONTAGEM METÁLICA COM CHAPA DE MONTAGEM DE 1,5MM, PINTURA EM EPÓXI NA COR CINZA, ACESSÓRIO E MONTAGEM."
+    },
     "unidade": "CJ",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 80793.11,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 93138.29,
-    "totalComBdiReais": 93138.29
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "80793.11",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "93138.29",
+    "totalComBdiReais": "93138.29"
   },
   {
     "sourceRowNumber": 163,
     "hierarchicalCode": "06.00.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-004",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "QUADRO DE FORÇA COM DISJUNTOR 1P 6A, DISJUNTOR 2P 4A, DISJUNTOR 3P 25A, TRILHO, CAIXA DE MONTAGEM METÁLICA COM CHAPA DE MONTAGEM DE 1,5MM, PINTURA EM EPÓXI NA COR CINZA, ACESSÓRIO E MONTAGEM.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "QUADRO DE FORÇA COM DISJUNTOR 1P 6A, DISJUNTOR 2P 4A, DISJUNTOR 3P 25A, TRILHO, CAIXA DE MONTAGEM METÁLICA COM CHAPA DE MONTAGEM DE 1,5MM, PINTURA EM EPÓXI NA COR CINZA, ACESSÓRIO E MONTAGEM."
+    },
     "unidade": "CJ",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 5269,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 6074.1,
-    "totalComBdiReais": 18222.3
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "5269",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "6074.1",
+    "totalComBdiReais": "18222.3"
   },
   {
     "sourceRowNumber": 164,
     "hierarchicalCode": "06.00.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-005",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "SIRENE ELETRONICA MULTIUSO PARA USO EXTERNO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SIRENE ELETRONICA MULTIUSO PARA USO EXTERNO"
+    },
     "unidade": "UND",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 403.66,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 465.33,
-    "totalComBdiReais": 930.66
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "403.66",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "465.33",
+    "totalComBdiReais": "930.66"
   },
   {
     "sourceRowNumber": 165,
     "hierarchicalCode": "06.00.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-006",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "MICRO SENSOR DE ABERTURA DE PORTA SOBREPOR DUPLO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MICRO SENSOR DE ABERTURA DE PORTA SOBREPOR DUPLO"
+    },
     "unidade": "UND",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 259.36,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 298.99,
-    "totalComBdiReais": 597.98
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "259.36",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "298.99",
+    "totalComBdiReais": "597.98"
   },
   {
     "sourceRowNumber": 166,
     "hierarchicalCode": "06.00.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-007",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "SENSOR DE NÍVEL TIPO RADAR",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SENSOR DE NÍVEL TIPO RADAR"
+    },
     "unidade": "UND",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 44280,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 51045.98,
-    "totalComBdiReais": 51045.98
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "44280",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "51045.98",
+    "totalComBdiReais": "51045.98"
   },
   {
     "sourceRowNumber": 167,
     "hierarchicalCode": "06.00.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-008",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "SENSOR DE NÍVEL TIPO ULTRASSÔNICO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SENSOR DE NÍVEL TIPO ULTRASSÔNICO"
+    },
     "unidade": "UND",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 34955.13,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 40296.27,
-    "totalComBdiReais": 40296.27
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "34955.13",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "40296.27",
+    "totalComBdiReais": "40296.27"
   },
   {
     "sourceRowNumber": 168,
     "hierarchicalCode": "06.00.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-009",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "SENSOR DE VAZÃO ULTRASSÔNICO CONDUTO FORÇADO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SENSOR DE VAZÃO ULTRASSÔNICO CONDUTO FORÇADO"
+    },
     "unidade": "UND",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 24468.59,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 28207.39,
-    "totalComBdiReais": 84622.17
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "24468.59",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "28207.39",
+    "totalComBdiReais": "84622.17"
   },
   {
     "sourceRowNumber": 169,
     "hierarchicalCode": "06.00.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-010",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "CÂMERA NOTURNA POE",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CÂMERA NOTURNA POE"
+    },
     "unidade": "UND",
-    "quantidade": 5,
-    "custoUnitarioSemBdiReais": 373.05,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 430.05,
-    "totalComBdiReais": 2150.25
+    "quantidade": "5",
+    "custoUnitarioSemBdiReais": "373.05",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "430.05",
+    "totalComBdiReais": "2150.25"
   },
   {
     "sourceRowNumber": 170,
     "hierarchicalCode": "06.00.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-011",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "MATERIAL DA INFRAESTRUTURA E ACESSÓRIOS.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MATERIAL DA INFRAESTRUTURA E ACESSÓRIOS."
+    },
     "unidade": "UND",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 79074,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 91156.5,
-    "totalComBdiReais": 91156.5
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "79074",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "91156.5",
+    "totalComBdiReais": "91156.5"
   },
   {
     "sourceRowNumber": 171,
     "hierarchicalCode": "06.00.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "SERV-AUTO",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "SERVIÇOS DE INSTALAÇÃO DA AUTOMAÇÃO (PROGRAMAÇÃO DO CLP, IHM, SCADA, WEB SERVER)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SERVIÇOS DE INSTALAÇÃO DA AUTOMAÇÃO (PROGRAMAÇÃO DO CLP, IHM, SCADA, WEB SERVER)"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 72500.54,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 90031.17,
-    "totalComBdiReais": 90031.17
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "72500.54",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "90031.17",
+    "totalComBdiReais": "90031.17"
   },
   {
     "sourceRowNumber": 172,
     "hierarchicalCode": "06.00.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "SERV-COMISS",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "SERVIÇOS DE COMISSIONAMENTO E STARTUP",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SERVIÇOS DE COMISSIONAMENTO E STARTUP"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 14011.92,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 17400,
-    "totalComBdiReais": 17400
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "14011.92",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "17400",
+    "totalComBdiReais": "17400"
   },
   {
     "sourceRowNumber": 173,
     "hierarchicalCode": "06.00.15",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "I9905",
     "fonte": "Insumo SEINFRA",
     "tipo": "obM",
-    "descricao": "NOBREAK 800VA 220/220V",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "NOBREAK 800VA 220/220V"
+    },
     "unidade": "UN",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 634.97,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 731.99,
-    "totalComBdiReais": 2195.97
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "634.97",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "731.99",
+    "totalComBdiReais": "2195.97"
   },
   {
     "sourceRowNumber": 174,
     "hierarchicalCode": "06.00.16",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "I6819",
     "fonte": "Insumo SEINFRA",
     "tipo": "obM",
-    "descricao": "CABO DE FIBRA ÓTICA, 04 PARES",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CABO DE FIBRA ÓTICA, 04 PARES"
+    },
     "unidade": "M",
-    "quantidade": 2000,
-    "custoUnitarioSemBdiReais": 5.71,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 6.58,
-    "totalComBdiReais": 13160
+    "quantidade": "2000",
+    "custoUnitarioSemBdiReais": "5.71",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "6.58",
+    "totalComBdiReais": "13160"
   },
   {
     "sourceRowNumber": 175,
     "hierarchicalCode": "06.00.17",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-012",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "SWITCH 10 PORTAS FAST ETHERNET COM 8 PORTAS POE (POWER OVER ETHERNET)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SWITCH 10 PORTAS FAST ETHERNET COM 8 PORTAS POE (POWER OVER ETHERNET)"
+    },
     "unidade": "UND",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 1020,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 1175.85,
-    "totalComBdiReais": 2351.7
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "1020",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "1175.85",
+    "totalComBdiReais": "2351.7"
   },
   {
     "sourceRowNumber": 176,
     "hierarchicalCode": "06.00.18",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-013",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "CONVERSOR DE MÍDIA SINGLE FIBER SM 20 KM WDM GIGABIT (PAR)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CONVERSOR DE MÍDIA SINGLE FIBER SM 20 KM WDM GIGABIT (PAR)"
+    },
     "unidade": "UND",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 1275,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 1469.82,
-    "totalComBdiReais": 4409.46
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "1275",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "1469.82",
+    "totalComBdiReais": "4409.46"
   },
   {
     "sourceRowNumber": 177,
     "hierarchicalCode": "06.00.19",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "43972",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
-    "descricao": "CABO DE REDE, PAR TRANCADO U/UTP, 4 PARES, CATEGORIA 5E (CAT 5E), ISOLAMENTO PVC (CM)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CABO DE REDE, PAR TRANCADO U/UTP, 4 PARES, CATEGORIA 5E (CAT 5E), ISOLAMENTO PVC (CM)"
+    },
     "unidade": "M",
-    "quantidade": 500,
-    "custoUnitarioSemBdiReais": 4.58,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 5.27,
-    "totalComBdiReais": 2635
+    "quantidade": "500",
+    "custoUnitarioSemBdiReais": "4.58",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "5.27",
+    "totalComBdiReais": "2635"
   },
   {
     "sourceRowNumber": 178,
     "hierarchicalCode": "06.00.20",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-014",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "MEDIDOR DE NÍVEL DE ÁGUA DIGITAL, SENSOR DE NÍVEL LÍQUIDO SUBMERSÍVEL, LCD NÍVEL DO POÇO PIEZÔMETROS, 1M 5M FAIXA, 4-20M, FORNECIMENTO E INSTALAÇÃO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MEDIDOR DE NÍVEL DE ÁGUA DIGITAL, SENSOR DE NÍVEL LÍQUIDO SUBMERSÍVEL, LCD NÍVEL DO POÇO PIEZÔMETROS, 1M 5M FAIXA, 4-20M, FORNECIMENTO E INSTALAÇÃO"
+    },
     "unidade": "UND",
-    "quantidade": 6,
-    "custoUnitarioSemBdiReais": 2994.71,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 3452.3,
-    "totalComBdiReais": 20713.8
+    "quantidade": "6",
+    "custoUnitarioSemBdiReais": "2994.71",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "3452.3",
+    "totalComBdiReais": "20713.8"
   },
   {
     "sourceRowNumber": 179,
     "hierarchicalCode": "06.00.21",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-015",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "",
+    "descricao": {
+      "status": "AbsentFromSource"
+    },
     "unidade": "M",
-    "quantidade": 1000,
-    "custoUnitarioSemBdiReais": 24.69,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 28.46,
-    "totalComBdiReais": 28460
+    "quantidade": "1000",
+    "custoUnitarioSemBdiReais": "24.69",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "28.46",
+    "totalComBdiReais": "28460"
   },
   {
     "sourceRowNumber": 180,
     "hierarchicalCode": "06.00.22",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "CPU – 07.00.26",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CABO DE COBRE FLEXÍVEL PP 3 X 1,5MM P/ INSTALAÇÃO DO SENSOR NO POÇO PIEZÔMETROS FORNECIMENTO E INSTALAÇÃO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CABO DE COBRE FLEXÍVEL PP 3 X 1,5MM P/ INSTALAÇÃO DO SENSOR NO POÇO PIEZÔMETROS FORNECIMENTO E INSTALAÇÃO"
+    },
     "unidade": "M",
-    "quantidade": 270,
-    "custoUnitarioSemBdiReais": 9.93,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 12.33,
-    "totalComBdiReais": 3329.1
+    "quantidade": "270",
+    "custoUnitarioSemBdiReais": "9.93",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "12.33",
+    "totalComBdiReais": "3329.1"
   },
   {
     "sourceRowNumber": 181,
     "hierarchicalCode": "06.00.23",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "AUT-016",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "",
+    "descricao": {
+      "status": "AbsentFromSource"
+    },
     "unidade": "UND",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 7311.55,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 8428.75,
-    "totalComBdiReais": 8428.75
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "7311.55",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "8428.75",
+    "totalComBdiReais": "8428.75"
   },
   {
     "sourceRowNumber": 182,
     "hierarchicalCode": "06.00.24",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "TREIN-AUTO",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "SERVIÇOS DE TREINAMENTO E OPERAÇÃO ASSISTIDA (AUTOMAÇÃO)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SERVIÇOS DE TREINAMENTO E OPERAÇÃO ASSISTIDA (AUTOMAÇÃO)"
+    },
     "unidade": "UNID",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 16984.68,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 21091.57,
-    "totalComBdiReais": 42183.14
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "16984.68",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "21091.57",
+    "totalComBdiReais": "42183.14"
   },
   {
     "sourceRowNumber": 184,
     "hierarchicalCode": "07.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
+    "parentResolutionMethod": "TopLevelNoParent",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "CENTRO ADMINISTRATIVO / GUARITA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CENTRO ADMINISTRATIVO / GUARITA"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
-    "totalComBdiReais": 183533.5199999999
+    "totalComBdiReais": "183533.5199999999"
   },
   {
     "sourceRowNumber": 185,
     "hierarchicalCode": "07.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "07.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Centro Administrativo",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Centro Administrativo"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -2847,794 +3586,994 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "07.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4915744",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "CAPINA MANUAL",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAPINA MANUAL"
+    },
     "unidade": "M2",
-    "quantidade": 139.56500000000003,
-    "custoUnitarioSemBdiReais": 0.68,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 0.84,
-    "totalComBdiReais": 117.23
+    "quantidade": "139.56500000000003",
+    "custoUnitarioSemBdiReais": "0.68",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "0.84",
+    "totalComBdiReais": "117.23"
   },
   {
     "sourceRowNumber": 187,
     "hierarchicalCode": "07.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "99059",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "LOCAÇÃO CONVENCIONAL DE OBRA, UTILIZANDO GABARITO DE TÁBUAS CORRIDAS PONTALETADAS A CADA 2,00M -  2 UTILIZAÇÕES. AF_03/2024",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LOCAÇÃO CONVENCIONAL DE OBRA, UTILIZANDO GABARITO DE TÁBUAS CORRIDAS PONTALETADAS A CADA 2,00M -  2 UTILIZAÇÕES. AF_03/2024"
+    },
     "unidade": "M",
-    "quantidade": 51.6,
-    "custoUnitarioSemBdiReais": 59.99,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 74.49,
-    "totalComBdiReais": 3843.68
+    "quantidade": "51.6",
+    "custoUnitarioSemBdiReais": "59.99",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "74.49",
+    "totalComBdiReais": "3843.68"
   },
   {
     "sourceRowNumber": 188,
     "hierarchicalCode": "07.01.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "6122",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "EMBASAMENTO C/PEDRA ARGAMASSADA UTILIZANDO ARG.CIM/AREIA 1:4",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "EMBASAMENTO C/PEDRA ARGAMASSADA UTILIZANDO ARG.CIM/AREIA 1:4"
+    },
     "unidade": "M3",
-    "quantidade": 7.89,
-    "custoUnitarioSemBdiReais": 515.36,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 639.97,
-    "totalComBdiReais": 5049.36
+    "quantidade": "7.89",
+    "custoUnitarioSemBdiReais": "515.36",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "639.97",
+    "totalComBdiReais": "5049.36"
   },
   {
     "sourceRowNumber": 189,
     "hierarchicalCode": "07.01.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "6110",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "ALVENARIA DE EMBASAMENTO EM TIJOLOS CERAMICOS MACICOS 5X10X20CM, ASSENTADO COM ARGAMASSA TRACO 1:2:8 (CIMENTO, CAL E AREIA)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ALVENARIA DE EMBASAMENTO EM TIJOLOS CERAMICOS MACICOS 5X10X20CM, ASSENTADO COM ARGAMASSA TRACO 1:2:8 (CIMENTO, CAL E AREIA)"
+    },
     "unidade": "M3",
-    "quantidade": 0.9860000000000002,
-    "custoUnitarioSemBdiReais": 919.4,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1141.71,
-    "totalComBdiReais": 1125.72
+    "quantidade": "0.9860000000000002",
+    "custoUnitarioSemBdiReais": "919.4",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1141.71",
+    "totalComBdiReais": "1125.72"
   },
   {
     "sourceRowNumber": 190,
     "hierarchicalCode": "07.01.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "78018",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "ESCAVACAO MANUAL A CEU ABERTO EM MATERIAL DE 1A CATEGORIA, EM PROFUNDIDADE ATE 0,50M",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESCAVACAO MANUAL A CEU ABERTO EM MATERIAL DE 1A CATEGORIA, EM PROFUNDIDADE ATE 0,50M"
+    },
     "unidade": "M3",
-    "quantidade": 15.856000000000003,
-    "custoUnitarioSemBdiReais": 48.64,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 60.4,
-    "totalComBdiReais": 957.7
+    "quantidade": "15.856000000000003",
+    "custoUnitarioSemBdiReais": "48.64",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "60.4",
+    "totalComBdiReais": "957.7"
   },
   {
     "sourceRowNumber": 191,
     "hierarchicalCode": "07.01.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73935/002",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "ALVENARIA EM TIJOLO CERAMICO FURADO 9X19X19CM, 1 VEZ (ESPESSURA 19 CM), ASSENTADO EM ARGAMASSA TRACO 1:4 (CIMENTO E AREIA MEDIA NAO PENEIRADA), PREPARO MANUAL, JUNTA1 CM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ALVENARIA EM TIJOLO CERAMICO FURADO 9X19X19CM, 1 VEZ (ESPESSURA 19 CM), ASSENTADO EM ARGAMASSA TRACO 1:4 (CIMENTO E AREIA MEDIA NAO PENEIRADA), PREPARO MANUAL, JUNTA1 CM"
+    },
     "unidade": "M2",
-    "quantidade": 148.96349999999998,
-    "custoUnitarioSemBdiReais": 101.46,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 125.99,
-    "totalComBdiReais": 18767.91
+    "quantidade": "148.96349999999998",
+    "custoUnitarioSemBdiReais": "101.46",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "125.99",
+    "totalComBdiReais": "18767.91"
   },
   {
     "sourceRowNumber": 192,
     "hierarchicalCode": "07.01.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73346",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CONCRETO ARMADO DOSADO 15 MPA INCL MAT P/ 1 M3 PREPARO CONF COMP 5845 COLOC CONF COMP 7090 14 M2 DE AREIA MOLDADA FORMAS E ESCORAMENTO CONF COMPS 5306 E 5708 60 KG DE AÇO CA-50 INC MÃO DE OBRA P/CORTE DOBRAGEM MONTAGEM E COLOC NAS FORMAS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CONCRETO ARMADO DOSADO 15 MPA INCL MAT P/ 1 M3 PREPARO CONF COMP 5845 COLOC CONF COMP 7090 14 M2 DE AREIA MOLDADA FORMAS E ESCORAMENTO CONF COMPS 5306 E 5708 60 KG DE AÇO CA-50 INC MÃO DE OBRA P/CORTE DOBRAGEM MONTAGEM E COLOC NAS FORMAS"
+    },
     "unidade": "M3",
-    "quantidade": 5.857875000000001,
-    "custoUnitarioSemBdiReais": 2242.19,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2784.35,
-    "totalComBdiReais": 16310.37
+    "quantidade": "5.857875000000001",
+    "custoUnitarioSemBdiReais": "2242.19",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2784.35",
+    "totalComBdiReais": "16310.37"
   },
   {
     "sourceRowNumber": 193,
     "hierarchicalCode": "07.01.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "87873",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CHAPISCO APLICADO EM ALVENARIAS E ESTRUTURAS DE CONCRETO INTERNAS, COM ROLO PARA TEXTURA ACRÍLICA.  ARGAMASSA TRAÇO 1:4 E EMULSÃO POLIMÉRICA (ADESIVO) COM PREPARO MANUAL. AF_06/2014",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CHAPISCO APLICADO EM ALVENARIAS E ESTRUTURAS DE CONCRETO INTERNAS, COM ROLO PARA TEXTURA ACRÍLICA.  ARGAMASSA TRAÇO 1:4 E EMULSÃO POLIMÉRICA (ADESIVO) COM PREPARO MANUAL. AF_06/2014"
+    },
     "unidade": "M2",
-    "quantidade": 297.59499999999997,
-    "custoUnitarioSemBdiReais": 6.98,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 8.66,
-    "totalComBdiReais": 2577.17
+    "quantidade": "297.59499999999997",
+    "custoUnitarioSemBdiReais": "6.98",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "8.66",
+    "totalComBdiReais": "2577.17"
   },
   {
     "sourceRowNumber": 194,
     "hierarchicalCode": "07.01.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "87527",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "EMBOÇO, EM ARGAMASSA TRAÇO 1:2:8, PREPARO MECÂNICO, APLICADO MANUALMENTE EM PAREDES INTERNAS DE AMBIENTES COM ÁREA MENOR QUE 5M², E =17,5MM, COM TALISCAS. AF_03/2024",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "EMBOÇO, EM ARGAMASSA TRAÇO 1:2:8, PREPARO MECÂNICO, APLICADO MANUALMENTE EM PAREDES INTERNAS DE AMBIENTES COM ÁREA MENOR QUE 5M², E =17,5MM, COM TALISCAS. AF_03/2024"
+    },
     "unidade": "M2",
-    "quantidade": 19.240000000000002,
-    "custoUnitarioSemBdiReais": 36.72,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 45.59,
-    "totalComBdiReais": 877.15
+    "quantidade": "19.240000000000002",
+    "custoUnitarioSemBdiReais": "36.72",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "45.59",
+    "totalComBdiReais": "877.15"
   },
   {
     "sourceRowNumber": 195,
     "hierarchicalCode": "07.01.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "84076",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "REBOCO TRACO 1:3 (CIMENTO E AREIA MEDIA NAO PENEIRADA), PREPARO MANUAL DA ARGAMASSA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "REBOCO TRACO 1:3 (CIMENTO E AREIA MEDIA NAO PENEIRADA), PREPARO MANUAL DA ARGAMASSA"
+    },
     "unidade": "M2",
-    "quantidade": 278.687,
-    "custoUnitarioSemBdiReais": 35.03,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 43.5,
-    "totalComBdiReais": 12122.88
+    "quantidade": "278.687",
+    "custoUnitarioSemBdiReais": "35.03",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "43.5",
+    "totalComBdiReais": "12122.88"
   },
   {
     "sourceRowNumber": 196,
     "hierarchicalCode": "07.01.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "83534",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "LASTRO DE CONCRETO, PREPARO MECÂNICO, INCLUSOS ADITIVO IMPERMEABILIZANTE, LANÇAMENTO E ADENSAMENTO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LASTRO DE CONCRETO, PREPARO MECÂNICO, INCLUSOS ADITIVO IMPERMEABILIZANTE, LANÇAMENTO E ADENSAMENTO"
+    },
     "unidade": "M3",
-    "quantidade": 2.5147500000000003,
-    "custoUnitarioSemBdiReais": 770.57,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 956.89,
-    "totalComBdiReais": 2406.33
+    "quantidade": "2.5147500000000003",
+    "custoUnitarioSemBdiReais": "770.57",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "956.89",
+    "totalComBdiReais": "2406.33"
   },
   {
     "sourceRowNumber": 197,
     "hierarchicalCode": "07.01.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74079/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "PISO CIMENTADO TRACO 1:4 (CIMENTO E AREIA) COM ACABAMENTO LISO ESPESSURA 2,0CM COM JUNTAS PLASTICAS DE DILATACAO E PREPARO MANUAL DA ARGAMASSA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PISO CIMENTADO TRACO 1:4 (CIMENTO E AREIA) COM ACABAMENTO LISO ESPESSURA 2,0CM COM JUNTAS PLASTICAS DE DILATACAO E PREPARO MANUAL DA ARGAMASSA"
+    },
     "unidade": "M2",
-    "quantidade": 38.2,
-    "custoUnitarioSemBdiReais": 75.22,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 93.4,
-    "totalComBdiReais": 3567.88
+    "quantidade": "38.2",
+    "custoUnitarioSemBdiReais": "75.22",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "93.4",
+    "totalComBdiReais": "3567.88"
   },
   {
     "sourceRowNumber": 198,
     "hierarchicalCode": "07.01.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "87247",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "REVESTIMENTO CERÂMICO PARA PISO COM PLACAS TIPO ESMALTADA DE DIMENSÕES 35X35 CM APLICADA EM AMBIENTES DE ÁREA ENTRE 5 M2 E 10 M2. AF_02/2023_PE",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "REVESTIMENTO CERÂMICO PARA PISO COM PLACAS TIPO ESMALTADA DE DIMENSÕES 35X35 CM APLICADA EM AMBIENTES DE ÁREA ENTRE 5 M2 E 10 M2. AF_02/2023_PE"
+    },
     "unidade": "M2",
-    "quantidade": 12.09,
-    "custoUnitarioSemBdiReais": 64.89,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 80.58,
-    "totalComBdiReais": 974.21
+    "quantidade": "12.09",
+    "custoUnitarioSemBdiReais": "64.89",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "80.58",
+    "totalComBdiReais": "974.21"
   },
   {
     "sourceRowNumber": 199,
     "hierarchicalCode": "07.01.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "9875",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "COBOGO CERAMICO (ELEMENTO VAZADO), 9X20X20CM, ASSENTADO COM ARGAMASSA TRAÇO 1:4 DE CIMENTO E AREIA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "COBOGO CERAMICO (ELEMENTO VAZADO), 9X20X20CM, ASSENTADO COM ARGAMASSA TRAÇO 1:4 DE CIMENTO E AREIA"
+    },
     "unidade": "M2",
-    "quantidade": 5.02,
-    "custoUnitarioSemBdiReais": 109.66,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 136.17,
-    "totalComBdiReais": 683.57
+    "quantidade": "5.02",
+    "custoUnitarioSemBdiReais": "109.66",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "136.17",
+    "totalComBdiReais": "683.57"
   },
   {
     "sourceRowNumber": 200,
     "hierarchicalCode": "07.01.15",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "83901",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "VERGAS 10X10 CM, PREMOLDADAS C/ CONCRETO FCK=15 MPA (PREPARO MECANICO), ACO CA-50 COM FORMAS TABUA DE PINHO 3A",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "VERGAS 10X10 CM, PREMOLDADAS C/ CONCRETO FCK=15 MPA (PREPARO MECANICO), ACO CA-50 COM FORMAS TABUA DE PINHO 3A"
+    },
     "unidade": "M",
-    "quantidade": 17.400000000000002,
-    "custoUnitarioSemBdiReais": 18.92,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 23.49,
-    "totalComBdiReais": 408.72
+    "quantidade": "17.400000000000002",
+    "custoUnitarioSemBdiReais": "18.92",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "23.49",
+    "totalComBdiReais": "408.72"
   },
   {
     "sourceRowNumber": 201,
     "hierarchicalCode": "07.01.16",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "88489",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "PINTURA LÁTEX ACRÍLICA PREMIUM, APLICAÇÃO MANUAL EM PAREDES, DUAS DEMÃOS. AF_04/2023",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PINTURA LÁTEX ACRÍLICA PREMIUM, APLICAÇÃO MANUAL EM PAREDES, DUAS DEMÃOS. AF_04/2023"
+    },
     "unidade": "M2",
-    "quantidade": 173.95999999999998,
-    "custoUnitarioSemBdiReais": 12.2,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 15.14,
-    "totalComBdiReais": 2633.75
+    "quantidade": "173.95999999999998",
+    "custoUnitarioSemBdiReais": "12.2",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "15.14",
+    "totalComBdiReais": "2633.75"
   },
   {
     "sourceRowNumber": 202,
     "hierarchicalCode": "07.01.17",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "88488",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "PINTURA LÁTEX ACRÍLICA PREMIUM, APLICAÇÃO MANUAL EM TETO, DUAS DEMÃOS. AF_04/2023",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PINTURA LÁTEX ACRÍLICA PREMIUM, APLICAÇÃO MANUAL EM TETO, DUAS DEMÃOS. AF_04/2023"
+    },
     "unidade": "M2",
-    "quantidade": 91.669,
-    "custoUnitarioSemBdiReais": 14.33,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 17.79,
-    "totalComBdiReais": 1630.79
+    "quantidade": "91.669",
+    "custoUnitarioSemBdiReais": "14.33",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "17.79",
+    "totalComBdiReais": "1630.79"
   },
   {
     "sourceRowNumber": 203,
     "hierarchicalCode": "07.01.18",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "87265",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "REVESTIMENTO CERÂMICO PARA PAREDES INTERNAS COM PLACAS TIPO ESMALTADA DE DIMENSÕES 20X20 CM APLICADAS NA ALTURA INTEIRA DAS PAREDES.  AF_02/2023_PE",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "REVESTIMENTO CERÂMICO PARA PAREDES INTERNAS COM PLACAS TIPO ESMALTADA DE DIMENSÕES 20X20 CM APLICADAS NA ALTURA INTEIRA DAS PAREDES.  AF_02/2023_PE"
+    },
     "unidade": "M2",
-    "quantidade": 11.100000000000001,
-    "custoUnitarioSemBdiReais": 62.89,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 78.09,
-    "totalComBdiReais": 866.79
+    "quantidade": "11.100000000000001",
+    "custoUnitarioSemBdiReais": "62.89",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "78.09",
+    "totalComBdiReais": "866.79"
   },
   {
     "sourceRowNumber": 204,
     "hierarchicalCode": "07.01.19",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "91337",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "KIT DE PORTA DE MADEIRA TIPO MEXICANA, MACIÇA (PESADA OU SUPERPESADA), PADRÃO POPULAR, 80X210CM, ESPESSURA DE 3CM, ITENS INCLUSOS: DOBRADIÇAS, MONTAGEM E INSTALAÇÃO DO BATENTE, SEM FECHADURA - FORNECIMENTO E INSTALAÇÃO. AF_12/2019",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "KIT DE PORTA DE MADEIRA TIPO MEXICANA, MACIÇA (PESADA OU SUPERPESADA), PADRÃO POPULAR, 80X210CM, ESPESSURA DE 3CM, ITENS INCLUSOS: DOBRADIÇAS, MONTAGEM E INSTALAÇÃO DO BATENTE, SEM FECHADURA - FORNECIMENTO E INSTALAÇÃO. AF_12/2019"
+    },
     "unidade": "UN",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 2407.29,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2989.37,
-    "totalComBdiReais": 8968.11
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "2407.29",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2989.37",
+    "totalComBdiReais": "8968.11"
   },
   {
     "sourceRowNumber": 205,
     "hierarchicalCode": "07.01.20",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "90841",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "KIT DE PORTA DE MADEIRA PARA PINTURA, SEMI-OCA (LEVE OU MÉDIA), PADRÃO MÉDIO, 60X210CM, ESPESSURA DE 3,5CM, ITENS INCLUSOS: DOBRADIÇAS, MONTAGEM E INSTALAÇÃO DO BATENTE, FECHADURA COM EXECUÇÃO DO FURO - FORNECIMENTO E INSTALAÇÃO. AF_12/2019",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "KIT DE PORTA DE MADEIRA PARA PINTURA, SEMI-OCA (LEVE OU MÉDIA), PADRÃO MÉDIO, 60X210CM, ESPESSURA DE 3,5CM, ITENS INCLUSOS: DOBRADIÇAS, MONTAGEM E INSTALAÇÃO DO BATENTE, FECHADURA COM EXECUÇÃO DO FURO - FORNECIMENTO E INSTALAÇÃO. AF_12/2019"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 963.95,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1197.03,
-    "totalComBdiReais": 1197.03
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "963.95",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1197.03",
+    "totalComBdiReais": "1197.03"
   },
   {
     "sourceRowNumber": 206,
     "hierarchicalCode": "07.01.21",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "90843",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "KIT DE PORTA DE MADEIRA PARA PINTURA, SEMI-OCA (LEVE OU MÉDIA), PADRÃO MÉDIO, 80X210CM, ESPESSURA DE 3,5CM, ITENS INCLUSOS: DOBRADIÇAS, MONTAGEM E INSTALAÇÃO DO BATENTE, FECHADURA COM EXECUÇÃO DO FURO - FORNECIMENTO E INSTALAÇÃO. AF_12/2019",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "KIT DE PORTA DE MADEIRA PARA PINTURA, SEMI-OCA (LEVE OU MÉDIA), PADRÃO MÉDIO, 80X210CM, ESPESSURA DE 3,5CM, ITENS INCLUSOS: DOBRADIÇAS, MONTAGEM E INSTALAÇÃO DO BATENTE, FECHADURA COM EXECUÇÃO DO FURO - FORNECIMENTO E INSTALAÇÃO. AF_12/2019"
+    },
     "unidade": "UN",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 1017.93,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1264.06,
-    "totalComBdiReais": 3792.18
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "1017.93",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1264.06",
+    "totalComBdiReais": "3792.18"
   },
   {
     "sourceRowNumber": 207,
     "hierarchicalCode": "07.01.22",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73938/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "COBERTURA EM TELHA CERAMICA TIPO COLONIAL, COM ARGAMASSA TRACO 1:3 (CIMENTO E AREIA)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "COBERTURA EM TELHA CERAMICA TIPO COLONIAL, COM ARGAMASSA TRACO 1:3 (CIMENTO E AREIA)"
+    },
     "unidade": "M2",
-    "quantidade": 77.2,
-    "custoUnitarioSemBdiReais": 116.54,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 144.71,
-    "totalComBdiReais": 11171.61
+    "quantidade": "77.2",
+    "custoUnitarioSemBdiReais": "116.54",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "144.71",
+    "totalComBdiReais": "11171.61"
   },
   {
     "sourceRowNumber": 208,
     "hierarchicalCode": "07.01.23",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "72078",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "ESTRUTURA DE MADEIRA DE LEI PRIMEIRA QUALIDADE, SERRADA, NAO APARELHADA, PARA TELHAS CERAMICAS, VAOS DE 7M ATE 10 M",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESTRUTURA DE MADEIRA DE LEI PRIMEIRA QUALIDADE, SERRADA, NAO APARELHADA, PARA TELHAS CERAMICAS, VAOS DE 7M ATE 10 M"
+    },
     "unidade": "M2",
-    "quantidade": 77.2,
-    "custoUnitarioSemBdiReais": 146.01,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 181.31,
-    "totalComBdiReais": 13997.13
+    "quantidade": "77.2",
+    "custoUnitarioSemBdiReais": "146.01",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "181.31",
+    "totalComBdiReais": "13997.13"
   },
   {
     "sourceRowNumber": 209,
     "hierarchicalCode": "07.01.24",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73892/002",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "PISO (CALCADA) EM CONCRETO 12MPA TRACO 1:3:5 (CIMENTO/AREIA/BRITA) PREPARO MECANICO, ESPESSURA 7CM, COM JUNTA DE DILATACAO EM MADEIRA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PISO (CALCADA) EM CONCRETO 12MPA TRACO 1:3:5 (CIMENTO/AREIA/BRITA) PREPARO MECANICO, ESPESSURA 7CM, COM JUNTA DE DILATACAO EM MADEIRA"
+    },
     "unidade": "M2",
-    "quantidade": 5.4,
-    "custoUnitarioSemBdiReais": 48.25,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 59.91,
-    "totalComBdiReais": 323.51
+    "quantidade": "5.4",
+    "custoUnitarioSemBdiReais": "48.25",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "59.91",
+    "totalComBdiReais": "323.51"
   },
   {
     "sourceRowNumber": 210,
     "hierarchicalCode": "07.01.25",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74197/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "FOSSA SEPTICA EM ALVENARIA DE TIJOLO CERAMICO MACICO DIMENSOES EXTERNAS 1,90X1,10X1,40M, 1.500 LITROS, REVESTIDA INTERNAMENTE COM BARRA LISA, COM TAMPA EM CONCRETO ARMADO COM ESPESSURA 8CM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FOSSA SEPTICA EM ALVENARIA DE TIJOLO CERAMICO MACICO DIMENSOES EXTERNAS 1,90X1,10X1,40M, 1.500 LITROS, REVESTIDA INTERNAMENTE COM BARRA LISA, COM TAMPA EM CONCRETO ARMADO COM ESPESSURA 8CM"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 2240.16,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2781.83,
-    "totalComBdiReais": 2781.83
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "2240.16",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2781.83",
+    "totalComBdiReais": "2781.83"
   },
   {
     "sourceRowNumber": 211,
     "hierarchicalCode": "07.01.26",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74198/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "SUMIDOURO EM ALVENARIA DE TIJOLO CERAMICO MACICO DIAMETRO 1,20M E ALTURA 5,00M, COM TAMPA EM CONCRETO ARMADO DIAMETRO 1,40M E ESPESSURA 10CM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SUMIDOURO EM ALVENARIA DE TIJOLO CERAMICO MACICO DIAMETRO 1,20M E ALTURA 5,00M, COM TAMPA EM CONCRETO ARMADO DIAMETRO 1,40M E ESPESSURA 10CM"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 1702.23,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2113.82,
-    "totalComBdiReais": 2113.82
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "1702.23",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2113.82",
+    "totalComBdiReais": "2113.82"
   },
   {
     "sourceRowNumber": 212,
     "hierarchicalCode": "07.01.27",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89711",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "TUBO PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 40 MM, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TUBO PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 40 MM, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022"
+    },
     "unidade": "M",
-    "quantidade": 6,
-    "custoUnitarioSemBdiReais": 19.58,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 24.31,
-    "totalComBdiReais": 145.86
+    "quantidade": "6",
+    "custoUnitarioSemBdiReais": "19.58",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "24.31",
+    "totalComBdiReais": "145.86"
   },
   {
     "sourceRowNumber": 213,
     "hierarchicalCode": "07.01.28",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89712",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "TUBO PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 50 MM, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TUBO PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 50 MM, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022"
+    },
     "unidade": "M",
-    "quantidade": 6,
-    "custoUnitarioSemBdiReais": 24.93,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 30.95,
-    "totalComBdiReais": 185.7
+    "quantidade": "6",
+    "custoUnitarioSemBdiReais": "24.93",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "30.95",
+    "totalComBdiReais": "185.7"
   },
   {
     "sourceRowNumber": 214,
     "hierarchicalCode": "07.01.29",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89714",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "TUBO PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 100 MM, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TUBO PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 100 MM, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022"
+    },
     "unidade": "M",
-    "quantidade": 6,
-    "custoUnitarioSemBdiReais": 34.73,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 43.12,
-    "totalComBdiReais": 258.72
+    "quantidade": "6",
+    "custoUnitarioSemBdiReais": "34.73",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "43.12",
+    "totalComBdiReais": "258.72"
   },
   {
     "sourceRowNumber": 215,
     "hierarchicalCode": "07.01.30",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89726",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "JOELHO 45 GRAUS, PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 40 MM, JUNTA SOLDÁVEL, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "JOELHO 45 GRAUS, PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 40 MM, JUNTA SOLDÁVEL, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022"
+    },
     "unidade": "UN",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 9.22,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 11.44,
-    "totalComBdiReais": 22.88
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "9.22",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "11.44",
+    "totalComBdiReais": "22.88"
   },
   {
     "sourceRowNumber": 216,
     "hierarchicalCode": "07.01.31",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89731",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "JOELHO 90 GRAUS, PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 50 MM, JUNTA ELÁSTICA, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "JOELHO 90 GRAUS, PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 50 MM, JUNTA ELÁSTICA, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 14.28,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 17.73,
-    "totalComBdiReais": 17.73
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "14.28",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "17.73",
+    "totalComBdiReais": "17.73"
   },
   {
     "sourceRowNumber": 217,
     "hierarchicalCode": "07.01.32",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89744",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "JOELHO 90 GRAUS, PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 100 MM, JUNTA ELÁSTICA, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "JOELHO 90 GRAUS, PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 100 MM, JUNTA ELÁSTICA, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 26.26,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 32.6,
-    "totalComBdiReais": 32.6
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "26.26",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "32.6",
+    "totalComBdiReais": "32.6"
   },
   {
     "sourceRowNumber": 218,
     "hierarchicalCode": "07.01.33",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "97902",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CAIXA ENTERRADA HIDRÁULICA RETANGULAR EM ALVENARIA COM TIJOLOS CERÂMICOS MACIÇOS, DIMENSÕES INTERNAS: 0,6X0,6X0,6 M PARA REDE DE ESGOTO. AF_12/2020",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAIXA ENTERRADA HIDRÁULICA RETANGULAR EM ALVENARIA COM TIJOLOS CERÂMICOS MACIÇOS, DIMENSÕES INTERNAS: 0,6X0,6X0,6 M PARA REDE DE ESGOTO. AF_12/2020"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 529.08,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 657.01,
-    "totalComBdiReais": 657.01
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "529.08",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "657.01",
+    "totalComBdiReais": "657.01"
   },
   {
     "sourceRowNumber": 219,
     "hierarchicalCode": "07.01.34",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "86888",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "VASO SANITÁRIO SIFONADO COM CAIXA ACOPLADA LOUÇA BRANCA - FORNECIMENTO E INSTALAÇÃO. AF_01/2020",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "VASO SANITÁRIO SIFONADO COM CAIXA ACOPLADA LOUÇA BRANCA - FORNECIMENTO E INSTALAÇÃO. AF_01/2020"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 496.7,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 616.8,
-    "totalComBdiReais": 616.8
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "496.7",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "616.8",
+    "totalComBdiReais": "616.8"
   },
   {
     "sourceRowNumber": 220,
     "hierarchicalCode": "07.01.35",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "86902",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "LAVATÓRIO LOUÇA BRANCA COM COLUNA, *44 X 35,5* CM, PADRÃO POPULAR - FORNECIMENTO E INSTALAÇÃO. AF_01/2020",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LAVATÓRIO LOUÇA BRANCA COM COLUNA, *44 X 35,5* CM, PADRÃO POPULAR - FORNECIMENTO E INSTALAÇÃO. AF_01/2020"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 319.89,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 397.23,
-    "totalComBdiReais": 397.23
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "319.89",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "397.23",
+    "totalComBdiReais": "397.23"
   },
   {
     "sourceRowNumber": 221,
     "hierarchicalCode": "07.01.36",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "100860",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CHUVEIRO ELÉTRICO COMUM CORPO PLÁSTICO, TIPO DUCHA - FORNECIMENTO E INSTALAÇÃO. AF_01/2020",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CHUVEIRO ELÉTRICO COMUM CORPO PLÁSTICO, TIPO DUCHA - FORNECIMENTO E INSTALAÇÃO. AF_01/2020"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 103.69,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 128.76,
-    "totalComBdiReais": 128.76
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "103.69",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "128.76",
+    "totalComBdiReais": "128.76"
   },
   {
     "sourceRowNumber": 222,
     "hierarchicalCode": "07.01.37",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89482",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CAIXA SIFONADA, PVC, DN 100 X 100 X 50 MM, FORNECIDA E INSTALADA EM RAMAIS DE ENCAMINHAMENTO DE ÁGUA PLUVIAL. AF_06/2022",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAIXA SIFONADA, PVC, DN 100 X 100 X 50 MM, FORNECIDA E INSTALADA EM RAMAIS DE ENCAMINHAMENTO DE ÁGUA PLUVIAL. AF_06/2022"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 32.89,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 40.84,
-    "totalComBdiReais": 40.84
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "32.89",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "40.84",
+    "totalComBdiReais": "40.84"
   },
   {
     "sourceRowNumber": 223,
     "hierarchicalCode": "07.01.38",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74131/1",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "QUADRO DE DISTRIBUICAO DE ENERGIA DE EMBUTIR, EM CHAPA METALICA, PARA 3 DISJUNTORES TERMOMAGNETICOS MONOPOLARES SEM BARRAMENTO FORNECIMENTO E INSTALACAO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "QUADRO DE DISTRIBUICAO DE ENERGIA DE EMBUTIR, EM CHAPA METALICA, PARA 3 DISJUNTORES TERMOMAGNETICOS MONOPOLARES SEM BARRAMENTO FORNECIMENTO E INSTALACAO"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 402.36,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 499.65,
-    "totalComBdiReais": 499.65
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "402.36",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "499.65",
+    "totalComBdiReais": "499.65"
   },
   {
     "sourceRowNumber": 224,
     "hierarchicalCode": "07.01.39",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "97584",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "LUMINÁRIA TIPO CALHA, DE SOBREPOR, COM 1 LÂMPADA TUBULAR FLUORESCENTE DE 36 W, COM REATOR DE PARTIDA RÁPIDA - FORNECIMENTO E INSTALAÇÃO. AF_02/2020",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LUMINÁRIA TIPO CALHA, DE SOBREPOR, COM 1 LÂMPADA TUBULAR FLUORESCENTE DE 36 W, COM REATOR DE PARTIDA RÁPIDA - FORNECIMENTO E INSTALAÇÃO. AF_02/2020"
+    },
     "unidade": "UNID",
-    "quantidade": 6,
-    "custoUnitarioSemBdiReais": 115.47,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 143.39,
-    "totalComBdiReais": 860.34
+    "quantidade": "6",
+    "custoUnitarioSemBdiReais": "115.47",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "143.39",
+    "totalComBdiReais": "860.34"
   },
   {
     "sourceRowNumber": 225,
     "hierarchicalCode": "07.01.40",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74130/1",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "DISJUNTOR TERMOMAGNETICO MONOPOLAR PADRAO NEMA (AMERICANO) 10 A 30A 240V, FORNECIMENTO E INSTALACAO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "DISJUNTOR TERMOMAGNETICO MONOPOLAR PADRAO NEMA (AMERICANO) 10 A 30A 240V, FORNECIMENTO E INSTALACAO"
+    },
     "unidade": "UNID",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 13.19,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 16.37,
-    "totalComBdiReais": 49.11
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "13.19",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "16.37",
+    "totalComBdiReais": "49.11"
   },
   {
     "sourceRowNumber": 226,
     "hierarchicalCode": "07.01.41",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89957",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "PONTO DE CONSUMO TERMINAL DE ÁGUA FRIA (SUBRAMAL) COM TUBULAÇÃO DE PVC, DN 25 MM, INSTALADO EM RAMAL DE ÁGUA, INCLUSOS RASGO E CHUMBAMENTO EM ALVENARIA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PONTO DE CONSUMO TERMINAL DE ÁGUA FRIA (SUBRAMAL) COM TUBULAÇÃO DE PVC, DN 25 MM, INSTALADO EM RAMAL DE ÁGUA, INCLUSOS RASGO E CHUMBAMENTO EM ALVENARIA"
+    },
     "unidade": "UNID",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 125.51,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 155.85,
-    "totalComBdiReais": 467.55
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "125.51",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "155.85",
+    "totalComBdiReais": "467.55"
   },
   {
     "sourceRowNumber": 227,
     "hierarchicalCode": "07.01.42",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89971",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "KIT DE REGISTRO DE GAVETA BRUTO DE LATÃO ½\", INCLUSIVE CONEXÕES, ROSCÁVEL, INSTALADO EM RAMAL DE ÁGUA FRIA – FORNECIMENTO E INSTALAÇÃO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "KIT DE REGISTRO DE GAVETA BRUTO DE LATÃO ½\", INCLUSIVE CONEXÕES, ROSCÁVEL, INSTALADO EM RAMAL DE ÁGUA FRIA – FORNECIMENTO E INSTALAÇÃO"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 48.19,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 59.84,
-    "totalComBdiReais": 59.84
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "48.19",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "59.84",
+    "totalComBdiReais": "59.84"
   },
   {
     "sourceRowNumber": 228,
     "hierarchicalCode": "07.01.43",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89969",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "KIT DE REGISTRO DE PRESSÃO BRUTO DE LATÃO ½\", INCLUSIVE CONEXÕES, ROSCÁVEL, INSTALADO EM RAMAL DE ÁGUA FRIA – FORNECIMENTO E INSTALAÇÃO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "KIT DE REGISTRO DE PRESSÃO BRUTO DE LATÃO ½\", INCLUSIVE CONEXÕES, ROSCÁVEL, INSTALADO EM RAMAL DE ÁGUA FRIA – FORNECIMENTO E INSTALAÇÃO"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 42.24,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 52.45,
-    "totalComBdiReais": 52.45
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "42.24",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "52.45",
+    "totalComBdiReais": "52.45"
   },
   {
     "sourceRowNumber": 229,
     "hierarchicalCode": "07.01.44",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "102622",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CAIXA D´ÁGUA EM POLIETILENO, 500 LITROS (INCLUSOS TUBOS, CONEXÕES E TORNEIRA DE BÓIA) - FORNECIMENTO E INSTALAÇÃO. AF_06/2021",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAIXA D´ÁGUA EM POLIETILENO, 500 LITROS (INCLUSOS TUBOS, CONEXÕES E TORNEIRA DE BÓIA) - FORNECIMENTO E INSTALAÇÃO. AF_06/2021"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 579.1,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 719.12,
-    "totalComBdiReais": 719.12
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "579.1",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "719.12",
+    "totalComBdiReais": "719.12"
   },
   {
     "sourceRowNumber": 230,
     "hierarchicalCode": "07.01.45",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "72934",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "ELETRODUTO DE PVC FLEXIVEL CORRUGADO DN 20MM (3/4\") FORNECIMENTO E INSTALACAO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ELETRODUTO DE PVC FLEXIVEL CORRUGADO DN 20MM (3/4\") FORNECIMENTO E INSTALACAO"
+    },
     "unidade": "M",
-    "quantidade": 100,
-    "custoUnitarioSemBdiReais": 8.25,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 10.24,
-    "totalComBdiReais": 1024
+    "quantidade": "100",
+    "custoUnitarioSemBdiReais": "8.25",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "10.24",
+    "totalComBdiReais": "1024"
   },
   {
     "sourceRowNumber": 231,
     "hierarchicalCode": "07.01.46",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "91926",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CABO DE COBRE FLEXÍVEL ISOLADO, 2,5 MM², ANTI-CHAMA 450/750 V, PARA CIRCUITOS TERMINAIS - FORNECIMENTO E INSTALAÇÃO. AF_03/2023",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CABO DE COBRE FLEXÍVEL ISOLADO, 2,5 MM², ANTI-CHAMA 450/750 V, PARA CIRCUITOS TERMINAIS - FORNECIMENTO E INSTALAÇÃO. AF_03/2023"
+    },
     "unidade": "M",
-    "quantidade": 300,
-    "custoUnitarioSemBdiReais": 4.64,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 5.76,
-    "totalComBdiReais": 1728
+    "quantidade": "300",
+    "custoUnitarioSemBdiReais": "4.64",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "5.76",
+    "totalComBdiReais": "1728"
   },
   {
     "sourceRowNumber": 232,
     "hierarchicalCode": "07.01.47",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "92023",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "INTERRUPTOR SIMPLES (1 MÓDULO) COM 1 TOMADA DE EMBUTIR 2P+T 10 A, INCLUINDO SUPORTE E PLACA - FORNECIMENTO E INSTALAÇÃO. AF_03/2023",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INTERRUPTOR SIMPLES (1 MÓDULO) COM 1 TOMADA DE EMBUTIR 2P+T 10 A, INCLUINDO SUPORTE E PLACA - FORNECIMENTO E INSTALAÇÃO. AF_03/2023"
+    },
     "unidade": "UN",
-    "quantidade": 7,
-    "custoUnitarioSemBdiReais": 46.54,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 57.79,
-    "totalComBdiReais": 404.53
+    "quantidade": "7",
+    "custoUnitarioSemBdiReais": "46.54",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "57.79",
+    "totalComBdiReais": "404.53"
   },
   {
     "sourceRowNumber": 233,
     "hierarchicalCode": "07.01.48",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "83540",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "TOMADA DE EMBUTIR 2P+T 10A/250V C/ PLACA - FORNECIMENTO E INSTALACAO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TOMADA DE EMBUTIR 2P+T 10A/250V C/ PLACA - FORNECIMENTO E INSTALACAO"
+    },
     "unidade": "UNID",
-    "quantidade": 11,
-    "custoUnitarioSemBdiReais": 17.91,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 22.24,
-    "totalComBdiReais": 244.64
+    "quantidade": "11",
+    "custoUnitarioSemBdiReais": "17.91",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "22.24",
+    "totalComBdiReais": "244.64"
   },
   {
     "sourceRowNumber": 234,
     "hierarchicalCode": "07.01.49",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "83387",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CAIXA DE PASSAGEM PVC 4X2\" - FORNECIMENTO E INSTALACAO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAIXA DE PASSAGEM PVC 4X2\" - FORNECIMENTO E INSTALACAO"
+    },
     "unidade": "UNID",
-    "quantidade": 18,
-    "custoUnitarioSemBdiReais": 8.39,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 10.41,
-    "totalComBdiReais": 187.38
+    "quantidade": "18",
+    "custoUnitarioSemBdiReais": "8.39",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "10.41",
+    "totalComBdiReais": "187.38"
   },
   {
     "sourceRowNumber": 235,
     "hierarchicalCode": "07.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "07.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Guarita",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Guarita"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -3647,1036 +4586,1296 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "07.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4915744",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "CAPINA MANUAL",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAPINA MANUAL"
+    },
     "unidade": "M2",
-    "quantidade": 12,
-    "custoUnitarioSemBdiReais": 0.68,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 0.84,
-    "totalComBdiReais": 10.08
+    "quantidade": "12",
+    "custoUnitarioSemBdiReais": "0.68",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "0.84",
+    "totalComBdiReais": "10.08"
   },
   {
     "sourceRowNumber": 237,
     "hierarchicalCode": "07.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "99059",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "LOCAÇÃO CONVENCIONAL DE OBRA, UTILIZANDO GABARITO DE TÁBUAS CORRIDAS PONTALETADAS A CADA 2,00M -  2 UTILIZAÇÕES. AF_03/2024",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LOCAÇÃO CONVENCIONAL DE OBRA, UTILIZANDO GABARITO DE TÁBUAS CORRIDAS PONTALETADAS A CADA 2,00M -  2 UTILIZAÇÕES. AF_03/2024"
+    },
     "unidade": "M",
-    "quantidade": 20,
-    "custoUnitarioSemBdiReais": 59.99,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 74.49,
-    "totalComBdiReais": 1489.8
+    "quantidade": "20",
+    "custoUnitarioSemBdiReais": "59.99",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "74.49",
+    "totalComBdiReais": "1489.8"
   },
   {
     "sourceRowNumber": 238,
     "hierarchicalCode": "07.02.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "6122",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "EMBASAMENTO C/PEDRA ARGAMASSADA UTILIZANDO ARG.CIM/AREIA 1:4",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "EMBASAMENTO C/PEDRA ARGAMASSADA UTILIZANDO ARG.CIM/AREIA 1:4"
+    },
     "unidade": "M3",
-    "quantidade": 2.672,
-    "custoUnitarioSemBdiReais": 515.36,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 639.97,
-    "totalComBdiReais": 1709.99
+    "quantidade": "2.672",
+    "custoUnitarioSemBdiReais": "515.36",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "639.97",
+    "totalComBdiReais": "1709.99"
   },
   {
     "sourceRowNumber": 239,
     "hierarchicalCode": "07.02.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "6110",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "ALVENARIA DE EMBASAMENTO EM TIJOLOS CERAMICOS MACICOS 5X10X20CM, ASSENTADO COM ARGAMASSA TRACO 1:2:8 (CIMENTO, CAL E AREIA)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ALVENARIA DE EMBASAMENTO EM TIJOLOS CERAMICOS MACICOS 5X10X20CM, ASSENTADO COM ARGAMASSA TRACO 1:2:8 (CIMENTO, CAL E AREIA)"
+    },
     "unidade": "M3",
-    "quantidade": 0.334,
-    "custoUnitarioSemBdiReais": 919.4,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1141.71,
-    "totalComBdiReais": 381.33
+    "quantidade": "0.334",
+    "custoUnitarioSemBdiReais": "919.4",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1141.71",
+    "totalComBdiReais": "381.33"
   },
   {
     "sourceRowNumber": 240,
     "hierarchicalCode": "07.02.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "78018",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "ESCAVACAO MANUAL A CEU ABERTO EM MATERIAL DE 1A CATEGORIA, EM PROFUNDIDADE ATE 0,50M",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESCAVACAO MANUAL A CEU ABERTO EM MATERIAL DE 1A CATEGORIA, EM PROFUNDIDADE ATE 0,50M"
+    },
     "unidade": "M3",
-    "quantidade": 6.128,
-    "custoUnitarioSemBdiReais": 48.64,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 60.4,
-    "totalComBdiReais": 370.13
+    "quantidade": "6.128",
+    "custoUnitarioSemBdiReais": "48.64",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "60.4",
+    "totalComBdiReais": "370.13"
   },
   {
     "sourceRowNumber": 241,
     "hierarchicalCode": "07.02.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73935/002",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "ALVENARIA EM TIJOLO CERAMICO FURADO 9X19X19CM, 1 VEZ (ESPESSURA 19 CM), ASSENTADO EM ARGAMASSA TRACO 1:4 (CIMENTO E AREIA MEDIA NAO PENEIRADA), PREPARO MANUAL, JUNTA1 CM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ALVENARIA EM TIJOLO CERAMICO FURADO 9X19X19CM, 1 VEZ (ESPESSURA 19 CM), ASSENTADO EM ARGAMASSA TRACO 1:4 (CIMENTO E AREIA MEDIA NAO PENEIRADA), PREPARO MANUAL, JUNTA1 CM"
+    },
     "unidade": "M2",
-    "quantidade": 53.76,
-    "custoUnitarioSemBdiReais": 101.46,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 125.99,
-    "totalComBdiReais": 6773.22
+    "quantidade": "53.76",
+    "custoUnitarioSemBdiReais": "101.46",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "125.99",
+    "totalComBdiReais": "6773.22"
   },
   {
     "sourceRowNumber": 242,
     "hierarchicalCode": "07.02.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73346",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CONCRETO ARMADO DOSADO 15 MPA INCL MAT P/ 1 M3 PREPARO CONF COMP 5845 COLOC CONF COMP 7090 14 M2 DE AREIA MOLDADA FORMAS E ESCORAMENTO CONF COMPS 5306 E 5708 60 KG DE AÇO CA-50 INC MÃO DE OBRA P/CORTE DOBRAGEM MONTAGEM E COLOC NAS FORMAS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CONCRETO ARMADO DOSADO 15 MPA INCL MAT P/ 1 M3 PREPARO CONF COMP 5845 COLOC CONF COMP 7090 14 M2 DE AREIA MOLDADA FORMAS E ESCORAMENTO CONF COMPS 5306 E 5708 60 KG DE AÇO CA-50 INC MÃO DE OBRA P/CORTE DOBRAGEM MONTAGEM E COLOC NAS FORMAS"
+    },
     "unidade": "M3",
-    "quantidade": 1.82055,
-    "custoUnitarioSemBdiReais": 2242.19,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2784.35,
-    "totalComBdiReais": 5069.04
+    "quantidade": "1.82055",
+    "custoUnitarioSemBdiReais": "2242.19",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2784.35",
+    "totalComBdiReais": "5069.04"
   },
   {
     "sourceRowNumber": 243,
     "hierarchicalCode": "07.02.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "87873",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CHAPISCO APLICADO EM ALVENARIAS E ESTRUTURAS DE CONCRETO INTERNAS, COM ROLO PARA TEXTURA ACRÍLICA.  ARGAMASSA TRAÇO 1:4 E EMULSÃO POLIMÉRICA (ADESIVO) COM PREPARO MANUAL. AF_06/2014",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CHAPISCO APLICADO EM ALVENARIAS E ESTRUTURAS DE CONCRETO INTERNAS, COM ROLO PARA TEXTURA ACRÍLICA.  ARGAMASSA TRAÇO 1:4 E EMULSÃO POLIMÉRICA (ADESIVO) COM PREPARO MANUAL. AF_06/2014"
+    },
     "unidade": "M2",
-    "quantidade": 107.52,
-    "custoUnitarioSemBdiReais": 6.98,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 8.66,
-    "totalComBdiReais": 931.12
+    "quantidade": "107.52",
+    "custoUnitarioSemBdiReais": "6.98",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "8.66",
+    "totalComBdiReais": "931.12"
   },
   {
     "sourceRowNumber": 244,
     "hierarchicalCode": "07.02.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "87527",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "EMBOÇO, EM ARGAMASSA TRAÇO 1:2:8, PREPARO MECÂNICO, APLICADO MANUALMENTE EM PAREDES INTERNAS DE AMBIENTES COM ÁREA MENOR QUE 5M², E =17,5MM, COM TALISCAS. AF_03/2024",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "EMBOÇO, EM ARGAMASSA TRAÇO 1:2:8, PREPARO MECÂNICO, APLICADO MANUALMENTE EM PAREDES INTERNAS DE AMBIENTES COM ÁREA MENOR QUE 5M², E =17,5MM, COM TALISCAS. AF_03/2024"
+    },
     "unidade": "M2",
-    "quantidade": 14.04,
-    "custoUnitarioSemBdiReais": 36.72,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 45.59,
-    "totalComBdiReais": 640.08
+    "quantidade": "14.04",
+    "custoUnitarioSemBdiReais": "36.72",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "45.59",
+    "totalComBdiReais": "640.08"
   },
   {
     "sourceRowNumber": 245,
     "hierarchicalCode": "07.02.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "84076",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "REBOCO TRACO 1:3 (CIMENTO E AREIA MEDIA NAO PENEIRADA), PREPARO MANUAL DA ARGAMASSA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "REBOCO TRACO 1:3 (CIMENTO E AREIA MEDIA NAO PENEIRADA), PREPARO MANUAL DA ARGAMASSA"
+    },
     "unidade": "M2",
-    "quantidade": 93.47999999999999,
-    "custoUnitarioSemBdiReais": 35.03,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 43.5,
-    "totalComBdiReais": 4066.38
+    "quantidade": "93.47999999999999",
+    "custoUnitarioSemBdiReais": "35.03",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "43.5",
+    "totalComBdiReais": "4066.38"
   },
   {
     "sourceRowNumber": 246,
     "hierarchicalCode": "07.02.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "83534",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "LASTRO DE CONCRETO, PREPARO MECÂNICO, INCLUSOS ADITIVO IMPERMEABILIZANTE, LANÇAMENTO E ADENSAMENTO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LASTRO DE CONCRETO, PREPARO MECÂNICO, INCLUSOS ADITIVO IMPERMEABILIZANTE, LANÇAMENTO E ADENSAMENTO"
+    },
     "unidade": "M3",
-    "quantidade": 0.47925000000000006,
-    "custoUnitarioSemBdiReais": 770.57,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 956.89,
-    "totalComBdiReais": 458.58
+    "quantidade": "0.47925000000000006",
+    "custoUnitarioSemBdiReais": "770.57",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "956.89",
+    "totalComBdiReais": "458.58"
   },
   {
     "sourceRowNumber": 247,
     "hierarchicalCode": "07.02.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "87247",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "REVESTIMENTO CERÂMICO PARA PISO COM PLACAS TIPO ESMALTADA DE DIMENSÕES 35X35 CM APLICADA EM AMBIENTES DE ÁREA ENTRE 5 M2 E 10 M2. AF_02/2023_PE",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "REVESTIMENTO CERÂMICO PARA PISO COM PLACAS TIPO ESMALTADA DE DIMENSÕES 35X35 CM APLICADA EM AMBIENTES DE ÁREA ENTRE 5 M2 E 10 M2. AF_02/2023_PE"
+    },
     "unidade": "M2",
-    "quantidade": 9.585,
-    "custoUnitarioSemBdiReais": 64.89,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 80.58,
-    "totalComBdiReais": 772.35
+    "quantidade": "9.585",
+    "custoUnitarioSemBdiReais": "64.89",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "80.58",
+    "totalComBdiReais": "772.35"
   },
   {
     "sourceRowNumber": 248,
     "hierarchicalCode": "07.02.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "9875",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "COBOGO CERAMICO (ELEMENTO VAZADO), 9X20X20CM, ASSENTADO COM ARGAMASSA TRAÇO 1:4 DE CIMENTO E AREIA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "COBOGO CERAMICO (ELEMENTO VAZADO), 9X20X20CM, ASSENTADO COM ARGAMASSA TRAÇO 1:4 DE CIMENTO E AREIA"
+    },
     "unidade": "M2",
-    "quantidade": 0.36,
-    "custoUnitarioSemBdiReais": 109.66,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 136.17,
-    "totalComBdiReais": 49.02
+    "quantidade": "0.36",
+    "custoUnitarioSemBdiReais": "109.66",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "136.17",
+    "totalComBdiReais": "49.02"
   },
   {
     "sourceRowNumber": 249,
     "hierarchicalCode": "07.02.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "83901",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "VERGAS 10X10 CM, PREMOLDADAS C/ CONCRETO FCK=15 MPA (PREPARO MECANICO), ACO CA-50 COM FORMAS TABUA DE PINHO 3A",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "VERGAS 10X10 CM, PREMOLDADAS C/ CONCRETO FCK=15 MPA (PREPARO MECANICO), ACO CA-50 COM FORMAS TABUA DE PINHO 3A"
+    },
     "unidade": "M",
-    "quantidade": 5.6000000000000005,
-    "custoUnitarioSemBdiReais": 18.92,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 23.49,
-    "totalComBdiReais": 131.54
+    "quantidade": "5.6000000000000005",
+    "custoUnitarioSemBdiReais": "18.92",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "23.49",
+    "totalComBdiReais": "131.54"
   },
   {
     "sourceRowNumber": 250,
     "hierarchicalCode": "07.02.15",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "88489",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "PINTURA LÁTEX ACRÍLICA PREMIUM, APLICAÇÃO MANUAL EM PAREDES, DUAS DEMÃOS. AF_04/2023",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PINTURA LÁTEX ACRÍLICA PREMIUM, APLICAÇÃO MANUAL EM PAREDES, DUAS DEMÃOS. AF_04/2023"
+    },
     "unidade": "M2",
-    "quantidade": 36.08,
-    "custoUnitarioSemBdiReais": 12.2,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 15.14,
-    "totalComBdiReais": 546.25
+    "quantidade": "36.08",
+    "custoUnitarioSemBdiReais": "12.2",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "15.14",
+    "totalComBdiReais": "546.25"
   },
   {
     "sourceRowNumber": 251,
     "hierarchicalCode": "07.02.16",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "88488",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "PINTURA LÁTEX ACRÍLICA PREMIUM, APLICAÇÃO MANUAL EM TETO, DUAS DEMÃOS. AF_04/2023",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PINTURA LÁTEX ACRÍLICA PREMIUM, APLICAÇÃO MANUAL EM TETO, DUAS DEMÃOS. AF_04/2023"
+    },
     "unidade": "M2",
-    "quantidade": 47.599999999999994,
-    "custoUnitarioSemBdiReais": 14.33,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 17.79,
-    "totalComBdiReais": 846.8
+    "quantidade": "47.599999999999994",
+    "custoUnitarioSemBdiReais": "14.33",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "17.79",
+    "totalComBdiReais": "846.8"
   },
   {
     "sourceRowNumber": 252,
     "hierarchicalCode": "07.02.17",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "87265",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "REVESTIMENTO CERÂMICO PARA PAREDES INTERNAS COM PLACAS TIPO ESMALTADA DE DIMENSÕES 20X20 CM APLICADAS NA ALTURA INTEIRA DAS PAREDES.  AF_02/2023_PE",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "REVESTIMENTO CERÂMICO PARA PAREDES INTERNAS COM PLACAS TIPO ESMALTADA DE DIMENSÕES 20X20 CM APLICADAS NA ALTURA INTEIRA DAS PAREDES.  AF_02/2023_PE"
+    },
     "unidade": "M2",
-    "quantidade": 14.04,
-    "custoUnitarioSemBdiReais": 62.89,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 78.09,
-    "totalComBdiReais": 1096.38
+    "quantidade": "14.04",
+    "custoUnitarioSemBdiReais": "62.89",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "78.09",
+    "totalComBdiReais": "1096.38"
   },
   {
     "sourceRowNumber": 253,
     "hierarchicalCode": "07.02.18",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "91337",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "KIT DE PORTA DE MADEIRA TIPO MEXICANA, MACIÇA (PESADA OU SUPERPESADA), PADRÃO POPULAR, 80X210CM, ESPESSURA DE 3CM, ITENS INCLUSOS: DOBRADIÇAS, MONTAGEM E INSTALAÇÃO DO BATENTE, SEM FECHADURA - FORNECIMENTO E INSTALAÇÃO. AF_12/2019",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "KIT DE PORTA DE MADEIRA TIPO MEXICANA, MACIÇA (PESADA OU SUPERPESADA), PADRÃO POPULAR, 80X210CM, ESPESSURA DE 3CM, ITENS INCLUSOS: DOBRADIÇAS, MONTAGEM E INSTALAÇÃO DO BATENTE, SEM FECHADURA - FORNECIMENTO E INSTALAÇÃO. AF_12/2019"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 2407.29,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2989.37,
-    "totalComBdiReais": 2989.37
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "2407.29",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2989.37",
+    "totalComBdiReais": "2989.37"
   },
   {
     "sourceRowNumber": 254,
     "hierarchicalCode": "07.02.19",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "90842",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "KIT DE PORTA DE MADEIRA PARA PINTURA, SEMI-OCA (LEVE OU MÉDIA), PADRÃO MÉDIO, 70X210CM, ESPESSURA DE 3,5CM, ITENS INCLUSOS: DOBRADIÇAS, MONTAGEM E INSTALAÇÃO DO BATENTE, FECHADURA COM EXECUÇÃO DO FURO - FORNECIMENTO E INSTALAÇÃO. AF_12/2019",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "KIT DE PORTA DE MADEIRA PARA PINTURA, SEMI-OCA (LEVE OU MÉDIA), PADRÃO MÉDIO, 70X210CM, ESPESSURA DE 3,5CM, ITENS INCLUSOS: DOBRADIÇAS, MONTAGEM E INSTALAÇÃO DO BATENTE, FECHADURA COM EXECUÇÃO DO FURO - FORNECIMENTO E INSTALAÇÃO. AF_12/2019"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 972.47,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1207.61,
-    "totalComBdiReais": 1207.61
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "972.47",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1207.61",
+    "totalComBdiReais": "1207.61"
   },
   {
     "sourceRowNumber": 255,
     "hierarchicalCode": "07.02.20",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74202/1",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "LAJE PRE-MOLDADA P/FORRO, SOBRECARGA 100KG/M2, VAOS ATE 3,50M/E=8CM, C/LAJOTAS E CAP.C/CONC FCK=20MPA, 3CM, INTER-EIXO 38CM, C/ESCORAMENTO (REAPR.3X) E FERRAGEM NEGATIVA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LAJE PRE-MOLDADA P/FORRO, SOBRECARGA 100KG/M2, VAOS ATE 3,50M/E=8CM, C/LAJOTAS E CAP.C/CONC FCK=20MPA, 3CM, INTER-EIXO 38CM, C/ESCORAMENTO (REAPR.3X) E FERRAGEM NEGATIVA"
+    },
     "unidade": "M2",
-    "quantidade": 77.2,
-    "custoUnitarioSemBdiReais": 98.49,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 122.3,
-    "totalComBdiReais": 9441.56
+    "quantidade": "77.2",
+    "custoUnitarioSemBdiReais": "98.49",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "122.3",
+    "totalComBdiReais": "9441.56"
   },
   {
     "sourceRowNumber": 256,
     "hierarchicalCode": "07.02.21",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73892/002",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "PISO (CALCADA) EM CONCRETO 12MPA TRACO 1:3:5 (CIMENTO/AREIA/BRITA) PREPARO MECANICO, ESPESSURA 7CM, COM JUNTA DE DILATACAO EM MADEIRA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PISO (CALCADA) EM CONCRETO 12MPA TRACO 1:3:5 (CIMENTO/AREIA/BRITA) PREPARO MECANICO, ESPESSURA 7CM, COM JUNTA DE DILATACAO EM MADEIRA"
+    },
     "unidade": "M2",
-    "quantidade": 8,
-    "custoUnitarioSemBdiReais": 48.25,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 59.91,
-    "totalComBdiReais": 479.28
+    "quantidade": "8",
+    "custoUnitarioSemBdiReais": "48.25",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "59.91",
+    "totalComBdiReais": "479.28"
   },
   {
     "sourceRowNumber": 257,
     "hierarchicalCode": "07.02.22",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74197/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "FOSSA SEPTICA EM ALVENARIA DE TIJOLO CERAMICO MACICO DIMENSOES EXTERNAS 1,90X1,10X1,40M, 1.500 LITROS, REVESTIDA INTERNAMENTE COM BARRA LISA, COM TAMPA EM CONCRETO ARMADO COM ESPESSURA 8CM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FOSSA SEPTICA EM ALVENARIA DE TIJOLO CERAMICO MACICO DIMENSOES EXTERNAS 1,90X1,10X1,40M, 1.500 LITROS, REVESTIDA INTERNAMENTE COM BARRA LISA, COM TAMPA EM CONCRETO ARMADO COM ESPESSURA 8CM"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 2240.16,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2781.83,
-    "totalComBdiReais": 2781.83
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "2240.16",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2781.83",
+    "totalComBdiReais": "2781.83"
   },
   {
     "sourceRowNumber": 258,
     "hierarchicalCode": "07.02.23",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74198/001",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "SUMIDOURO EM ALVENARIA DE TIJOLO CERAMICO MACICO DIAMETRO 1,20M E ALTURA 5,00M, COM TAMPA EM CONCRETO ARMADO DIAMETRO 1,40M E ESPESSURA 10CM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SUMIDOURO EM ALVENARIA DE TIJOLO CERAMICO MACICO DIAMETRO 1,20M E ALTURA 5,00M, COM TAMPA EM CONCRETO ARMADO DIAMETRO 1,40M E ESPESSURA 10CM"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 1702.23,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2113.82,
-    "totalComBdiReais": 2113.82
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "1702.23",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2113.82",
+    "totalComBdiReais": "2113.82"
   },
   {
     "sourceRowNumber": 259,
     "hierarchicalCode": "07.02.24",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89711",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "TUBO PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 40 MM, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TUBO PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 40 MM, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022"
+    },
     "unidade": "M",
-    "quantidade": 6,
-    "custoUnitarioSemBdiReais": 19.58,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 24.31,
-    "totalComBdiReais": 145.86
+    "quantidade": "6",
+    "custoUnitarioSemBdiReais": "19.58",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "24.31",
+    "totalComBdiReais": "145.86"
   },
   {
     "sourceRowNumber": 260,
     "hierarchicalCode": "07.02.25",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89712",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "TUBO PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 50 MM, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TUBO PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 50 MM, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022"
+    },
     "unidade": "M",
-    "quantidade": 6,
-    "custoUnitarioSemBdiReais": 24.93,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 30.95,
-    "totalComBdiReais": 185.7
+    "quantidade": "6",
+    "custoUnitarioSemBdiReais": "24.93",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "30.95",
+    "totalComBdiReais": "185.7"
   },
   {
     "sourceRowNumber": 261,
     "hierarchicalCode": "07.02.26",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89714",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "TUBO PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 100 MM, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TUBO PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 100 MM, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022"
+    },
     "unidade": "M",
-    "quantidade": 6,
-    "custoUnitarioSemBdiReais": 34.73,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 43.12,
-    "totalComBdiReais": 258.72
+    "quantidade": "6",
+    "custoUnitarioSemBdiReais": "34.73",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "43.12",
+    "totalComBdiReais": "258.72"
   },
   {
     "sourceRowNumber": 262,
     "hierarchicalCode": "07.02.27",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89726",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "JOELHO 45 GRAUS, PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 40 MM, JUNTA SOLDÁVEL, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "JOELHO 45 GRAUS, PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 40 MM, JUNTA SOLDÁVEL, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022"
+    },
     "unidade": "UN",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 9.22,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 11.44,
-    "totalComBdiReais": 22.88
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "9.22",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "11.44",
+    "totalComBdiReais": "22.88"
   },
   {
     "sourceRowNumber": 263,
     "hierarchicalCode": "07.02.28",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89731",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "JOELHO 90 GRAUS, PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 50 MM, JUNTA ELÁSTICA, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "JOELHO 90 GRAUS, PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 50 MM, JUNTA ELÁSTICA, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 14.28,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 17.73,
-    "totalComBdiReais": 17.73
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "14.28",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "17.73",
+    "totalComBdiReais": "17.73"
   },
   {
     "sourceRowNumber": 264,
     "hierarchicalCode": "07.02.29",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89744",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "JOELHO 90 GRAUS, PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 100 MM, JUNTA ELÁSTICA, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "JOELHO 90 GRAUS, PVC, SERIE NORMAL, ESGOTO PREDIAL, DN 100 MM, JUNTA ELÁSTICA, FORNECIDO E INSTALADO EM RAMAL DE DESCARGA OU RAMAL DE ESGOTO SANITÁRIO. AF_08/2022"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 26.26,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 32.6,
-    "totalComBdiReais": 32.6
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "26.26",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "32.6",
+    "totalComBdiReais": "32.6"
   },
   {
     "sourceRowNumber": 265,
     "hierarchicalCode": "07.02.30",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "97902",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CAIXA ENTERRADA HIDRÁULICA RETANGULAR EM ALVENARIA COM TIJOLOS CERÂMICOS MACIÇOS, DIMENSÕES INTERNAS: 0,6X0,6X0,6 M PARA REDE DE ESGOTO. AF_12/2020",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAIXA ENTERRADA HIDRÁULICA RETANGULAR EM ALVENARIA COM TIJOLOS CERÂMICOS MACIÇOS, DIMENSÕES INTERNAS: 0,6X0,6X0,6 M PARA REDE DE ESGOTO. AF_12/2020"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 529.08,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 657.01,
-    "totalComBdiReais": 657.01
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "529.08",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "657.01",
+    "totalComBdiReais": "657.01"
   },
   {
     "sourceRowNumber": 266,
     "hierarchicalCode": "07.02.31",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "86888",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "VASO SANITÁRIO SIFONADO COM CAIXA ACOPLADA LOUÇA BRANCA - FORNECIMENTO E INSTALAÇÃO. AF_01/2020",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "VASO SANITÁRIO SIFONADO COM CAIXA ACOPLADA LOUÇA BRANCA - FORNECIMENTO E INSTALAÇÃO. AF_01/2020"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 496.7,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 616.8,
-    "totalComBdiReais": 616.8
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "496.7",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "616.8",
+    "totalComBdiReais": "616.8"
   },
   {
     "sourceRowNumber": 267,
     "hierarchicalCode": "07.02.32",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "86902",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "LAVATÓRIO LOUÇA BRANCA COM COLUNA, *44 X 35,5* CM, PADRÃO POPULAR - FORNECIMENTO E INSTALAÇÃO. AF_01/2020",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LAVATÓRIO LOUÇA BRANCA COM COLUNA, *44 X 35,5* CM, PADRÃO POPULAR - FORNECIMENTO E INSTALAÇÃO. AF_01/2020"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 319.89,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 397.23,
-    "totalComBdiReais": 397.23
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "319.89",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "397.23",
+    "totalComBdiReais": "397.23"
   },
   {
     "sourceRowNumber": 268,
     "hierarchicalCode": "07.02.33",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "100860",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CHUVEIRO ELÉTRICO COMUM CORPO PLÁSTICO, TIPO DUCHA - FORNECIMENTO E INSTALAÇÃO. AF_01/2020",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CHUVEIRO ELÉTRICO COMUM CORPO PLÁSTICO, TIPO DUCHA - FORNECIMENTO E INSTALAÇÃO. AF_01/2020"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 103.69,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 128.76,
-    "totalComBdiReais": 128.76
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "103.69",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "128.76",
+    "totalComBdiReais": "128.76"
   },
   {
     "sourceRowNumber": 269,
     "hierarchicalCode": "07.02.34",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89482",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CAIXA SIFONADA, PVC, DN 100 X 100 X 50 MM, FORNECIDA E INSTALADA EM RAMAIS DE ENCAMINHAMENTO DE ÁGUA PLUVIAL. AF_06/2022",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAIXA SIFONADA, PVC, DN 100 X 100 X 50 MM, FORNECIDA E INSTALADA EM RAMAIS DE ENCAMINHAMENTO DE ÁGUA PLUVIAL. AF_06/2022"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 32.89,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 40.84,
-    "totalComBdiReais": 40.84
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "32.89",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "40.84",
+    "totalComBdiReais": "40.84"
   },
   {
     "sourceRowNumber": 270,
     "hierarchicalCode": "07.02.35",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74131/1",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "QUADRO DE DISTRIBUICAO DE ENERGIA DE EMBUTIR, EM CHAPA METALICA, PARA 3 DISJUNTORES TERMOMAGNETICOS MONOPOLARES SEM BARRAMENTO FORNECIMENTO E INSTALACAO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "QUADRO DE DISTRIBUICAO DE ENERGIA DE EMBUTIR, EM CHAPA METALICA, PARA 3 DISJUNTORES TERMOMAGNETICOS MONOPOLARES SEM BARRAMENTO FORNECIMENTO E INSTALACAO"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 402.36,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 499.65,
-    "totalComBdiReais": 499.65
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "402.36",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "499.65",
+    "totalComBdiReais": "499.65"
   },
   {
     "sourceRowNumber": 271,
     "hierarchicalCode": "07.02.36",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "97584",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "LUMINÁRIA TIPO CALHA, DE SOBREPOR, COM 1 LÂMPADA TUBULAR FLUORESCENTE DE 36 W, COM REATOR DE PARTIDA RÁPIDA - FORNECIMENTO E INSTALAÇÃO. AF_02/2020",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LUMINÁRIA TIPO CALHA, DE SOBREPOR, COM 1 LÂMPADA TUBULAR FLUORESCENTE DE 36 W, COM REATOR DE PARTIDA RÁPIDA - FORNECIMENTO E INSTALAÇÃO. AF_02/2020"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 115.47,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 143.39,
-    "totalComBdiReais": 143.39
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "115.47",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "143.39",
+    "totalComBdiReais": "143.39"
   },
   {
     "sourceRowNumber": 272,
     "hierarchicalCode": "07.02.37",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74130/1",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "DISJUNTOR TERMOMAGNETICO MONOPOLAR PADRAO NEMA (AMERICANO) 10 A 30A 240V, FORNECIMENTO E INSTALACAO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "DISJUNTOR TERMOMAGNETICO MONOPOLAR PADRAO NEMA (AMERICANO) 10 A 30A 240V, FORNECIMENTO E INSTALACAO"
+    },
     "unidade": "UNID",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 13.19,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 16.37,
-    "totalComBdiReais": 49.11
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "13.19",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "16.37",
+    "totalComBdiReais": "49.11"
   },
   {
     "sourceRowNumber": 273,
     "hierarchicalCode": "07.02.38",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89957",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "PONTO DE CONSUMO TERMINAL DE ÁGUA FRIA (SUBRAMAL) COM TUBULAÇÃO DE PVC, DN 25 MM, INSTALADO EM RAMAL DE ÁGUA, INCLUSOS RASGO E CHUMBAMENTO EM ALVENARIA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PONTO DE CONSUMO TERMINAL DE ÁGUA FRIA (SUBRAMAL) COM TUBULAÇÃO DE PVC, DN 25 MM, INSTALADO EM RAMAL DE ÁGUA, INCLUSOS RASGO E CHUMBAMENTO EM ALVENARIA"
+    },
     "unidade": "UNID",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 125.51,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 155.85,
-    "totalComBdiReais": 467.55
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "125.51",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "155.85",
+    "totalComBdiReais": "467.55"
   },
   {
     "sourceRowNumber": 274,
     "hierarchicalCode": "07.02.39",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89971",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "KIT DE REGISTRO DE GAVETA BRUTO DE LATÃO ½\", INCLUSIVE CONEXÕES, ROSCÁVEL, INSTALADO EM RAMAL DE ÁGUA FRIA – FORNECIMENTO E INSTALAÇÃO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "KIT DE REGISTRO DE GAVETA BRUTO DE LATÃO ½\", INCLUSIVE CONEXÕES, ROSCÁVEL, INSTALADO EM RAMAL DE ÁGUA FRIA – FORNECIMENTO E INSTALAÇÃO"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 48.19,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 59.84,
-    "totalComBdiReais": 59.84
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "48.19",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "59.84",
+    "totalComBdiReais": "59.84"
   },
   {
     "sourceRowNumber": 275,
     "hierarchicalCode": "07.02.40",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "89969",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "KIT DE REGISTRO DE PRESSÃO BRUTO DE LATÃO ½\", INCLUSIVE CONEXÕES, ROSCÁVEL, INSTALADO EM RAMAL DE ÁGUA FRIA – FORNECIMENTO E INSTALAÇÃO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "KIT DE REGISTRO DE PRESSÃO BRUTO DE LATÃO ½\", INCLUSIVE CONEXÕES, ROSCÁVEL, INSTALADO EM RAMAL DE ÁGUA FRIA – FORNECIMENTO E INSTALAÇÃO"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 42.24,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 52.45,
-    "totalComBdiReais": 52.45
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "42.24",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "52.45",
+    "totalComBdiReais": "52.45"
   },
   {
     "sourceRowNumber": 276,
     "hierarchicalCode": "07.02.41",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "102622",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CAIXA D´ÁGUA EM POLIETILENO, 500 LITROS (INCLUSOS TUBOS, CONEXÕES E TORNEIRA DE BÓIA) - FORNECIMENTO E INSTALAÇÃO. AF_06/2021",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAIXA D´ÁGUA EM POLIETILENO, 500 LITROS (INCLUSOS TUBOS, CONEXÕES E TORNEIRA DE BÓIA) - FORNECIMENTO E INSTALAÇÃO. AF_06/2021"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 579.1,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 719.12,
-    "totalComBdiReais": 719.12
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "579.1",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "719.12",
+    "totalComBdiReais": "719.12"
   },
   {
     "sourceRowNumber": 277,
     "hierarchicalCode": "07.02.42",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "72934",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "ELETRODUTO DE PVC FLEXIVEL CORRUGADO DN 20MM (3/4\") FORNECIMENTO E INSTALACAO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ELETRODUTO DE PVC FLEXIVEL CORRUGADO DN 20MM (3/4\") FORNECIMENTO E INSTALACAO"
+    },
     "unidade": "M",
-    "quantidade": 50,
-    "custoUnitarioSemBdiReais": 8.25,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 10.24,
-    "totalComBdiReais": 512
+    "quantidade": "50",
+    "custoUnitarioSemBdiReais": "8.25",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "10.24",
+    "totalComBdiReais": "512"
   },
   {
     "sourceRowNumber": 278,
     "hierarchicalCode": "07.02.43",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "91928",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CABO DE COBRE FLEXÍVEL ISOLADO, 4 MM², ANTI-CHAMA 450/750 V, PARA CIRCUITOS TERMINAIS - FORNECIMENTO E INSTALAÇÃO. AF_03/2023",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CABO DE COBRE FLEXÍVEL ISOLADO, 4 MM², ANTI-CHAMA 450/750 V, PARA CIRCUITOS TERMINAIS - FORNECIMENTO E INSTALAÇÃO. AF_03/2023"
+    },
     "unidade": "M",
-    "quantidade": 150,
-    "custoUnitarioSemBdiReais": 7.25,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 9,
-    "totalComBdiReais": 1350
+    "quantidade": "150",
+    "custoUnitarioSemBdiReais": "7.25",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "9",
+    "totalComBdiReais": "1350"
   },
   {
     "sourceRowNumber": 279,
     "hierarchicalCode": "07.02.44",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "92023",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "INTERRUPTOR SIMPLES (1 MÓDULO) COM 1 TOMADA DE EMBUTIR 2P+T 10 A, INCLUINDO SUPORTE E PLACA - FORNECIMENTO E INSTALAÇÃO. AF_03/2023",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INTERRUPTOR SIMPLES (1 MÓDULO) COM 1 TOMADA DE EMBUTIR 2P+T 10 A, INCLUINDO SUPORTE E PLACA - FORNECIMENTO E INSTALAÇÃO. AF_03/2023"
+    },
     "unidade": "UN",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 46.54,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 57.79,
-    "totalComBdiReais": 115.58
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "46.54",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "57.79",
+    "totalComBdiReais": "115.58"
   },
   {
     "sourceRowNumber": 280,
     "hierarchicalCode": "07.02.45",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "83540",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "TOMADA DE EMBUTIR 2P+T 10A/250V C/ PLACA - FORNECIMENTO E INSTALACAO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TOMADA DE EMBUTIR 2P+T 10A/250V C/ PLACA - FORNECIMENTO E INSTALACAO"
+    },
     "unidade": "UNID",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 17.91,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 22.24,
-    "totalComBdiReais": 66.72
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "17.91",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "22.24",
+    "totalComBdiReais": "66.72"
   },
   {
     "sourceRowNumber": 281,
     "hierarchicalCode": "07.02.46",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "83387",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CAIXA DE PASSAGEM PVC 4X2\" - FORNECIMENTO E INSTALACAO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAIXA DE PASSAGEM PVC 4X2\" - FORNECIMENTO E INSTALACAO"
+    },
     "unidade": "UNID",
-    "quantidade": 5,
-    "custoUnitarioSemBdiReais": 8.39,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 10.41,
-    "totalComBdiReais": 52.05
+    "quantidade": "5",
+    "custoUnitarioSemBdiReais": "8.39",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "10.41",
+    "totalComBdiReais": "52.05"
   },
   {
     "sourceRowNumber": 282,
     "hierarchicalCode": "07.02.47",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "74067/002",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "JANELA DE CORRER EM ALUMINIO, FOLHAS PARA VIDRO, COM BANDEIRA, INCLUSO GUARNICAO E VIDRO LISO INCOLOR",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "JANELA DE CORRER EM ALUMINIO, FOLHAS PARA VIDRO, COM BANDEIRA, INCLUSO GUARNICAO E VIDRO LISO INCOLOR"
+    },
     "unidade": "M2",
-    "quantidade": 2.64,
-    "custoUnitarioSemBdiReais": 731.25,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 908.06,
-    "totalComBdiReais": 2397.27
+    "quantidade": "2.64",
+    "custoUnitarioSemBdiReais": "731.25",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "908.06",
+    "totalComBdiReais": "2397.27"
   },
   {
     "sourceRowNumber": 283,
     "hierarchicalCode": "07.02.48",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "84089",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "PEITORIL EM MARMORE BRANCO, LARGURA DE 25CM, ASSENTADO COM ARGAMASSA TRACO 1:3 (CIMENTO E AREIA MEDIA), PREPARO MANUAL DA ARGAMASSA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PEITORIL EM MARMORE BRANCO, LARGURA DE 25CM, ASSENTADO COM ARGAMASSA TRACO 1:3 (CIMENTO E AREIA MEDIA), PREPARO MANUAL DA ARGAMASSA"
+    },
     "unidade": "M",
-    "quantidade": 0.72,
-    "custoUnitarioSemBdiReais": 171.42,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 212.86,
-    "totalComBdiReais": 153.25
+    "quantidade": "0.72",
+    "custoUnitarioSemBdiReais": "171.42",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "212.86",
+    "totalComBdiReais": "153.25"
   },
   {
     "sourceRowNumber": 284,
     "hierarchicalCode": "07.02.49",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "68058",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "RUFO EM CONCRETO ARMADO, LARGURA 40CM E ESPESSURA 7CM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "RUFO EM CONCRETO ARMADO, LARGURA 40CM E ESPESSURA 7CM"
+    },
     "unidade": "M",
-    "quantidade": 14,
-    "custoUnitarioSemBdiReais": 113.24,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 140.62,
-    "totalComBdiReais": 1968.68
+    "quantidade": "14",
+    "custoUnitarioSemBdiReais": "113.24",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "140.62",
+    "totalComBdiReais": "1968.68"
   },
   {
     "sourceRowNumber": 286,
     "hierarchicalCode": "08.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
+    "parentResolutionMethod": "TopLevelNoParent",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "INSTALAÇÕES ELÉTRICAS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÕES ELÉTRICAS"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
-    "totalComBdiReais": 337938.47
+    "totalComBdiReais": "337938.47"
   },
   {
     "sourceRowNumber": 287,
     "hierarchicalCode": "08.00.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "C4970",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "POSTE DE CONCRETO DUPLO T, RESISTÊNCIA NOMINAL 300KG, H= 9,00M, PESO APROXIMADO 845KG",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "POSTE DE CONCRETO DUPLO T, RESISTÊNCIA NOMINAL 300KG, H= 9,00M, PESO APROXIMADO 845KG"
+    },
     "unidade": "UNID",
-    "quantidade": 5,
-    "custoUnitarioSemBdiReais": 1923.45,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2388.54,
-    "totalComBdiReais": 11942.7
+    "quantidade": "5",
+    "custoUnitarioSemBdiReais": "1923.45",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2388.54",
+    "totalComBdiReais": "11942.7"
   },
   {
     "sourceRowNumber": 288,
     "hierarchicalCode": "08.00.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "1094",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
-    "descricao": "ARMACAO VERTICAL COM HASTE E CONTRA-PINO, EM CHAPA DE ACO GALVANIZADO 3/16\", COM 1 ESTRIBO, SEM ISOLADOR",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ARMACAO VERTICAL COM HASTE E CONTRA-PINO, EM CHAPA DE ACO GALVANIZADO 3/16\", COM 1 ESTRIBO, SEM ISOLADOR"
+    },
     "unidade": "UN",
-    "quantidade": 4,
-    "custoUnitarioSemBdiReais": 24.6,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 28.35,
-    "totalComBdiReais": 113.4
+    "quantidade": "4",
+    "custoUnitarioSemBdiReais": "24.6",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "28.35",
+    "totalComBdiReais": "113.4"
   },
   {
     "sourceRowNumber": 289,
     "hierarchicalCode": "08.00.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "I1580",
     "fonte": "Insumo SEINFRA",
     "tipo": "obM",
-    "descricao": "PARAFUSO FRANCES 1/2''X8'' COM 2 PORCAS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PARAFUSO FRANCES 1/2''X8'' COM 2 PORCAS"
+    },
     "unidade": "UN",
-    "quantidade": 4,
-    "custoUnitarioSemBdiReais": 6.37,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 7.34,
-    "totalComBdiReais": 29.36
+    "quantidade": "4",
+    "custoUnitarioSemBdiReais": "6.37",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "7.34",
+    "totalComBdiReais": "29.36"
   },
   {
     "sourceRowNumber": 290,
     "hierarchicalCode": "08.00.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "3398",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
-    "descricao": "ISOLADOR DE PORCELANA, TIPO ROLDANA, DIMENSOES DE *72* X *72* MM, PARA USO EM BAIXA TENSAO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ISOLADOR DE PORCELANA, TIPO ROLDANA, DIMENSOES DE *72* X *72* MM, PARA USO EM BAIXA TENSAO"
+    },
     "unidade": "UN",
-    "quantidade": 4,
-    "custoUnitarioSemBdiReais": 5.41,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 6.23,
-    "totalComBdiReais": 24.92
+    "quantidade": "4",
+    "custoUnitarioSemBdiReais": "5.41",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "6.23",
+    "totalComBdiReais": "24.92"
   },
   {
     "sourceRowNumber": 291,
     "hierarchicalCode": "08.00.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4274",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
-    "descricao": "PARA-RAIOS TIPO FRANKLIN 350 MM, EM LATAO CROMADO, DUAS DESCIDAS, PARA PROTECAO DE EDIFICACOES CONTRA DESCARGAS ATMOSFERICAS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PARA-RAIOS TIPO FRANKLIN 350 MM, EM LATAO CROMADO, DUAS DESCIDAS, PARA PROTECAO DE EDIFICACOES CONTRA DESCARGAS ATMOSFERICAS"
+    },
     "unidade": "UN",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 82.9,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 95.56,
-    "totalComBdiReais": 191.12
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "82.9",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "95.56",
+    "totalComBdiReais": "191.12"
   },
   {
     "sourceRowNumber": 292,
     "hierarchicalCode": "08.00.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "I0206",
     "fonte": "Insumo SEINFRA",
     "tipo": "obM",
-    "descricao": "BASE PARA MASTRO DE PARA-RAIOS DE 1 1/2\" DE 1 1/2\"",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "BASE PARA MASTRO DE PARA-RAIOS DE 1 1/2\" DE 1 1/2\""
+    },
     "unidade": "UN",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 56.58,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 65.22,
-    "totalComBdiReais": 130.44
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "56.58",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "65.22",
+    "totalComBdiReais": "130.44"
   },
   {
     "sourceRowNumber": 293,
     "hierarchicalCode": "08.00.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "I6472",
     "fonte": "Insumo SEINFRA",
     "tipo": "obM",
-    "descricao": "ABRAÇADEIRA PARA POSTE DE CONCRETO DUPLO \"T\"",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ABRAÇADEIRA PARA POSTE DE CONCRETO DUPLO \"T\""
+    },
     "unidade": "UN",
-    "quantidade": 20,
-    "custoUnitarioSemBdiReais": 8.25,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 9.51,
-    "totalComBdiReais": 190.2
+    "quantidade": "20",
+    "custoUnitarioSemBdiReais": "8.25",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "9.51",
+    "totalComBdiReais": "190.2"
   },
   {
     "sourceRowNumber": 294,
     "hierarchicalCode": "08.00.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "11270",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
-    "descricao": "ABRACADEIRA DE LATAO PARA FIXACAO DE CABO PARA-RAIO, DIMENSOES 32 X 24 X 24 MM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ABRACADEIRA DE LATAO PARA FIXACAO DE CABO PARA-RAIO, DIMENSOES 32 X 24 X 24 MM"
+    },
     "unidade": "UN",
-    "quantidade": 20,
-    "custoUnitarioSemBdiReais": 2.88,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 3.32,
-    "totalComBdiReais": 66.4
+    "quantidade": "20",
+    "custoUnitarioSemBdiReais": "2.88",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "3.32",
+    "totalComBdiReais": "66.4"
   },
   {
     "sourceRowNumber": 295,
     "hierarchicalCode": "08.00.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "3380",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
-    "descricao": "HASTE DE ATERRAMENTO EM ACO COM 3,00 M DE COMPRIMENTO E DN = 5/8\", REVESTIDA COM BAIXA CAMADA DE COBRE, COM CONECTOR TIPO GRAMPO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "HASTE DE ATERRAMENTO EM ACO COM 3,00 M DE COMPRIMENTO E DN = 5/8\", REVESTIDA COM BAIXA CAMADA DE COBRE, COM CONECTOR TIPO GRAMPO"
+    },
     "unidade": "UN",
-    "quantidade": 15,
-    "custoUnitarioSemBdiReais": 76.95,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 88.7,
-    "totalComBdiReais": 1330.5
+    "quantidade": "15",
+    "custoUnitarioSemBdiReais": "76.95",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "88.7",
+    "totalComBdiReais": "1330.5"
   },
   {
     "sourceRowNumber": 296,
     "hierarchicalCode": "08.00.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "C3909",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "SOLDA EXOTÉRMICA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SOLDA EXOTÉRMICA"
+    },
     "unidade": "UNID",
-    "quantidade": 15,
-    "custoUnitarioSemBdiReais": 39.98,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 49.64,
-    "totalComBdiReais": 744.6
+    "quantidade": "15",
+    "custoUnitarioSemBdiReais": "39.98",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "49.64",
+    "totalComBdiReais": "744.6"
   },
   {
     "sourceRowNumber": 297,
     "hierarchicalCode": "08.00.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "CX INSPECAO",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CAIXA DE INSPECAO EM PVC D=30CM, H=30CM C/ TAMPA EM FERRO FUNDIDO ARTICULADA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CAIXA DE INSPECAO EM PVC D=30CM, H=30CM C/ TAMPA EM FERRO FUNDIDO ARTICULADA"
+    },
     "unidade": "UNID",
-    "quantidade": 15,
-    "custoUnitarioSemBdiReais": 251.52,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 312.33,
-    "totalComBdiReais": 4684.95
+    "quantidade": "15",
+    "custoUnitarioSemBdiReais": "251.52",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "312.33",
+    "totalComBdiReais": "4684.95"
   },
   {
     "sourceRowNumber": 298,
     "hierarchicalCode": "08.00.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "96971",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CORDOALHA DE COBRE NU 16 MM², NÃO ENTERRADA, COM ISOLADOR - FORNECIMENTO E INSTALAÇÃO. AF_08/2023",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CORDOALHA DE COBRE NU 16 MM², NÃO ENTERRADA, COM ISOLADOR - FORNECIMENTO E INSTALAÇÃO. AF_08/2023"
+    },
     "unidade": "M",
-    "quantidade": 76,
-    "custoUnitarioSemBdiReais": 36.92,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 45.84,
-    "totalComBdiReais": 3483.84
+    "quantidade": "76",
+    "custoUnitarioSemBdiReais": "36.92",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "45.84",
+    "totalComBdiReais": "3483.84"
   },
   {
     "sourceRowNumber": 299,
     "hierarchicalCode": "08.00.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "INSTAL-ELET",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "SERVIÇOS DE INSTALAÇÃO DO SISTEMA ELÉTRICO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SERVIÇOS DE INSTALAÇÃO DO SISTEMA ELÉTRICO"
+    },
     "unidade": "DIA",
-    "quantidade": 8,
-    "custoUnitarioSemBdiReais": 1474.64,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1831.2,
-    "totalComBdiReais": 14649.6
+    "quantidade": "8",
+    "custoUnitarioSemBdiReais": "1474.64",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1831.2",
+    "totalComBdiReais": "14649.6"
   },
   {
     "sourceRowNumber": 300,
     "hierarchicalCode": "08.00.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "INSTAL-SPDA",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "SERVIÇOS DE INSTALAÇÃO DO SPDA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SERVIÇOS DE INSTALAÇÃO DO SPDA"
+    },
     "unidade": "DIA",
-    "quantidade": 6,
-    "custoUnitarioSemBdiReais": 1474.64,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 1831.2,
-    "totalComBdiReais": 10987.2
+    "quantidade": "6",
+    "custoUnitarioSemBdiReais": "1474.64",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "1831.2",
+    "totalComBdiReais": "10987.2"
   },
   {
     "sourceRowNumber": 301,
     "hierarchicalCode": "08.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Quadros",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Quadros"
+    },
     "unidade": null,
-    "quantidade": 0,
+    "quantidade": "0",
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
@@ -4687,44 +5886,56 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "08.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "C3925",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "QUADRO DE FORÇA P/ 10kW",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "QUADRO DE FORÇA P/ 10kW"
+    },
     "unidade": "UNID",
-    "quantidade": 3,
-    "custoUnitarioSemBdiReais": 12577.77,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 15619.07,
-    "totalComBdiReais": 46857.21
+    "quantidade": "3",
+    "custoUnitarioSemBdiReais": "12577.77",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "15619.07",
+    "totalComBdiReais": "46857.21"
   },
   {
     "sourceRowNumber": 303,
     "hierarchicalCode": "08.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "CPU – 08.01.02",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "MISCELANIA DE DISJUNTORES E CONECTORES PARA QUADROS (UN)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MISCELANIA DE DISJUNTORES E CONECTORES PARA QUADROS (UN)"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 2523.29,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 3133.42,
-    "totalComBdiReais": 3133.42
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "2523.29",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "3133.42",
+    "totalComBdiReais": "3133.42"
   },
   {
     "sourceRowNumber": 304,
     "hierarchicalCode": "08.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Cabos eletrodutos e acessórios para montagem",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Cabos eletrodutos e acessórios para montagem"
+    },
     "unidade": null,
-    "quantidade": 0,
+    "quantidade": "0",
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
@@ -4735,156 +5946,196 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "08.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "97668",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "ELETRODUTO FLEXÍVEL CORRUGADO, PEAD, DN 63 (2\"), PARA REDE ENTERRADA DE DISTRIBUIÇÃO DE ENERGIA ELÉTRICA - FORNECIMENTO E INSTALAÇÃO. AF_12/2021",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ELETRODUTO FLEXÍVEL CORRUGADO, PEAD, DN 63 (2\"), PARA REDE ENTERRADA DE DISTRIBUIÇÃO DE ENERGIA ELÉTRICA - FORNECIMENTO E INSTALAÇÃO. AF_12/2021"
+    },
     "unidade": "M",
-    "quantidade": 680,
-    "custoUnitarioSemBdiReais": 14.4,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 17.88,
-    "totalComBdiReais": 12158.4
+    "quantidade": "680",
+    "custoUnitarioSemBdiReais": "14.4",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "17.88",
+    "totalComBdiReais": "12158.4"
   },
   {
     "sourceRowNumber": 306,
     "hierarchicalCode": "08.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "CPU – 08.02.02",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "MISCELÂNEA DE SUPORTAÇÕES, CONECTORES, ABRAÇADEIRAS PARA MONTAGENS EM POSTES DE CABOS MULTIPLEXADOS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MISCELÂNEA DE SUPORTAÇÕES, CONECTORES, ABRAÇADEIRAS PARA MONTAGENS EM POSTES DE CABOS MULTIPLEXADOS"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 5419.7,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 6730.18,
-    "totalComBdiReais": 6730.18
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "5419.7",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "6730.18",
+    "totalComBdiReais": "6730.18"
   },
   {
     "sourceRowNumber": 307,
     "hierarchicalCode": "08.02.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "C4810",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "PROJETOR, EM LED (TEMPERATURA DE COR 4000K), CORPO EM ALUMÍNIO, LENTE EM ACRÍLICO E VEDAÇÃO EM SILICONE, GRAU DE PROTEÇÃO IP65, POTÊNCIA MÍNIMA 60W E MÁXIMA 70W, FLUXO LUMINOSO MÍNIMO 5.000LM, FATOR DE POTÊNCIA MÍNIMO 0,92",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PROJETOR, EM LED (TEMPERATURA DE COR 4000K), CORPO EM ALUMÍNIO, LENTE EM ACRÍLICO E VEDAÇÃO EM SILICONE, GRAU DE PROTEÇÃO IP65, POTÊNCIA MÍNIMA 60W E MÁXIMA 70W, FLUXO LUMINOSO MÍNIMO 5.000LM, FATOR DE POTÊNCIA MÍNIMO 0,92"
+    },
     "unidade": "UNID",
-    "quantidade": 8,
-    "custoUnitarioSemBdiReais": 588.94,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 731.34,
-    "totalComBdiReais": 5850.72
+    "quantidade": "8",
+    "custoUnitarioSemBdiReais": "588.94",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "731.34",
+    "totalComBdiReais": "5850.72"
   },
   {
     "sourceRowNumber": 308,
     "hierarchicalCode": "08.02.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "CPU – 08.02.04",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "FORNECIMENTO E INSTALAÇÃO ELETRODUTO EM FERRO GALVANIZADO PESADO SEM COSTURA 2\".",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "FORNECIMENTO E INSTALAÇÃO ELETRODUTO EM FERRO GALVANIZADO PESADO SEM COSTURA 2\"."
+    },
     "unidade": "UNID",
-    "quantidade": 12,
-    "custoUnitarioSemBdiReais": 133.37,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 165.61,
-    "totalComBdiReais": 1987.32
+    "quantidade": "12",
+    "custoUnitarioSemBdiReais": "133.37",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "165.61",
+    "totalComBdiReais": "1987.32"
   },
   {
     "sourceRowNumber": 309,
     "hierarchicalCode": "08.02.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "CPU – 08.02.05",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CABOS DE ALUMÍNIO MULTIPLEXADOS, COM 3 CONDUTORES FASE EM ALUMÍNIO ISOLADOS 0,6/ 1 KV E CONDUTORES MENSAGEIRO (NEUTRO) NU EM LIGA DE ALUMÍNIO - 25 MM²",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CABOS DE ALUMÍNIO MULTIPLEXADOS, COM 3 CONDUTORES FASE EM ALUMÍNIO ISOLADOS 0,6/ 1 KV E CONDUTORES MENSAGEIRO (NEUTRO) NU EM LIGA DE ALUMÍNIO - 25 MM²"
+    },
     "unidade": "M",
-    "quantidade": 482.4,
-    "custoUnitarioSemBdiReais": 77.49,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 96.22,
-    "totalComBdiReais": 46416.52
+    "quantidade": "482.4",
+    "custoUnitarioSemBdiReais": "77.49",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "96.22",
+    "totalComBdiReais": "46416.52"
   },
   {
     "sourceRowNumber": 310,
     "hierarchicalCode": "08.02.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "91935",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CABO DE COBRE FLEXÍVEL ISOLADO, 16 MM², ANTI-CHAMA 0,6/1,0 KV, PARA CIRCUITOS TERMINAIS - FORNECIMENTO E INSTALAÇÃO. AF_03/2023",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CABO DE COBRE FLEXÍVEL ISOLADO, 16 MM², ANTI-CHAMA 0,6/1,0 KV, PARA CIRCUITOS TERMINAIS - FORNECIMENTO E INSTALAÇÃO. AF_03/2023"
+    },
     "unidade": "M",
-    "quantidade": 45,
-    "custoUnitarioSemBdiReais": 27.94,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 34.69,
-    "totalComBdiReais": 1561.05
+    "quantidade": "45",
+    "custoUnitarioSemBdiReais": "27.94",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "34.69",
+    "totalComBdiReais": "1561.05"
   },
   {
     "sourceRowNumber": 311,
     "hierarchicalCode": "08.02.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "CPU – 08.02.07",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CABOS DE ALUMÍNIO MULTIPLEXADOS, COM 3 CONDUTORES FASE EM ALUMÍNIO ISOLADOS 0,6/ 1 KV E CONDUTORES MENSAGEIRO (NEUTRO) NU EM LIGA DE ALUMÍNIO - 35 MM²",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CABOS DE ALUMÍNIO MULTIPLEXADOS, COM 3 CONDUTORES FASE EM ALUMÍNIO ISOLADOS 0,6/ 1 KV E CONDUTORES MENSAGEIRO (NEUTRO) NU EM LIGA DE ALUMÍNIO - 35 MM²"
+    },
     "unidade": "M",
-    "quantidade": 350,
-    "custoUnitarioSemBdiReais": 82.74,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 102.74,
-    "totalComBdiReais": 35959
+    "quantidade": "350",
+    "custoUnitarioSemBdiReais": "82.74",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "102.74",
+    "totalComBdiReais": "35959"
   },
   {
     "sourceRowNumber": 312,
     "hierarchicalCode": "08.02.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "CPU – 08.02.08",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "MISCELÂNEA DE CONDULETE , SUPORTAÇÕES, PARA ELETRODUTOS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MISCELÂNEA DE CONDULETE , SUPORTAÇÕES, PARA ELETRODUTOS"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 2928.5,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 3636.61,
-    "totalComBdiReais": 3636.61
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "2928.5",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "3636.61",
+    "totalComBdiReais": "3636.61"
   },
   {
     "sourceRowNumber": 313,
     "hierarchicalCode": "08.02.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "CPU – 08.02.09",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "MISCELÂNEA DE DISJUNTORES PARA REDE DISTRIBUIÇÃO, SITEMA DE ILUMINAÇÃO, QGBT, QUADRO DA TORRE, QUADRO SAÍDA DE ÁGUA.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MISCELÂNEA DE DISJUNTORES PARA REDE DISTRIBUIÇÃO, SITEMA DE ILUMINAÇÃO, QGBT, QUADRO DA TORRE, QUADRO SAÍDA DE ÁGUA."
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 3599.86,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 4470.3,
-    "totalComBdiReais": 4470.3
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "3599.86",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "4470.3",
+    "totalComBdiReais": "4470.3"
   },
   {
     "sourceRowNumber": 314,
     "hierarchicalCode": "08.03.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Iluminação",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Iluminação"
+    },
     "unidade": null,
-    "quantidade": 0,
+    "quantidade": "0",
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
@@ -4895,172 +6146,216 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "08.03.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "101632",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "RELÉ FOTOELÉTRICO PARA COMANDO DE ILUMINAÇÃO EXTERNA 1000 W - FORNECIMENTO E INSTALAÇÃO. AF_02/2025",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "RELÉ FOTOELÉTRICO PARA COMANDO DE ILUMINAÇÃO EXTERNA 1000 W - FORNECIMENTO E INSTALAÇÃO. AF_02/2025"
+    },
     "unidade": "UN",
-    "quantidade": 11,
-    "custoUnitarioSemBdiReais": 36.21,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 44.96,
-    "totalComBdiReais": 494.56
+    "quantidade": "11",
+    "custoUnitarioSemBdiReais": "36.21",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "44.96",
+    "totalComBdiReais": "494.56"
   },
   {
     "sourceRowNumber": 316,
     "hierarchicalCode": "08.03.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "39380",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
-    "descricao": "BASE PARA RELE COM SUPORTE METALICO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "BASE PARA RELE COM SUPORTE METALICO"
+    },
     "unidade": "UN",
-    "quantidade": 11,
-    "custoUnitarioSemBdiReais": 20.28,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 23.37,
-    "totalComBdiReais": 257.07
+    "quantidade": "11",
+    "custoUnitarioSemBdiReais": "20.28",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "23.37",
+    "totalComBdiReais": "257.07"
   },
   {
     "sourceRowNumber": 317,
     "hierarchicalCode": "08.03.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "101562",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CABO DE COBRE FLEXÍVEL ISOLADO, 25 MM², 0,6/1,0 KV, PARA REDE AÉREA DE DISTRIBUIÇÃO DE ENERGIA ELÉTRICA DE BAIXA TENSÃO - FORNECIMENTO E INSTALAÇÃO. AF_07/2020",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CABO DE COBRE FLEXÍVEL ISOLADO, 25 MM², 0,6/1,0 KV, PARA REDE AÉREA DE DISTRIBUIÇÃO DE ENERGIA ELÉTRICA DE BAIXA TENSÃO - FORNECIMENTO E INSTALAÇÃO. AF_07/2020"
+    },
     "unidade": "M",
-    "quantidade": 1800,
-    "custoUnitarioSemBdiReais": 29.33,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 36.42,
-    "totalComBdiReais": 65556
+    "quantidade": "1800",
+    "custoUnitarioSemBdiReais": "29.33",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "36.42",
+    "totalComBdiReais": "65556"
   },
   {
     "sourceRowNumber": 318,
     "hierarchicalCode": "08.03.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "101658",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "LUMINÁRIA DE LED PARA ILUMINAÇÃO PÚBLICA, DE 138 W ATÉ 180 W - FORNECIMENTO E INSTALAÇÃO. AF_02/2025_PS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LUMINÁRIA DE LED PARA ILUMINAÇÃO PÚBLICA, DE 138 W ATÉ 180 W - FORNECIMENTO E INSTALAÇÃO. AF_02/2025_PS"
+    },
     "unidade": "UN",
-    "quantidade": 11,
-    "custoUnitarioSemBdiReais": 441.75,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 548.56,
-    "totalComBdiReais": 6034.16
+    "quantidade": "11",
+    "custoUnitarioSemBdiReais": "441.75",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "548.56",
+    "totalComBdiReais": "6034.16"
   },
   {
     "sourceRowNumber": 319,
     "hierarchicalCode": "08.03.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "101636",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "BRAÇO PARA ILUMINAÇÃO PÚBLICA, EM TUBO DE AÇO GALVANIZADO, COMPRIMENTO DE 1,50 M, PARA FIXAÇÃO EM POSTE DE CONCRETO - FORNECIMENTO E INSTALAÇÃO. AF_02/2025_PS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "BRAÇO PARA ILUMINAÇÃO PÚBLICA, EM TUBO DE AÇO GALVANIZADO, COMPRIMENTO DE 1,50 M, PARA FIXAÇÃO EM POSTE DE CONCRETO - FORNECIMENTO E INSTALAÇÃO. AF_02/2025_PS"
+    },
     "unidade": "UN",
-    "quantidade": 11,
-    "custoUnitarioSemBdiReais": 142.27,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 176.67,
-    "totalComBdiReais": 1943.37
+    "quantidade": "11",
+    "custoUnitarioSemBdiReais": "142.27",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "176.67",
+    "totalComBdiReais": "1943.37"
   },
   {
     "sourceRowNumber": 320,
     "hierarchicalCode": "08.03.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "91927",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "CABO DE COBRE FLEXÍVEL ISOLADO, 2,5 MM², ANTI-CHAMA 0,6/1,0 KV, PARA CIRCUITOS TERMINAIS - FORNECIMENTO E INSTALAÇÃO. AF_03/2023",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CABO DE COBRE FLEXÍVEL ISOLADO, 2,5 MM², ANTI-CHAMA 0,6/1,0 KV, PARA CIRCUITOS TERMINAIS - FORNECIMENTO E INSTALAÇÃO. AF_03/2023"
+    },
     "unidade": "M",
-    "quantidade": 300,
-    "custoUnitarioSemBdiReais": 5.25,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 6.51,
-    "totalComBdiReais": 1953
+    "quantidade": "300",
+    "custoUnitarioSemBdiReais": "5.25",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "6.51",
+    "totalComBdiReais": "1953"
   },
   {
     "sourceRowNumber": 321,
     "hierarchicalCode": "08.03.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "I8438",
     "fonte": "Insumo SEINFRA",
     "tipo": "obM",
-    "descricao": "CABO CORDPLAST (CABO PP) 3 x 2,50 mm²",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CABO CORDPLAST (CABO PP) 3 x 2,50 mm²"
+    },
     "unidade": "M",
-    "quantidade": 200,
-    "custoUnitarioSemBdiReais": 5.04,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 5.81,
-    "totalComBdiReais": 1162
+    "quantidade": "200",
+    "custoUnitarioSemBdiReais": "5.04",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "5.81",
+    "totalComBdiReais": "1162"
   },
   {
     "sourceRowNumber": 322,
     "hierarchicalCode": "08.03.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "862",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
-    "descricao": "CABO DE COBRE NU 10 MM2 MEIO-DURO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CABO DE COBRE NU 10 MM2 MEIO-DURO"
+    },
     "unidade": "M",
-    "quantidade": 350,
-    "custoUnitarioSemBdiReais": 12.36,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 14.24,
-    "totalComBdiReais": 4984
+    "quantidade": "350",
+    "custoUnitarioSemBdiReais": "12.36",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "14.24",
+    "totalComBdiReais": "4984"
   },
   {
     "sourceRowNumber": 323,
     "hierarchicalCode": "08.03.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "C4960",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "POSTE DE CONCRETO CIRCULAR, RESISTÊNCIA NOMINAL 200KG, H=11,00M, PESO APROXIMADO 910KG",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "POSTE DE CONCRETO CIRCULAR, RESISTÊNCIA NOMINAL 200KG, H=11,00M, PESO APROXIMADO 910KG"
+    },
     "unidade": "UNID",
-    "quantidade": 11,
-    "custoUnitarioSemBdiReais": 2059.42,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2557.38,
-    "totalComBdiReais": 28131.18
+    "quantidade": "11",
+    "custoUnitarioSemBdiReais": "2059.42",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2557.38",
+    "totalComBdiReais": "28131.18"
   },
   {
     "sourceRowNumber": 324,
     "hierarchicalCode": "08.03.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "CPU – 08.03.10",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "MISCELÂNEA DE SUPORTAÇÕES E FIXAÇÕES PARA SISTEMA DE ILUMINAÇÃO EM POSTE DE CONCRETO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "MISCELÂNEA DE SUPORTAÇÕES E FIXAÇÕES PARA SISTEMA DE ILUMINAÇÃO EM POSTE DE CONCRETO"
+    },
     "unidade": "UNID",
-    "quantidade": 16,
-    "custoUnitarioSemBdiReais": 236.73,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 293.97,
-    "totalComBdiReais": 4703.52
+    "quantidade": "16",
+    "custoUnitarioSemBdiReais": "236.73",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "293.97",
+    "totalComBdiReais": "4703.52"
   },
   {
     "sourceRowNumber": 325,
     "hierarchicalCode": "08.04.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "08.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Padrão de medição ENEL trifásico",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Padrão de medição ENEL trifásico"
+    },
     "unidade": null,
-    "quantidade": 0,
+    "quantidade": "0",
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
@@ -5071,58 +6366,74 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "08.04.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "101507",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
-    "descricao": "ENTRADA DE ENERGIA ELÉTRICA, AÉREA, TRIFÁSICA, COM CAIXA DE SOBREPOR, CABO DE 25 MM2 E DISJUNTOR DIN 50A (NÃO INCLUSO O POSTE DE CONCRETO). AF_07/2020_PS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ENTRADA DE ENERGIA ELÉTRICA, AÉREA, TRIFÁSICA, COM CAIXA DE SOBREPOR, CABO DE 25 MM2 E DISJUNTOR DIN 50A (NÃO INCLUSO O POSTE DE CONCRETO). AF_07/2020_PS"
+    },
     "unidade": "UN",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 2251.38,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2795.76,
-    "totalComBdiReais": 2795.76
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "2251.38",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2795.76",
+    "totalComBdiReais": "2795.76"
   },
   {
     "sourceRowNumber": 327,
     "hierarchicalCode": "08.04.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.04.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "C4979",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "POSTE DE CONCRETO CIRCULAR, RESISTÊNCIA NOMINAL 400KG, H=12,00M, PESO APROXIMADO 1.130KG",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "POSTE DE CONCRETO CIRCULAR, RESISTÊNCIA NOMINAL 400KG, H=12,00M, PESO APROXIMADO 1.130KG"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 2088.82,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2593.89,
-    "totalComBdiReais": 2593.89
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "2088.82",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2593.89",
+    "totalComBdiReais": "2593.89"
   },
   {
     "sourceRowNumber": 328,
     "hierarchicalCode": "09.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
+    "parentResolutionMethod": "TopLevelNoParent",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "OBRAS COMPLEMENTARES",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "OBRAS COMPLEMENTARES"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
-    "totalComBdiReais": 54831.5
+    "totalComBdiReais": "54831.5"
   },
   {
     "sourceRowNumber": 329,
     "hierarchicalCode": "09.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "09.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Demolição do Canteiro de Obras",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Demolição do Canteiro de Obras"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -5135,90 +6446,114 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "09.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "09.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "72218",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "DEMOLICAO DE DIVISORIAS EM CHAPAS OU TABUAS, INCLUSIVE DEMOLICAO DE ENTARUGAMENTO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "DEMOLICAO DE DIVISORIAS EM CHAPAS OU TABUAS, INCLUSIVE DEMOLICAO DE ENTARUGAMENTO"
+    },
     "unidade": "M2",
-    "quantidade": 33.6,
-    "custoUnitarioSemBdiReais": 8.1,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 10.05,
-    "totalComBdiReais": 337.68
+    "quantidade": "33.6",
+    "custoUnitarioSemBdiReais": "8.1",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "10.05",
+    "totalComBdiReais": "337.68"
   },
   {
     "sourceRowNumber": 331,
     "hierarchicalCode": "09.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "09.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "72225",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "DEMOLICAO DE TELHAS ONDULADAS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "DEMOLICAO DE TELHAS ONDULADAS"
+    },
     "unidade": "M2",
-    "quantidade": 33,
-    "custoUnitarioSemBdiReais": 5.06,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 6.28,
-    "totalComBdiReais": 207.24
+    "quantidade": "33",
+    "custoUnitarioSemBdiReais": "5.06",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "6.28",
+    "totalComBdiReais": "207.24"
   },
   {
     "sourceRowNumber": 332,
     "hierarchicalCode": "09.01.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "09.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "85379",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "DEMOLICAO DE CERCA DE ARAME FARPADO E MOUROES DE CONCRETO S/ REMOCAO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "DEMOLICAO DE CERCA DE ARAME FARPADO E MOUROES DE CONCRETO S/ REMOCAO"
+    },
     "unidade": "M",
-    "quantidade": 81.6,
-    "custoUnitarioSemBdiReais": 3.04,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 3.77,
-    "totalComBdiReais": 307.63
+    "quantidade": "81.6",
+    "custoUnitarioSemBdiReais": "3.04",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "3.77",
+    "totalComBdiReais": "307.63"
   },
   {
     "sourceRowNumber": 333,
     "hierarchicalCode": "09.01.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "09.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "72895",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CARGA, MANOBRAS E DESCARGA DE MATERIAIS DIVERSOS, COM CAMINHAO CARROCERIA 9 T (CARGA E DESCARGA MANUAIS)",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CARGA, MANOBRAS E DESCARGA DE MATERIAIS DIVERSOS, COM CAMINHAO CARROCERIA 9 T (CARGA E DESCARGA MANUAIS)"
+    },
     "unidade": "M3",
-    "quantidade": 6.66,
-    "custoUnitarioSemBdiReais": 26.34,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 32.7,
-    "totalComBdiReais": 217.78
+    "quantidade": "6.66",
+    "custoUnitarioSemBdiReais": "26.34",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "32.7",
+    "totalComBdiReais": "217.78"
   },
   {
     "sourceRowNumber": 334,
     "hierarchicalCode": "09.01.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "09.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "72900",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "TRANSPORTE DE ENTULHO COM CAMINHAO BASCULANTE 6 M3, RODOVIA PAVIMENTADA, DMT 0,5 A 1,0 KM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "TRANSPORTE DE ENTULHO COM CAMINHAO BASCULANTE 6 M3, RODOVIA PAVIMENTADA, DMT 0,5 A 1,0 KM"
+    },
     "unidade": "M3",
-    "quantidade": 6.66,
-    "custoUnitarioSemBdiReais": 7.49,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 9.3,
-    "totalComBdiReais": 61.93
+    "quantidade": "6.66",
+    "custoUnitarioSemBdiReais": "7.49",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "9.3",
+    "totalComBdiReais": "61.93"
   },
   {
     "sourceRowNumber": 335,
     "hierarchicalCode": "09.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "09.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Cerca para Isolameto da Barragem e Área Administrativa",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Cerca para Isolameto da Barragem e Área Administrativa"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -5231,138 +6566,174 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "09.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "09.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "CERCA-6 FIOS",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "CERCA COM 6 FIOS DE ARAME FARPADO E MOURÃO DE CONCRETO DE SEÇÃO QUADRADA DE 11 CM A CADA 2,5 M E ESTICADOR DE 15 CM A CADA 50 M - AREIA E BRITA COMERCIAIS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "CERCA COM 6 FIOS DE ARAME FARPADO E MOURÃO DE CONCRETO DE SEÇÃO QUADRADA DE 11 CM A CADA 2,5 M E ESTICADOR DE 15 CM A CADA 50 M - AREIA E BRITA COMERCIAIS"
+    },
     "unidade": "M",
-    "quantidade": 980,
-    "custoUnitarioSemBdiReais": 40.35,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 50.1,
-    "totalComBdiReais": 49098
+    "quantidade": "980",
+    "custoUnitarioSemBdiReais": "40.35",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "50.1",
+    "totalComBdiReais": "49098"
   },
   {
     "sourceRowNumber": 337,
     "hierarchicalCode": "09.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "09.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "85189",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "PORTAO EM TUBO DE ACO GALVANIZADO DIN 2440/NBR 5580, PAINEL UNICO, DIMENSOES 4,0X2,0M, INCLUSIVE CADEADO",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PORTAO EM TUBO DE ACO GALVANIZADO DIN 2440/NBR 5580, PAINEL UNICO, DIMENSOES 4,0X2,0M, INCLUSIVE CADEADO"
+    },
     "unidade": "UNID",
-    "quantidade": 2,
-    "custoUnitarioSemBdiReais": 1852.65,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2300.62,
-    "totalComBdiReais": 4601.24
+    "quantidade": "2",
+    "custoUnitarioSemBdiReais": "1852.65",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2300.62",
+    "totalComBdiReais": "4601.24"
   },
   {
     "sourceRowNumber": 339,
     "hierarchicalCode": "10.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
+    "parentResolutionMethod": "TopLevelNoParent",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "PROTEÇÃO AMBIENTAL",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "PROTEÇÃO AMBIENTAL"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
-    "totalComBdiReais": 2786.4799999999996
+    "totalComBdiReais": "2786.4799999999996"
   },
   {
     "sourceRowNumber": 340,
     "hierarchicalCode": "10.00.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "10.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "73903/1",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "LIMPEZA SUPERFICIAL DA CAMADA VEGETAL EM JAZIDA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "LIMPEZA SUPERFICIAL DA CAMADA VEGETAL EM JAZIDA"
+    },
     "unidade": "M2",
-    "quantidade": 1300,
-    "custoUnitarioSemBdiReais": 0.54,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 0.67,
-    "totalComBdiReais": 871
+    "quantidade": "1300",
+    "custoUnitarioSemBdiReais": "0.54",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "0.67",
+    "totalComBdiReais": "871"
   },
   {
     "sourceRowNumber": 341,
     "hierarchicalCode": "10.00.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "10.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "5502986",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "EXPURGO DE JAZIDA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "EXPURGO DE JAZIDA"
+    },
     "unidade": "M3",
-    "quantidade": 230,
-    "custoUnitarioSemBdiReais": 3.15,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 3.91,
-    "totalComBdiReais": 899.3
+    "quantidade": "230",
+    "custoUnitarioSemBdiReais": "3.15",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "3.91",
+    "totalComBdiReais": "899.3"
   },
   {
     "sourceRowNumber": 342,
     "hierarchicalCode": "10.00.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "10.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "4413942",
     "fonte": "Serv SICRO",
     "tipo": "obS",
-    "descricao": "ESPALHAMENTO DE MATERIAL EM BOTA-FORA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESPALHAMENTO DE MATERIAL EM BOTA-FORA"
+    },
     "unidade": "M3",
-    "quantidade": 230,
-    "custoUnitarioSemBdiReais": 1.96,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 2.43,
-    "totalComBdiReais": 558.9
+    "quantidade": "230",
+    "custoUnitarioSemBdiReais": "1.96",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "2.43",
+    "totalComBdiReais": "558.9"
   },
   {
     "sourceRowNumber": 343,
     "hierarchicalCode": "10.00.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "10.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "FORMIG",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "COMBATE A FORMIGUEIROS NA ÁREA DA BARRAGEM",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "COMBATE A FORMIGUEIROS NA ÁREA DA BARRAGEM"
+    },
     "unidade": "M2",
-    "quantidade": 1039.29,
-    "custoUnitarioSemBdiReais": 0.36,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 0.44,
-    "totalComBdiReais": 457.28
+    "quantidade": "1039.29",
+    "custoUnitarioSemBdiReais": "0.36",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "0.44",
+    "totalComBdiReais": "457.28"
   },
   {
     "sourceRowNumber": 345,
     "hierarchicalCode": "11.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
+    "parentResolutionMethod": "TopLevelNoParent",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "EQUIPAMENTOS DE ANÁLISE",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "EQUIPAMENTOS DE ANÁLISE"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
     "bdiPercent": null,
     "precoUnitarioComBdiReais": null,
-    "totalComBdiReais": 173920.56
+    "totalComBdiReais": "173920.56"
   },
   {
     "sourceRowNumber": 346,
     "hierarchicalCode": "11.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "11.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Estação Meteorológica",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Estação Meteorológica"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -5375,42 +6746,54 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "11.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "11.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "ANA-001",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "ESTAÇÃO METEOROLÓGICA COM SENSORES PARA MEDIÇÃO DE TEMPERATURA, UMIDADE DO AR, PRESSÃO BAROMÉTRICA, DIREÇÃO E VELOCIDADE DO VENTO ULTRASSÔNICO, PLUVIOMETRIA E PONTO DE ORVALHO. E PIROMETRO DE SEGUNDA CLASSE COM 5 METROS DE CABO. COM SAÍDA RS485 E PROTOCOLO MODBUS.",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "ESTAÇÃO METEOROLÓGICA COM SENSORES PARA MEDIÇÃO DE TEMPERATURA, UMIDADE DO AR, PRESSÃO BAROMÉTRICA, DIREÇÃO E VELOCIDADE DO VENTO ULTRASSÔNICO, PLUVIOMETRIA E PONTO DE ORVALHO. E PIROMETRO DE SEGUNDA CLASSE COM 5 METROS DE CABO. COM SAÍDA RS485 E PROTOCOLO MODBUS."
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 74058.05,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 85374.12,
-    "totalComBdiReais": 85374.12
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "74058.05",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "85374.12",
+    "totalComBdiReais": "85374.12"
   },
   {
     "sourceRowNumber": 348,
     "hierarchicalCode": "11.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "11.01.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "INSTAL-METEO",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO DE ESTAÇÃO METEOROLÓGICA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO DE ESTAÇÃO METEOROLÓGICA"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 2717.74,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 3374.88,
-    "totalComBdiReais": 3374.88
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "2717.74",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "3374.88",
+    "totalComBdiReais": "3374.88"
   },
   {
     "sourceRowNumber": 349,
     "hierarchicalCode": "11.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "11.00.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
-    "descricao": "Medidores de Qualidade da Água",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "Medidores de Qualidade da Água"
+    },
     "unidade": null,
     "quantidade": null,
     "custoUnitarioSemBdiReais": null,
@@ -5423,31 +6806,112 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "hierarchicalCode": "11.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "11.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "ANA-002",
     "fonte": "Cotação",
     "tipo": "obM",
-    "descricao": "SONDA MULTIPARAMÉTRICA (PH, ORP, TEMPERATURA, SALINIDADE, PRESSÃO TDS, NÍVEL, OXIGÊNIO DISSOLVIDO) COM SAÍDA RS485 E PROTOCOLO MODBUS",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "SONDA MULTIPARAMÉTRICA (PH, ORP, TEMPERATURA, SALINIDADE, PRESSÃO TDS, NÍVEL, OXIGÊNIO DISSOLVIDO) COM SAÍDA RS485 E PROTOCOLO MODBUS"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 69771.76,
-    "bdiPercent": 0.1528,
-    "precoUnitarioComBdiReais": 80432.88,
-    "totalComBdiReais": 80432.88
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "69771.76",
+    "bdiPercent": "0.1528",
+    "precoUnitarioComBdiReais": "80432.88",
+    "totalComBdiReais": "80432.88"
   },
   {
     "sourceRowNumber": 351,
     "hierarchicalCode": "11.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "11.02.00",
+    "parentResolutionMethod": "HierarchicalCode",
     "externalSourceCode": "INSTAL-MED",
     "fonte": "Composição",
     "tipo": "obS",
-    "descricao": "INSTALAÇÃO DE MEDIDOR DE QUALIDADE DE ÁGUA",
+    "descricao": {
+      "status": "ConfirmedFromSource",
+      "text": "INSTALAÇÃO DE MEDIDOR DE QUALIDADE DE ÁGUA"
+    },
     "unidade": "UNID",
-    "quantidade": 1,
-    "custoUnitarioSemBdiReais": 3815.98,
-    "bdiPercent": 0.2418,
-    "precoUnitarioComBdiReais": 4738.68,
-    "totalComBdiReais": 4738.68
+    "quantidade": "1",
+    "custoUnitarioSemBdiReais": "3815.98",
+    "bdiPercent": "0.2418",
+    "precoUnitarioComBdiReais": "4738.68",
+    "totalComBdiReais": "4738.68"
+  }
+];
+
+/**
+ * As 11 linhas examinadas (dentre as 347, linhas 6-352) que não
+ * geraram registro de domínio. `347 = LAGOA_DO_ARROZ_OFFICIAL_LINES.length + LAGOA_DO_ARROZ_EXCLUDED_LINES.length`.
+ */
+export const LAGOA_DO_ARROZ_EXCLUDED_LINES: ReadonlyArray<LagoaDoArrozExcludedLine> = [
+  {
+    "sourceRowNumber": 34,
+    "reason": "DocumentaryFootnote",
+    "classificacaoDocumentalObservada": "Nota/rodapé documental embutido na planilha (texto jurídico extenso em célula de descrição, sem código, tipo ou valor de linha orçamentária).",
+    "observedContent": "* Acórdão Nº 2622/2013 – TCU – Plenário: \r\n9.3.2.2. estabelecer, nos editais de licitação, critério objetivo de medição para a administração local, estipulando pagamentos proporcionais à execução fina"
+  },
+  {
+    "sourceRowNumber": 42,
+    "reason": "BlankSeparatorRow",
+    "classificacaoDocumentalObservada": "Linha totalmente vazia, usada como separador visual entre seções da planilha.",
+    "observedContent": null
+  },
+  {
+    "sourceRowNumber": 90,
+    "reason": "BlankSeparatorRow",
+    "classificacaoDocumentalObservada": "Linha totalmente vazia, usada como separador visual entre seções da planilha.",
+    "observedContent": null
+  },
+  {
+    "sourceRowNumber": 121,
+    "reason": "BlankSeparatorRow",
+    "classificacaoDocumentalObservada": "Linha totalmente vazia, usada como separador visual entre seções da planilha.",
+    "observedContent": null
+  },
+  {
+    "sourceRowNumber": 152,
+    "reason": "BlankSeparatorRow",
+    "classificacaoDocumentalObservada": "Linha totalmente vazia, usada como separador visual entre seções da planilha.",
+    "observedContent": null
+  },
+  {
+    "sourceRowNumber": 158,
+    "reason": "BlankSeparatorRow",
+    "classificacaoDocumentalObservada": "Linha totalmente vazia, usada como separador visual entre seções da planilha.",
+    "observedContent": null
+  },
+  {
+    "sourceRowNumber": 183,
+    "reason": "ZeroValueArtifactRow",
+    "classificacaoDocumentalObservada": "Linha sem código, descrição ou tipo; contém apenas resíduo de fórmula com valor zero nas colunas de subtotal MATERIAL/SERVIÇO — artefato de formatação da planilha, não uma linha econômica.",
+    "observedContent": "0 | 0"
+  },
+  {
+    "sourceRowNumber": 285,
+    "reason": "BlankSeparatorRow",
+    "classificacaoDocumentalObservada": "Linha totalmente vazia, usada como separador visual entre seções da planilha.",
+    "observedContent": null
+  },
+  {
+    "sourceRowNumber": 338,
+    "reason": "BlankSeparatorRow",
+    "classificacaoDocumentalObservada": "Linha totalmente vazia, usada como separador visual entre seções da planilha.",
+    "observedContent": null
+  },
+  {
+    "sourceRowNumber": 344,
+    "reason": "BlankSeparatorRow",
+    "classificacaoDocumentalObservada": "Linha totalmente vazia, usada como separador visual entre seções da planilha.",
+    "observedContent": null
+  },
+  {
+    "sourceRowNumber": 352,
+    "reason": "BlankSeparatorRow",
+    "classificacaoDocumentalObservada": "Linha totalmente vazia, usada como separador visual entre seções da planilha.",
+    "observedContent": null
   }
 ];

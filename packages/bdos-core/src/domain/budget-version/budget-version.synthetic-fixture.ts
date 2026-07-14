@@ -8,7 +8,7 @@
 import { createLotScope, createProcurementCase, createProcurementLot, createWholeCaseScope } from "../procurement-case";
 import type { ProcurementCase, ProcurementLot, ProcurementScope } from "../procurement-case";
 import { addBudgetLine, consolidateBudgetVersion, createBudgetVersion } from "./budget-version";
-import { reaisToCents } from "./budget-version-money";
+import { centsFromExactReais } from "./budget-version-money";
 import { BudgetLineKind, BudgetVersionOriginKind } from "./budget-version.types";
 import type { BudgetVersion } from "./budget-version.types";
 
@@ -136,7 +136,7 @@ export function buildSyntheticMultiLotScenario(): SyntheticMultiLotScenario {
       parentLineId: "subgroup-lot-a-1",
       position: 0,
       scope: lotAScope,
-      totalCents: reaisToCents(15000),
+      totalCents: centsFromExactReais(15000),
     }),
     "item-lot-a-1",
   ).budgetVersion;
@@ -163,7 +163,7 @@ export function buildSyntheticMultiLotScenario(): SyntheticMultiLotScenario {
       parentLineId: "group-lot-b",
       position: 0,
       scope: lotBScope,
-      totalCents: reaisToCents(8000),
+      totalCents: centsFromExactReais(8000),
     }),
     "item-lot-b-1",
   ).budgetVersion;
@@ -178,7 +178,7 @@ export function buildSyntheticMultiLotScenario(): SyntheticMultiLotScenario {
       parentLineId: "group-lot-b",
       position: 1,
       scope: lotBScope,
-      totalCents: reaisToCents(1234.56),
+      totalCents: centsFromExactReais(1234.56),
     }),
     "item-lot-b-2-no-code",
   ).budgetVersion;

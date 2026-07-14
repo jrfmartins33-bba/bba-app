@@ -4,8 +4,10 @@ import {
   createProcurementCase,
   createProcurementLot,
   createWholeCaseScope,
+  isWellFormedProcurementScope,
   type ProcurementCase,
   type ProcurementLot,
+  type ProcurementScope,
 } from "./index";
 
 const organizationId = "organization-alpha-engenharia";
@@ -120,6 +122,52 @@ runTest("rejeita Escopo com lote de outra organização usuária", () => {
   const scope = createLotScope({ procurementCase: created.procurementCase, procurementLot: foreignLot });
   assertScopeFailure(scope, "expected cross-organization failure");
   assertEqual(scope.errors[0]?.code, "organization_mismatch", "error code mismatch");
+});
+
+runTest("rejeita identificador vazio de Processo", () => {
+  const result = createProcurementCase(caseInputFixture({ id: "" }));
+  assertCaseFailure(result, "expected missing id failure");
+  assertEqual(result.errors[0]?.code, "missing_id", "error code mismatch");
+});
+
+runTest("rejeita identificador vazio de Lote", () => {
+  const created = createProcurementCase(caseInputFixture());
+  assertCaseSuccess(created, "expected case creation success");
+  const result = createProcurementLot(lotInputFixture(created.procurementCase, { id: "" }));
+  assertLotFailure(result, "expected missing id failure");
+  assertEqual(result.errors[0]?.code, "missing_id", "error code mismatch");
+});
+
+runTest("correlationId, createdBy e sourceSystem podem ser omitidos — não são contrato obrigatório", () => {
+  const result = createProcurementCase({
+    id: "case-without-provenance-fields",
+    organizationId,
+    title: "Processo sem campos de proveniência técnica",
+  });
+  assertCaseSuccess(result, "expected case creation success without correlationId/createdBy/sourceSystem");
+
+  const lot = createProcurementLot({
+    id: "lot-without-provenance-fields",
+    procurementCase: result.procurementCase,
+    title: "Lote sem campos de proveniência técnica",
+  });
+  assertLotSuccess(lot, "expected lot creation success without correlationId/createdBy/sourceSystem");
+});
+
+runTest("isWellFormedProcurementScope aceita as duas formas aprovadas e rejeita Escopo estrutural arbitrário", () => {
+  const wholeCase: ProcurementScope = { kind: ProcurementScopeKind.WholeCase, procurementCaseId: "case-x" };
+  const lot: ProcurementScope = { kind: ProcurementScopeKind.Lot, procurementCaseId: "case-x", procurementLotId: "lot-x" };
+  assertEqual(isWellFormedProcurementScope(wholeCase), true, "well-formed WholeCase scope must be accepted");
+  assertEqual(isWellFormedProcurementScope(lot), true, "well-formed Lot scope must be accepted");
+
+  const extraField = { kind: ProcurementScopeKind.WholeCase, procurementCaseId: "case-x", procurementLotId: "lot-x" } as unknown as ProcurementScope;
+  assertEqual(isWellFormedProcurementScope(extraField), false, "a WholeCase scope with an extra procurementLotId field must be rejected");
+
+  const missingField = { kind: ProcurementScopeKind.Lot, procurementCaseId: "case-x" } as unknown as ProcurementScope;
+  assertEqual(isWellFormedProcurementScope(missingField), false, "a Lot scope missing procurementLotId must be rejected");
+
+  const unknownKind = { kind: "SomeArbitraryKind", procurementCaseId: "case-x" } as unknown as ProcurementScope;
+  assertEqual(isWellFormedProcurementScope(unknownKind), false, "a scope with an arbitrary, unapproved kind must be rejected");
 });
 
 function caseFixture(): ProcurementCase {

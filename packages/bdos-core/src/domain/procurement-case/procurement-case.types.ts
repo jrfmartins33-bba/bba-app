@@ -33,14 +33,19 @@ export interface ProcurementCase {
   readonly metadata: ProcurementCaseMetadata;
 }
 
+/**
+ * `correlationId`, `createdBy` e `sourceSystem` são precedentes técnicos a
+ * avaliar (mapa §L), não um contrato obrigatório já aprovado — por isso são
+ * opcionais aqui; quando ausentes, simplesmente não entram em `metadata`.
+ */
 export interface CreateProcurementCaseInput {
   readonly id: ProcurementCaseId;
   readonly organizationId: ProcurementOrganizationId;
   readonly title: ProcurementCaseTitle;
   readonly externalReference?: ProcurementExternalReference | null;
-  readonly correlationId: ProcurementCorrelationId;
-  readonly createdBy: ProcurementCreatedBy;
-  readonly sourceSystem: ProcurementSourceSystem;
+  readonly correlationId?: ProcurementCorrelationId;
+  readonly createdBy?: ProcurementCreatedBy;
+  readonly sourceSystem?: ProcurementSourceSystem;
   readonly metadata?: ProcurementCaseMetadata;
 }
 
@@ -64,9 +69,9 @@ export interface CreateProcurementLotInput {
   readonly procurementCase: ProcurementCase;
   readonly title: ProcurementCaseTitle;
   readonly externalReference?: ProcurementExternalReference | null;
-  readonly correlationId: ProcurementCorrelationId;
-  readonly createdBy: ProcurementCreatedBy;
-  readonly sourceSystem: ProcurementSourceSystem;
+  readonly correlationId?: ProcurementCorrelationId;
+  readonly createdBy?: ProcurementCreatedBy;
+  readonly sourceSystem?: ProcurementSourceSystem;
   readonly metadata?: ProcurementCaseMetadata;
 }
 
@@ -91,11 +96,13 @@ export type ProcurementScope =
     };
 
 export type ProcurementCaseErrorCode =
+  | "missing_id"
   | "missing_organization_id"
   | "missing_title"
   | "missing_procurement_case"
   | "organization_mismatch"
-  | "invalid_scope_lot";
+  | "invalid_scope_lot"
+  | "malformed_scope";
 
 export interface ProcurementCaseError {
   readonly code: ProcurementCaseErrorCode;

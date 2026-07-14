@@ -17,10 +17,15 @@ import type {
   ProcurementCaseMetadata,
 } from "./procurement-case.types";
 import { ProcurementScopeKind } from "./procurement-case.types";
+import type { ProcurementScope } from "./procurement-case.types";
 
 export function createProcurementCase(input: CreateProcurementCaseInput): CreateProcurementCaseResult {
   const metadata = createCaseMetadata(input);
   const errors: ProcurementCaseError[] = [];
+
+  if (isBlank(input.id)) {
+    errors.push(createCaseError("missing_id", "id", "Identity is required.", metadata));
+  }
 
   if (isBlank(input.organizationId)) {
     errors.push(createCaseError("missing_organization_id", "organizationId", "Organization id is required.", metadata));
@@ -58,6 +63,10 @@ export function createProcurementCase(input: CreateProcurementCaseInput): Create
 export function createProcurementLot(input: CreateProcurementLotInput): CreateProcurementLotResult {
   const metadata = createLotMetadata(input);
   const errors: ProcurementCaseError[] = [];
+
+  if (isBlank(input.id)) {
+    errors.push(createCaseError("missing_id", "id", "Identity is required.", metadata));
+  }
 
   if (input.procurementCase === undefined || input.procurementCase === null) {
     errors.push(
@@ -164,6 +173,41 @@ export function createLotScope(input: CreateLotScopeInput): CreateProcurementSco
     warnings: [],
     metadata,
   });
+}
+
+/**
+ * Proibição de Escopo estrutural arbitrário: um `ProcurementScope` só é
+ * bem-formado quando corresponde exatamente a uma das duas formas
+ * aprovadas — processo inteiro (`kind` + `procurementCaseId`, nada mais) ou
+ * lote específico (`kind` + `procurementCaseId` + `procurementLotId`, nada
+ * mais). Um valor com campos a mais, a menos, ou de tipo incorreto — ainda
+ * que estruturalmente compatível o suficiente para escapar à checagem de
+ * tipos em algum ponto de passagem — é rejeitado em tempo de execução, não
+ * apenas em tempo de compilação.
+ */
+export function isWellFormedProcurementScope(scope: ProcurementScope): boolean {
+  if (scope === null || typeof scope !== "object") {
+    return false;
+  }
+
+  if (scope.kind === ProcurementScopeKind.WholeCase) {
+    const keys = Object.keys(scope).sort();
+    return keys.length === 2 && keys[0] === "kind" && keys[1] === "procurementCaseId" && typeof scope.procurementCaseId === "string";
+  }
+
+  if (scope.kind === ProcurementScopeKind.Lot) {
+    const keys = Object.keys(scope).sort();
+    return (
+      keys.length === 3 &&
+      keys[0] === "kind" &&
+      keys[1] === "procurementCaseId" &&
+      keys[2] === "procurementLotId" &&
+      typeof scope.procurementCaseId === "string" &&
+      typeof scope.procurementLotId === "string"
+    );
+  }
+
+  return false;
 }
 
 function createCaseError(

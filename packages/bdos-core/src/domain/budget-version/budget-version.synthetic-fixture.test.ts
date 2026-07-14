@@ -1,5 +1,5 @@
 import { calculateBudgetVersionTotal } from "./budget-version";
-import { reaisToCents } from "./budget-version-money";
+import { centsFromExactReais } from "./budget-version-money";
 import { BudgetVersionStatus } from "./budget-version.types";
 import { buildSyntheticCaseWithoutLots, buildSyntheticMultiLotScenario } from "./budget-version.synthetic-fixture";
 
@@ -19,7 +19,7 @@ runTest("cenário sintético: consolida com dois lotes, hierarquia completa e It
 runTest("cenário sintético: total do processo inteiro soma os dois lotes sem dupla contagem", () => {
   const scenario = buildSyntheticMultiLotScenario();
 
-  const expectedTotal = reaisToCents(15000) + reaisToCents(8000) + reaisToCents(1234.56);
+  const expectedTotal = centsFromExactReais(15000) + centsFromExactReais(8000) + centsFromExactReais(1234.56);
   assertEqual(calculateBudgetVersionTotal(scenario.consolidatedBudgetVersion), expectedTotal, "whole-case total mismatch");
 });
 
@@ -28,12 +28,12 @@ runTest("cenário sintético: totalização por lote respeita o Escopo consultad
 
   assertEqual(
     calculateBudgetVersionTotal(scenario.consolidatedBudgetVersion, scenario.lotAScope),
-    reaisToCents(15000),
+    centsFromExactReais(15000),
     "lot A total mismatch",
   );
   assertEqual(
     calculateBudgetVersionTotal(scenario.consolidatedBudgetVersion, scenario.lotBScope),
-    reaisToCents(8000) + reaisToCents(1234.56),
+    centsFromExactReais(8000) + centsFromExactReais(1234.56),
     "lot B total mismatch",
   );
 });

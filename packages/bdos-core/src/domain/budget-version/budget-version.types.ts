@@ -104,15 +104,20 @@ export interface BudgetVersion {
   readonly metadata: BudgetVersionMetadata;
 }
 
+/**
+ * `correlationId`, `createdBy` e `sourceSystem` são precedentes técnicos a
+ * avaliar (mapa §L), não um contrato obrigatório já aprovado — por isso são
+ * opcionais aqui; quando ausentes, simplesmente não entram em `metadata`.
+ */
 export interface CreateBudgetVersionInput {
   readonly id: BudgetVersionId;
   readonly organizationId: BudgetOrganizationId;
   readonly procurementCaseId: ProcurementCaseId;
   readonly scope: ProcurementScope;
   readonly origin: BudgetVersionOrigin;
-  readonly correlationId: BudgetCorrelationId;
-  readonly createdBy: BudgetCreatedBy;
-  readonly sourceSystem: BudgetSourceSystem;
+  readonly correlationId?: BudgetCorrelationId;
+  readonly createdBy?: BudgetCreatedBy;
+  readonly sourceSystem?: BudgetSourceSystem;
   readonly metadata?: BudgetVersionMetadata;
 }
 
@@ -129,6 +134,22 @@ export interface AddBudgetLineInput {
   readonly metadata?: BudgetVersionMetadata;
 }
 
+/** Alteração controlada de campos de uma Linha já existente — somente em rascunho. */
+export interface UpdateBudgetLineInput {
+  readonly budgetVersion: BudgetVersion;
+  readonly lineId: BudgetLineId;
+  readonly description?: string;
+  readonly externalCode?: string | null;
+  readonly scope?: ProcurementScope;
+  readonly totalCents?: MoneyCents | null;
+}
+
+/** Remoção controlada de uma Linha sem filhos — somente em rascunho. */
+export interface RemoveBudgetLineInput {
+  readonly budgetVersion: BudgetVersion;
+  readonly lineId: BudgetLineId;
+}
+
 export interface UpdateBudgetLinePositionInput {
   readonly budgetVersion: BudgetVersion;
   readonly lineId: BudgetLineId;
@@ -139,9 +160,23 @@ export interface ConsolidateBudgetVersionInput {
   readonly budgetVersion: BudgetVersion;
 }
 
+/**
+ * Registro posterior (ou substituição, enquanto em rascunho) da Relação de
+ * Rastreabilidade de origem da Versão do Orçamento — mapa §13: "pode ser
+ * declarada na criação ou registrada posteriormente enquanto a versão
+ * estiver em rascunho, se houver evidência suficiente".
+ */
+export interface RegisterLineageRelationInput {
+  readonly budgetVersion: BudgetVersion;
+  readonly origin: BudgetVersionOrigin;
+}
+
 export type BudgetVersionErrorCode =
+  | "missing_id"
   | "missing_organization_id"
   | "missing_procurement_case_id"
+  | "scope_case_mismatch"
+  | "malformed_scope"
   | "invalid_origin_reference"
   | "consolidated_version_immutable"
   | "missing_description"
@@ -152,9 +187,10 @@ export type BudgetVersionErrorCode =
   | "self_parent"
   | "incompatible_parent_kind"
   | "line_scope_incompatible"
-  | "line_scope_organization_mismatch"
+  | "child_scope_incompatible_with_parent"
   | "invalid_total_cents"
-  | "unknown_line";
+  | "unknown_line"
+  | "line_has_children";
 
 export interface BudgetVersionError {
   readonly code: BudgetVersionErrorCode;

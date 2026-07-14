@@ -11,7 +11,10 @@ import {
   createBudgetVersion,
   hasHierarchyCycle,
   orderedChildren,
-  reaisToCents,
+  centsFromExactReais,
+  registerLineageRelation,
+  removeBudgetLine,
+  updateBudgetLine,
   updateBudgetLinePosition,
   type BudgetLine,
   type BudgetVersion,
@@ -113,10 +116,10 @@ runTest("Subgrupo sob Grupo, Item sob Subgrupo, Item diretamente sob Grupo, Item
   version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0)));
   version = requireSuccess(addBudgetLine(subgroupInput(version, "subgroup-1", "group-1", 0)));
   version = requireSuccess(
-    addBudgetLine(serviceItemInput(version, "item-under-subgroup", "subgroup-1", 0, reaisToCents(100), "GRP-01.01.01")),
+    addBudgetLine(serviceItemInput(version, "item-under-subgroup", "subgroup-1", 0, centsFromExactReais(100), "GRP-01.01.01")),
   );
   version = requireSuccess(
-    addBudgetLine(serviceItemInput(version, "item-under-group-cot-015", "group-1", 1, reaisToCents(50), null)),
+    addBudgetLine(serviceItemInput(version, "item-under-group-cot-015", "group-1", 1, centsFromExactReais(50), null)),
   );
 
   const subgroup = version.lines.find((line) => line.id === "subgroup-1");
@@ -141,7 +144,7 @@ runTest("rejeição de Grupo com pai", () => {
 runTest("rejeição de Subgrupo sem pai compatível", () => {
   let version = requireSuccess(createVersion());
   version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0)));
-  version = requireSuccess(addBudgetLine(serviceItemInput(version, "item-1", "group-1", 1, reaisToCents(1))));
+  version = requireSuccess(addBudgetLine(serviceItemInput(version, "item-1", "group-1", 1, centsFromExactReais(1))));
 
   const missingParent = addBudgetLine(subgroupInput(version, "subgroup-1", null, 2));
   assertVersionFailure(missingParent, "expected failure: subgroup requires a parent");
@@ -273,29 +276,29 @@ runTest("total do Item de Serviço, derivado do Subgrupo, derivado do Grupo, e d
   version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0)));
   version = requireSuccess(addBudgetLine(subgroupInput(version, "subgroup-1", "group-1", 0)));
   version = requireSuccess(
-    addBudgetLine(serviceItemInput(version, "item-a", "subgroup-1", 0, reaisToCents(1000.5))),
+    addBudgetLine(serviceItemInput(version, "item-a", "subgroup-1", 0, centsFromExactReais(1000.5))),
   );
   version = requireSuccess(
-    addBudgetLine(serviceItemInput(version, "item-b", "subgroup-1", 1, reaisToCents(2000.25))),
+    addBudgetLine(serviceItemInput(version, "item-b", "subgroup-1", 1, centsFromExactReais(2000.25))),
   );
   version = requireSuccess(
-    addBudgetLine(serviceItemInput(version, "item-c-cot-015", "group-1", 1, reaisToCents(500.43), null)),
+    addBudgetLine(serviceItemInput(version, "item-c-cot-015", "group-1", 1, centsFromExactReais(500.43), null)),
   );
 
-  assertEqual(calculateLineTotal(version.lines, "item-a"), reaisToCents(1000.5), "item-a total mismatch");
+  assertEqual(calculateLineTotal(version.lines, "item-a"), centsFromExactReais(1000.5), "item-a total mismatch");
   assertEqual(
     calculateLineTotal(version.lines, "subgroup-1"),
-    reaisToCents(1000.5) + reaisToCents(2000.25),
+    centsFromExactReais(1000.5) + centsFromExactReais(2000.25),
     "subgroup total must equal the sum of its descendant items only",
   );
   assertEqual(
     calculateLineTotal(version.lines, "group-1"),
-    reaisToCents(1000.5) + reaisToCents(2000.25) + reaisToCents(500.43),
+    centsFromExactReais(1000.5) + centsFromExactReais(2000.25) + centsFromExactReais(500.43),
     "group total must equal the sum of all descendant items only (subgroup total is never re-added)",
   );
   assertEqual(
     calculateBudgetVersionTotal(version),
-    reaisToCents(1000.5) + reaisToCents(2000.25) + reaisToCents(500.43),
+    centsFromExactReais(1000.5) + centsFromExactReais(2000.25) + centsFromExactReais(500.43),
     "version total must equal exactly the sum of leaf service items, with COT-015-like item included",
   );
 });
@@ -303,13 +306,13 @@ runTest("total do Item de Serviço, derivado do Subgrupo, derivado do Grupo, e d
 runTest("totalização independe da ordem de inserção", () => {
   let versionInsertedInOrder = requireSuccess(createVersion({ id: "version-order-1" }));
   versionInsertedInOrder = requireSuccess(addBudgetLine(groupInput(versionInsertedInOrder, "group-1", 0)));
-  versionInsertedInOrder = requireSuccess(addBudgetLine(serviceItemInput(versionInsertedInOrder, "item-1", "group-1", 1, reaisToCents(10))));
-  versionInsertedInOrder = requireSuccess(addBudgetLine(serviceItemInput(versionInsertedInOrder, "item-2", "group-1", 2, reaisToCents(20))));
+  versionInsertedInOrder = requireSuccess(addBudgetLine(serviceItemInput(versionInsertedInOrder, "item-1", "group-1", 1, centsFromExactReais(10))));
+  versionInsertedInOrder = requireSuccess(addBudgetLine(serviceItemInput(versionInsertedInOrder, "item-2", "group-1", 2, centsFromExactReais(20))));
 
   let versionInsertedReversed = requireSuccess(createVersion({ id: "version-order-2" }));
   versionInsertedReversed = requireSuccess(addBudgetLine(groupInput(versionInsertedReversed, "group-1", 0)));
-  versionInsertedReversed = requireSuccess(addBudgetLine(serviceItemInput(versionInsertedReversed, "item-2", "group-1", 2, reaisToCents(20))));
-  versionInsertedReversed = requireSuccess(addBudgetLine(serviceItemInput(versionInsertedReversed, "item-1", "group-1", 1, reaisToCents(10))));
+  versionInsertedReversed = requireSuccess(addBudgetLine(serviceItemInput(versionInsertedReversed, "item-2", "group-1", 2, centsFromExactReais(20))));
+  versionInsertedReversed = requireSuccess(addBudgetLine(serviceItemInput(versionInsertedReversed, "item-1", "group-1", 1, centsFromExactReais(10))));
 
   assertEqual(
     calculateBudgetVersionTotal(versionInsertedInOrder),
@@ -322,20 +325,20 @@ runTest("totalização respeita o Escopo consultado", () => {
   let version = requireSuccess(createVersion({ scope: wholeCaseScope }));
   version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0, wholeCaseScope)));
   version = requireSuccess(
-    addBudgetLine(serviceItemInput(version, "item-lot-a", "group-1", 1, reaisToCents(300), null, lotAScope)),
+    addBudgetLine(serviceItemInput(version, "item-lot-a", "group-1", 1, centsFromExactReais(300), null, lotAScope)),
   );
   version = requireSuccess(
-    addBudgetLine(serviceItemInput(version, "item-lot-b", "group-1", 2, reaisToCents(700), null, lotBScope)),
+    addBudgetLine(serviceItemInput(version, "item-lot-b", "group-1", 2, centsFromExactReais(700), null, lotBScope)),
   );
 
-  assertEqual(calculateBudgetVersionTotal(version, lotAScope), reaisToCents(300), "lot A total mismatch");
-  assertEqual(calculateBudgetVersionTotal(version, lotBScope), reaisToCents(700), "lot B total mismatch");
-  assertEqual(calculateBudgetVersionTotal(version), reaisToCents(1000), "whole-case total must include both lots");
+  assertEqual(calculateBudgetVersionTotal(version, lotAScope), centsFromExactReais(300), "lot A total mismatch");
+  assertEqual(calculateBudgetVersionTotal(version, lotBScope), centsFromExactReais(700), "lot B total mismatch");
+  assertEqual(calculateBudgetVersionTotal(version), centsFromExactReais(1000), "whole-case total must include both lots");
 });
 
 runTest("rejeita totalCents em Grupo ou Subgrupo (nunca uma parcela própria)", () => {
   const version = requireSuccess(createVersion());
-  const attempt = addBudgetLine({ ...groupInput(version, "group-1", 0), totalCents: reaisToCents(1) });
+  const attempt = addBudgetLine({ ...groupInput(version, "group-1", 0), totalCents: centsFromExactReais(1) });
   assertVersionFailure(attempt, "expected failure: group must never carry its own totalCents");
   assertEqual(attempt.errors[0]?.code, "invalid_total_cents", "error code mismatch");
 });
@@ -364,6 +367,209 @@ runTest("Relação de Rastreabilidade não é alterada silenciosamente após con
   const consolidated = requireSuccess(consolidateBudgetVersion({ budgetVersion: version }));
   assertEqual(consolidated.originLineage.id, version.originLineage.id, "lineage id must be preserved through consolidation");
   assertEqual(consolidated.originLineage.origin.kind, version.originLineage.origin.kind, "lineage origin must be preserved through consolidation");
+});
+
+runTest("Relação de Rastreabilidade pode ser registrada posteriormente, enquanto em rascunho", () => {
+  const version = requireSuccess(createVersion({ origin: { kind: BudgetVersionOriginKind.Native } }));
+  const updated = registerLineageRelation({
+    budgetVersion: version,
+    origin: { kind: BudgetVersionOriginKind.DocumentaryOpaqueReference, reference: "evidencia-registrada-depois" },
+  });
+  assertVersionSuccess(updated, "expected success registering a later lineage relation while in draft");
+  assertEqual(updated.budgetVersion.originLineage.origin.kind, BudgetVersionOriginKind.DocumentaryOpaqueReference, "origin kind must be updated");
+});
+
+runTest("registro posterior de Relação de Rastreabilidade é proibido após consolidação", () => {
+  const version = requireSuccess(createVersion());
+  const consolidated = requireSuccess(consolidateBudgetVersion({ budgetVersion: version }));
+  const attempt = registerLineageRelation({
+    budgetVersion: consolidated,
+    origin: { kind: BudgetVersionOriginKind.Native },
+  });
+  assertVersionFailure(attempt, "expected failure registering a lineage relation on a consolidated version");
+  assertEqual(attempt.errors[0]?.code, "consolidated_version_immutable", "error code mismatch");
+});
+
+// ---------------------------------------------------------------------------
+// 18.9 — Validação conjunta Processo/organização/Escopo e identificadores vazios
+// ---------------------------------------------------------------------------
+
+runTest("rejeita Versão do Orçamento com identificador vazio", () => {
+  const attempt = createBudgetVersion({
+    id: "",
+    organizationId,
+    procurementCaseId,
+    scope: wholeCaseScope,
+    origin: { kind: BudgetVersionOriginKind.Native },
+  });
+  assertVersionFailure(attempt, "expected missing id failure");
+  assertEqual(attempt.errors[0]?.code, "missing_id", "error code mismatch");
+});
+
+runTest("rejeita Linha do Orçamento com identificador vazio", () => {
+  const version = requireSuccess(createVersion());
+  const attempt = addBudgetLine({ ...groupInput(version, "", 0) });
+  assertVersionFailure(attempt, "expected missing id failure");
+  assertEqual(attempt.errors[0]?.code, "missing_id", "error code mismatch");
+});
+
+runTest("rejeita Versão do Orçamento cujo Escopo pertence a outro Processo (validação conjunta Processo/Escopo)", () => {
+  const foreignScope: ProcurementScope = { kind: ProcurementScopeKind.WholeCase, procurementCaseId: "case-other" };
+  const attempt = createBudgetVersion({
+    id: "version-mismatched-scope",
+    organizationId,
+    procurementCaseId,
+    scope: foreignScope,
+    origin: { kind: BudgetVersionOriginKind.Native },
+  });
+  assertVersionFailure(attempt, "expected scope/case mismatch failure");
+  assertEqual(attempt.errors[0]?.code, "scope_case_mismatch", "error code mismatch");
+});
+
+runTest("rejeita Escopo estruturalmente arbitrário na criação da Versão", () => {
+  const malformedScope = { kind: ProcurementScopeKind.WholeCase, procurementCaseId, procurementLotId: "lot-a" } as unknown as ProcurementScope;
+  const attempt = createBudgetVersion({
+    id: "version-malformed-scope",
+    organizationId,
+    procurementCaseId,
+    scope: malformedScope,
+    origin: { kind: BudgetVersionOriginKind.Native },
+  });
+  assertVersionFailure(attempt, "expected malformed scope failure");
+  assertEqual(attempt.errors[0]?.code, "malformed_scope", "error code mismatch");
+});
+
+runTest("rejeita Escopo estruturalmente arbitrário ao adicionar uma Linha", () => {
+  const version = requireSuccess(createVersion());
+  const malformedScope = { kind: ProcurementScopeKind.Lot, procurementCaseId } as unknown as ProcurementScope;
+  const attempt = addBudgetLine({ ...groupInput(version, "group-1", 0, malformedScope) });
+  assertVersionFailure(attempt, "expected malformed scope failure");
+  assertEqual(attempt.errors[0]?.code, "malformed_scope", "error code mismatch");
+});
+
+runTest("correlationId, createdBy e sourceSystem podem ser omitidos ao criar a Versão", () => {
+  const result = createBudgetVersion({
+    id: "version-without-provenance-fields",
+    organizationId,
+    procurementCaseId,
+    scope: wholeCaseScope,
+    origin: { kind: BudgetVersionOriginKind.Native },
+  });
+  assertVersionSuccess(result, "expected success without correlationId/createdBy/sourceSystem");
+});
+
+// ---------------------------------------------------------------------------
+// 18.10 — Compatibilidade de Escopo entre pai e filho
+// ---------------------------------------------------------------------------
+
+runTest("aceita filho cujo Escopo é compatível com o Escopo do pai", () => {
+  let version = requireSuccess(createVersion());
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-lot-a", 0, lotAScope)));
+  version = requireSuccess(addBudgetLine(subgroupInput(version, "subgroup-lot-a", "group-lot-a", 0, lotAScope)));
+  assertEqual(version.lines.length, 2, "expected both lines to be accepted");
+});
+
+runTest("rejeita filho cujo Escopo diverge do Escopo do pai", () => {
+  let version = requireSuccess(createVersion());
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-lot-a", 0, lotAScope)));
+  const attempt = addBudgetLine(subgroupInput(version, "subgroup-lot-b", "group-lot-a", 0, lotBScope));
+  assertVersionFailure(attempt, "expected child scope incompatible with parent scope failure");
+  assertEqual(attempt.errors[0]?.code, "child_scope_incompatible_with_parent", "error code mismatch");
+});
+
+// ---------------------------------------------------------------------------
+// 18.11 — Alteração controlada de Linhas do Orçamento
+// ---------------------------------------------------------------------------
+
+runTest("altera descrição, código externo e total de uma Linha em rascunho", () => {
+  let version = requireSuccess(createVersion());
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0)));
+  version = requireSuccess(addBudgetLine(serviceItemInput(version, "item-1", "group-1", 0, centsFromExactReais(10))));
+
+  const updated = updateBudgetLine({
+    budgetVersion: version,
+    lineId: "item-1",
+    description: "Descrição alterada",
+    externalCode: "NEW-CODE",
+    totalCents: centsFromExactReais(20),
+  });
+  assertVersionSuccess(updated, "expected update success");
+  const updatedLine = updated.budgetVersion.lines.find((line) => line.id === "item-1");
+  assertEqual(updatedLine?.description, "Descrição alterada", "description must be updated");
+  assertEqual(updatedLine?.externalCode, "NEW-CODE", "external code must be updated");
+  assertEqual(updatedLine?.totalCents, centsFromExactReais(20), "total must be updated");
+});
+
+runTest("rejeita alteração de Linha após consolidação", () => {
+  let version = requireSuccess(createVersion());
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0)));
+  const consolidated = requireSuccess(consolidateBudgetVersion({ budgetVersion: version }));
+
+  const attempt = updateBudgetLine({ budgetVersion: consolidated, lineId: "group-1", description: "Nova descrição" });
+  assertVersionFailure(attempt, "expected failure updating a line on a consolidated version");
+  assertEqual(attempt.errors[0]?.code, "consolidated_version_immutable", "error code mismatch");
+});
+
+runTest("altera o Escopo de uma Linha-pai apenas quando os filhos existentes permanecem compatíveis", () => {
+  let version = requireSuccess(createVersion());
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-lot-a", 0, lotAScope)));
+  version = requireSuccess(addBudgetLine(subgroupInput(version, "subgroup-lot-a", "group-lot-a", 0, lotAScope)));
+
+  const incompatibleAttempt = updateBudgetLine({ budgetVersion: version, lineId: "group-lot-a", scope: lotBScope });
+  assertVersionFailure(incompatibleAttempt, "expected failure: changing parent scope would strand an existing child");
+  assertEqual(incompatibleAttempt.errors[0]?.code, "child_scope_incompatible_with_parent", "error code mismatch");
+});
+
+// ---------------------------------------------------------------------------
+// 18.12 — Remoção controlada de Linhas do Orçamento
+// ---------------------------------------------------------------------------
+
+runTest("remove uma Linha sem filhos em rascunho", () => {
+  let version = requireSuccess(createVersion());
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0)));
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-2", 1)));
+
+  const removed = removeBudgetLine({ budgetVersion: version, lineId: "group-2" });
+  assertVersionSuccess(removed, "expected removal success");
+  assertEqual(removed.budgetVersion.lines.length, 1, "expected exactly one remaining line");
+});
+
+runTest("rejeita remoção de Linha que possui filhos", () => {
+  let version = requireSuccess(createVersion());
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0)));
+  version = requireSuccess(addBudgetLine(subgroupInput(version, "subgroup-1", "group-1", 0)));
+
+  const attempt = removeBudgetLine({ budgetVersion: version, lineId: "group-1" });
+  assertVersionFailure(attempt, "expected failure removing a line with children");
+  assertEqual(attempt.errors[0]?.code, "line_has_children", "error code mismatch");
+});
+
+runTest("rejeita remoção de Linha após consolidação", () => {
+  let version = requireSuccess(createVersion());
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0)));
+  const consolidated = requireSuccess(consolidateBudgetVersion({ budgetVersion: version }));
+
+  const attempt = removeBudgetLine({ budgetVersion: consolidated, lineId: "group-1" });
+  assertVersionFailure(attempt, "expected failure removing a line from a consolidated version");
+  assertEqual(attempt.errors[0]?.code, "consolidated_version_immutable", "error code mismatch");
+});
+
+// ---------------------------------------------------------------------------
+// 18.13 — Consolidação repetida não é mecanismo físico de idempotência
+// ---------------------------------------------------------------------------
+
+runTest("consolidação repetida é um no-op de domínio, não um mecanismo físico de idempotência", () => {
+  const version = requireSuccess(createVersion());
+  const firstConsolidation = requireSuccess(consolidateBudgetVersion({ budgetVersion: version }));
+  const secondConsolidation = requireSuccess(consolidateBudgetVersion({ budgetVersion: firstConsolidation }));
+
+  assertEqual(secondConsolidation.id, firstConsolidation.id, "id must be unchanged");
+  assertEqual(secondConsolidation.status, BudgetVersionStatus.Consolidated, "status must remain Consolidated");
+  // Esta asserção documenta a distinção: nenhuma identidade de execução,
+  // nenhuma persistência e nenhuma concorrência estão envolvidas aqui —
+  // apenas um retorno inalterado em memória. O mecanismo físico de
+  // idempotência (execução concorrente contra um registro persistido)
+  // permanece uma decisão em aberto, reservada à Sprint 21.3C.
 });
 
 // ---------------------------------------------------------------------------

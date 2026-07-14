@@ -1,4 +1,4 @@
-import { ProcurementScopeKind } from "../procurement-case";
+import { ProcurementScopeKind, isWellFormedProcurementScope } from "../procurement-case";
 import type { ProcurementScope } from "../procurement-case";
 import { isValidMoneyCents, sumCents } from "./budget-version-money";
 import type { MoneyCents } from "./budget-version-money";
@@ -15,6 +15,9 @@ import type {
   ConsolidateBudgetVersionInput,
   CreateBudgetVersionInput,
   LineageRelation,
+  RegisterLineageRelationInput,
+  RemoveBudgetLineInput,
+  UpdateBudgetLineInput,
   UpdateBudgetLinePositionInput,
 } from "./budget-version.types";
 import { BudgetLineKind, BudgetVersionStatus, LineageRelationNature } from "./budget-version.types";
@@ -23,6 +26,10 @@ export function createBudgetVersion(input: CreateBudgetVersionInput): BudgetVers
   const metadata = createVersionMetadata(input);
   const errors: BudgetVersionError[] = [];
 
+  if (isBlank(input.id)) {
+    errors.push(createVersionError("missing_id", "id", "Identity is required.", metadata));
+  }
+
   if (isBlank(input.organizationId)) {
     errors.push(createVersionError("missing_organization_id", "organizationId", "Organization id is required.", metadata));
   }
@@ -30,6 +37,19 @@ export function createBudgetVersion(input: CreateBudgetVersionInput): BudgetVers
   if (isBlank(input.procurementCaseId)) {
     errors.push(
       createVersionError("missing_procurement_case_id", "procurementCaseId", "Processo de Licitação e Contratação id is required.", metadata),
+    );
+  }
+
+  if (!isWellFormedProcurementScope(input.scope)) {
+    errors.push(createVersionError("malformed_scope", "scope", "Escopo da Licitação must be a well-formed WholeCase or Lot scope.", metadata));
+  } else if (!isBlank(input.procurementCaseId) && input.scope.procurementCaseId !== input.procurementCaseId) {
+    errors.push(
+      createVersionError(
+        "scope_case_mismatch",
+        "scope",
+        "The Escopo da Licitação must belong to the same Processo de Licitação e Contratação as the Versão do Orçamento.",
+        metadata,
+      ),
     );
   }
 
@@ -77,12 +97,54 @@ export function createBudgetVersion(input: CreateBudgetVersionInput): BudgetVers
 }
 
 /**
- * Adiciona (ou reorganiza, via nova chamada) uma Linha do Orçamento —
- * somente permitido enquanto a Versão estiver em rascunho (ADR-003 §F.2).
- * Grupo nunca possui pai; Subgrupo sempre possui Grupo como pai; Item de
- * Serviço possui Grupo ou Subgrupo como pai. Código externo é sempre
- * opcional — o caso real `COT-015` (Item de Serviço sem código) é
- * representável sem exceção especial.
+ * Registro posterior (ou substituição) da origem/Relação de Rastreabilidade
+ * da Versão — somente em rascunho (mapa §13). Substitui `originLineage` por
+ * um novo registro; não acumula uma coleção de relações nesta Sprint.
+ */
+export function registerLineageRelation(input: RegisterLineageRelationInput): BudgetVersionResult {
+  const { budgetVersion } = input;
+  const metadata: BudgetVersionMetadata = { ...budgetVersion.metadata, budgetVersionId: budgetVersion.id };
+
+  if (budgetVersion.status === BudgetVersionStatus.Consolidated) {
+    return immutableVersionFailure(budgetVersion, "budgetVersion", metadata);
+  }
+
+  if (input.origin.kind === "DocumentaryOpaqueReference" && isBlank(input.origin.reference)) {
+    return freezeDomainObject<BudgetVersionFailure>({
+      success: false,
+      budgetVersion: null,
+      errors: [
+        createVersionError("invalid_origin_reference", "origin.reference", "Documentary opaque reference must not be blank.", metadata),
+      ],
+      warnings: [],
+      metadata,
+    });
+  }
+
+  const originLineage: LineageRelation = {
+    id: `${budgetVersion.id}-origin-lineage`,
+    organizationId: budgetVersion.organizationId,
+    nature: LineageRelationNature.Origin,
+    origin: input.origin,
+    destinationBudgetVersionId: budgetVersion.id,
+    metadata,
+  };
+
+  return freezeDomainObject<BudgetVersionSuccess>({
+    success: true,
+    budgetVersion: { ...budgetVersion, originLineage },
+    errors: [],
+    warnings: [],
+    metadata,
+  });
+}
+
+/**
+ * Adiciona uma Linha do Orçamento — somente permitido enquanto a Versão
+ * estiver em rascunho (ADR-003 §F.2). Grupo nunca possui pai; Subgrupo
+ * sempre possui Grupo como pai; Item de Serviço possui Grupo ou Subgrupo
+ * como pai. Código externo é sempre opcional — o caso real `COT-015` (Item
+ * de Serviço sem código) é representável sem exceção especial.
  */
 export function addBudgetLine(input: AddBudgetLineInput): BudgetVersionResult {
   const { budgetVersion } = input;
@@ -93,6 +155,10 @@ export function addBudgetLine(input: AddBudgetLineInput): BudgetVersionResult {
   }
 
   const errors: BudgetVersionError[] = [];
+
+  if (isBlank(input.id)) {
+    errors.push(createVersionError("missing_id", "id", "Identity is required.", metadata));
+  }
 
   if (isBlank(input.description)) {
     errors.push(createVersionError("missing_description", "description", "Description is required.", metadata));
@@ -106,13 +172,17 @@ export function addBudgetLine(input: AddBudgetLineInput): BudgetVersionResult {
     errors.push(createVersionError("self_parent", "parentLineId", "A line cannot be its own parent.", metadata));
   }
 
-  const parentErrors = validateParent(budgetVersion, input);
+  const parentErrors = validateParent(budgetVersion, input.kind, input.parentLineId ?? null, metadata);
   errors.push(...parentErrors);
 
-  const scopeErrors = validateLineScope(budgetVersion.scope, input.scope, metadata);
-  errors.push(...scopeErrors);
+  if (!isWellFormedProcurementScope(input.scope)) {
+    errors.push(createVersionError("malformed_scope", "scope", "Escopo da Licitação must be a well-formed WholeCase or Lot scope.", metadata));
+  } else {
+    errors.push(...validateLineScope(budgetVersion.scope, input.scope, metadata));
+    errors.push(...validateParentChildScope(budgetVersion, input.parentLineId ?? null, input.scope, metadata));
+  }
 
-  const totalErrors = validateLineTotal(input, metadata);
+  const totalErrors = validateLineTotal(input.kind, input.totalCents, metadata);
   errors.push(...totalErrors);
 
   if (budgetVersion.lines.some((line) => line.parentLineId === (input.parentLineId ?? null) && line.position === input.position)) {
@@ -154,6 +224,134 @@ export function addBudgetLine(input: AddBudgetLineInput): BudgetVersionResult {
     budgetVersion: {
       ...budgetVersion,
       lines: [...budgetVersion.lines, newLine],
+    },
+    errors: [],
+    warnings: [],
+    metadata,
+  });
+}
+
+/**
+ * Alteração controlada de campos de uma Linha existente (descrição, código
+ * externo, escopo, total) — somente em rascunho. Reaplica as mesmas
+ * validações de `addBudgetLine` para os campos alterados (compatibilidade
+ * de escopo com a Versão e com o pai, validade do total econômico).
+ */
+export function updateBudgetLine(input: UpdateBudgetLineInput): BudgetVersionResult {
+  const { budgetVersion, lineId } = input;
+  const metadata: BudgetVersionMetadata = { ...budgetVersion.metadata, budgetVersionId: budgetVersion.id, lineId };
+
+  if (budgetVersion.status === BudgetVersionStatus.Consolidated) {
+    return immutableVersionFailure(budgetVersion, "budgetVersion", metadata);
+  }
+
+  const target = budgetVersion.lines.find((line) => line.id === lineId);
+
+  if (target === undefined) {
+    return freezeDomainObject<BudgetVersionFailure>({
+      success: false,
+      budgetVersion: null,
+      errors: [createVersionError("unknown_line", "lineId", `No line with id "${lineId}" exists in this version.`, metadata)],
+      warnings: [],
+      metadata,
+    });
+  }
+
+  const errors: BudgetVersionError[] = [];
+
+  if (input.description !== undefined && isBlank(input.description)) {
+    errors.push(createVersionError("missing_description", "description", "Description is required.", metadata));
+  }
+
+  const nextScope = input.scope ?? target.scope;
+
+  if (input.scope !== undefined) {
+    if (!isWellFormedProcurementScope(input.scope)) {
+      errors.push(createVersionError("malformed_scope", "scope", "Escopo da Licitação must be a well-formed WholeCase or Lot scope.", metadata));
+    } else {
+      errors.push(...validateLineScope(budgetVersion.scope, input.scope, metadata));
+      errors.push(...validateParentChildScope(budgetVersion, target.parentLineId, input.scope, metadata));
+      errors.push(...validateChildrenScopeAgainstNewParentScope(budgetVersion, lineId, input.scope, metadata));
+    }
+  }
+
+  const nextTotalCents = input.totalCents !== undefined ? input.totalCents : target.totalCents;
+  errors.push(...validateLineTotal(target.kind, nextTotalCents, metadata));
+
+  if (errors.length > 0) {
+    return freezeDomainObject<BudgetVersionFailure>({
+      success: false,
+      budgetVersion: null,
+      errors,
+      warnings: [],
+      metadata,
+    });
+  }
+
+  const updatedLine: BudgetLine = {
+    ...target,
+    description: input.description ?? target.description,
+    externalCode: input.externalCode !== undefined ? input.externalCode : target.externalCode,
+    scope: nextScope,
+    totalCents: target.kind === BudgetLineKind.ServiceItem ? nextTotalCents : null,
+  };
+
+  return freezeDomainObject<BudgetVersionSuccess>({
+    success: true,
+    budgetVersion: {
+      ...budgetVersion,
+      lines: budgetVersion.lines.map((line) => (line.id === lineId ? updatedLine : line)),
+    },
+    errors: [],
+    warnings: [],
+    metadata,
+  });
+}
+
+/**
+ * Remoção controlada de uma Linha — somente em rascunho, e somente quando a
+ * Linha não possui filhos (remover uma Linha com descendentes exige
+ * removê-los primeiro; nenhuma remoção em cascata é inventada aqui).
+ */
+export function removeBudgetLine(input: RemoveBudgetLineInput): BudgetVersionResult {
+  const { budgetVersion, lineId } = input;
+  const metadata: BudgetVersionMetadata = { ...budgetVersion.metadata, budgetVersionId: budgetVersion.id, lineId };
+
+  if (budgetVersion.status === BudgetVersionStatus.Consolidated) {
+    return immutableVersionFailure(budgetVersion, "budgetVersion", metadata);
+  }
+
+  const target = budgetVersion.lines.find((line) => line.id === lineId);
+
+  if (target === undefined) {
+    return freezeDomainObject<BudgetVersionFailure>({
+      success: false,
+      budgetVersion: null,
+      errors: [createVersionError("unknown_line", "lineId", `No line with id "${lineId}" exists in this version.`, metadata)],
+      warnings: [],
+      metadata,
+    });
+  }
+
+  const hasChildren = budgetVersion.lines.some((line) => line.parentLineId === lineId);
+
+  if (hasChildren) {
+    return freezeDomainObject<BudgetVersionFailure>({
+      success: false,
+      budgetVersion: null,
+      errors: [
+        createVersionError("line_has_children", "lineId", `Line "${lineId}" has children and cannot be removed before they are.`, metadata),
+      ],
+      warnings: [],
+      metadata,
+    });
+  }
+
+  return freezeDomainObject<BudgetVersionSuccess>({
+    success: true,
+    budgetVersion: {
+      ...budgetVersion,
+      lines: budgetVersion.lines.filter((line) => line.id !== lineId),
     },
     errors: [],
     warnings: [],
@@ -211,8 +409,13 @@ export function updateBudgetLinePosition(input: UpdateBudgetLinePositionInput): 
 }
 
 /**
- * Consolidação explícita (ADR-003 §F.2). Idempotente: consolidar uma versão
- * já consolidada apenas a retorna inalterada — nunca cria uma nova versão.
+ * Consolidação explícita (ADR-003 §F.2). Reinvocar sobre uma versão já
+ * consolidada apenas a retorna inalterada — um no-op de nível de domínio
+ * (nunca cria uma nova versão, nunca lança erro). Isso é uma salvaguarda de
+ * domínio, não um mecanismo físico de idempotência: não envolve execução
+ * concorrente, identificador de execução, nem persistência — a questão de
+ * idempotência física (ex.: duas requisições de consolidação simultâneas
+ * contra o mesmo registro persistido) pertence à Sprint 21.3C.
  */
 export function consolidateBudgetVersion(input: ConsolidateBudgetVersionInput): BudgetVersionResult {
   const { budgetVersion } = input;
@@ -309,11 +512,13 @@ export function hasHierarchyCycle(lines: ReadonlyArray<BudgetLine>): boolean {
   });
 }
 
-function validateParent(budgetVersion: BudgetVersion, input: AddBudgetLineInput): ReadonlyArray<BudgetVersionError> {
-  const metadata = createLineMetadata(input);
-  const parentLineId = input.parentLineId ?? null;
-
-  if (input.kind === BudgetLineKind.Group) {
+function validateParent(
+  budgetVersion: BudgetVersion,
+  kind: BudgetLineKind,
+  parentLineId: BudgetLine["id"] | null,
+  metadata: BudgetVersionMetadata,
+): ReadonlyArray<BudgetVersionError> {
+  if (kind === BudgetLineKind.Group) {
     if (parentLineId !== null) {
       return [createVersionError("incompatible_parent_kind", "parentLineId", "Grupo must not have a parent line.", metadata)];
     }
@@ -321,7 +526,7 @@ function validateParent(budgetVersion: BudgetVersion, input: AddBudgetLineInput)
   }
 
   if (parentLineId === null) {
-    return [createVersionError("missing_parent_line", "parentLineId", `${input.kind} requires a parent line.`, metadata)];
+    return [createVersionError("missing_parent_line", "parentLineId", `${kind} requires a parent line.`, metadata)];
   }
 
   const parent = budgetVersion.lines.find((line) => line.id === parentLineId);
@@ -336,15 +541,11 @@ function validateParent(budgetVersion: BudgetVersion, input: AddBudgetLineInput)
     ];
   }
 
-  if (input.kind === BudgetLineKind.Subgroup && parent.kind !== BudgetLineKind.Group) {
+  if (kind === BudgetLineKind.Subgroup && parent.kind !== BudgetLineKind.Group) {
     return [createVersionError("incompatible_parent_kind", "parentLineId", "Subgrupo must have a Grupo as parent.", metadata)];
   }
 
-  if (
-    input.kind === BudgetLineKind.ServiceItem &&
-    parent.kind !== BudgetLineKind.Group &&
-    parent.kind !== BudgetLineKind.Subgroup
-  ) {
+  if (kind === BudgetLineKind.ServiceItem && parent.kind !== BudgetLineKind.Group && parent.kind !== BudgetLineKind.Subgroup) {
     return [
       createVersionError("incompatible_parent_kind", "parentLineId", "Item de Serviço must have a Grupo or Subgrupo as parent.", metadata),
     ];
@@ -359,18 +560,21 @@ function validateParent(budgetVersion: BudgetVersion, input: AddBudgetLineInput)
  * inteiro aceita linhas do processo inteiro ou de qualquer lote válido
  * daquele processo; Versão de lote só aceita linhas do mesmo lote. A
  * existência do próprio lote é responsabilidade de `procurement-case`
- * (`createLotScope`), consultado antes desta chamada.
+ * (`createLotScope`), consultado antes desta chamada. A mesma função
+ * também governa a compatibilidade de Escopo entre uma Linha-pai e sua
+ * Linha-filha (o Escopo do pai age como teto, exatamente como o Escopo da
+ * Versão age como teto para uma Linha de nível superior).
  */
-function isScopeCompatible(versionScope: ProcurementScope, lineScope: ProcurementScope): boolean {
-  if (lineScope.procurementCaseId !== versionScope.procurementCaseId) {
+function isScopeCompatible(ceilingScope: ProcurementScope, candidateScope: ProcurementScope): boolean {
+  if (candidateScope.procurementCaseId !== ceilingScope.procurementCaseId) {
     return false;
   }
 
-  if (versionScope.kind === ProcurementScopeKind.WholeCase) {
+  if (ceilingScope.kind === ProcurementScopeKind.WholeCase) {
     return true;
   }
 
-  return lineScope.kind === ProcurementScopeKind.Lot && lineScope.procurementLotId === versionScope.procurementLotId;
+  return candidateScope.kind === ProcurementScopeKind.Lot && candidateScope.procurementLotId === ceilingScope.procurementLotId;
 }
 
 function validateLineScope(
@@ -392,9 +596,68 @@ function validateLineScope(
   ];
 }
 
-function validateLineTotal(input: AddBudgetLineInput, metadata: BudgetVersionMetadata): ReadonlyArray<BudgetVersionError> {
-  if (input.kind !== BudgetLineKind.ServiceItem) {
-    if (input.totalCents !== undefined && input.totalCents !== null) {
+/** Compatibilidade de Escopo entre pai e filho: o Escopo do pai é o teto do filho. */
+function validateParentChildScope(
+  budgetVersion: BudgetVersion,
+  parentLineId: BudgetLine["id"] | null,
+  childScope: ProcurementScope,
+  metadata: BudgetVersionMetadata,
+): ReadonlyArray<BudgetVersionError> {
+  if (parentLineId === null) {
+    return [];
+  }
+
+  const parent = budgetVersion.lines.find((line) => line.id === parentLineId);
+
+  if (parent === undefined || !isScopeCompatible(parent.scope, childScope)) {
+    if (parent === undefined) {
+      return [];
+    }
+    return [
+      createVersionError(
+        "child_scope_incompatible_with_parent",
+        "scope",
+        "The line's Escopo da Licitação is not compatible with its parent line's Escopo.",
+        metadata,
+      ),
+    ];
+  }
+
+  return [];
+}
+
+/** Ao alterar o Escopo de uma Linha, seus filhos existentes precisam continuar compatíveis. */
+function validateChildrenScopeAgainstNewParentScope(
+  budgetVersion: BudgetVersion,
+  lineId: BudgetLine["id"],
+  newScope: ProcurementScope,
+  metadata: BudgetVersionMetadata,
+): ReadonlyArray<BudgetVersionError> {
+  const incompatibleChild = budgetVersion.lines.find(
+    (line) => line.parentLineId === lineId && !isScopeCompatible(newScope, line.scope),
+  );
+
+  if (incompatibleChild === undefined) {
+    return [];
+  }
+
+  return [
+    createVersionError(
+      "child_scope_incompatible_with_parent",
+      "scope",
+      `Changing this line's Escopo would make existing child line "${incompatibleChild.id}" incompatible.`,
+      metadata,
+    ),
+  ];
+}
+
+function validateLineTotal(
+  kind: BudgetLineKind,
+  totalCents: MoneyCents | null | undefined,
+  metadata: BudgetVersionMetadata,
+): ReadonlyArray<BudgetVersionError> {
+  if (kind !== BudgetLineKind.ServiceItem) {
+    if (totalCents !== undefined && totalCents !== null) {
       return [
         createVersionError(
           "invalid_total_cents",
@@ -407,7 +670,7 @@ function validateLineTotal(input: AddBudgetLineInput, metadata: BudgetVersionMet
     return [];
   }
 
-  if (input.totalCents === undefined || input.totalCents === null || !isValidMoneyCents(input.totalCents)) {
+  if (totalCents === undefined || totalCents === null || !isValidMoneyCents(totalCents)) {
     return [
       createVersionError("invalid_total_cents", "totalCents", "Item de Serviço requires a valid non-negative integer totalCents.", metadata),
     ];
