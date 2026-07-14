@@ -11,7 +11,7 @@ import { BudgetLineKind, BudgetVersionStatus } from "../../../packages/bdos-core
 import {
   createBudgetVersionRepository,
   createProcurementCaseRepository,
-} from "../../../apps/web/lib/bdos/procurement-engineering-repository.ts";
+} from "../../../apps/web/lib/bdos/procurement-engineering-server-repository.ts";
 
 // Sprint 21.3C — teste de persistência da fixture oficial Lagoa do Arroz.
 // Monta o agregado inteiro pelo domínio puro da Sprint 21.3B
@@ -20,6 +20,15 @@ import {
 // Sprint — nenhum Serviço de Aplicação de importação em massa é criado só
 // para este teste. Exige um ambiente de teste explicitamente dedicado —
 // ver README.md nesta pasta.
+//
+// Desde a correção de fechamento da fronteira de confiança, as 4 funções
+// de mutação só são executáveis por `service_role`
+// (20260714000004_..._server_only_functions.sql) — os repositórios de
+// escrita usados aqui são construídos com `serviceRoleClient`, nunca com o
+// cliente autenticado por senha; `clientAId` entra como `actor` em cada
+// chamada de escrita, exatamente como o caminho confiável real (Serviço de
+// Aplicação + adaptador de servidor) faria depois de já ter revalidado o
+// usuário via sessão.
 //
 // A fixture usa identidades de Processo/Versão/Relação fixas e não-UUID —
 // apropriadas para o domínio puro (Sprint 21.3B, onde identidade é só
@@ -153,9 +162,10 @@ function remapToPersistableIdentities(scenario, organizationId) {
 }
 
 async function main() {
-  const client = await signIn(clientAEmail, clientAPassword);
-  const procurementCaseRepository = createProcurementCaseRepository(client);
-  const budgetVersionRepository = createBudgetVersionRepository(client);
+  await signIn(clientAEmail, clientAPassword);
+  const serviceRoleClient = createServiceRoleClient();
+  const procurementCaseRepository = createProcurementCaseRepository(serviceRoleClient);
+  const budgetVersionRepository = createBudgetVersionRepository(serviceRoleClient);
 
   const scenario = buildLagoaDoArrozOfficialScenario();
   const { procurementCase, budgetVersion: draftBudgetVersion } = remapToPersistableIdentities(scenario, companyAId);
@@ -166,13 +176,13 @@ async function main() {
 
   try {
     await runTest("persiste o Processo e a Versão em rascunho com os 336 registros e a Relação de Rastreabilidade declarada na criação", async () => {
-      await procurementCaseRepository.createProcurementCase(companyAId, procurementCase);
+      await procurementCaseRepository.createProcurementCase(companyAId, clientAId, procurementCase);
 
-      const draft = await budgetVersionRepository.createDraftBudgetVersion(companyAId, { ...draftBudgetVersion, lines: [] });
+      const draft = await budgetVersionRepository.createDraftBudgetVersion(companyAId, clientAId, { ...draftBudgetVersion, lines: [] });
       assertEqual(draft.revision, 0);
       shared.persistedVersionId = draft.entity.id;
 
-      const saved = await budgetVersionRepository.saveBudgetVersion(companyAId, draftBudgetVersion, draft.revision);
+      const saved = await budgetVersionRepository.saveBudgetVersion(companyAId, clientAId, draftBudgetVersion, draft.revision);
       assertEqual(saved.outcome, "saved");
       if (saved.outcome === "saved") {
         shared.finalRevision = saved.revision;
@@ -195,7 +205,7 @@ async function main() {
       });
       assertEqual(updated.success, true, JSON.stringify(updated.errors));
 
-      const saved = await budgetVersionRepository.saveBudgetVersion(companyAId, updated.budgetVersion, reloaded.revision);
+      const saved = await budgetVersionRepository.saveBudgetVersion(companyAId, clientAId, updated.budgetVersion, reloaded.revision);
       assertEqual(saved.outcome, "saved");
       if (saved.outcome === "saved") {
         shared.finalRevision = saved.revision;
@@ -217,7 +227,7 @@ async function main() {
       const consolidated = consolidateBudgetVersion({ budgetVersion: reloaded.entity });
       assertEqual(consolidated.success, true);
 
-      const saved = await budgetVersionRepository.saveBudgetVersion(companyAId, consolidated.budgetVersion, reloaded.revision);
+      const saved = await budgetVersionRepository.saveBudgetVersion(companyAId, clientAId, consolidated.budgetVersion, reloaded.revision);
       assertEqual(saved.outcome, "saved");
       if (saved.outcome === "saved") {
         shared.finalRevision = saved.revision;
@@ -318,8 +328,7 @@ async function main() {
       assertEqual(reloaded.revision, shared.finalRevision, "revision must match what the last save call returned");
     });
   } finally {
-    const serviceClient = createServiceRoleClient();
-    await cleanupCreatedData(serviceClient, tracked);
+    await cleanupCreatedData(serviceRoleClient, tracked);
   }
 }
 

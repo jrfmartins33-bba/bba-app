@@ -18,7 +18,7 @@ import {
 import {
   createBudgetVersionRepository,
   createProcurementCaseRepository,
-} from "../../../apps/web/lib/bdos/procurement-engineering-repository.ts";
+} from "../../../apps/web/lib/bdos/procurement-engineering-server-repository.ts";
 
 // Sprint 21.3C — testes de integração com o banco real. Exige um ambiente
 // de teste explicitamente dedicado — ver README.md nesta pasta. Roda via
@@ -104,9 +104,15 @@ function assertTrue(value, message) {
 }
 
 async function main() {
-  const client = await signIn(clientAEmail, clientAPassword);
-  const procurementCaseRepository = createProcurementCaseRepository(client);
-  const budgetVersionRepository = createBudgetVersionRepository(client);
+  // `client` (autenticado como clientA) só é usado para provar, em outro
+  // arquivo (write-boundary), que o caminho direto está fechado — aqui,
+  // toda escrita passa pelo caminho confiável (service_role + ator já
+  // resolvido), exatamente como a camada de servidor faria depois de
+  // validar a sessão via apps/web/lib/supabase/server.ts.
+  await signIn(clientAEmail, clientAPassword);
+  const serviceRoleClient = createServiceRoleClient();
+  const procurementCaseRepository = createProcurementCaseRepository(serviceRoleClient);
+  const budgetVersionRepository = createBudgetVersionRepository(serviceRoleClient);
   const repositories = { procurementCaseRepository, budgetVersionRepository };
   const context = { organizationId: companyAId, actor: clientAId, correlationId: `sprint-21-3c-${runId()}`, sourceSystem: "sprint-21-3c-integration-test" };
   const marker = runId();
@@ -298,6 +304,7 @@ async function main() {
 
       const firstSave = await budgetVersionRepository.saveBudgetVersion(
         companyAId,
+        clientAId,
         { ...firstCopy.entity, lines: [...firstCopy.entity.lines, firstCopyLine] },
         firstCopy.revision,
       );
@@ -305,6 +312,7 @@ async function main() {
 
       const staleSave = await budgetVersionRepository.saveBudgetVersion(
         companyAId,
+        clientAId,
         { ...secondCopy.entity, lines: [...secondCopy.entity.lines, secondCopyLine] },
         secondCopy.revision,
       );
@@ -337,7 +345,12 @@ async function main() {
 
       const revisionBefore = draft.revision;
 
-      const { error } = await client.rpc("persist_budget_version_snapshot", {
+      // Forçar a falha via service_role (não authenticated — authenticated
+      // nem alcança a função, ver procurement-engineering-write-boundary.
+      // test.mjs seção 8/9): o objetivo aqui é a atomicidade da função em
+      // si, não a fronteira de autorização.
+      const { error } = await serviceRoleClient.rpc("persist_budget_version_snapshot", {
+        p_actor_id: clientAId,
         p_company_id: companyAId,
         p_budget_version_id: draft.budgetVersion.id,
         p_expected_revision: revisionBefore,
@@ -403,7 +416,7 @@ async function main() {
 
       assertTrue(childId < parentId, "precondition: child id must sort before parent id lexicographically");
 
-      const firstSave = await budgetVersionRepository.saveBudgetVersion(companyAId, withChild.budgetVersion, draft.revision);
+      const firstSave = await budgetVersionRepository.saveBudgetVersion(companyAId, clientAId, withChild.budgetVersion, draft.revision);
       assertEqual(firstSave.outcome, "saved", "persisting with a lexicographically-earlier child id must succeed — the mapper must order parent before child regardless of id ordering");
       if (firstSave.outcome !== "saved") return;
 

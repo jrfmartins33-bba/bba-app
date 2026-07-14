@@ -12,13 +12,25 @@ import {
 import {
   createBudgetVersionRepository,
   createProcurementCaseRepository,
-} from "../../../apps/web/lib/bdos/procurement-engineering-repository.ts";
+} from "../../../apps/web/lib/bdos/procurement-engineering-server-repository.ts";
 
 // Sprint 21.3C — testes obrigatórios de isolamento entre organizações
-// usuárias (seção 20 da instrução original / seção 9 da correção de
-// segurança). Exige um ambiente de teste explicitamente dedicado — ver
-// README.md nesta pasta. Nunca cai de volta em apps/web/.env.local, em
-// credenciais-padrão, ou em qualquer valor literal versionado.
+// usuárias (seção 20 da instrução original / seção 13 da correção de
+// fechamento da fronteira de confiança). Exige um ambiente de teste
+// explicitamente dedicado — ver README.md nesta pasta. Nunca cai de volta
+// em apps/web/.env.local, em credenciais-padrão, ou em qualquer valor
+// literal versionado.
+//
+// Desde a correção de fechamento da fronteira de confiança, as 4 funções
+// de mutação só são executáveis por `service_role`
+// (20260714000004_..._server_only_functions.sql) — logo toda a preparação
+// (seed) de dados de organização usuária usa `serviceRoleClient` (nunca o
+// cliente autenticado por senha), exatamente como
+// procurement-engineering-write-boundary.test.mjs e
+// procurement-engineering-integration.test.mjs. Os clientes autenticados
+// `clientA`/`clientB` continuam sendo os únicos usados para provar leitura
+// isolada por RLS e para as tentativas negativas de escrita — nunca
+// service_role, que jamais pode ser sujeito de um teste de isolamento.
 
 if (process.env.BDOS_ALLOW_DESTRUCTIVE_INTEGRATION_TESTS !== "true") {
   throw new Error(
@@ -58,9 +70,10 @@ async function signIn(email, password) {
 }
 
 function createServiceRoleClient() {
-  // Somente para preparação e limpeza de dados de teste — nunca sujeito
-  // dos testes de isolamento abaixo (seção 9 da correção: "nunca utilize
-  // cliente administrativo para provar isolamento").
+  // Somente para preparação (seed) e limpeza de dados de teste — nunca
+  // sujeito dos testes de isolamento abaixo (seção 9 da correção anterior,
+  // reafirmada na correção de fechamento: "nunca utilize a credencial
+  // privilegiada como sujeito de um teste de isolamento").
   return createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
@@ -106,9 +119,14 @@ function assertTrue(value, message) {
   if (!value) throw new Error(message ?? "esperava true, recebeu false");
 }
 
-async function seedOrganizationData(client, organizationId, actorId, marker, tracked) {
-  const procurementCaseRepository = createProcurementCaseRepository(client);
-  const budgetVersionRepository = createBudgetVersionRepository(client);
+function assertPermissionDenied(error, label) {
+  assertTrue(error !== null, `${label}: expected an error, got success`);
+  assertEqual(error.code, "42501", `${label}: expected a permission-denied error (42501), got ${JSON.stringify(error)}`);
+}
+
+async function seedOrganizationData(serviceRoleClient, organizationId, actorId, marker, tracked) {
+  const procurementCaseRepository = createProcurementCaseRepository(serviceRoleClient);
+  const budgetVersionRepository = createBudgetVersionRepository(serviceRoleClient);
   const repositories = { procurementCaseRepository, budgetVersionRepository };
   const context = { organizationId, actor: actorId, sourceSystem: "sprint-21-3c-isolation-test" };
 
@@ -155,14 +173,15 @@ async function main() {
   const tracked = { procurementCaseIds: [], budgetVersionIds: [] };
   const clientA = await signIn(clientAEmail, clientAPassword);
   const clientB = await signIn(clientBEmail, clientBPassword);
+  const serviceRoleClient = createServiceRoleClient();
 
   let dataA;
   let dataB;
 
   try {
-    await runTest("usuário A cria e lê dados da organização A; usuário B cria e lê dados da organização B", async () => {
-      dataA = await seedOrganizationData(clientA, companyAId, clientAId, `A-${marker}`, tracked);
-      dataB = await seedOrganizationData(clientB, companyBId, clientBId, `B-${marker}`, tracked);
+    await runTest("usuário A cria (via caminho confiável) e lê dados da organização A; usuário B cria e lê dados da organização B", async () => {
+      dataA = await seedOrganizationData(serviceRoleClient, companyAId, clientAId, `A-${marker}`, tracked);
+      dataB = await seedOrganizationData(serviceRoleClient, companyBId, clientBId, `B-${marker}`, tracked);
 
       const repositoryA = createProcurementCaseRepository(clientA);
       const foundOwnCase = await repositoryA.findProcurementCaseById(companyAId, dataA.procurementCase.id);
@@ -210,26 +229,26 @@ async function main() {
       assertEqual(rawLineage.length, 0, "RLS alone must hide the other organization's Relação de Rastreabilidade row");
     });
 
-    await runTest("usuário A não insere Processo com company_id da organização B (nem diretamente, nem via função protegida)", async () => {
+    await runTest("usuário A não insere Processo com company_id da organização B (nem diretamente na tabela, nem via função de mutação — que agora nega EXECUTE a authenticated)", async () => {
       const { error: directError } = await clientA
         .from("procurement_cases")
         .insert({ id: crypto.randomUUID(), company_id: companyBId, title: "Tentativa de inserção direta cruzando organizações", external_reference: null, metadata: {} });
       assertTrue(directError !== null, "direct insert with another organization's company_id must be rejected (no INSERT grant left for authenticated)");
 
       const { error: rpcError } = await clientA.rpc("create_procurement_case", {
+        p_actor_id: clientAId,
         p_company_id: companyBId,
         p_id: crypto.randomUUID(),
-        p_title: "Tentativa via função protegida cruzando organizações",
+        p_title: "Tentativa via função de mutação cruzando organizações",
         p_external_reference: null,
         p_metadata: {},
         p_correlation_id: null,
-        p_created_by: clientAId,
         p_source_system: null,
       });
-      assertTrue(rpcError !== null, "create_procurement_case must reject a company_id that does not match the caller's own organização usuária");
+      assertPermissionDenied(rpcError, "create_procurement_case via authenticated (payload de organização alheia)");
     });
 
-    await runTest("usuário A não atualiza Versão da organização B (nem diretamente, nem via função protegida)", async () => {
+    await runTest("usuário A não atualiza Versão da organização B (nem diretamente na tabela, nem via função de mutação — que agora nega EXECUTE a authenticated)", async () => {
       const { data, error } = await clientA
         .from("budget_versions")
         .update({ status: "Consolidated" })
@@ -238,11 +257,12 @@ async function main() {
       assertTrue(error !== null, "client A must not be able to update client B's Versão directly — no UPDATE grant left for authenticated");
       assertEqual(data ?? null, null);
 
-      // A função protegida autoriza pela company_id do próprio chamador (A) — não
-      // levanta exceção de autorização aqui, mas o id da Versão pertence a B, então
-      // `UPDATE ... WHERE id = <versão de B> AND company_id = A` nunca casa nenhuma
-      // linha: a função deve devolver conflito explícito, nunca sucesso.
+      // Desde a correção de fechamento da fronteira de confiança, `authenticated`
+      // não tem mais nenhum EXECUTE sobre `persist_budget_version_snapshot` — a
+      // chamada falha por permissão antes mesmo de a função avaliar de quem é a
+      // Versão, então nunca mais retorna `{ conflict: true }` para este cliente.
       const { data: rpcData, error: rpcError } = await clientA.rpc("persist_budget_version_snapshot", {
+        p_actor_id: clientAId,
         p_company_id: companyAId,
         p_budget_version_id: dataB.budgetVersionId,
         p_expected_revision: 0,
@@ -252,8 +272,8 @@ async function main() {
         p_lineage_origin_kind: null,
         p_lineage_origin_reference: null,
       });
-      assertEqual(rpcError, null, rpcError?.message);
-      assertEqual(rpcData?.conflict, true, "the function must report a conflict, never silently succeed, for a Versão id that does not belong to the caller's own organização usuária");
+      assertPermissionDenied(rpcError, "persist_budget_version_snapshot via authenticated (Versão de organização alheia)");
+      assertEqual(rpcData ?? null, null, "no data should ever be returned when EXECUTE itself is denied");
     });
 
     await runTest("usuário A não relaciona Processo A com Lote da organização B", async () => {
@@ -270,8 +290,7 @@ async function main() {
       assertEqual(result.outcome, "procurement_lot_not_found", "a Lot belonging to another organização usuária must never prove a scope, even when the Processo itself belongs to the caller");
     });
   } finally {
-    const serviceClient = createServiceRoleClient();
-    await cleanupCreatedData(serviceClient, tracked);
+    await cleanupCreatedData(serviceRoleClient, tracked);
   }
 }
 

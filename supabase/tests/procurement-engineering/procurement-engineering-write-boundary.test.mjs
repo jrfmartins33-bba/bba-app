@@ -11,17 +11,26 @@ import {
 import {
   createBudgetVersionRepository,
   createProcurementCaseRepository,
-} from "../../../apps/web/lib/bdos/procurement-engineering-repository.ts";
+} from "../../../apps/web/lib/bdos/procurement-engineering-server-repository.ts";
 
-// Sprint 21.3C — correção de segurança, seção 12: confirma que toda
-// mutação direta nas 5 tabelas falha (nenhum GRANT de INSERT/UPDATE/DELETE
-// restou para `authenticated` — migração 20260714000002_..._write_boundary.
-// sql), e que a mesma operação, feita pela função SECURITY DEFINER
-// autorizada (ou pelo Serviço de Aplicação que a invoca), passa. Usa
-// somente a organização de teste A — este arquivo não é sobre isolamento
-// entre organizações (ver procurement-engineering-isolation.test.mjs para
-// isso), é sobre a fronteira Serviço de Aplicação/função autorizada versus
-// escrita direta na tabela.
+// Sprint 21.3C — correção de fechamento da fronteira de confiança
+// (revisão final): as 4 funções de mutação (create_procurement_case,
+// register_procurement_lot, create_budget_version_draft,
+// persist_budget_version_snapshot) tiveram EXECUTE revogado de
+// `authenticated`/`anon`/PUBLIC e concedido só a `service_role`
+// (20260714000004_..._server_only_functions.sql). Este arquivo confirma:
+//
+// 1. Toda tentativa de um usuário `authenticated` chamar qualquer das 4
+//    funções diretamente falha por falta de permissão de EXECUTE — mesmo
+//    com payload sintaticamente válido da própria organização (seção 8/9
+//    da correção).
+// 2. O caminho confiável (cliente de `service_role`, ator já resolvido)
+//    continua funcionando (seção 10).
+// 3. A validação ator-organização dentro das funções funciona: mesmo
+//    usando `service_role`, um ator só pode operar a própria organização,
+//    exceto administrador BBA (seção 4/11).
+// 4. `created_by` persistido é sempre o ator validado, nunca um valor
+//    independente (seção 5).
 
 if (process.env.BDOS_ALLOW_DESTRUCTIVE_INTEGRATION_TESTS !== "true") {
   throw new Error(
@@ -46,6 +55,12 @@ const clientAEmail = requireEnv("RLS_TEST_CLIENT_A_EMAIL");
 const clientAPassword = requireEnv("RLS_TEST_CLIENT_A_PASSWORD");
 const clientAId = requireEnv("RLS_TEST_CLIENT_A_ID");
 const companyAId = requireEnv("RLS_TEST_COMPANY_A_ID");
+const companyBId = requireEnv("RLS_TEST_COMPANY_B_ID");
+// Opcional: quando presente, exercita o comportamento real de administrador
+// BBA (seção 4/11 — "conforme a regra real já existente"). Sem essa
+// variável, os cenários de admin são pulados explicitamente, nunca
+// simulados.
+const adminId = process.env.RLS_TEST_ADMIN_ID;
 
 async function signIn(email, password) {
   const client = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -55,6 +70,12 @@ async function signIn(email, password) {
 }
 
 function createServiceRoleClient() {
+  // A camada de servidor confiável (Sprint futura, Route Handler ainda não
+  // implementada nesta Sprint) usaria exatamente este tipo de cliente —
+  // autenticado com a chave de service_role, nunca a chave pública — para
+  // chamar os Serviços de Aplicação, depois de já ter resolvido e
+  // revalidado o ator via apps/web/lib/supabase/server.ts
+  // (getSupabaseRouteHandlerClient + requireAuthenticatedCompany).
   return createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
@@ -100,126 +121,273 @@ function assertTrue(value, message) {
   if (!value) throw new Error(message ?? "esperava true, recebeu false");
 }
 
+function assertPermissionDenied(error, label) {
+  assertTrue(error !== null, `${label}: expected an error, got success`);
+  assertEqual(error.code, "42501", `${label}: expected a permission-denied error (42501), got ${JSON.stringify(error)}`);
+}
+
 async function main() {
   const marker = runId();
   const tracked = { procurementCaseIds: [], budgetVersionIds: [] };
-  const client = await signIn(clientAEmail, clientAPassword);
-  const procurementCaseRepository = createProcurementCaseRepository(client);
-  const budgetVersionRepository = createBudgetVersionRepository(client);
-  const repositories = { procurementCaseRepository, budgetVersionRepository };
-  const context = { organizationId: companyAId, actor: clientAId, sourceSystem: "sprint-21-3c-write-boundary-test" };
+  const authenticatedClient = await signIn(clientAEmail, clientAPassword);
+  const serviceRoleClient = createServiceRoleClient();
 
   try {
-    let caseId;
-    let versionId;
-    let lineId;
+    await runTest("seção 8: authenticated não executa nenhuma das 4 funções de mutação, mesmo com payload sintaticamente válido da própria organização", async () => {
+      const { error: caseError } = await authenticatedClient.rpc("create_procurement_case", {
+        p_actor_id: clientAId,
+        p_company_id: companyAId,
+        p_id: crypto.randomUUID(),
+        p_title: "Tentativa direta",
+        p_external_reference: null,
+        p_metadata: {},
+        p_correlation_id: null,
+        p_source_system: null,
+      });
+      assertPermissionDenied(caseError, "create_procurement_case");
 
-    await runTest("insert direto em procurement_cases falha; create_procurement_case (Serviço de Aplicação) passa", async () => {
-      const { error: directError } = await client
-        .from("procurement_cases")
-        .insert({ id: crypto.randomUUID(), company_id: companyAId, title: "Tentativa de insert direto", external_reference: null, metadata: {} });
-      assertTrue(directError !== null, "direct insert into procurement_cases must fail — no INSERT grant left for authenticated");
+      const { error: lotError } = await authenticatedClient.rpc("register_procurement_lot", {
+        p_actor_id: clientAId,
+        p_company_id: companyAId,
+        p_id: crypto.randomUUID(),
+        p_procurement_case_id: crypto.randomUUID(),
+        p_title: "Tentativa direta",
+        p_external_reference: null,
+        p_metadata: {},
+        p_correlation_id: null,
+        p_source_system: null,
+      });
+      assertPermissionDenied(lotError, "register_procurement_lot");
 
-      const created = await createProcurementCaseService(context, { title: `[Sprint 21.3C][write-boundary] Processo ${marker}` }, procurementCaseRepository);
-      assertEqual(created.outcome, "created", "the same operation, through the Application Service and its authorized function, must succeed");
-      if (created.outcome !== "created") return;
-      caseId = created.procurementCase.id;
-      tracked.procurementCaseIds.push(caseId);
+      const { error: draftError } = await authenticatedClient.rpc("create_budget_version_draft", {
+        p_actor_id: clientAId,
+        p_company_id: companyAId,
+        p_id: crypto.randomUUID(),
+        p_procurement_case_id: crypto.randomUUID(),
+        p_scope_kind: "WholeCase",
+        p_procurement_lot_id: null,
+        p_origin_kind: "Native",
+        p_origin_reference: null,
+        p_metadata: {},
+        p_correlation_id: null,
+        p_source_system: null,
+        p_lineage_id: null,
+        p_lineage_origin_kind: null,
+        p_lineage_origin_reference: null,
+      });
+      assertPermissionDenied(draftError, "create_budget_version_draft");
+
+      const { error: snapshotError } = await authenticatedClient.rpc("persist_budget_version_snapshot", {
+        p_actor_id: clientAId,
+        p_company_id: companyAId,
+        p_budget_version_id: crypto.randomUUID(),
+        p_expected_revision: 0,
+        p_status: "Draft",
+        p_lines: [],
+        p_lineage_id: null,
+        p_lineage_origin_kind: null,
+        p_lineage_origin_reference: null,
+      });
+      assertPermissionDenied(snapshotError, "persist_budget_version_snapshot");
     });
 
-    await runTest("insert direto em procurement_lots falha; register_procurement_lot (Serviço de Aplicação) passa", async () => {
-      const { error: directError } = await client
-        .from("procurement_lots")
-        .insert({ id: crypto.randomUUID(), company_id: companyAId, procurement_case_id: caseId, title: "Tentativa de insert direto", external_reference: null, metadata: {} });
-      assertTrue(directError !== null, "direct insert into procurement_lots must fail — no INSERT grant left for authenticated");
+    let realCaseId;
+    let realLotId;
+    let realVersionId;
 
-      const registered = await registerProcurementLotService(context, { procurementCaseId: caseId, title: `[Sprint 21.3C][write-boundary] Lote ${marker}` }, procurementCaseRepository);
-      assertEqual(registered.outcome, "created", "the same operation, through the Application Service, must succeed");
-    });
+    await runTest("seção 10: caminho confiável (service_role, ator já resolvido) cria Processo, Lote, Versão e Linha normalmente", async () => {
+      const procurementCaseRepository = createProcurementCaseRepository(serviceRoleClient);
+      const budgetVersionRepository = createBudgetVersionRepository(serviceRoleClient);
+      const repositories = { procurementCaseRepository, budgetVersionRepository };
+      const context = { organizationId: companyAId, actor: clientAId, sourceSystem: "sprint-21-3c-write-boundary-test" };
 
-    await runTest("insert direto em budget_versions falha; create_budget_version_draft (Serviço de Aplicação) passa", async () => {
-      const { error: directError } = await client
-        .from("budget_versions")
-        .insert({ id: crypto.randomUUID(), company_id: companyAId, procurement_case_id: caseId, scope_kind: "WholeCase", procurement_lot_id: null, origin_kind: "Native", origin_reference: null });
-      assertTrue(directError !== null, "direct insert into budget_versions must fail — no INSERT grant left for authenticated");
+      const createdCase = await createProcurementCaseService(context, { title: `[Sprint 21.3C][write-boundary] Processo ${marker}` }, procurementCaseRepository);
+      assertEqual(createdCase.outcome, "created");
+      if (createdCase.outcome !== "created") return;
+      realCaseId = createdCase.procurementCase.id;
+      tracked.procurementCaseIds.push(realCaseId);
 
-      const draft = await createBudgetVersionDraftService(
-        context,
-        { procurementCaseId: caseId, scope: { kind: "WholeCase" }, origin: { kind: BudgetVersionOriginKind.Native } },
-        repositories,
-      );
-      assertEqual(draft.outcome, "success", "the same operation, through the Application Service and its authorized function, must succeed");
+      const createdLot = await registerProcurementLotService(context, { procurementCaseId: realCaseId, title: `[Sprint 21.3C][write-boundary] Lote ${marker}` }, procurementCaseRepository);
+      assertEqual(createdLot.outcome, "created");
+      if (createdLot.outcome === "created") realLotId = createdLot.procurementLot.id;
+
+      const draft = await createBudgetVersionDraftService(context, { procurementCaseId: realCaseId, scope: { kind: "WholeCase" }, origin: { kind: BudgetVersionOriginKind.Native } }, repositories);
+      assertEqual(draft.outcome, "success");
       if (draft.outcome !== "success") return;
-      versionId = draft.budgetVersion.id;
-      tracked.budgetVersionIds.push(versionId);
-    });
-
-    await runTest("update direto em budget_versions falha (status e revision); adicionar Linha pelo Serviço de Aplicação passa e avança a revisão corretamente", async () => {
-      const { data: statusData, error: statusError } = await client
-        .from("budget_versions")
-        .update({ status: "Consolidated" })
-        .eq("id", versionId)
-        .select("id");
-      assertTrue(statusError !== null, "direct UPDATE of status must be rejected outright — no UPDATE grant left for authenticated");
-      assertEqual(statusData ?? null, null);
-
-      const { data: revisionData, error: revisionError } = await client
-        .from("budget_versions")
-        .update({ revision: 999 })
-        .eq("id", versionId)
-        .select("id");
-      assertTrue(revisionError !== null, "direct UPDATE of revision must be rejected outright — no UPDATE grant left for authenticated");
-      assertEqual(revisionData ?? null, null);
+      realVersionId = draft.budgetVersion.id;
+      tracked.budgetVersionIds.push(realVersionId);
 
       const added = await addBudgetLineService(
         context,
-        { budgetVersionId: versionId, kind: BudgetLineKind.Group, description: { status: "Confirmed", text: "Grupo" }, position: 0, scope: { kind: "WholeCase" } },
+        { budgetVersionId: realVersionId, kind: BudgetLineKind.Group, description: { status: "Confirmed", text: "Grupo" }, position: 0, scope: { kind: "WholeCase" } },
         repositories,
       );
-      assertEqual(added.outcome, "success", "the same kind of write, through the Application Service and its authorized function, must succeed");
+      assertEqual(added.outcome, "success");
       if (added.outcome === "success") {
-        lineId = added.budgetVersion.lines[0].id;
-        assertEqual(added.revision, 1, "revision must have advanced exactly once through the authorized function");
+        assertEqual(added.revision, 1);
       }
+
+      // created_by persistido é exatamente o ator validado — nunca um
+      // valor independente (não existe mais p_created_by como parâmetro).
+      const { data: caseRow, error: caseRowError } = await serviceRoleClient.from("procurement_cases").select("created_by").eq("id", realCaseId).single();
+      assertEqual(caseRowError, null, caseRowError?.message);
+      assertEqual(caseRow.created_by, clientAId, "created_by must be exactly the validated actor");
     });
 
-    await runTest("insert direto em budget_lines falha; delete direto em budget_lines falha", async () => {
-      const { error: insertError } = await client.from("budget_lines").insert({
+    await runTest("seção 9: authenticated não contorna o domínio chamando persist_budget_version_snapshot diretamente, mesmo com dados válidos da própria organização — todas as tentativas falham antes de qualquer escrita, e a Versão persistida permanece intacta", async () => {
+      assertTrue(typeof realVersionId === "string", "the trusted-path test must have run first");
+
+      const { data: beforeRow, error: beforeError } = await serviceRoleClient.from("budget_versions").select("revision, status").eq("id", realVersionId).single();
+      assertEqual(beforeError, null, beforeError?.message);
+
+      const malformedAttempts = [
+        {
+          label: "1. versão consolidada retornando para rascunho",
+          payload: { p_status: "Draft", p_lines: [], p_expected_revision: beforeRow.revision },
+        },
+        {
+          label: "2. nova Linha em versão consolidada",
+          payload: {
+            p_status: beforeRow.status,
+            p_lines: [{ id: crypto.randomUUID(), kind: "Group", descriptionStatus: "Confirmed", descriptionText: "x", externalCode: null, parentLineId: null, position: 99, scopeKind: "WholeCase", scopeProcurementLotId: null, totalCents: null, metadata: {} }],
+            p_expected_revision: beforeRow.revision,
+          },
+        },
+        {
+          label: "3. Subgrupo sem Grupo",
+          payload: {
+            p_status: beforeRow.status,
+            p_lines: [{ id: crypto.randomUUID(), kind: "Subgroup", descriptionStatus: "Confirmed", descriptionText: "x", externalCode: null, parentLineId: null, position: 0, scopeKind: "WholeCase", scopeProcurementLotId: null, totalCents: null, metadata: {} }],
+            p_expected_revision: beforeRow.revision,
+          },
+        },
+        {
+          label: "4. Grupo com pai",
+          payload: {
+            p_status: beforeRow.status,
+            p_lines: [
+              { id: crypto.randomUUID(), kind: "Group", descriptionStatus: "Confirmed", descriptionText: "pai", externalCode: null, parentLineId: null, position: 0, scopeKind: "WholeCase", scopeProcurementLotId: null, totalCents: null, metadata: {} },
+              { id: crypto.randomUUID(), kind: "Group", descriptionStatus: "Confirmed", descriptionText: "filho ilegítimo", externalCode: null, parentLineId: null, position: 1, scopeKind: "WholeCase", scopeProcurementLotId: null, totalCents: null, metadata: {} },
+            ],
+            p_expected_revision: beforeRow.revision,
+          },
+        },
+        {
+          label: "5. Linha de lote diferente do Escopo restrito da Versão",
+          payload: {
+            p_status: beforeRow.status,
+            p_lines: [{ id: crypto.randomUUID(), kind: "Group", descriptionStatus: "Confirmed", descriptionText: "x", externalCode: null, parentLineId: null, position: 0, scopeKind: "Lot", scopeProcurementLotId: crypto.randomUUID(), totalCents: null, metadata: {} }],
+            p_expected_revision: beforeRow.revision,
+          },
+        },
+        {
+          label: "6. posições duplicadas",
+          payload: {
+            p_status: beforeRow.status,
+            p_lines: [
+              { id: crypto.randomUUID(), kind: "Group", descriptionStatus: "Confirmed", descriptionText: "a", externalCode: null, parentLineId: null, position: 0, scopeKind: "WholeCase", scopeProcurementLotId: null, totalCents: null, metadata: {} },
+              { id: crypto.randomUUID(), kind: "Group", descriptionStatus: "Confirmed", descriptionText: "b", externalCode: null, parentLineId: null, position: 0, scopeKind: "WholeCase", scopeProcurementLotId: null, totalCents: null, metadata: {} },
+            ],
+            p_expected_revision: beforeRow.revision,
+          },
+        },
+        {
+          label: "7. Relação de Rastreabilidade divergente da origem",
+          payload: {
+            p_status: beforeRow.status,
+            p_lines: [],
+            p_expected_revision: beforeRow.revision,
+            p_lineage_id: crypto.randomUUID(),
+            p_lineage_origin_kind: "DocumentaryOpaqueReference",
+            p_lineage_origin_reference: "arquivo-nao-relacionado.xlsx",
+          },
+        },
+      ];
+
+      for (const attempt of malformedAttempts) {
+        const { error } = await authenticatedClient.rpc("persist_budget_version_snapshot", {
+          p_actor_id: clientAId,
+          p_company_id: companyAId,
+          p_budget_version_id: realVersionId,
+          p_lineage_id: null,
+          p_lineage_origin_kind: null,
+          p_lineage_origin_reference: null,
+          ...attempt.payload,
+        });
+        assertPermissionDenied(error, attempt.label);
+      }
+
+      const { data: afterRow, error: afterError } = await serviceRoleClient.from("budget_versions").select("revision, status").eq("id", realVersionId).single();
+      assertEqual(afterError, null, afterError?.message);
+      assertEqual(afterRow.revision, beforeRow.revision, "revision must be untouched by every rejected attempt");
+      assertEqual(afterRow.status, beforeRow.status, "status must be untouched by every rejected attempt");
+    });
+
+    await runTest("seção 4/11: ator só opera a própria organização — mesma organização permitido, organização alheia rejeitado, ator inexistente rejeitado", async () => {
+      const procurementCaseRepository = createProcurementCaseRepository(serviceRoleClient);
+
+      const ownOrg = await procurementCaseRepository.createProcurementCase(companyAId, clientAId, {
         id: crypto.randomUUID(),
-        company_id: companyAId,
-        budget_version_id: versionId,
-        kind: "Group",
-        description_status: "Confirmed",
-        description_text: "Tentativa de insert direto",
-        external_code: null,
-        parent_line_id: null,
-        position: 1,
-        scope_kind: "WholeCase",
-        scope_procurement_lot_id: null,
-        total_cents: null,
+        organizationId: companyAId,
+        title: `[Sprint 21.3C][write-boundary] ator na própria organização ${marker}`,
+        externalReference: null,
         metadata: {},
       });
-      assertTrue(insertError !== null, "direct insert into budget_lines must fail — no INSERT grant left for authenticated");
+      tracked.procurementCaseIds.push(ownOrg.id);
 
-      const { data: deleteData, error: deleteError } = await client.from("budget_lines").delete().eq("id", lineId).select("id");
-      assertTrue(deleteError !== null, "direct DELETE of a line must be rejected outright — no DELETE grant left for authenticated");
-      assertEqual(deleteData ?? null, null);
+      const foreignAttemptId = crypto.randomUUID();
+      let foreignError = null;
+      try {
+        await procurementCaseRepository.createProcurementCase(companyBId, clientAId, {
+          id: foreignAttemptId,
+          organizationId: companyBId,
+          title: "Tentativa de ator A operando organização B",
+          externalReference: null,
+          metadata: {},
+        });
+      } catch (error) {
+        foreignError = error;
+      }
+      assertTrue(foreignError !== null, "an actor from organization A must not be able to operate organization B, even via the trusted service_role path");
+
+      const nonExistentActorId = crypto.randomUUID();
+      let missingActorError = null;
+      try {
+        await procurementCaseRepository.createProcurementCase(companyAId, nonExistentActorId, {
+          id: crypto.randomUUID(),
+          organizationId: companyAId,
+          title: "Tentativa de ator inexistente",
+          externalReference: null,
+          metadata: {},
+        });
+      } catch (error) {
+        missingActorError = error;
+      }
+      assertTrue(missingActorError !== null, "a non-existent actor id must be rejected");
     });
 
-    await runTest("insert direto em budget_version_lineage_relations falha; registrar via Serviço de Aplicação passa", async () => {
-      const { error: insertError } = await client.from("budget_version_lineage_relations").insert({
+    await runTest("seção 4/11: administrador BBA pode operar organização diferente da própria (comportamento real já existente)", async () => {
+      if (adminId === undefined) {
+        console.log("  (skipped: RLS_TEST_ADMIN_ID not set — admin scenario not exercised)");
+        return;
+      }
+
+      const procurementCaseRepository = createProcurementCaseRepository(serviceRoleClient);
+      const created = await procurementCaseRepository.createProcurementCase(companyAId, adminId, {
         id: crypto.randomUUID(),
-        company_id: companyAId,
-        budget_version_id: versionId,
-        nature: "Origin",
-        origin_kind: "Native",
-        origin_reference: null,
+        organizationId: companyAId,
+        title: `[Sprint 21.3C][write-boundary] criado por admin ${marker}`,
+        externalReference: null,
+        metadata: {},
       });
-      assertTrue(insertError !== null, "direct insert into budget_version_lineage_relations must fail — no INSERT grant left for authenticated");
+      tracked.procurementCaseIds.push(created.id);
+
+      const { data: row, error: rowError } = await serviceRoleClient.from("procurement_cases").select("created_by").eq("id", created.id).single();
+      assertEqual(rowError, null, rowError?.message);
+      assertEqual(row.created_by, adminId, "created_by must be the admin actor, exactly as validated");
     });
   } finally {
-    const serviceClient = createServiceRoleClient();
-    await cleanupCreatedData(serviceClient, tracked);
+    await cleanupCreatedData(serviceRoleClient, tracked);
   }
 }
 
