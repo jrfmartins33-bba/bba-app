@@ -10,8 +10,8 @@ import {
   mapBudgetVersionAggregate,
   mapProcurementCaseRow,
   mapProcurementLotRow,
-  procurementCaseInsertRow,
-  procurementLotInsertRow,
+  procurementCaseCreateRpcParams,
+  procurementLotRegisterRpcParams,
 } from "./procurement-engineering-mappers";
 
 // Adaptador de persistência (Sprint 21.3C) — implementa os contratos de
@@ -34,17 +34,23 @@ const LINEAGE_RELATION_COLUMNS = "id, budget_version_id, nature, origin_kind, or
 export function createProcurementCaseRepository(supabase: SupabaseClient): ProcurementCaseRepository {
   return {
     async createProcurementCase(organizationId, procurementCase) {
-      const { data, error } = await supabase
-        .from("procurement_cases")
-        .insert(procurementCaseInsertRow(organizationId, procurementCase))
-        .select(PROCUREMENT_CASE_COLUMNS)
-        .single();
+      // Correção de segurança: escrita direta em `procurement_cases` foi
+      // revogada de `authenticated` (20260714000002_..._write_boundary.sql)
+      // — a única forma autorizada de criar um Processo é esta função
+      // SECURITY DEFINER, que verifica auth.uid()/company_id explicitamente.
+      const { data, error } = await supabase.rpc(
+        "create_procurement_case",
+        procurementCaseCreateRpcParams(organizationId, procurementCase),
+      );
 
       if (error || !data) {
         throw error ?? new Error("Falha ao persistir o Processo de Licitação e Contratação.");
       }
 
-      return mapProcurementCaseRow(data);
+      // O retrato retornado é o mesmo já validado pelo domínio (Sprint
+      // 21.3B) que originou este INSERT — mesma disciplina de
+      // createDraftBudgetVersion, nenhuma releitura necessária.
+      return procurementCase;
     },
 
     async findProcurementCaseById(organizationId, id) {
@@ -63,17 +69,19 @@ export function createProcurementCaseRepository(supabase: SupabaseClient): Procu
     },
 
     async createProcurementLot(organizationId, procurementLot) {
-      const { data, error } = await supabase
-        .from("procurement_lots")
-        .insert(procurementLotInsertRow(organizationId, procurementLot))
-        .select(PROCUREMENT_LOT_COLUMNS)
-        .single();
+      // Mesma correção de segurança de createProcurementCase — escrita
+      // direta em `procurement_lots` foi revogada; única forma autorizada
+      // é esta função SECURITY DEFINER.
+      const { data, error } = await supabase.rpc(
+        "register_procurement_lot",
+        procurementLotRegisterRpcParams(organizationId, procurementLot),
+      );
 
       if (error || !data) {
         throw error ?? new Error("Falha ao persistir o Lote da Licitação.");
       }
 
-      return mapProcurementLotRow(data);
+      return procurementLot;
     },
 
     async findProcurementLotById(organizationId, procurementCaseId, id) {

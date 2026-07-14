@@ -7,6 +7,7 @@ import {
   updateBudgetLine,
   updateBudgetLinePosition,
 } from "../../domain/budget-version";
+import { BudgetVersionStatus } from "../../domain/budget-version";
 import type { BudgetVersion } from "../../domain/budget-version";
 import { ProcurementScopeKind } from "../../domain/procurement-case";
 import type { ProcurementLot, ProcurementScope } from "../../domain/procurement-case";
@@ -251,6 +252,14 @@ export async function consolidateBudgetVersionService(
 
   if (loaded === null) {
     return { outcome: "not_found" };
+  }
+
+  // Operação sem efeito de domínio (repetir a consolidação de uma Versão
+  // já consolidada): reconhecida antes de invocar o domínio, nunca chama
+  // saveBudgetVersion, nunca incrementa a revisão física — a mesma
+  // Versão e a mesma revisão já carregadas são devolvidas.
+  if (loaded.entity.status === BudgetVersionStatus.Consolidated) {
+    return { outcome: "success", budgetVersion: loaded.entity, revision: loaded.revision };
   }
 
   const domainResult = consolidateBudgetVersion({ budgetVersion: loaded.entity });

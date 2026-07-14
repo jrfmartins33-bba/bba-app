@@ -5,8 +5,8 @@ import {
   mapBudgetVersionAggregate,
   mapProcurementCaseRow,
   mapProcurementLotRow,
-  procurementCaseInsertRow,
-  procurementLotInsertRow,
+  procurementCaseCreateRpcParams,
+  procurementLotRegisterRpcParams,
 } from "./procurement-engineering-mappers";
 import type { BudgetLineRow, BudgetVersionRow, LineageRelationRow, ProcurementCaseRow, ProcurementLotRow } from "./procurement-engineering-mappers";
 import {
@@ -35,6 +35,12 @@ function runTest(name: string, testCase: () => void): void {
 function assertEqual<T>(actual: T, expected: T, message?: string): void {
   if (actual !== expected) {
     throw new Error(`${message ?? "valores diferentes"}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+}
+
+function assertTrue(value: boolean, message: string): void {
+  if (!value) {
+    throw new Error(message);
   }
 }
 
@@ -88,8 +94,8 @@ runTest("mapProcurementLotRow reconstrói o Lote vinculado ao Processo correto",
   assertEqual(lot.organizationId, COMPANY_A);
 });
 
-runTest("procurementCaseInsertRow extrai correlation_id/created_by/source_system da metadata do domínio", () => {
-  const row = procurementCaseInsertRow(COMPANY_A, {
+runTest("procurementCaseCreateRpcParams extrai correlation_id/created_by/source_system da metadata do domínio", () => {
+  const params = procurementCaseCreateRpcParams(COMPANY_A, {
     id: CASE_ID,
     organizationId: COMPANY_A,
     title: "Processo",
@@ -97,10 +103,10 @@ runTest("procurementCaseInsertRow extrai correlation_id/created_by/source_system
     metadata: { correlationId: "corr-x", createdBy: "user-1", sourceSystem: "bdos-core" },
   });
 
-  assertEqual(row.company_id, COMPANY_A);
-  assertEqual(row.correlation_id, "corr-x");
-  assertEqual(row.created_by, "user-1");
-  assertEqual(row.source_system, "bdos-core");
+  assertEqual(params.p_company_id, COMPANY_A);
+  assertEqual(params.p_correlation_id, "corr-x");
+  assertEqual(params.p_created_by, "user-1");
+  assertEqual(params.p_source_system, "bdos-core");
 });
 
 function wholeCaseVersionRow(overrides: Partial<BudgetVersionRow> = {}): BudgetVersionRow {
@@ -319,4 +325,103 @@ runTest("budgetVersionSnapshotRpcParams serializa Linhas com totalCents preserva
   assertEqual(lines[0].totalCents, 980_908_718);
   assertEqual(lines[0].externalCode, "COT-015");
   assertEqual(lines[0].descriptionText, "Item");
+});
+
+runTest("procurementLotRegisterRpcParams monta os parâmetros de register_procurement_lot", () => {
+  const params = procurementLotRegisterRpcParams(COMPANY_A, {
+    id: LOT_ID,
+    procurementCaseId: CASE_ID,
+    organizationId: COMPANY_A,
+    title: "Lote único",
+    externalReference: null,
+    metadata: { correlationId: "corr-lot" },
+  });
+
+  assertEqual(params.p_company_id, COMPANY_A);
+  assertEqual(params.p_id, LOT_ID);
+  assertEqual(params.p_procurement_case_id, CASE_ID);
+  assertEqual(params.p_correlation_id, "corr-lot");
+});
+
+function wholeCaseLine(id: string, parentLineId: string | null, kind = BudgetLineKind.Group): {
+  id: string;
+  budgetVersionId: string;
+  kind: typeof kind;
+  description: { status: "Confirmed"; text: string };
+  externalCode: null;
+  parentLineId: string | null;
+  position: number;
+  scope: { kind: ProcurementScopeKind.WholeCase; procurementCaseId: string };
+  totalCents: null;
+  metadata: Record<string, never>;
+} {
+  return {
+    id,
+    budgetVersionId: VERSION_ID,
+    kind,
+    description: { status: "Confirmed", text: id },
+    externalCode: null,
+    parentLineId,
+    position: 0,
+    scope: { kind: ProcurementScopeKind.WholeCase, procurementCaseId: CASE_ID },
+    totalCents: null,
+    metadata: {},
+  };
+}
+
+runTest("budgetVersionSnapshotRpcParams ordena as Linhas topologicamente — pai sempre antes do filho, mesmo com a entrada fora de ordem", () => {
+  // Entrada deliberadamente fora de ordem: o neto vem primeiro, o avô por último —
+  // exatamente o cenário que o gatilho de integridade de parent_line_id rejeitaria
+  // se a ordem de inserção não fosse corrigida aqui.
+  const grandchild = wholeCaseLine("line-grandchild", "line-child", BudgetLineKind.ServiceItem);
+  const child = wholeCaseLine("line-child", "line-parent", BudgetLineKind.Subgroup);
+  const parent = wholeCaseLine("line-parent", null, BudgetLineKind.Group);
+
+  const params = budgetVersionSnapshotRpcParams(
+    COMPANY_A,
+    {
+      id: VERSION_ID,
+      organizationId: COMPANY_A,
+      procurementCaseId: CASE_ID,
+      scope: { kind: ProcurementScopeKind.WholeCase, procurementCaseId: CASE_ID },
+      origin: { kind: BudgetVersionOriginKind.Native },
+      status: BudgetVersionStatus.Draft,
+      originLineage: null,
+      lines: [grandchild, child, parent],
+      metadata: {},
+    },
+    0,
+  );
+
+  const lines = params.p_lines as ReadonlyArray<{ id: string }>;
+  assertEqual(lines.length, 3);
+  const indexOf = (id: string) => lines.findIndex((line) => line.id === id);
+  assertTrue(indexOf("line-parent") < indexOf("line-child"), "parent must be serialized before its child");
+  assertTrue(indexOf("line-child") < indexOf("line-grandchild"), "child must be serialized before its own child");
+});
+
+runTest("budgetVersionSnapshotRpcParams rejeita explicitamente um ciclo entre Linhas", () => {
+  const lineA = wholeCaseLine("line-a", "line-b");
+  const lineB = wholeCaseLine("line-b", "line-a");
+
+  assertThrows(
+    () =>
+      budgetVersionSnapshotRpcParams(
+        COMPANY_A,
+        {
+          id: VERSION_ID,
+          organizationId: COMPANY_A,
+          procurementCaseId: CASE_ID,
+          scope: { kind: ProcurementScopeKind.WholeCase, procurementCaseId: CASE_ID },
+          origin: { kind: BudgetVersionOriginKind.Native },
+          status: BudgetVersionStatus.Draft,
+          originLineage: null,
+          lines: [lineA, lineB],
+          metadata: {},
+        },
+        0,
+      ),
+    Error,
+    "a cycle between two lines must be rejected explicitly, never silently serialized",
+  );
 });

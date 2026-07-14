@@ -307,30 +307,36 @@ function readOptionalMetadataString(metadata: Record<string, unknown>, key: stri
   return typeof value === "string" ? value : null;
 }
 
-export function procurementCaseInsertRow(organizationId: string, procurementCase: ProcurementCase): Record<string, unknown> {
+/**
+ * Parâmetros RPC de `create_procurement_case` (correção de segurança —
+ * substitui o INSERT direto de `procurement_cases`, que a migração
+ * `20260714000002_..._write_boundary.sql` revogou de `authenticated`).
+ */
+export function procurementCaseCreateRpcParams(organizationId: string, procurementCase: ProcurementCase): Record<string, unknown> {
   return {
-    id: procurementCase.id,
-    company_id: organizationId,
-    title: procurementCase.title,
-    external_reference: procurementCase.externalReference,
-    metadata: procurementCase.metadata,
-    correlation_id: readOptionalMetadataString(procurementCase.metadata, "correlationId"),
-    created_by: readOptionalMetadataString(procurementCase.metadata, "createdBy"),
-    source_system: readOptionalMetadataString(procurementCase.metadata, "sourceSystem"),
+    p_company_id: organizationId,
+    p_id: procurementCase.id,
+    p_title: procurementCase.title,
+    p_external_reference: procurementCase.externalReference,
+    p_metadata: procurementCase.metadata,
+    p_correlation_id: readOptionalMetadataString(procurementCase.metadata, "correlationId"),
+    p_created_by: readOptionalMetadataString(procurementCase.metadata, "createdBy"),
+    p_source_system: readOptionalMetadataString(procurementCase.metadata, "sourceSystem"),
   };
 }
 
-export function procurementLotInsertRow(organizationId: string, procurementLot: ProcurementLot): Record<string, unknown> {
+/** Parâmetros RPC de `register_procurement_lot` — mesma razão de `procurementCaseCreateRpcParams`. */
+export function procurementLotRegisterRpcParams(organizationId: string, procurementLot: ProcurementLot): Record<string, unknown> {
   return {
-    id: procurementLot.id,
-    company_id: organizationId,
-    procurement_case_id: procurementLot.procurementCaseId,
-    title: procurementLot.title,
-    external_reference: procurementLot.externalReference,
-    metadata: procurementLot.metadata,
-    correlation_id: readOptionalMetadataString(procurementLot.metadata, "correlationId"),
-    created_by: readOptionalMetadataString(procurementLot.metadata, "createdBy"),
-    source_system: readOptionalMetadataString(procurementLot.metadata, "sourceSystem"),
+    p_company_id: organizationId,
+    p_id: procurementLot.id,
+    p_procurement_case_id: procurementLot.procurementCaseId,
+    p_title: procurementLot.title,
+    p_external_reference: procurementLot.externalReference,
+    p_metadata: procurementLot.metadata,
+    p_correlation_id: readOptionalMetadataString(procurementLot.metadata, "correlationId"),
+    p_created_by: readOptionalMetadataString(procurementLot.metadata, "createdBy"),
+    p_source_system: readOptionalMetadataString(procurementLot.metadata, "sourceSystem"),
   };
 }
 
@@ -362,6 +368,63 @@ export function budgetVersionDraftRpcParams(organizationId: string, budgetVersio
   };
 }
 
+/**
+ * Ordena as Linhas topologicamente (pai sempre antes do filho) antes de
+ * serializar para `p_lines` — correção de segurança: o gatilho de
+ * integridade de `parent_line_id` (`enforce_budget_line_version_
+ * consistency`) exige que o pai já exista no momento em que a linha
+ * filha é inserida, e um único `INSERT ... SELECT` processa as linhas na
+ * ordem do array de entrada. O domínio (Sprint 21.3B) já impede pai
+ * ausente e ciclo antes de qualquer linha chegar aqui — esta função
+ * ainda assim rejeita explicitamente as duas situações, para nunca
+ * produzir uma carga inválida para o RPC caso essa garantia seja violada
+ * por algum caminho futuro.
+ */
+function sortLinesTopologically(lines: ReadonlyArray<BudgetLine>): ReadonlyArray<BudgetLine> {
+  const byId = new Map(lines.map((line) => [line.id, line]));
+
+  lines.forEach((line) => {
+    if (line.parentLineId !== null && !byId.has(line.parentLineId)) {
+      throw new Error(`Cannot serialize budget lines: line "${line.id}" references a missing parent "${line.parentLineId}".`);
+    }
+  });
+
+  const sorted: BudgetLine[] = [];
+  const visited = new Set<string>();
+  const visiting = new Set<string>();
+
+  function visit(line: BudgetLine): void {
+    if (visited.has(line.id)) {
+      return;
+    }
+
+    if (visiting.has(line.id)) {
+      throw new Error(`Cannot serialize budget lines: cycle detected involving line "${line.id}".`);
+    }
+
+    visiting.add(line.id);
+
+    if (line.parentLineId !== null) {
+      const parent = byId.get(line.parentLineId);
+      if (parent !== undefined) {
+        visit(parent);
+      }
+    }
+
+    visiting.delete(line.id);
+    visited.add(line.id);
+    sorted.push(line);
+  }
+
+  lines.forEach((line) => visit(line));
+
+  if (sorted.length !== lines.length) {
+    throw new Error("Cannot serialize budget lines: topological sort produced a different count than the input — structure is not a valid tree.");
+  }
+
+  return sorted;
+}
+
 function lineToJsonPayload(line: BudgetLine): Record<string, unknown> {
   return {
     id: line.id,
@@ -389,7 +452,7 @@ export function budgetVersionSnapshotRpcParams(
     p_budget_version_id: budgetVersion.id,
     p_expected_revision: expectedRevision,
     p_status: budgetVersion.status,
-    p_lines: budgetVersion.lines.map(lineToJsonPayload),
+    p_lines: sortLinesTopologically(budgetVersion.lines).map(lineToJsonPayload),
     p_lineage_id: budgetVersion.originLineage?.id ?? null,
     p_lineage_origin_kind: budgetVersion.originLineage?.origin.kind ?? null,
     p_lineage_origin_reference: budgetVersion.originLineage ? originReferenceOf(budgetVersion.originLineage.origin) : null,

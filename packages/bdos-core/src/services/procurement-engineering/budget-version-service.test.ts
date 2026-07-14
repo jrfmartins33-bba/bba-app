@@ -61,15 +61,20 @@ function createFakeProcurementCaseRepository(): FakeProcurementCaseRepository {
 
 interface FakeBudgetVersionRepository extends BudgetVersionRepository {
   setThrowOnSave(shouldThrow: boolean): void;
+  saveCallCount(): number;
 }
 
 function createFakeBudgetVersionRepository(): FakeBudgetVersionRepository {
   const versions = new Map<string, PersistedEntity<BudgetVersion>>();
   let throwOnSave = false;
+  let saveCalls = 0;
 
   return {
     setThrowOnSave(shouldThrow: boolean): void {
       throwOnSave = shouldThrow;
+    },
+    saveCallCount(): number {
+      return saveCalls;
     },
     async createDraftBudgetVersion(organizationId, budgetVersion) {
       const persisted: PersistedEntity<BudgetVersion> = { entity: budgetVersion, revision: INITIAL_BUDGET_VERSION_REVISION };
@@ -80,6 +85,8 @@ function createFakeBudgetVersionRepository(): FakeBudgetVersionRepository {
       return versions.get(`${organizationId}:${id}`) ?? null;
     },
     async saveBudgetVersion(organizationId, budgetVersion, expectedRevision): Promise<SaveBudgetVersionResult> {
+      saveCalls += 1;
+
       if (throwOnSave) {
         throw new Error("simulated persistence failure");
       }
@@ -516,8 +523,14 @@ async function main(): Promise<void> {
     assertEqual(consolidated.budgetVersion.lines.length, 1);
     assertEqual(consolidated.budgetVersion.originLineage !== null, true);
 
+    const fakeRepo = repositories.budgetVersionRepository as FakeBudgetVersionRepository;
+    const saveCallsBeforeRepeat = fakeRepo.saveCallCount();
     const repeated = await consolidateBudgetVersionService(contextFor(ORG_A), { budgetVersionId }, repositories);
     assertEqual(repeated.outcome, "success", "consolidating an already-consolidated version is a domain no-op, never an error");
+    if (repeated.outcome === "success") {
+      assertEqual(repeated.revision, consolidated.revision, "revision must not advance on a no-op consolidation");
+    }
+    assertEqual(fakeRepo.saveCallCount(), saveCallsBeforeRepeat, "consolidating an already-consolidated version must never call saveBudgetVersion");
   });
 
   await runTest("rejeita alteração de Linha após consolidação (propaga erro de domínio)", async () => {
