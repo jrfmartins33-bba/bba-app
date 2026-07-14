@@ -38,14 +38,14 @@ function createFakeProcurementCaseRepository(): FakeProcurementCaseRepository {
   const lots = new Map<string, ProcurementLot>();
 
   return {
-    async createProcurementCase(organizationId, procurementCase) {
+    async createProcurementCase(organizationId, _actor, procurementCase) {
       cases.set(`${organizationId}:${procurementCase.id}`, procurementCase);
       return procurementCase;
     },
     async findProcurementCaseById(organizationId, id) {
       return cases.get(`${organizationId}:${id}`) ?? null;
     },
-    async createProcurementLot(organizationId, procurementLot) {
+    async createProcurementLot(organizationId, _actor, procurementLot) {
       lots.set(`${organizationId}:${procurementLot.id}`, procurementLot);
       return procurementLot;
     },
@@ -62,12 +62,14 @@ function createFakeProcurementCaseRepository(): FakeProcurementCaseRepository {
 interface FakeBudgetVersionRepository extends BudgetVersionRepository {
   setThrowOnSave(shouldThrow: boolean): void;
   saveCallCount(): number;
+  lastActor(): string | undefined;
 }
 
 function createFakeBudgetVersionRepository(): FakeBudgetVersionRepository {
   const versions = new Map<string, PersistedEntity<BudgetVersion>>();
   let throwOnSave = false;
   let saveCalls = 0;
+  let lastActor: string | undefined;
 
   return {
     setThrowOnSave(shouldThrow: boolean): void {
@@ -76,7 +78,11 @@ function createFakeBudgetVersionRepository(): FakeBudgetVersionRepository {
     saveCallCount(): number {
       return saveCalls;
     },
-    async createDraftBudgetVersion(organizationId, budgetVersion) {
+    lastActor(): string | undefined {
+      return lastActor;
+    },
+    async createDraftBudgetVersion(organizationId, actor, budgetVersion) {
+      lastActor = actor;
       const persisted: PersistedEntity<BudgetVersion> = { entity: budgetVersion, revision: INITIAL_BUDGET_VERSION_REVISION };
       versions.set(`${organizationId}:${budgetVersion.id}`, persisted);
       return persisted;
@@ -84,8 +90,9 @@ function createFakeBudgetVersionRepository(): FakeBudgetVersionRepository {
     async loadBudgetVersion(organizationId, id) {
       return versions.get(`${organizationId}:${id}`) ?? null;
     },
-    async saveBudgetVersion(organizationId, budgetVersion, expectedRevision): Promise<SaveBudgetVersionResult> {
+    async saveBudgetVersion(organizationId, actor, budgetVersion, expectedRevision): Promise<SaveBudgetVersionResult> {
       saveCalls += 1;
+      lastActor = actor;
 
       if (throwOnSave) {
         throw new Error("simulated persistence failure");
@@ -145,6 +152,31 @@ async function main(): Promise<void> {
     if (query.outcome !== "found") return;
     assertEqual(query.budgetVersion.status, BudgetVersionStatus.Draft);
     assertEqual(query.revision, INITIAL_BUDGET_VERSION_REVISION);
+  });
+
+  await runTest("autoria: cada gravação recebe o ator do contexto que está executando aquela chamada, nunca um valor desatualizado", async () => {
+    const repositories: BudgetVersionServiceRepositories = {
+      procurementCaseRepository: createFakeProcurementCaseRepository(),
+      budgetVersionRepository: createFakeBudgetVersionRepository(),
+    };
+    const fakeBudgetVersionRepository = repositories.budgetVersionRepository as FakeBudgetVersionRepository;
+
+    const creatorContext = { ...contextFor(ORG_A), actor: "engenheiro-criador" };
+    const { budgetVersionId } = await seedWholeCaseDraft(creatorContext, repositories);
+    assertEqual(fakeBudgetVersionRepository.lastActor(), "engenheiro-criador", "createDraftBudgetVersion must receive the creating context's actor");
+
+    const editorContext = { ...contextFor(ORG_A), actor: "engenheiro-editor" };
+    const added = await addBudgetLineService(
+      editorContext,
+      { budgetVersionId, kind: BudgetLineKind.Group, description: { status: "Confirmed", text: "Grupo" }, position: 0, scope: { kind: "WholeCase" } },
+      repositories,
+    );
+    assertEqual(added.outcome, "success");
+    assertEqual(
+      fakeBudgetVersionRepository.lastActor(),
+      "engenheiro-editor",
+      "saveBudgetVersion must receive the actor performing THIS mutation, never the original creator recorded in stale metadata",
+    );
   });
 
   await runTest("rejeita criar Versão para Processo inexistente", async () => {
@@ -626,7 +658,7 @@ async function main(): Promise<void> {
         ...firstCopy.entity,
         metadata: { ...firstCopy.entity.metadata, changedBy: "first-copy" },
       };
-      const firstSave = await budgetVersionRepository.saveBudgetVersion(ORG_A, firstCopyModified, firstCopy.revision);
+      const firstSave = await budgetVersionRepository.saveBudgetVersion(ORG_A, "engenheiro-de-custos", firstCopyModified, firstCopy.revision);
       assertEqual(firstSave.outcome, "saved");
       if (firstSave.outcome !== "saved") return;
       assertEqual(firstSave.revision, firstCopy.revision + 1);
@@ -638,7 +670,7 @@ async function main(): Promise<void> {
         ...secondCopy.entity,
         metadata: { ...secondCopy.entity.metadata, changedBy: "second-copy-stale" },
       };
-      const staleSave = await budgetVersionRepository.saveBudgetVersion(ORG_A, secondCopyModified, secondCopy.revision);
+      const staleSave = await budgetVersionRepository.saveBudgetVersion(ORG_A, "engenheiro-de-custos", secondCopyModified, secondCopy.revision);
       assertEqual(staleSave.outcome, "concurrency_conflict");
 
       // A alteração mais recente (da primeira cópia) permanece íntegra — a

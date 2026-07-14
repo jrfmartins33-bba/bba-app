@@ -19,6 +19,7 @@ function contextFor(organizationId: string): ApplicationContext {
 interface FakeProcurementCaseRepository extends ProcurementCaseRepository {
   setThrowOnCreateCase(shouldThrow: boolean): void;
   setThrowOnCreateLot(shouldThrow: boolean): void;
+  lastActor(): string | undefined;
 }
 
 function createFakeRepository(): FakeProcurementCaseRepository {
@@ -26,28 +27,34 @@ function createFakeRepository(): FakeProcurementCaseRepository {
   const lots = new Map<string, ProcurementLot>();
   let throwOnCreateCase = false;
   let throwOnCreateLot = false;
+  let lastActor: string | undefined;
 
   return {
+    lastActor(): string | undefined {
+      return lastActor;
+    },
     setThrowOnCreateCase(shouldThrow: boolean): void {
       throwOnCreateCase = shouldThrow;
     },
     setThrowOnCreateLot(shouldThrow: boolean): void {
       throwOnCreateLot = shouldThrow;
     },
-    async createProcurementCase(organizationId, procurementCase) {
+    async createProcurementCase(organizationId, actor, procurementCase) {
       if (throwOnCreateCase) {
         throw new Error("simulated persistence failure");
       }
+      lastActor = actor;
       cases.set(`${organizationId}:${procurementCase.id}`, procurementCase);
       return procurementCase;
     },
     async findProcurementCaseById(organizationId, id) {
       return cases.get(`${organizationId}:${id}`) ?? null;
     },
-    async createProcurementLot(organizationId, procurementLot) {
+    async createProcurementLot(organizationId, actor, procurementLot) {
       if (throwOnCreateLot) {
         throw new Error("simulated persistence failure");
       }
+      lastActor = actor;
       lots.set(`${organizationId}:${procurementLot.id}`, procurementLot);
       return procurementLot;
     },
@@ -77,6 +84,13 @@ async function main(): Promise<void> {
 
     const reloaded = await repository.findProcurementCaseById(ORG_A, result.procurementCase.id);
     assertEqual(reloaded?.id, result.procurementCase.id, "the created case must be retrievable from the same organization");
+  });
+
+  await runTest("autoria: o repositório recebe sempre o ator do contexto — o comando nunca oferece um campo para escolher outro", async () => {
+    const repository = createFakeRepository();
+    const context = contextFor(ORG_A);
+    await createProcurementCaseService(context, { title: "Processo" }, repository);
+    assertEqual(repository.lastActor(), context.actor, "the repository must receive exactly the context's actor, never an independently-suppliable identity");
   });
 
   await runTest("comando não possui campo organizationId — organização vem sempre do contexto", async () => {

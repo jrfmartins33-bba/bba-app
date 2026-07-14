@@ -13,8 +13,17 @@ import type { ProcurementCase, ProcurementLot } from "../../domain/procurement-c
  * (`null`), nunca como um erro que revele sua existência.
  */
 export interface ProcurementCaseRepository {
+  /**
+   * `actor` é a identidade já autenticada e resolvida pela camada de
+   * servidor — nunca uma identidade escolhida livremente pelo chamador. A
+   * implementação (Sprint 21.3C, correção de fronteira de confiança) usa
+   * `actor` tanto para autorizar a escrita (associação real com
+   * `organizationId`, validada no banco) quanto como autoria persistida
+   * (`created_by`) — nunca um valor independente.
+   */
   createProcurementCase(
     organizationId: string,
+    actor: string,
     procurementCase: ProcurementCase,
   ): Promise<ProcurementCase>;
 
@@ -25,6 +34,7 @@ export interface ProcurementCaseRepository {
 
   createProcurementLot(
     organizationId: string,
+    actor: string,
     procurementLot: ProcurementLot,
   ): Promise<ProcurementLot>;
 

@@ -27,8 +27,15 @@ export type SaveBudgetVersionResult =
  * atomicidade do agregado).
  */
 export interface BudgetVersionRepository {
+  /**
+   * `actor` é a identidade já autenticada e resolvida pela camada de
+   * servidor (correção de fronteira de confiança) — usada para autorizar
+   * a escrita e como autoria persistida (`created_by`), nunca um valor
+   * independente escolhido pelo chamador.
+   */
   createDraftBudgetVersion(
     organizationId: string,
+    actor: string,
     budgetVersion: BudgetVersion,
   ): Promise<PersistedEntity<BudgetVersion>>;
 
@@ -42,10 +49,14 @@ export interface BudgetVersionRepository {
    * Persiste um novo retrato inteiro da Versão do Orçamento (já validado
    * pelo domínio) condicionado à revisão esperada. Retorna a nova revisão
    * em caso de sucesso, ou conflito de concorrência explícito — nunca
-   * sobrescrita silenciosa, nunca persistência parcial.
+   * sobrescrita silenciosa, nunca persistência parcial. `actor` é sempre a
+   * identidade que está executando esta alteração específica — nunca
+   * derivada de `budgetVersion.metadata.createdBy` (que reflete apenas
+   * quem criou a Versão originalmente, podendo estar desatualizado).
    */
   saveBudgetVersion(
     organizationId: string,
+    actor: string,
     budgetVersion: BudgetVersion,
     expectedRevision: number,
   ): Promise<SaveBudgetVersionResult>;

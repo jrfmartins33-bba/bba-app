@@ -82,6 +82,7 @@ export async function createBudgetVersionDraftService(
   try {
     const persisted = await repositories.budgetVersionRepository.createDraftBudgetVersion(
       context.organizationId,
+      context.actor,
       domainResult.budgetVersion,
     );
     return { outcome: "success", budgetVersion: persisted.entity, revision: persisted.revision };
@@ -331,7 +332,7 @@ async function persistBudgetVersionMutation(
   budgetVersion: BudgetVersion,
 ): Promise<BudgetVersionServiceResult> {
   try {
-    const saveResult = await budgetVersionRepository.saveBudgetVersion(context.organizationId, budgetVersion, expectedRevision);
+    const saveResult = await budgetVersionRepository.saveBudgetVersion(context.organizationId, context.actor, budgetVersion, expectedRevision);
 
     if (saveResult.outcome === "concurrency_conflict") {
       return { outcome: "concurrency_conflict" };

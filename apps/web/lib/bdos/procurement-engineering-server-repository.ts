@@ -15,13 +15,41 @@ import {
 } from "./procurement-engineering-mappers";
 
 // Adaptador de persistência (Sprint 21.3C) — implementa os contratos de
-// packages/bdos-core/src/services/procurement-engineering/*.repository.ts
-// contra o schema de 20260714000000_bdos_procurement_engineering_schema.sql.
-// Vive em apps/web, não em bdos-core, pelo mesmo motivo de todo repositório
-// existente (repository.ts, measurement-repository.ts): depende do
-// SupabaseClient autenticado, injetado por chamada — nunca module-global.
+// packages/bdos-core/src/services/procurement-engineering/*.repository.ts.
+//
+// *** EXCLUSIVO DE SERVIDOR — NUNCA IMPORTAR DE CÓDIGO CLIENTE ***
+//
+// As quatro operações de escrita (createProcurementCase, createProcurementLot,
+// createDraftBudgetVersion, saveBudgetVersion) chamam funções SQL cujo
+// EXECUTE foi revogado de `authenticated`/`anon`/PUBLIC e concedido somente
+// a `service_role` (20260714000004_..._server_only_functions.sql) — este
+// módulo só funciona, para escrita, com um `SupabaseClient` construído com
+// a chave de `service_role`, nunca com a chave pública/anônima
+// (`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) usada por
+// apps/web/lib/supabase/server.ts (`getSupabaseRouteHandlerClient`).
+//
+// Fluxo de servidor pretendido (a construir em Sprint futura, junto da
+// rota/Server Action que ainda não existe nesta Sprint):
+//   1. `getSupabaseRouteHandlerClient()` + `requireAuthenticatedCompany()`
+//      (apps/web/lib/supabase/server.ts, mecanismo já existente) resolvem
+//      e REVALIDAM `{ userId, companyId }` a partir do cookie de sessão —
+//      nunca a partir de um corpo de requisição não confiável.
+//   2. Um cliente separado, autenticado com a chave de `service_role`
+//      (variável de ambiente exclusiva de servidor, nunca `NEXT_PUBLIC_*`,
+//      nunca embutida em nenhum bundle do navegador), é passado para as
+//      funções deste módulo.
+//   3. `userId`/`companyId` já revalidados no passo 1 tornam-se
+//      `actor`/`organizationId` aqui — nunca um valor recebido cru do
+//      corpo da requisição.
+//
+// As operações de LEITURA (findProcurementCaseById, findProcurementLotById,
+// loadBudgetVersion) continuam funcionando normalmente com um cliente
+// autenticado comum (`getSupabaseRouteHandlerClient()`), protegidas por RLS
+// como antes — nada aqui obriga toda leitura a usar `service_role`.
+//
 // Nunca recalcula regra econômica; apenas mapeia domínio <-> banco,
-// converte organizationId <-> company_id, e traduz erros físicos.
+// converte organizationId <-> company_id, actor <-> ator autorizado, e
+// traduz erros físicos.
 
 const PROCUREMENT_CASE_COLUMNS = "id, company_id, title, external_reference, metadata";
 const PROCUREMENT_LOT_COLUMNS = "id, company_id, procurement_case_id, title, external_reference, metadata";
@@ -33,14 +61,15 @@ const LINEAGE_RELATION_COLUMNS = "id, budget_version_id, nature, origin_kind, or
 
 export function createProcurementCaseRepository(supabase: SupabaseClient): ProcurementCaseRepository {
   return {
-    async createProcurementCase(organizationId, procurementCase) {
-      // Correção de segurança: escrita direta em `procurement_cases` foi
-      // revogada de `authenticated` (20260714000002_..._write_boundary.sql)
-      // — a única forma autorizada de criar um Processo é esta função
-      // SECURITY DEFINER, que verifica auth.uid()/company_id explicitamente.
+    async createProcurementCase(organizationId, actor, procurementCase) {
+      // `supabase` precisa ser um cliente de service_role aqui — EXECUTE
+      // desta função foi revogado de authenticated/anon/PUBLIC
+      // (20260714000004_..._server_only_functions.sql). `actor` é
+      // verificado dentro da função contra profiles.company_id/role antes
+      // de qualquer escrita; created_by é sempre o próprio actor.
       const { data, error } = await supabase.rpc(
         "create_procurement_case",
-        procurementCaseCreateRpcParams(organizationId, procurementCase),
+        procurementCaseCreateRpcParams(organizationId, actor, procurementCase),
       );
 
       if (error || !data) {
@@ -68,13 +97,12 @@ export function createProcurementCaseRepository(supabase: SupabaseClient): Procu
       return data === null ? null : mapProcurementCaseRow(data);
     },
 
-    async createProcurementLot(organizationId, procurementLot) {
-      // Mesma correção de segurança de createProcurementCase — escrita
-      // direta em `procurement_lots` foi revogada; única forma autorizada
-      // é esta função SECURITY DEFINER.
+    async createProcurementLot(organizationId, actor, procurementLot) {
+      // Mesma disciplina de createProcurementCase — service_role
+      // obrigatório, actor verificado dentro da função.
       const { data, error } = await supabase.rpc(
         "register_procurement_lot",
-        procurementLotRegisterRpcParams(organizationId, procurementLot),
+        procurementLotRegisterRpcParams(organizationId, actor, procurementLot),
       );
 
       if (error || !data) {
@@ -104,10 +132,11 @@ export function createProcurementCaseRepository(supabase: SupabaseClient): Procu
 
 export function createBudgetVersionRepository(supabase: SupabaseClient): BudgetVersionRepository {
   return {
-    async createDraftBudgetVersion(organizationId, budgetVersion) {
+    async createDraftBudgetVersion(organizationId, actor, budgetVersion) {
+      // service_role obrigatório — mesma disciplina de createProcurementCase.
       const { data, error } = await supabase.rpc(
         "create_budget_version_draft",
-        budgetVersionDraftRpcParams(organizationId, budgetVersion),
+        budgetVersionDraftRpcParams(organizationId, actor, budgetVersion),
       );
 
       if (error || !data) {
@@ -166,10 +195,13 @@ export function createBudgetVersionRepository(supabase: SupabaseClient): BudgetV
       return mapBudgetVersionAggregate(versionRow, lineRows ?? [], lineageRow);
     },
 
-    async saveBudgetVersion(organizationId, budgetVersion, expectedRevision): Promise<SaveBudgetVersionResult> {
+    async saveBudgetVersion(organizationId, actor, budgetVersion, expectedRevision): Promise<SaveBudgetVersionResult> {
+      // service_role obrigatório. `actor` é sempre quem está executando
+      // ESTA chamada — nunca extraído de budgetVersion.metadata.createdBy
+      // (ver comentário em budgetVersionSnapshotRpcParams).
       const { data, error } = await supabase.rpc(
         "persist_budget_version_snapshot",
-        budgetVersionSnapshotRpcParams(organizationId, budgetVersion, expectedRevision),
+        budgetVersionSnapshotRpcParams(organizationId, actor, budgetVersion, expectedRevision),
       );
 
       if (error || !data) {

@@ -308,26 +308,31 @@ function readOptionalMetadataString(metadata: Record<string, unknown>, key: stri
 }
 
 /**
- * Parâmetros RPC de `create_procurement_case` (correção de segurança —
- * substitui o INSERT direto de `procurement_cases`, que a migração
- * `20260714000002_..._write_boundary.sql` revogou de `authenticated`).
+ * Parâmetros RPC de `create_procurement_case` — função exclusiva de
+ * servidor (`20260714000004_..._server_only_functions.sql`, EXECUTE só
+ * para `service_role`). `actor` é sempre a identidade já autenticada e
+ * validada pela camada de servidor (nunca extraída de `metadata` — que
+ * pode não refletir quem está executando *esta* chamada) e vira tanto a
+ * autorização quanto a autoria (`created_by`) dentro da função — não existe
+ * mais `p_created_by` independente.
  */
-export function procurementCaseCreateRpcParams(organizationId: string, procurementCase: ProcurementCase): Record<string, unknown> {
+export function procurementCaseCreateRpcParams(organizationId: string, actor: string, procurementCase: ProcurementCase): Record<string, unknown> {
   return {
+    p_actor_id: actor,
     p_company_id: organizationId,
     p_id: procurementCase.id,
     p_title: procurementCase.title,
     p_external_reference: procurementCase.externalReference,
     p_metadata: procurementCase.metadata,
     p_correlation_id: readOptionalMetadataString(procurementCase.metadata, "correlationId"),
-    p_created_by: readOptionalMetadataString(procurementCase.metadata, "createdBy"),
     p_source_system: readOptionalMetadataString(procurementCase.metadata, "sourceSystem"),
   };
 }
 
 /** Parâmetros RPC de `register_procurement_lot` — mesma razão de `procurementCaseCreateRpcParams`. */
-export function procurementLotRegisterRpcParams(organizationId: string, procurementLot: ProcurementLot): Record<string, unknown> {
+export function procurementLotRegisterRpcParams(organizationId: string, actor: string, procurementLot: ProcurementLot): Record<string, unknown> {
   return {
+    p_actor_id: actor,
     p_company_id: organizationId,
     p_id: procurementLot.id,
     p_procurement_case_id: procurementLot.procurementCaseId,
@@ -335,7 +340,6 @@ export function procurementLotRegisterRpcParams(organizationId: string, procurem
     p_external_reference: procurementLot.externalReference,
     p_metadata: procurementLot.metadata,
     p_correlation_id: readOptionalMetadataString(procurementLot.metadata, "correlationId"),
-    p_created_by: readOptionalMetadataString(procurementLot.metadata, "createdBy"),
     p_source_system: readOptionalMetadataString(procurementLot.metadata, "sourceSystem"),
   };
 }
@@ -348,9 +352,10 @@ function lotIdOfScope(scope: ProcurementScope): string | null {
   return scope.kind === ProcurementScopeKind.Lot ? scope.procurementLotId : null;
 }
 
-/** Parâmetros RPC de `create_budget_version_draft` (Bloco 10 da migração). */
-export function budgetVersionDraftRpcParams(organizationId: string, budgetVersion: BudgetVersion): Record<string, unknown> {
+/** Parâmetros RPC de `create_budget_version_draft` — função exclusiva de servidor, mesma razão de `procurementCaseCreateRpcParams`. */
+export function budgetVersionDraftRpcParams(organizationId: string, actor: string, budgetVersion: BudgetVersion): Record<string, unknown> {
   return {
+    p_actor_id: actor,
     p_company_id: organizationId,
     p_id: budgetVersion.id,
     p_procurement_case_id: budgetVersion.procurementCaseId,
@@ -360,7 +365,6 @@ export function budgetVersionDraftRpcParams(organizationId: string, budgetVersio
     p_origin_reference: originReferenceOf(budgetVersion.origin),
     p_metadata: budgetVersion.metadata,
     p_correlation_id: readOptionalMetadataString(budgetVersion.metadata, "correlationId"),
-    p_created_by: readOptionalMetadataString(budgetVersion.metadata, "createdBy"),
     p_source_system: readOptionalMetadataString(budgetVersion.metadata, "sourceSystem"),
     p_lineage_id: budgetVersion.originLineage?.id ?? null,
     p_lineage_origin_kind: budgetVersion.originLineage?.origin.kind ?? null,
@@ -441,13 +445,22 @@ function lineToJsonPayload(line: BudgetLine): Record<string, unknown> {
   };
 }
 
-/** Parâmetros RPC de `persist_budget_version_snapshot` (Bloco 11 da migração). */
+/**
+ * Parâmetros RPC de `persist_budget_version_snapshot` — função exclusiva
+ * de servidor. `actor` nunca é lido de `budgetVersion.metadata.createdBy`
+ * (que reflete apenas quem criou a Versão originalmente e não muda depois
+ * — usá-lo aqui autorizaria toda alteração futura como se fosse sempre o
+ * criador original, mesmo quando outro usuário da mesma organização está
+ * executando esta chamada específica).
+ */
 export function budgetVersionSnapshotRpcParams(
   organizationId: string,
+  actor: string,
   budgetVersion: BudgetVersion,
   expectedRevision: number,
 ): Record<string, unknown> {
   return {
+    p_actor_id: actor,
     p_company_id: organizationId,
     p_budget_version_id: budgetVersion.id,
     p_expected_revision: expectedRevision,

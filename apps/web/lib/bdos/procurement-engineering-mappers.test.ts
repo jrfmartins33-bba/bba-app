@@ -26,6 +26,7 @@ const CASE_ID = "22222222-2222-2222-2222-222222222222";
 const LOT_ID = "33333333-3333-3333-3333-333333333333";
 const VERSION_ID = "44444444-4444-4444-4444-444444444444";
 const LINEAGE_ID = "55555555-5555-5555-5555-555555555555";
+const ACTOR_ID = "66666666-6666-6666-6666-666666666666";
 
 function runTest(name: string, testCase: () => void): void {
   testCase();
@@ -94,19 +95,20 @@ runTest("mapProcurementLotRow reconstrói o Lote vinculado ao Processo correto",
   assertEqual(lot.organizationId, COMPANY_A);
 });
 
-runTest("procurementCaseCreateRpcParams extrai correlation_id/created_by/source_system da metadata do domínio", () => {
-  const params = procurementCaseCreateRpcParams(COMPANY_A, {
+runTest("procurementCaseCreateRpcParams usa o actor explícito para p_actor_id, e extrai correlation_id/source_system da metadata do domínio", () => {
+  const params = procurementCaseCreateRpcParams(COMPANY_A, ACTOR_ID, {
     id: CASE_ID,
     organizationId: COMPANY_A,
     title: "Processo",
     externalReference: null,
-    metadata: { correlationId: "corr-x", createdBy: "user-1", sourceSystem: "bdos-core" },
+    metadata: { correlationId: "corr-x", createdBy: "someone-else-entirely", sourceSystem: "bdos-core" },
   });
 
   assertEqual(params.p_company_id, COMPANY_A);
+  assertEqual(params.p_actor_id, ACTOR_ID, "p_actor_id must be the explicitly-passed actor, never read from metadata.createdBy");
   assertEqual(params.p_correlation_id, "corr-x");
-  assertEqual(params.p_created_by, "user-1");
   assertEqual(params.p_source_system, "bdos-core");
+  assertEqual("p_created_by" in params, false, "p_created_by must no longer be an independent parameter");
 });
 
 function wholeCaseVersionRow(overrides: Partial<BudgetVersionRow> = {}): BudgetVersionRow {
@@ -261,7 +263,7 @@ runTest("mapBudgetVersionAggregate rejeita descrição confirmada com texto vazi
 });
 
 runTest("budgetVersionDraftRpcParams monta os parâmetros de create_budget_version_draft, incluindo a Relação inicial", () => {
-  const params = budgetVersionDraftRpcParams(COMPANY_A, {
+  const params = budgetVersionDraftRpcParams(COMPANY_A, ACTOR_ID, {
     id: VERSION_ID,
     organizationId: COMPANY_A,
     procurementCaseId: CASE_ID,
@@ -281,6 +283,7 @@ runTest("budgetVersionDraftRpcParams monta os parâmetros de create_budget_versi
   });
 
   assertEqual(params.p_company_id, COMPANY_A);
+  assertEqual(params.p_actor_id, ACTOR_ID);
   assertEqual(params.p_scope_kind, "Lot");
   assertEqual(params.p_procurement_lot_id, LOT_ID);
   assertEqual(params.p_origin_reference, "planilha.xlsx");
@@ -291,6 +294,7 @@ runTest("budgetVersionDraftRpcParams monta os parâmetros de create_budget_versi
 runTest("budgetVersionSnapshotRpcParams serializa Linhas com totalCents preservado exatamente", () => {
   const params = budgetVersionSnapshotRpcParams(
     COMPANY_A,
+    ACTOR_ID,
     {
       id: VERSION_ID,
       organizationId: COMPANY_A,
@@ -318,6 +322,7 @@ runTest("budgetVersionSnapshotRpcParams serializa Linhas com totalCents preserva
     3,
   );
 
+  assertEqual(params.p_actor_id, ACTOR_ID);
   assertEqual(params.p_expected_revision, 3);
   assertEqual(params.p_status, "Consolidated");
   const lines = params.p_lines as ReadonlyArray<Record<string, unknown>>;
@@ -328,7 +333,7 @@ runTest("budgetVersionSnapshotRpcParams serializa Linhas com totalCents preserva
 });
 
 runTest("procurementLotRegisterRpcParams monta os parâmetros de register_procurement_lot", () => {
-  const params = procurementLotRegisterRpcParams(COMPANY_A, {
+  const params = procurementLotRegisterRpcParams(COMPANY_A, ACTOR_ID, {
     id: LOT_ID,
     procurementCaseId: CASE_ID,
     organizationId: COMPANY_A,
@@ -379,6 +384,7 @@ runTest("budgetVersionSnapshotRpcParams ordena as Linhas topologicamente — pai
 
   const params = budgetVersionSnapshotRpcParams(
     COMPANY_A,
+    ACTOR_ID,
     {
       id: VERSION_ID,
       organizationId: COMPANY_A,
@@ -408,6 +414,7 @@ runTest("budgetVersionSnapshotRpcParams rejeita explicitamente um ciclo entre Li
     () =>
       budgetVersionSnapshotRpcParams(
         COMPANY_A,
+        ACTOR_ID,
         {
           id: VERSION_ID,
           organizationId: COMPANY_A,

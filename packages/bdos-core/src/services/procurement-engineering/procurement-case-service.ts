@@ -37,7 +37,7 @@ export async function createProcurementCaseService(
   }
 
   try {
-    const procurementCase = await repository.createProcurementCase(context.organizationId, domainResult.procurementCase);
+    const procurementCase = await repository.createProcurementCase(context.organizationId, context.actor, domainResult.procurementCase);
     return { outcome: "created", procurementCase };
   } catch (error) {
     return { outcome: "persistence_failure", message: toInfrastructureErrorMessage(error) };
@@ -78,7 +78,7 @@ export async function registerProcurementLotService(
   }
 
   try {
-    const procurementLot = await repository.createProcurementLot(context.organizationId, domainResult.procurementLot);
+    const procurementLot = await repository.createProcurementLot(context.organizationId, context.actor, domainResult.procurementLot);
     return { outcome: "created", procurementLot };
   } catch (error) {
     return { outcome: "persistence_failure", message: toInfrastructureErrorMessage(error) };
