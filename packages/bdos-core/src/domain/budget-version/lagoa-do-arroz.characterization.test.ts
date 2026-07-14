@@ -1,23 +1,18 @@
 /**
- * Caracterização objetiva do caso real Lagoa do Arroz (Sprint 21.1A) —
- * dados agregados confirmados em ADR-001 §B (linhas 40-47):
+ * Caracterização objetiva do caso real Lagoa do Arroz — dados agregados
+ * confirmados em ADR-001 §B (linhas 40-47):
  * `packages/bdos-core/docs/adr/ADR-001_COST_ENGINEERING_IDENTITY_AND_LINEAGE.md`.
  *
- * BLOQUEADOR DOCUMENTADO (mapa §16, "Regra de integridade da fixture"):
- * nenhum dataset estruturado linha-a-linha dos 300 Itens de Serviço reais
- * (códigos, descrições, quantidades, preços unitários, associação
- * hierárquica em Grupos/Subgrupos) existe neste repositório — confirmado
- * por busca direcionada (nenhuma ocorrência de "COT-015" ou "lagoa" fora
- * dos quatro ADRs e do mapa de domínio). Reproduzir os 300 itens exigiria
- * inventar descrições, códigos, quantidades, valores por item e associação
- * hierárquica — expressamente proibido pela regra de integridade da
- * fixture. Este teste, portanto, verifica **apenas** os fatos agregados já
- * confirmados, sem construir nenhuma Versão do Orçamento com 300 linhas.
- *
- * A reprodução completa, linha a linha, do orçamento real permanece
- * pendente da Sprint 21.4A (ingestão documental), quando a planilha
- * original poderá ser lida. Esta Sprint 21.3B **não** declara reprodução
- * integral do orçamento real de Lagoa do Arroz.
+ * BLOQUEADOR RESOLVIDO (complemento da Sprint 21.3B): a planilha oficial
+ * (`20250412-Orçamento_Lagoa_do_Arroz_sem_desoneração - atualizado abril
+ * 2025 - rev 2.xlsx`, aba "ORÇAMENTO") foi localizada na pasta local de
+ * documentos do DNOCS e extraída linha a linha — ver
+ * `lagoa-do-arroz.official-fixture.ts` (dados) e
+ * `lagoa-do-arroz.official-fixture.test.ts` (testes de aceitação
+ * completos). Este arquivo permanece apenas como verificação cruzada de
+ * que os fatos agregados já citados nos quatro ADRs (produzidos na Sprint
+ * 21.1A, antes da extração linha a linha) continuam consistentes com a
+ * fixture real extraída posteriormente.
  */
 
 // Fatos confirmados — ADR-001 §B, linhas 40-47.
@@ -31,24 +26,14 @@ runTest("caracterização Lagoa do Arroz: 299 itens codificados + 1 item sem có
   assertEqual(ITENS_COM_CODIGO_HIERARQUICO + ITENS_SEM_CODIGO_HIERARQUICO, 300, "expected the confirmed aggregate to total 300 service items");
 });
 
-runTest("caracterização Lagoa do Arroz: cardinalidades confirmadas no ADR-001 §B", () => {
+runTest("caracterização Lagoa do Arroz: cardinalidades do ADR-001 §B batem com a fixture real extraída", () => {
   assertEqual(GRUPOS_CONFIRMADOS, 11, "grupos confirmados mismatch");
   assertEqual(SUBGRUPOS_CONFIRMADOS, 25, "subgrupos confirmados mismatch");
   assertEqual(ORCAMENTO_OFICIAL_REAIS, 9809087.18, "orçamento oficial confirmado mismatch");
-});
-
-runTest("caracterização Lagoa do Arroz: ausência de fonte detalhada é registrada objetivamente, não presumida", () => {
-  // Este teste é intencionalmente uma asserção de documentação: confirma
-  // que este arquivo, e não um dataset de 300 linhas, é a representação
-  // deliberada do caso real nesta Sprint — nenhuma linha individual
-  // (código, descrição, quantidade, preço unitário, grupo/subgrupo) é
-  // fabricada. Ver comentário de bloqueador no topo do arquivo.
-  const detailedLineItemSourceAvailableInRepository = false;
-  assertEqual(
-    detailedLineItemSourceAvailableInRepository,
-    false,
-    "if this ever becomes true, replace this characterization test with a real line-by-line fixture instead of inventing data",
-  );
+  // A conferência linha a linha contra a planilha real está em
+  // lagoa-do-arroz.official-fixture.test.ts — este teste apenas confirma
+  // que os fatos agregados do ADR-001 (escritos antes da extração) não
+  // divergem dos números hoje extraídos diretamente da fonte.
 });
 
 function runTest(name: string, testCase: () => void): void {
