@@ -168,6 +168,12 @@ runTest("isWellFormedProcurementScope aceita as duas formas aprovadas e rejeita 
 
   const unknownKind = { kind: "SomeArbitraryKind", procurementCaseId: "case-x" } as unknown as ProcurementScope;
   assertEqual(isWellFormedProcurementScope(unknownKind), false, "a scope with an arbitrary, unapproved kind must be rejected");
+
+  const blankLotId: ProcurementScope = { kind: ProcurementScopeKind.Lot, procurementCaseId: "case-x", procurementLotId: "" };
+  assertEqual(isWellFormedProcurementScope(blankLotId), false, "a Lot scope with a blank procurementLotId must be rejected");
+
+  const blankCaseId: ProcurementScope = { kind: ProcurementScopeKind.WholeCase, procurementCaseId: "" };
+  assertEqual(isWellFormedProcurementScope(blankCaseId), false, "a WholeCase scope with a blank procurementCaseId must be rejected");
 });
 
 function caseFixture(): ProcurementCase {

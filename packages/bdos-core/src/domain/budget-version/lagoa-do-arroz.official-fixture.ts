@@ -1,6 +1,6 @@
 /**
  * Fixture real, linha a linha, do orçamento oficial da Lagoa do Arroz —
- * DNOCS, Pregão Eletrônico 90006/2025 (Sprint 21.3B, complementos 1 e 2).
+ * DNOCS, Pregão Eletrônico 90006/2025 (Sprint 21.3B, complementos 1, 2 e 3).
  *
  * FONTE PRIMÁRIA (planilha oficial, não a proposta vencedora nem a
  * planilha corrigida):
@@ -11,64 +11,62 @@
  * - Intervalo de linhas de dados examinado: 6-352 (347 linhas)
  * - Linha do total geral declarado na fonte: 353 ("TOTAL GERAL (R$)")
  * - SHA-256 do arquivo original: 75bfcdd60111e8c72e1fc2033395b1e9793738b730c156584fac2043ce5de6b4
- * - Extraído em: 2026-07-14T14:17:14.074Z
+ * - Extraído em: 2026-07-14T15:18:05.263Z
  *
  * Critérios de classificação (a partir do próprio código hierárquico da
- * coluna "ITEM" da planilha, formato XX.YY.ZZ):
- * - YY="00" e ZZ="00"  → Grupo (ex.: "01.00.00"); `parentResolutionMethod`
- *   = "TopLevelNoParent".
- * - ZZ="00" (YY≠"00")  → Subgrupo, pai = Grupo "XX.00.00" (ex.: "01.01.00");
- *   `parentResolutionMethod` = "HierarchicalCode".
+ * coluna "ITEM" da planilha, formato XX.YY.ZZ) — inalterados desde a
+ * primeira extração:
+ * - YY="00" e ZZ="00"  → Grupo; `parentResolutionMethod` = "TopLevelNoParent".
+ * - ZZ="00" (YY≠"00")  → Subgrupo, pai = Grupo "XX.00.00"; `parentResolutionMethod` = "HierarchicalCode".
  * - ZZ≠"00"            → Item de Serviço; pai = Subgrupo "XX.YY.00" quando
  *   YY≠"00", ou o próprio Grupo "XX.00.00" quando YY="00" (caso real
- *   confirmado: item "05.00.01" está diretamente sob o Grupo "05.00.00",
- *   sem Subgrupo intermediário); `parentResolutionMethod` = "HierarchicalCode".
- * - Sem código hierárquico (célula "ITEM" vazia) mas com "TIPO" e
- *   "DESCRIÇÃO" preenchidos → Item de Serviço sem código externo na coluna
- *   hierárquica (caso real: `COT-015`, linha 151 da planilha). O pai é a
- *   seção (Subgrupo, ou Grupo na ausência de Subgrupo) vigente na posição
- *   em que a linha aparece na planilha — lido da própria estrutura do
- *   documento, nunca suposto; `parentResolutionMethod` =
- *   "DocumentPositionSection". Para `COT-015` especificamente: pai
- *   resolvido como "04.03.00", linha original 151, sem código hierárquico
- *   próprio, código externo de fonte "COT-015" — a relação NÃO está
- *   explicitamente codificada no próprio `COT-015`, é inferida da posição
- *   documental, exatamente como `parentResolutionMethod` declara.
+ *   confirmado: item "05.00.01" direto sob o Grupo "05.00.00", sem
+ *   Subgrupo intermediário); `parentResolutionMethod` = "HierarchicalCode".
+ * - Sem código hierárquico, mas com "TIPO" e "DESCRIÇÃO" preenchidos → Item
+ *   de Serviço sem código externo na coluna hierárquica (caso real:
+ *   `COT-015`, linha 151). Pai = seção vigente na posição documental;
+ *   `parentResolutionMethod` = "DocumentPositionSection". Para `COT-015`:
+ *   pai "04.03.00", linha original 151, sem código hierárquico próprio,
+ *   código externo "COT-015" — a relação NÃO está codificada no próprio
+ *   `COT-015`, é inferida da posição documental.
  *
- * Precisão econômica: nenhuma conversão nesta fixture usa `Math.round`.
+ * Precisão econômica: nenhuma conversão usa `Math.round`.
  * `quantidade`, `custoUnitarioSemBdiReais`, `bdiPercent`,
- * `precoUnitarioComBdiReais` e `totalComBdiReais` são preservados como
- * texto decimal exato (nunca `number`), evitando perda de precisão ou
- * formatação da fonte. Os quatro primeiros são proveniência apenas — esta
- * Sprint não calcula quantidade × preço unitário. `totalComBdiReais` é o
- * valor econômico usado (convertido para centavos inteiros no momento da
- * carga, a partir do texto decimal exato, nunca por arredondamento).
+ * `precoUnitarioComBdiReais` e `totalComBdiReais` são texto decimal exato
+ * (nunca `number`). Os quatro primeiros são proveniência apenas.
+ * `totalComBdiReais`: para Grupo, subtotal DECLARADO (conferência apenas,
+ * nunca somado como parcela própria); Subgrupo, sempre `null`; Item de
+ * Serviço, o valor econômico real.
  *
- * Descrição: `descricao` é uma união discriminada que diferencia
- * explicitamente descrição confirmada na fonte
- * (`{ status: "ConfirmedFromSource", text }`) de descrição ausente na
- * fonte oficial (`{ status: "AbsentFromSource" }`, sem campo `text`) — 8
- * linhas reais, todas do tipo "Cotação", têm a célula de descrição vazia
- * na própria planilha. Nenhum texto é produzido por este arquivo para
- * essas 8 linhas; um eventual rótulo de apresentação é responsabilidade
- * exclusiva do carregador (`lagoa-do-arroz.official-fixture-loader.ts`),
- * nunca desta fixture.
+ * Descrição: `descricao` diferencia explicitamente confirmada
+ * (`{ status: "ConfirmedFromSource", text }`) de ausente na fonte
+ * (`{ status: "AbsentFromSource" }`) — 8 linhas reais (todas "Cotação")
+ * têm a célula vazia na própria planilha. Nenhum texto é produzido aqui; o
+ * carregador mapeia para a representação do domínio
+ * (`BudgetLineDescription`), nunca produzindo rótulo de apresentação
+ * dentro desta fixture.
  *
- * Identidade: esta fixture NÃO atribui identidade interna — apenas
- * preserva `sourceRowNumber` (posição original na planilha) como
- * metadado de proveniência. A identidade interna de cada Linha do
- * Orçamento é atribuída somente pelo carregador, via sequência sintética
- * própria da carga, nunca a partir do código externo ou do número da
- * linha da fonte.
+ * Identidade e posição — campos fixos, atribuídos uma única vez nesta
+ * extração, persistidos diretamente na fixture (nunca recomputados pelo
+ * carregador a partir da posição no array ou de qualquer dado
+ * documental):
+ * - `fixtureLineId`: identificador opaco (UUID) sem significado
+ *   econômico, documental, de código externo ou de posição — estável
+ *   independentemente da ordem em que a fixture for percorrida ou
+ *   reorganizada.
+ * - `documentaryPosition`: posição fixa entre irmãos (mesmo pai),
+ *   computada uma única vez a partir da ordem documental original.
+ * - `sourceRowNumber` permanece exclusivamente como metadado de
+ *   proveniência, nunca como base de identidade ou posição.
  *
- * Reconciliação: as 347 linhas examinadas (6-352) se dividem em 336
- * incluídas como registros de domínio (`LAGOA_DO_ARROZ_OFFICIAL_LINES`) e
- * 11 excluídas com motivo objetivo, listadas em
- * `LAGOA_DO_ARROZ_EXCLUDED_LINES` — nenhuma das 347 linhas fica sem
- * destino conhecido.
+ * Reconciliação: 347 linhas examinadas (6-352) = 336 incluídas
+ * (`LAGOA_DO_ARROZ_OFFICIAL_LINES`) + 11 excluídas com motivo
+ * objetivo (`LAGOA_DO_ARROZ_EXCLUDED_LINES`) — nenhuma linha sem destino
+ * conhecido.
  *
- * Nenhum valor, código, descrição, quantidade, unidade ou associação
- * hierárquica foi inventado.
+ * Nenhum valor, código, descrição, quantidade, unidade, cardinalidade ou
+ * associação hierárquica foi inventado ou alterado desde a extração
+ * original aprovada.
  */
 
 export type LagoaDoArrozDescription =
@@ -78,35 +76,29 @@ export type LagoaDoArrozDescription =
 export type LagoaDoArrozParentResolutionMethod = "HierarchicalCode" | "DocumentPositionSection" | "TopLevelNoParent";
 
 export interface LagoaDoArrozOfficialLine {
+  /** Identidade opaca (UUID), fixa, sem significado econômico ou documental — nunca recomputada a partir da posição no array. */
+  readonly fixtureLineId: string;
   readonly sourceRowNumber: number;
   readonly hierarchicalCode: string | null;
   readonly classification: "Grupo" | "Subgrupo" | "ServiceItem";
   readonly parentHierarchicalCode: string | null;
   readonly parentResolutionMethod: LagoaDoArrozParentResolutionMethod;
+  /** Posição fixa entre irmãos, computada uma única vez a partir da ordem documental original. */
+  readonly documentaryPosition: number;
   readonly externalSourceCode: string | null;
   readonly fonte: string | null;
   readonly tipo: string | null;
   readonly descricao: LagoaDoArrozDescription;
   readonly unidade: string | null;
-  /** Texto decimal exato — proveniência apenas, não usado em cálculo econômico nesta Sprint. */
   readonly quantidade: string | null;
-  /** Texto decimal exato — proveniência apenas. */
   readonly custoUnitarioSemBdiReais: string | null;
-  /** Texto decimal exato — proveniência apenas. */
   readonly bdiPercent: string | null;
-  /** Texto decimal exato — proveniência apenas. */
   readonly precoUnitarioComBdiReais: string | null;
-  /** Texto decimal exato — valor econômico real (Item de Serviço) ou subtotal declarado apenas para conferência (Grupo). */
   readonly totalComBdiReais: string | null;
 }
 
 export type LagoaDoArrozExcludedReason = "BlankSeparatorRow" | "DocumentaryFootnote" | "ZeroValueArtifactRow";
 
-/**
- * Manifesto de reconciliação das linhas examinadas que NÃO geraram
- * registro de domínio — nenhuma representa Grupo, Subgrupo ou Item de
- * Serviço econômico.
- */
 export interface LagoaDoArrozExcludedLine {
   readonly sourceRowNumber: number;
   readonly reason: LagoaDoArrozExcludedReason;
@@ -122,7 +114,7 @@ export const LAGOA_DO_ARROZ_SOURCE_PROVENANCE = {
   dataRowRange: "6-352",
   totalExaminedRows: 347,
   totalRowNumber: 353,
-  extractedAt: "2026-07-14T14:17:14.074Z",
+  extractedAt: "2026-07-14T15:18:05.263Z",
 } as const;
 
 /** Total geral declarado na própria planilha (linha 353, "TOTAL GERAL (R$)"), como texto decimal exato. */
@@ -130,11 +122,13 @@ export const LAGOA_DO_ARROZ_DECLARED_TOTAL_DECIMAL = "9809087.18";
 
 export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLine> = [
   {
+    "fixtureLineId": "46b4967b-51a8-4506-8b44-4863413d4a6c",
     "sourceRowNumber": 6,
     "hierarchicalCode": "01.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
     "parentResolutionMethod": "TopLevelNoParent",
+    "documentaryPosition": 0,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -150,11 +144,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2006878.46"
   },
   {
+    "fixtureLineId": "f658866b-cffa-4c68-a70d-d25e28f41427",
     "sourceRowNumber": 7,
     "hierarchicalCode": "01.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "01.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -170,11 +166,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "6d2116e0-d4db-48a9-b675-27e03148a69d",
     "sourceRowNumber": 8,
     "hierarchicalCode": "01.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "4915744",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -190,11 +188,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "361.97"
   },
   {
+    "fixtureLineId": "de4e2d04-c2e7-45b8-9310-0bf6b24a48b0",
     "sourceRowNumber": 9,
     "hierarchicalCode": "01.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "CERCA-6 FIOS",
     "fonte": "Composição",
     "tipo": "obS",
@@ -210,11 +210,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "4088.16"
   },
   {
+    "fixtureLineId": "3b9b4f03-1acc-43bc-9b13-997475d45e8b",
     "sourceRowNumber": 10,
     "hierarchicalCode": "01.01.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "85189",
     "fonte": "Composição",
     "tipo": "obS",
@@ -230,11 +232,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2300.62"
   },
   {
+    "fixtureLineId": "da6c0b9a-f9e1-4d89-86ff-d6752dfef1f9",
     "sourceRowNumber": 11,
     "hierarchicalCode": "01.01.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "903807",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -250,11 +254,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "133951.28"
   },
   {
+    "fixtureLineId": "2c8c223e-ab21-4bb1-9ee2-0e45ea8179aa",
     "sourceRowNumber": 12,
     "hierarchicalCode": "01.01.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "LIC-JAZIDA",
     "fonte": "Composição",
     "tipo": "obS",
@@ -270,11 +276,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "88563.64"
   },
   {
+    "fixtureLineId": "c1b259d2-d82b-42e9-9b00-3df42305cfbf",
     "sourceRowNumber": 13,
     "hierarchicalCode": "01.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "01.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -290,11 +298,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "b5eac8be-c3cd-4ce4-a575-bee7455ca73c",
     "sourceRowNumber": 14,
     "hierarchicalCode": "01.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "73847/002",
     "fonte": "Composição",
     "tipo": "obS",
@@ -310,11 +320,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "10281.24"
   },
   {
+    "fixtureLineId": "23a01421-7141-48da-83c5-f7ad1930a8a7",
     "sourceRowNumber": 15,
     "hierarchicalCode": "01.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "73847/004",
     "fonte": "Composição",
     "tipo": "obS",
@@ -330,11 +342,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "13368.33"
   },
   {
+    "fixtureLineId": "cd8e323f-707d-4925-86d9-803059184494",
     "sourceRowNumber": 16,
     "hierarchicalCode": "01.02.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "73803/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -350,11 +364,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "11102.4"
   },
   {
+    "fixtureLineId": "e0607451-fc05-4e85-8f7d-5e4eaaaa7ba4",
     "sourceRowNumber": 17,
     "hierarchicalCode": "01.02.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "74210/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -370,11 +386,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "6818.58"
   },
   {
+    "fixtureLineId": "81d9973c-89e5-4727-b232-43746ce109da",
     "sourceRowNumber": 18,
     "hierarchicalCode": "01.02.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "74216/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -390,11 +408,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "150.6"
   },
   {
+    "fixtureLineId": "7ed3f7ae-ec62-4ae8-9634-25980adad832",
     "sourceRowNumber": 19,
     "hierarchicalCode": "01.02.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 5,
     "externalSourceCode": "74198/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -410,11 +430,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "42276.4"
   },
   {
+    "fixtureLineId": "003303e7-1257-471e-8a72-f3c98bf8202b",
     "sourceRowNumber": 20,
     "hierarchicalCode": "01.02.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 6,
     "externalSourceCode": "74197/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -430,11 +452,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2781.83"
   },
   {
+    "fixtureLineId": "d1c82436-09c9-46a4-b3fa-25cdc365ec31",
     "sourceRowNumber": 21,
     "hierarchicalCode": "01.02.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 7,
     "externalSourceCode": "74253/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -450,11 +474,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "40.07"
   },
   {
+    "fixtureLineId": "790c436a-5e50-4f97-8d7f-47cdac6ff153",
     "sourceRowNumber": 22,
     "hierarchicalCode": "01.02.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 8,
     "externalSourceCode": "102623",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -470,11 +496,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1020.15"
   },
   {
+    "fixtureLineId": "f8d677c8-efa5-4a7e-aec6-52039f8f38e3",
     "sourceRowNumber": 23,
     "hierarchicalCode": "01.02.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 9,
     "externalSourceCode": "73960/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -490,11 +518,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "3314.01"
   },
   {
+    "fixtureLineId": "04a42588-da86-475c-b660-e7604944a256",
     "sourceRowNumber": 24,
     "hierarchicalCode": "01.02.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 10,
     "externalSourceCode": "GERADOR",
     "fonte": "Composição",
     "tipo": "obS",
@@ -510,11 +540,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "135712.98"
   },
   {
+    "fixtureLineId": "1be473df-d970-4210-a28f-7d617762c6ea",
     "sourceRowNumber": 25,
     "hierarchicalCode": "01.02.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 11,
     "externalSourceCode": "F020000013",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -530,11 +562,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "13343.94"
   },
   {
+    "fixtureLineId": "1ad71c91-cdfb-4858-9b6c-9c2f17857bf7",
     "sourceRowNumber": 26,
     "hierarchicalCode": "01.03.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "01.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -550,11 +584,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "8a934cf4-e84e-4707-ba78-6a3c61ebf56e",
     "sourceRowNumber": 27,
     "hierarchicalCode": "01.03.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "TRANSP-1",
     "fonte": "Composição",
     "tipo": "obS",
@@ -570,11 +606,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "127260.72"
   },
   {
+    "fixtureLineId": "26d337b9-5003-435c-84f9-a9ef4ebdb8b1",
     "sourceRowNumber": 28,
     "hierarchicalCode": "01.03.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "TRANSP-2",
     "fonte": "Composição",
     "tipo": "obS",
@@ -590,11 +628,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "5163.04"
   },
   {
+    "fixtureLineId": "f093e2b5-1186-4c26-a4b2-d9027ec72465",
     "sourceRowNumber": 29,
     "hierarchicalCode": "01.03.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "TRANSP-3",
     "fonte": "Composição",
     "tipo": "obS",
@@ -610,11 +650,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "198557.18"
   },
   {
+    "fixtureLineId": "666d77dc-0d0e-468d-adf1-aae73d18955a",
     "sourceRowNumber": 30,
     "hierarchicalCode": "01.03.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "TRANSP-4",
     "fonte": "Composição",
     "tipo": "obS",
@@ -630,11 +672,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "8119.26"
   },
   {
+    "fixtureLineId": "5b65f7ef-62fa-4fb8-8456-0feef2c1a481",
     "sourceRowNumber": 31,
     "hierarchicalCode": "01.03.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "PESSOAL",
     "fonte": "Composição",
     "tipo": "obS",
@@ -650,11 +694,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1738.52"
   },
   {
+    "fixtureLineId": "78b236ae-e47d-4e4a-95e4-6f78be4a6c51",
     "sourceRowNumber": 32,
     "hierarchicalCode": "01.04.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "01.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -670,11 +716,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "8f89c87e-52a4-401e-a11f-8139ea25c57e",
     "sourceRowNumber": 33,
     "hierarchicalCode": "01.04.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "ADM-LOC",
     "fonte": "Composição",
     "tipo": "obS",
@@ -690,11 +738,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1052841"
   },
   {
+    "fixtureLineId": "ddebe5af-b517-432e-999a-4704d428ff66",
     "sourceRowNumber": 35,
     "hierarchicalCode": "01.05.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "01.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -710,11 +760,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "4ca94e85-b717-4d7f-ab8c-e36f8083bd11",
     "sourceRowNumber": 36,
     "hierarchicalCode": "01.05.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.05.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "74209/1",
     "fonte": "Composição",
     "tipo": "obS",
@@ -730,11 +782,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "8306.94"
   },
   {
+    "fixtureLineId": "547bbd27-e48a-4c9b-b168-45614cc7eab3",
     "sourceRowNumber": 37,
     "hierarchicalCode": "01.05.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.05.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "5213441",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -750,11 +804,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2866.55"
   },
   {
+    "fixtureLineId": "7388c8ab-b6cf-45ff-8c40-5071ab3c8af4",
     "sourceRowNumber": 38,
     "hierarchicalCode": "01.05.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.05.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "5213489",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -770,11 +826,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2234.98"
   },
   {
+    "fixtureLineId": "6daad882-b971-4d33-b253-3e9797eb7d0b",
     "sourceRowNumber": 39,
     "hierarchicalCode": "01.05.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.05.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "5216111",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -790,11 +848,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1281.15"
   },
   {
+    "fixtureLineId": "99f88818-f5b6-49dd-be15-5afa3215541f",
     "sourceRowNumber": 40,
     "hierarchicalCode": "01.06.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "01.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 5,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -810,11 +870,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "fbf443ec-4721-401f-bbe7-12d8b6001e97",
     "sourceRowNumber": 41,
     "hierarchicalCode": "01.06.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "01.06.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "CAMIN-SERV",
     "fonte": "Composição",
     "tipo": "obS",
@@ -830,11 +892,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "129032.92"
   },
   {
+    "fixtureLineId": "a58d6a63-9cc1-452e-a06a-0e51fc3fe2f5",
     "sourceRowNumber": 43,
     "hierarchicalCode": "02.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
     "parentResolutionMethod": "TopLevelNoParent",
+    "documentaryPosition": 1,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -850,11 +914,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "3714416.029999999"
   },
   {
+    "fixtureLineId": "742e8ada-35b1-4bfa-bd52-91f655d3df65",
     "sourceRowNumber": 44,
     "hierarchicalCode": "02.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "02.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -870,11 +936,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "cf753ae7-639d-43bc-860e-565127ef5cfc",
     "sourceRowNumber": 45,
     "hierarchicalCode": "02.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "LIMPEZA",
     "fonte": "Composição",
     "tipo": "obS",
@@ -890,11 +958,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "121326.54"
   },
   {
+    "fixtureLineId": "1e652902-222c-49bd-9e69-3e0660507afb",
     "sourceRowNumber": 46,
     "hierarchicalCode": "02.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "72898",
     "fonte": "Composição",
     "tipo": "obS",
@@ -910,11 +980,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2394.16"
   },
   {
+    "fixtureLineId": "df970a70-0562-4d36-8b1e-982cb0fe7409",
     "sourceRowNumber": 47,
     "hierarchicalCode": "02.01.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "5915320",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -930,11 +1002,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "711.77"
   },
   {
+    "fixtureLineId": "bbe0d078-b922-409d-896e-db56ceb61396",
     "sourceRowNumber": 48,
     "hierarchicalCode": "02.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "02.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -950,11 +1024,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "332a0acf-c45c-4957-8f5a-15fbf90fcb6f",
     "sourceRowNumber": 49,
     "hierarchicalCode": "02.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "ESCARIF",
     "fonte": "Composição",
     "tipo": "obS",
@@ -970,11 +1046,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "8928"
   },
   {
+    "fixtureLineId": "993739d0-1d79-4a5a-ae21-1ebaea01492a",
     "sourceRowNumber": 50,
     "hierarchicalCode": "02.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "5914351",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -990,11 +1068,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "5958"
   },
   {
+    "fixtureLineId": "037d3c67-6aed-4b27-a2a7-1518286cb09c",
     "sourceRowNumber": 51,
     "hierarchicalCode": "02.02.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "5915320",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1010,11 +1090,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "3168"
   },
   {
+    "fixtureLineId": "3dcb29f7-a3db-4e96-92cc-6db953906a97",
     "sourceRowNumber": 52,
     "hierarchicalCode": "02.02.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "4011221",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1030,11 +1112,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "13737.6"
   },
   {
+    "fixtureLineId": "0f3daa1f-28db-4480-98c8-d0fb238e1ab1",
     "sourceRowNumber": 53,
     "hierarchicalCode": "02.02.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "5915320",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1050,11 +1134,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2027.52"
   },
   {
+    "fixtureLineId": "a14ebc99-2090-4309-9da2-90465256bf55",
     "sourceRowNumber": 54,
     "hierarchicalCode": "02.02.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 5,
     "externalSourceCode": "4413942",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1070,11 +1156,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1749.6"
   },
   {
+    "fixtureLineId": "647e92b6-260b-41ca-aa97-5b6b200365bc",
     "sourceRowNumber": 55,
     "hierarchicalCode": "02.02.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 6,
     "externalSourceCode": "5502978",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1090,11 +1178,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "4413.6"
   },
   {
+    "fixtureLineId": "362dae5d-9d2b-447a-8bd5-03bb900a021c",
     "sourceRowNumber": 56,
     "hierarchicalCode": "02.02.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 7,
     "externalSourceCode": "92398",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -1110,11 +1200,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "467568"
   },
   {
+    "fixtureLineId": "cebb2dd2-57b6-4177-a3e9-d82b74931d7f",
     "sourceRowNumber": 57,
     "hierarchicalCode": "02.02.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 8,
     "externalSourceCode": "5915013",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1130,11 +1222,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "21641.01"
   },
   {
+    "fixtureLineId": "9e7be167-8e43-4d01-b5e7-445436aa6ca1",
     "sourceRowNumber": 58,
     "hierarchicalCode": "02.02.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 9,
     "externalSourceCode": "5915014",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1150,11 +1244,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "7661.26"
   },
   {
+    "fixtureLineId": "7c44605b-6af5-4b94-9587-ced84e3e327d",
     "sourceRowNumber": 59,
     "hierarchicalCode": "02.02.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 10,
     "externalSourceCode": "94273",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -1170,11 +1266,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "58524"
   },
   {
+    "fixtureLineId": "b16ad2b2-421f-4e46-8cc9-0f0fc9af1120",
     "sourceRowNumber": 60,
     "hierarchicalCode": "02.02.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 11,
     "externalSourceCode": "4915723",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1190,11 +1288,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1160.64"
   },
   {
+    "fixtureLineId": "aa9233eb-a24f-4b60-9cc1-e9f1ec3df9f7",
     "sourceRowNumber": 61,
     "hierarchicalCode": "02.02.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 12,
     "externalSourceCode": "3713604",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1210,11 +1310,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "568584"
   },
   {
+    "fixtureLineId": "bf7c9ef6-f2fe-4eb6-b7da-c48523fb30eb",
     "sourceRowNumber": 62,
     "hierarchicalCode": "02.02.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 13,
     "externalSourceCode": "5914614",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1230,11 +1332,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "27073.79"
   },
   {
+    "fixtureLineId": "6b6752bc-4106-4807-882e-e4768e093cc1",
     "sourceRowNumber": 63,
     "hierarchicalCode": "02.02.15",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 14,
     "externalSourceCode": "5914599",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1250,11 +1354,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1074.82"
   },
   {
+    "fixtureLineId": "6e57a3a1-c4e4-4b0d-bb4c-02c1256714e6",
     "sourceRowNumber": 64,
     "hierarchicalCode": "02.03.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "02.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -1270,11 +1376,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "47864a48-8fae-4b95-85c2-0e5c73f343ab",
     "sourceRowNumber": 65,
     "hierarchicalCode": "02.03.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "4805750",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1290,11 +1398,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "122394.17"
   },
   {
+    "fixtureLineId": "48ccf2cb-0726-4f10-afb8-f8812bde5128",
     "sourceRowNumber": 66,
     "hierarchicalCode": "02.03.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "4915733",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1310,11 +1420,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "110819.62"
   },
   {
+    "fixtureLineId": "72875b4c-7aad-405d-9bdc-76134fb9ee18",
     "sourceRowNumber": 67,
     "hierarchicalCode": "02.03.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "100974",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -1330,11 +1442,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "167172.19"
   },
   {
+    "fixtureLineId": "803be48b-31da-43b9-970a-091f10a479b5",
     "sourceRowNumber": 68,
     "hierarchicalCode": "02.03.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "5915320",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1350,11 +1464,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "44579.25"
   },
   {
+    "fixtureLineId": "daf53f1a-1cd9-41da-8002-90bdb7e6b56d",
     "sourceRowNumber": 69,
     "hierarchicalCode": "02.03.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "6176",
     "fonte": "Composição",
     "tipo": "obS",
@@ -1370,11 +1486,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "120853.22"
   },
   {
+    "fixtureLineId": "88959b53-ebf9-441c-a9ac-eb2ae33e802e",
     "sourceRowNumber": 70,
     "hierarchicalCode": "02.03.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 5,
     "externalSourceCode": "ENROC-MECAN",
     "fonte": "Composição",
     "tipo": "obS",
@@ -1390,11 +1508,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "942786.5"
   },
   {
+    "fixtureLineId": "a88600f7-6fa6-4efd-ae84-1f9d5005ccc6",
     "sourceRowNumber": 71,
     "hierarchicalCode": "02.03.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 6,
     "externalSourceCode": "5502109",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1410,11 +1530,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "17742.56"
   },
   {
+    "fixtureLineId": "c12221ee-463f-4d75-ac35-17e5ddd06f0a",
     "sourceRowNumber": 72,
     "hierarchicalCode": "02.03.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 7,
     "externalSourceCode": "100574",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -1430,11 +1552,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "4086.9"
   },
   {
+    "fixtureLineId": "6ec67dc3-2101-4ea3-9ab5-91c943439c47",
     "sourceRowNumber": 73,
     "hierarchicalCode": "02.03.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 8,
     "externalSourceCode": "5502768",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1450,11 +1574,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "682426.62"
   },
   {
+    "fixtureLineId": "d5d4c7a6-425a-4b56-af13-9a032e12ee81",
     "sourceRowNumber": 74,
     "hierarchicalCode": "02.04.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "02.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -1470,11 +1596,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "a07cdba7-a5d8-467e-824b-dcf3d51cc307",
     "sourceRowNumber": 75,
     "hierarchicalCode": "02.04.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "1600436",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1490,11 +1618,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "18075.61"
   },
   {
+    "fixtureLineId": "a1b6095e-5d3d-42cc-81db-20c075947494",
     "sourceRowNumber": 76,
     "hierarchicalCode": "02.04.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "74023/005",
     "fonte": "Composição",
     "tipo": "obS",
@@ -1510,11 +1640,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "3918.46"
   },
   {
+    "fixtureLineId": "82346d22-fe46-48a6-9f1b-3607c3df1405",
     "sourceRowNumber": 77,
     "hierarchicalCode": "02.04.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "74007/002",
     "fonte": "Composição",
     "tipo": "obS",
@@ -1530,11 +1662,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "36601.74"
   },
   {
+    "fixtureLineId": "f80f98ac-d416-4139-a6a9-5b5d8f98d617",
     "sourceRowNumber": 78,
     "hierarchicalCode": "02.04.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "1107889",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1550,11 +1684,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "14376.26"
   },
   {
+    "fixtureLineId": "d8d153d9-9c8b-4ed2-80ac-33d21856f149",
     "sourceRowNumber": 79,
     "hierarchicalCode": "02.04.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "4915708",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1570,11 +1706,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "996"
   },
   {
+    "fixtureLineId": "0a4265de-14b1-4373-bc24-20c805b1f357",
     "sourceRowNumber": 80,
     "hierarchicalCode": "02.04.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 5,
     "externalSourceCode": "4915710",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1590,11 +1728,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1864.96"
   },
   {
+    "fixtureLineId": "cfb4703a-3d39-4d79-80b1-8cb9a4a3a09e",
     "sourceRowNumber": 81,
     "hierarchicalCode": "02.04.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 6,
     "externalSourceCode": "4915711",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1610,11 +1750,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "569.25"
   },
   {
+    "fixtureLineId": "fe4c3a5b-1b3f-4846-b009-51338f87c289",
     "sourceRowNumber": 82,
     "hierarchicalCode": "02.04.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 7,
     "externalSourceCode": "4915712",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1630,11 +1772,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "26.3"
   },
   {
+    "fixtureLineId": "4b54a699-5de0-4afa-968f-7ab124010ae5",
     "sourceRowNumber": 83,
     "hierarchicalCode": "02.04.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 8,
     "externalSourceCode": "72219",
     "fonte": "Composição",
     "tipo": "obS",
@@ -1650,11 +1794,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1135.38"
   },
   {
+    "fixtureLineId": "3a8ac6eb-79f9-4ab5-b110-822a1b8c9edd",
     "sourceRowNumber": 84,
     "hierarchicalCode": "02.04.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 9,
     "externalSourceCode": "1506056",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1670,11 +1816,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2423.3"
   },
   {
+    "fixtureLineId": "0d26bbb0-21fd-4527-9c2f-1cd36362e995",
     "sourceRowNumber": 85,
     "hierarchicalCode": "02.04.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 10,
     "externalSourceCode": "4915723",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1690,11 +1838,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "7588.8"
   },
   {
+    "fixtureLineId": "245d98c4-30c7-4fae-b19b-b7f975faa98e",
     "sourceRowNumber": 86,
     "hierarchicalCode": "02.04.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 11,
     "externalSourceCode": "100574",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -1710,11 +1860,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "48.74"
   },
   {
+    "fixtureLineId": "3460d25b-37e2-41e1-8d35-eaee948f2e4d",
     "sourceRowNumber": 87,
     "hierarchicalCode": "02.04.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 12,
     "externalSourceCode": "93358",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -1730,11 +1882,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "9619.48"
   },
   {
+    "fixtureLineId": "9eb5646b-9599-4973-b238-d908daca080f",
     "sourceRowNumber": 88,
     "hierarchicalCode": "02.04.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 13,
     "externalSourceCode": "CALHA U",
     "fonte": "Composição",
     "tipo": "obS",
@@ -1750,11 +1904,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "85973.88"
   },
   {
+    "fixtureLineId": "9f219e25-8230-4c0f-a59e-6f7dcfdefdc0",
     "sourceRowNumber": 89,
     "hierarchicalCode": "02.04.15",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "02.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 14,
     "externalSourceCode": "4815671",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -1770,11 +1926,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "634.53"
   },
   {
+    "fixtureLineId": "fe8bce7f-397b-4d9e-af34-ffe8fb0c9142",
     "sourceRowNumber": 91,
     "hierarchicalCode": "03.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
     "parentResolutionMethod": "TopLevelNoParent",
+    "documentaryPosition": 2,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -1790,11 +1948,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "657754.9799999999"
   },
   {
+    "fixtureLineId": "980efd6a-0a10-40b0-ac42-2dba8834baef",
     "sourceRowNumber": 92,
     "hierarchicalCode": "03.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "03.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -1810,11 +1970,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "62d479b4-c049-40ac-98d3-381088c2b620",
     "sourceRowNumber": 93,
     "hierarchicalCode": "03.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "73801/002",
     "fonte": "Composição",
     "tipo": "obS",
@@ -1830,11 +1992,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "679.5"
   },
   {
+    "fixtureLineId": "c8ec2128-081a-45a6-95c2-d202d9f4512c",
     "sourceRowNumber": 94,
     "hierarchicalCode": "03.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "73802/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -1850,11 +2014,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "829.62"
   },
   {
+    "fixtureLineId": "ea07b637-81ed-4387-863f-9e5bbde51eb5",
     "sourceRowNumber": 95,
     "hierarchicalCode": "03.01.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "74023/005",
     "fonte": "Composição",
     "tipo": "obS",
@@ -1870,11 +2036,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "205.38"
   },
   {
+    "fixtureLineId": "d9c66a24-159c-40eb-b277-ce5cfab15854",
     "sourceRowNumber": 96,
     "hierarchicalCode": "03.01.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "83534",
     "fonte": "Composição",
     "tipo": "obS",
@@ -1890,11 +2058,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "688.96"
   },
   {
+    "fixtureLineId": "11b1a62a-48d5-440c-85e3-bce352d077b1",
     "sourceRowNumber": 97,
     "hierarchicalCode": "03.01.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "74079/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -1910,11 +2080,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1681.2"
   },
   {
+    "fixtureLineId": "6f822f53-d2ea-40f6-ae2c-ffcbe9aaf15a",
     "sourceRowNumber": 98,
     "hierarchicalCode": "03.01.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 5,
     "externalSourceCode": "87873",
     "fonte": "Composição",
     "tipo": "obS",
@@ -1930,11 +2102,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "571.56"
   },
   {
+    "fixtureLineId": "e34e3979-b9b6-4b21-83d3-800c05fa4495",
     "sourceRowNumber": 99,
     "hierarchicalCode": "03.01.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 6,
     "externalSourceCode": "84076",
     "fonte": "Composição",
     "tipo": "obS",
@@ -1950,11 +2124,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2871"
   },
   {
+    "fixtureLineId": "4dd0d3fc-3aa4-464e-b9ba-e025c00c8c9a",
     "sourceRowNumber": 100,
     "hierarchicalCode": "03.01.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 7,
     "externalSourceCode": "88489",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -1970,11 +2146,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "5450.4"
   },
   {
+    "fixtureLineId": "d1c9e2ee-862d-44df-9d10-02b19fffad1d",
     "sourceRowNumber": 101,
     "hierarchicalCode": "03.01.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 8,
     "externalSourceCode": "88488",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -1990,11 +2168,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "978.45"
   },
   {
+    "fixtureLineId": "f4faf445-cd36-42d9-8119-6a3381eab478",
     "sourceRowNumber": 102,
     "hierarchicalCode": "03.01.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 9,
     "externalSourceCode": "2419790",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -2010,11 +2190,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "352.71"
   },
   {
+    "fixtureLineId": "ea577b17-39ab-4b58-b77c-a5cae83ead14",
     "sourceRowNumber": 103,
     "hierarchicalCode": "03.01.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 10,
     "externalSourceCode": "73865/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2030,11 +2212,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "521.97"
   },
   {
+    "fixtureLineId": "7115f13f-cc03-4a22-8470-3d9713730b3b",
     "sourceRowNumber": 104,
     "hierarchicalCode": "03.01.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 11,
     "externalSourceCode": "73924/3",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2050,11 +2234,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1058.69"
   },
   {
+    "fixtureLineId": "70a20202-20ae-418b-b5f1-4fb8aa1ebbaa",
     "sourceRowNumber": 105,
     "hierarchicalCode": "03.01.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 12,
     "externalSourceCode": "74100/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2070,11 +2256,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1965.78"
   },
   {
+    "fixtureLineId": "39e1ee1f-43e4-422e-ae09-9b1b7fee018d",
     "sourceRowNumber": 106,
     "hierarchicalCode": "03.01.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 13,
     "externalSourceCode": "84656",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2090,11 +2278,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2555"
   },
   {
+    "fixtureLineId": "922aae41-679f-402d-aa9b-066ce89c8b42",
     "sourceRowNumber": 107,
     "hierarchicalCode": "03.01.15",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 14,
     "externalSourceCode": "79514/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2110,11 +2300,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "4335"
   },
   {
+    "fixtureLineId": "412e9388-29cf-49f5-b34c-d54cba66e47e",
     "sourceRowNumber": 108,
     "hierarchicalCode": "03.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "03.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -2130,11 +2322,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "0f7f60dc-381b-4dc9-a96f-bf6d7bc21f0d",
     "sourceRowNumber": 109,
     "hierarchicalCode": "03.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "98525",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -2150,11 +2344,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "425.6"
   },
   {
+    "fixtureLineId": "5a8f4163-da40-45f0-938d-511cc3229cdf",
     "sourceRowNumber": 110,
     "hierarchicalCode": "03.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "5502135",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -2170,11 +2366,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "5303.44"
   },
   {
+    "fixtureLineId": "bc50f432-2c31-482b-812d-7fa85c638c21",
     "sourceRowNumber": 111,
     "hierarchicalCode": "03.02.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "5502611",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -2190,11 +2388,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "13514.45"
   },
   {
+    "fixtureLineId": "4e4afb3a-c48f-4b15-9340-69f9eff477e5",
     "sourceRowNumber": 112,
     "hierarchicalCode": "03.02.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "5502768",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -2210,11 +2410,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "175301.63"
   },
   {
+    "fixtureLineId": "a90438aa-e2f0-496b-9694-f14a7e6fb96d",
     "sourceRowNumber": 113,
     "hierarchicalCode": "03.02.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "5914335",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -2230,11 +2432,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1221.02"
   },
   {
+    "fixtureLineId": "d05617c0-7d16-4a21-a114-87b27ce4e1c9",
     "sourceRowNumber": 114,
     "hierarchicalCode": "03.02.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 5,
     "externalSourceCode": "73844/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2250,11 +2454,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "283533.05"
   },
   {
+    "fixtureLineId": "9c3a2114-5e91-44ec-bcbc-dbf9cf361af9",
     "sourceRowNumber": 115,
     "hierarchicalCode": "03.02.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 6,
     "externalSourceCode": "84076",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2270,11 +2476,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "14616"
   },
   {
+    "fixtureLineId": "bb62f10e-2248-4552-a6f3-5e728809efd4",
     "sourceRowNumber": 116,
     "hierarchicalCode": "03.02.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 7,
     "externalSourceCode": "1107889",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -2290,11 +2498,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "46541.88"
   },
   {
+    "fixtureLineId": "a97a413f-751f-47e2-8659-5fbbfc4203d5",
     "sourceRowNumber": 117,
     "hierarchicalCode": "03.02.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 8,
     "externalSourceCode": "74007/002",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2310,11 +2520,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "24358.72"
   },
   {
+    "fixtureLineId": "97780336-f1aa-4ccf-9003-925f2af2fc07",
     "sourceRowNumber": 118,
     "hierarchicalCode": "03.02.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 9,
     "externalSourceCode": "72921",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2330,11 +2542,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "58714.65"
   },
   {
+    "fixtureLineId": "afc0a274-6085-421b-b9aa-8d1f6c19a1d1",
     "sourceRowNumber": 119,
     "hierarchicalCode": "03.02.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 10,
     "externalSourceCode": "83532",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2350,11 +2564,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "147.95"
   },
   {
+    "fixtureLineId": "bef74650-b5a9-4200-91e6-1ff80e67f64f",
     "sourceRowNumber": 120,
     "hierarchicalCode": "03.02.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "03.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 11,
     "externalSourceCode": "100574",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -2370,11 +2586,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "9331.37"
   },
   {
+    "fixtureLineId": "31c4b975-d6e3-46a4-97b5-4899feb0706f",
     "sourceRowNumber": 122,
     "hierarchicalCode": "04.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
     "parentResolutionMethod": "TopLevelNoParent",
+    "documentaryPosition": 3,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -2390,11 +2608,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1795601.71"
   },
   {
+    "fixtureLineId": "729483a9-8ab6-4ad3-948e-889c633633e4",
     "sourceRowNumber": 123,
     "hierarchicalCode": "04.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "04.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -2410,11 +2630,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "5fa66311-5e57-4663-956e-17bd6a101312",
     "sourceRowNumber": 124,
     "hierarchicalCode": "04.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "COT-002",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -2429,11 +2651,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "140339.45"
   },
   {
+    "fixtureLineId": "8b6f3d67-289e-4524-9990-8b4285066f53",
     "sourceRowNumber": 125,
     "hierarchicalCode": "04.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "COT-003",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -2448,11 +2672,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "98947.65"
   },
   {
+    "fixtureLineId": "9042050b-86e6-4392-9a62-d8b5ff4b38e9",
     "sourceRowNumber": 126,
     "hierarchicalCode": "04.01.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "INST-COMPORTA",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2468,11 +2694,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "120304.18"
   },
   {
+    "fixtureLineId": "41d4325d-f9d7-4721-b1c7-02640191ecae",
     "sourceRowNumber": 127,
     "hierarchicalCode": "04.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "04.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -2488,11 +2716,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "5f397ae1-67fc-4996-a30e-403befd52675",
     "sourceRowNumber": 128,
     "hierarchicalCode": "04.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "COT-004",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -2507,11 +2737,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "694523.31"
   },
   {
+    "fixtureLineId": "d28978c8-2814-423e-be87-1f0d4007b8a6",
     "sourceRowNumber": 129,
     "hierarchicalCode": "04.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "COT-005",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -2526,11 +2758,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "156089.12"
   },
   {
+    "fixtureLineId": "142ab15e-8418-40a4-a1c9-c92deb6ca0d0",
     "sourceRowNumber": 130,
     "hierarchicalCode": "04.02.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "COT-006",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -2545,11 +2779,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "62424.81"
   },
   {
+    "fixtureLineId": "ac7f2986-a06e-4c8d-bf2a-22699d24160c",
     "sourceRowNumber": 131,
     "hierarchicalCode": "04.02.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "COT-007",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -2564,11 +2800,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "103696.05"
   },
   {
+    "fixtureLineId": "790181f2-5317-4edc-a85c-90fe17d4a249",
     "sourceRowNumber": 132,
     "hierarchicalCode": "04.02.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "COT-008",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -2584,11 +2822,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "41649.9"
   },
   {
+    "fixtureLineId": "022274aa-0f0a-40b9-be93-18388fce29bc",
     "sourceRowNumber": 133,
     "hierarchicalCode": "04.02.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 5,
     "externalSourceCode": "COT-009",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -2604,11 +2844,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "5514.87"
   },
   {
+    "fixtureLineId": "5de59df4-54c6-4ef4-944f-4b24eb61aa5b",
     "sourceRowNumber": 134,
     "hierarchicalCode": "04.02.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 6,
     "externalSourceCode": "COT-010",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -2624,11 +2866,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "10545.3"
   },
   {
+    "fixtureLineId": "0bbc2b97-b5e7-4d60-96be-5afd1bce9294",
     "sourceRowNumber": 135,
     "hierarchicalCode": "04.02.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 7,
     "externalSourceCode": "COT-011",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -2644,11 +2888,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "4865.62"
   },
   {
+    "fixtureLineId": "fbb7a422-056a-4940-8349-9c8f6e4ab69f",
     "sourceRowNumber": 136,
     "hierarchicalCode": "04.02.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 8,
     "externalSourceCode": "COT-012",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -2664,11 +2910,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "65153.22"
   },
   {
+    "fixtureLineId": "106519f6-d911-4dd5-babc-001cb22bfe03",
     "sourceRowNumber": 137,
     "hierarchicalCode": "04.02.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 9,
     "externalSourceCode": "COT-013",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -2684,11 +2932,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "7032.02"
   },
   {
+    "fixtureLineId": "f32d678d-02ac-43f4-bd1e-df603370e01e",
     "sourceRowNumber": 138,
     "hierarchicalCode": "04.02.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 10,
     "externalSourceCode": "COT-014",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -2704,11 +2954,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "956.2"
   },
   {
+    "fixtureLineId": "023780e2-a8e9-4910-8263-74c9a4b8e049",
     "sourceRowNumber": 139,
     "hierarchicalCode": "04.02.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 11,
     "externalSourceCode": "GAV-800",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2724,11 +2976,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "5530.35"
   },
   {
+    "fixtureLineId": "45ccf795-e568-4705-98d3-f6c394708565",
     "sourceRowNumber": 140,
     "hierarchicalCode": "04.02.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 12,
     "externalSourceCode": "VALV-800",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2744,11 +2998,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1843.45"
   },
   {
+    "fixtureLineId": "2b50b0b9-2671-4396-b9d9-82e0db14c942",
     "sourceRowNumber": 141,
     "hierarchicalCode": "04.02.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 13,
     "externalSourceCode": "INST-TUBO1",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2764,11 +3020,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "9816.63"
   },
   {
+    "fixtureLineId": "b6248ab0-3038-4328-bafd-35dfb9e86ff5",
     "sourceRowNumber": 142,
     "hierarchicalCode": "04.02.15",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 14,
     "externalSourceCode": "INST-TUBO2",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2784,11 +3042,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "21661.44"
   },
   {
+    "fixtureLineId": "7dd6d82a-a215-4a2f-a41d-9c4933d89c82",
     "sourceRowNumber": 143,
     "hierarchicalCode": "04.02.16",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 15,
     "externalSourceCode": "TÊE-800",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2804,11 +3064,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "6365.4"
   },
   {
+    "fixtureLineId": "415d559e-e24d-4ba7-afa6-215136c139c5",
     "sourceRowNumber": 144,
     "hierarchicalCode": "04.02.17",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 16,
     "externalSourceCode": "TUBO-K7",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2824,11 +3086,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1454.54"
   },
   {
+    "fixtureLineId": "336330e0-8427-4aa3-899c-eb41c36b5496",
     "sourceRowNumber": 145,
     "hierarchicalCode": "04.02.18",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 17,
     "externalSourceCode": "TUBO-K7.1",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2844,11 +3108,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2277.9"
   },
   {
+    "fixtureLineId": "6faed61b-9d21-472d-90d9-2fec546ba4f7",
     "sourceRowNumber": 146,
     "hierarchicalCode": "04.02.19",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 18,
     "externalSourceCode": "TÊE-300",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2864,11 +3130,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2831.91"
   },
   {
+    "fixtureLineId": "31fecdc8-3848-48ed-bb1d-a9854ccd50f0",
     "sourceRowNumber": 147,
     "hierarchicalCode": "04.02.20",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 19,
     "externalSourceCode": "VALV-300",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2884,11 +3152,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1525.57"
   },
   {
+    "fixtureLineId": "8f22d535-bc9f-4880-a937-f75812c438ba",
     "sourceRowNumber": 148,
     "hierarchicalCode": "04.02.21",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 20,
     "externalSourceCode": "TUBO-K7.2",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2904,11 +3174,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1474.1"
   },
   {
+    "fixtureLineId": "57e8f050-4cca-4c49-ac48-3901a9be83fa",
     "sourceRowNumber": 149,
     "hierarchicalCode": "04.02.22",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 21,
     "externalSourceCode": "INST-CURVA",
     "fonte": "Composição",
     "tipo": "obS",
@@ -2924,11 +3196,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "865.72"
   },
   {
+    "fixtureLineId": "e648ddbb-136e-47db-9c05-502a9e927467",
     "sourceRowNumber": 150,
     "hierarchicalCode": "04.03.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "04.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -2944,11 +3218,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "ffa36cad-b4be-4b6e-a712-12644ca802d4",
     "sourceRowNumber": 151,
     "hierarchicalCode": null,
     "classification": "ServiceItem",
     "parentHierarchicalCode": "04.03.00",
     "parentResolutionMethod": "DocumentPositionSection",
+    "documentaryPosition": 0,
     "externalSourceCode": "COT-015",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -2964,11 +3240,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "227913"
   },
   {
+    "fixtureLineId": "302fcc4e-a982-475f-90b2-23a640164223",
     "sourceRowNumber": 153,
     "hierarchicalCode": "05.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
     "parentResolutionMethod": "TopLevelNoParent",
+    "documentaryPosition": 4,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -2984,11 +3262,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "69530.78"
   },
   {
+    "fixtureLineId": "fbf179e8-9242-46eb-8081-265a39df355f",
     "sourceRowNumber": 154,
     "hierarchicalCode": "05.00.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "05.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "MARCO-TOP",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3004,11 +3284,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2545.55"
   },
   {
+    "fixtureLineId": "c242a358-3b49-48b8-8032-cef7f6613d72",
     "sourceRowNumber": 155,
     "hierarchicalCode": "05.00.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "05.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "PIEZOM-01",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3024,11 +3306,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "37726.74"
   },
   {
+    "fixtureLineId": "a419c389-a1bc-42d7-8e50-b9edcfcd3e2a",
     "sourceRowNumber": 156,
     "hierarchicalCode": "05.00.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "05.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "PIEZOM-02",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3044,11 +3328,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "23984.25"
   },
   {
+    "fixtureLineId": "5357288e-47d0-4036-8939-81687279c894",
     "sourceRowNumber": 157,
     "hierarchicalCode": "05.00.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "05.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "REGUA",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3064,11 +3350,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "5274.24"
   },
   {
+    "fixtureLineId": "21f6e799-a44d-421c-8cb0-9a678bff35f7",
     "sourceRowNumber": 159,
     "hierarchicalCode": "06.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
     "parentResolutionMethod": "TopLevelNoParent",
+    "documentaryPosition": 5,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -3084,11 +3372,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "811894.6899999998"
   },
   {
+    "fixtureLineId": "c9dd28c1-8069-40be-92f1-fc2cee01c28c",
     "sourceRowNumber": 160,
     "hierarchicalCode": "06.00.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "AUT-001",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3104,11 +3394,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "130303.64"
   },
   {
+    "fixtureLineId": "fb24abd5-6157-466d-8e14-eea5ee141956",
     "sourceRowNumber": 161,
     "hierarchicalCode": "06.00.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "AUT-002",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3124,11 +3416,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "64132.56"
   },
   {
+    "fixtureLineId": "a95a42e3-a7e5-4fd4-ae3d-d2837955d126",
     "sourceRowNumber": 162,
     "hierarchicalCode": "06.00.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "AUT-003",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3144,11 +3438,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "93138.29"
   },
   {
+    "fixtureLineId": "77a86eb6-4435-481c-91b5-b85efdae3ce9",
     "sourceRowNumber": 163,
     "hierarchicalCode": "06.00.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "AUT-004",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3164,11 +3460,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "18222.3"
   },
   {
+    "fixtureLineId": "f9efbd29-a175-4429-9a1b-6d197ec1493f",
     "sourceRowNumber": 164,
     "hierarchicalCode": "06.00.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "AUT-005",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3184,11 +3482,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "930.66"
   },
   {
+    "fixtureLineId": "06f14259-26bd-4aa9-a98a-a13d81f25462",
     "sourceRowNumber": 165,
     "hierarchicalCode": "06.00.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 5,
     "externalSourceCode": "AUT-006",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3204,11 +3504,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "597.98"
   },
   {
+    "fixtureLineId": "01b7b7b3-cd30-4f40-86a0-3bfed9ec2178",
     "sourceRowNumber": 166,
     "hierarchicalCode": "06.00.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 6,
     "externalSourceCode": "AUT-007",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3224,11 +3526,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "51045.98"
   },
   {
+    "fixtureLineId": "6f9002df-b3f2-4078-8b4e-45258231e34f",
     "sourceRowNumber": 167,
     "hierarchicalCode": "06.00.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 7,
     "externalSourceCode": "AUT-008",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3244,11 +3548,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "40296.27"
   },
   {
+    "fixtureLineId": "f51a6f91-0e99-42cf-be79-a33684909bf0",
     "sourceRowNumber": 168,
     "hierarchicalCode": "06.00.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 8,
     "externalSourceCode": "AUT-009",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3264,11 +3570,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "84622.17"
   },
   {
+    "fixtureLineId": "96d13d03-14d6-406a-b9a4-a499ae03567d",
     "sourceRowNumber": 169,
     "hierarchicalCode": "06.00.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 9,
     "externalSourceCode": "AUT-010",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3284,11 +3592,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2150.25"
   },
   {
+    "fixtureLineId": "27464bda-88d8-467c-8a22-9779a63a9e67",
     "sourceRowNumber": 170,
     "hierarchicalCode": "06.00.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 10,
     "externalSourceCode": "AUT-011",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3304,11 +3614,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "91156.5"
   },
   {
+    "fixtureLineId": "66296516-ce6f-499c-bb35-078c22ee17b9",
     "sourceRowNumber": 171,
     "hierarchicalCode": "06.00.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 11,
     "externalSourceCode": "SERV-AUTO",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3324,11 +3636,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "90031.17"
   },
   {
+    "fixtureLineId": "38b224e4-6d18-4b0f-8ee1-adb8d6148d78",
     "sourceRowNumber": 172,
     "hierarchicalCode": "06.00.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 12,
     "externalSourceCode": "SERV-COMISS",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3344,11 +3658,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "17400"
   },
   {
+    "fixtureLineId": "09730abe-7a8a-43c2-b530-cdb7e06082c8",
     "sourceRowNumber": 173,
     "hierarchicalCode": "06.00.15",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 13,
     "externalSourceCode": "I9905",
     "fonte": "Insumo SEINFRA",
     "tipo": "obM",
@@ -3364,11 +3680,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2195.97"
   },
   {
+    "fixtureLineId": "206d1173-34f7-4591-9398-755c37aa12f5",
     "sourceRowNumber": 174,
     "hierarchicalCode": "06.00.16",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 14,
     "externalSourceCode": "I6819",
     "fonte": "Insumo SEINFRA",
     "tipo": "obM",
@@ -3384,11 +3702,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "13160"
   },
   {
+    "fixtureLineId": "81c4096c-c3eb-43de-b151-f747f2eee3ad",
     "sourceRowNumber": 175,
     "hierarchicalCode": "06.00.17",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 15,
     "externalSourceCode": "AUT-012",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3404,11 +3724,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2351.7"
   },
   {
+    "fixtureLineId": "c6c64763-9eff-4cb4-8560-c274e9b556fb",
     "sourceRowNumber": 176,
     "hierarchicalCode": "06.00.18",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 16,
     "externalSourceCode": "AUT-013",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3424,11 +3746,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "4409.46"
   },
   {
+    "fixtureLineId": "53ed2573-d330-4e31-8e7b-6fdefd89e900",
     "sourceRowNumber": 177,
     "hierarchicalCode": "06.00.19",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 17,
     "externalSourceCode": "43972",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
@@ -3444,11 +3768,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2635"
   },
   {
+    "fixtureLineId": "a435433c-5583-45c7-8026-32b6d6d829d4",
     "sourceRowNumber": 178,
     "hierarchicalCode": "06.00.20",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 18,
     "externalSourceCode": "AUT-014",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3464,11 +3790,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "20713.8"
   },
   {
+    "fixtureLineId": "e4176a26-605c-42e2-97ab-144411e964f6",
     "sourceRowNumber": 179,
     "hierarchicalCode": "06.00.21",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 19,
     "externalSourceCode": "AUT-015",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3483,11 +3811,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "28460"
   },
   {
+    "fixtureLineId": "acbb23e1-0d37-419c-a1d0-518256392b39",
     "sourceRowNumber": 180,
     "hierarchicalCode": "06.00.22",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 20,
     "externalSourceCode": "CPU – 07.00.26",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3503,11 +3833,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "3329.1"
   },
   {
+    "fixtureLineId": "93dae8a2-7ab5-4674-b7ce-827f96a32907",
     "sourceRowNumber": 181,
     "hierarchicalCode": "06.00.23",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 21,
     "externalSourceCode": "AUT-016",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -3522,11 +3854,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "8428.75"
   },
   {
+    "fixtureLineId": "5f6c10e1-78d5-43d4-8ff6-943d41bc0902",
     "sourceRowNumber": 182,
     "hierarchicalCode": "06.00.24",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "06.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 22,
     "externalSourceCode": "TREIN-AUTO",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3542,11 +3876,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "42183.14"
   },
   {
+    "fixtureLineId": "532e0ca8-89ca-4090-b4ff-fb08b75eb83b",
     "sourceRowNumber": 184,
     "hierarchicalCode": "07.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
     "parentResolutionMethod": "TopLevelNoParent",
+    "documentaryPosition": 6,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -3562,11 +3898,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "183533.5199999999"
   },
   {
+    "fixtureLineId": "5c803e23-f4aa-440b-a626-b7a090f880f6",
     "sourceRowNumber": 185,
     "hierarchicalCode": "07.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "07.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -3582,11 +3920,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "ff25b622-8342-48bf-b4e3-cf84176eee72",
     "sourceRowNumber": 186,
     "hierarchicalCode": "07.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "4915744",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -3602,11 +3942,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "117.23"
   },
   {
+    "fixtureLineId": "c547e54f-1303-4d2c-872a-c1bb6a1b7c28",
     "sourceRowNumber": 187,
     "hierarchicalCode": "07.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "99059",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -3622,11 +3964,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "3843.68"
   },
   {
+    "fixtureLineId": "34abc658-292b-4d47-b1e6-674994efaade",
     "sourceRowNumber": 188,
     "hierarchicalCode": "07.01.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "6122",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3642,11 +3986,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "5049.36"
   },
   {
+    "fixtureLineId": "4bcc531e-d0b3-4a8b-a134-9cdf6c24f294",
     "sourceRowNumber": 189,
     "hierarchicalCode": "07.01.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "6110",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3662,11 +4008,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1125.72"
   },
   {
+    "fixtureLineId": "e10c6fc8-57bf-48f5-8d67-7a801db8c743",
     "sourceRowNumber": 190,
     "hierarchicalCode": "07.01.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "78018",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3682,11 +4030,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "957.7"
   },
   {
+    "fixtureLineId": "d181247e-6a19-4989-9d27-6bfcc0ae397d",
     "sourceRowNumber": 191,
     "hierarchicalCode": "07.01.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 5,
     "externalSourceCode": "73935/002",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3702,11 +4052,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "18767.91"
   },
   {
+    "fixtureLineId": "067b49b2-483a-4e21-917b-1f96353edbd6",
     "sourceRowNumber": 192,
     "hierarchicalCode": "07.01.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 6,
     "externalSourceCode": "73346",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3722,11 +4074,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "16310.37"
   },
   {
+    "fixtureLineId": "f3977cc8-3c46-48ea-9189-95f518922719",
     "sourceRowNumber": 193,
     "hierarchicalCode": "07.01.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 7,
     "externalSourceCode": "87873",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3742,11 +4096,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2577.17"
   },
   {
+    "fixtureLineId": "065fdccf-ba2e-4d89-bb70-896c614bc1c6",
     "sourceRowNumber": 194,
     "hierarchicalCode": "07.01.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 8,
     "externalSourceCode": "87527",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -3762,11 +4118,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "877.15"
   },
   {
+    "fixtureLineId": "41be732f-aea3-4130-a1cb-d543cf1bcf4f",
     "sourceRowNumber": 195,
     "hierarchicalCode": "07.01.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 9,
     "externalSourceCode": "84076",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3782,11 +4140,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "12122.88"
   },
   {
+    "fixtureLineId": "a5065449-d662-41fc-84fb-db666fb78367",
     "sourceRowNumber": 196,
     "hierarchicalCode": "07.01.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 10,
     "externalSourceCode": "83534",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3802,11 +4162,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2406.33"
   },
   {
+    "fixtureLineId": "98711744-1a38-4474-aaf1-0782156e9be3",
     "sourceRowNumber": 197,
     "hierarchicalCode": "07.01.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 11,
     "externalSourceCode": "74079/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3822,11 +4184,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "3567.88"
   },
   {
+    "fixtureLineId": "95725e4c-c7ed-404d-b5a5-cc2e28a69894",
     "sourceRowNumber": 198,
     "hierarchicalCode": "07.01.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 12,
     "externalSourceCode": "87247",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -3842,11 +4206,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "974.21"
   },
   {
+    "fixtureLineId": "072d55f6-66b6-4985-95d8-2df2ddb45e12",
     "sourceRowNumber": 199,
     "hierarchicalCode": "07.01.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 13,
     "externalSourceCode": "9875",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3862,11 +4228,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "683.57"
   },
   {
+    "fixtureLineId": "e918748d-72c7-49ad-9638-b33b85a0dd53",
     "sourceRowNumber": 200,
     "hierarchicalCode": "07.01.15",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 14,
     "externalSourceCode": "83901",
     "fonte": "Composição",
     "tipo": "obS",
@@ -3882,11 +4250,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "408.72"
   },
   {
+    "fixtureLineId": "64d0c3e3-c785-4e73-af84-616e368a3ead",
     "sourceRowNumber": 201,
     "hierarchicalCode": "07.01.16",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 15,
     "externalSourceCode": "88489",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -3902,11 +4272,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2633.75"
   },
   {
+    "fixtureLineId": "c0bd7021-552f-4ba4-8ea3-1a734999c968",
     "sourceRowNumber": 202,
     "hierarchicalCode": "07.01.17",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 16,
     "externalSourceCode": "88488",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -3922,11 +4294,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1630.79"
   },
   {
+    "fixtureLineId": "cdf14113-ae8e-4232-97dc-a88be2b43108",
     "sourceRowNumber": 203,
     "hierarchicalCode": "07.01.18",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 17,
     "externalSourceCode": "87265",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -3942,11 +4316,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "866.79"
   },
   {
+    "fixtureLineId": "c737062b-0b66-411c-8757-3ef8d8b8bbb9",
     "sourceRowNumber": 204,
     "hierarchicalCode": "07.01.19",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 18,
     "externalSourceCode": "91337",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -3962,11 +4338,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "8968.11"
   },
   {
+    "fixtureLineId": "cf972207-8e79-4c93-8ac9-0846865dd8a8",
     "sourceRowNumber": 205,
     "hierarchicalCode": "07.01.20",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 19,
     "externalSourceCode": "90841",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -3982,11 +4360,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1197.03"
   },
   {
+    "fixtureLineId": "2cbab3f4-2257-47dc-9b97-e94be8ac3151",
     "sourceRowNumber": 206,
     "hierarchicalCode": "07.01.21",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 20,
     "externalSourceCode": "90843",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4002,11 +4382,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "3792.18"
   },
   {
+    "fixtureLineId": "8dc127db-5c67-41e7-be81-068697bc6eb0",
     "sourceRowNumber": 207,
     "hierarchicalCode": "07.01.22",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 21,
     "externalSourceCode": "73938/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4022,11 +4404,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "11171.61"
   },
   {
+    "fixtureLineId": "7487f809-1a6b-4097-83ec-a398ece81e33",
     "sourceRowNumber": 208,
     "hierarchicalCode": "07.01.23",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 22,
     "externalSourceCode": "72078",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4042,11 +4426,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "13997.13"
   },
   {
+    "fixtureLineId": "b6de39aa-d7c2-4662-96ed-02638a1fbdb0",
     "sourceRowNumber": 209,
     "hierarchicalCode": "07.01.24",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 23,
     "externalSourceCode": "73892/002",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4062,11 +4448,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "323.51"
   },
   {
+    "fixtureLineId": "8ad34521-3ec9-4a3b-935e-29348c223a8a",
     "sourceRowNumber": 210,
     "hierarchicalCode": "07.01.25",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 24,
     "externalSourceCode": "74197/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4082,11 +4470,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2781.83"
   },
   {
+    "fixtureLineId": "ef65cc3e-e1e7-4378-8ea9-94d0e51a63f7",
     "sourceRowNumber": 211,
     "hierarchicalCode": "07.01.26",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 25,
     "externalSourceCode": "74198/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4102,11 +4492,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2113.82"
   },
   {
+    "fixtureLineId": "024657d6-849c-4db1-9dcc-4282a21122bb",
     "sourceRowNumber": 212,
     "hierarchicalCode": "07.01.27",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 26,
     "externalSourceCode": "89711",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4122,11 +4514,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "145.86"
   },
   {
+    "fixtureLineId": "40d9809f-8f2d-452b-a6fd-1b2eb66baf66",
     "sourceRowNumber": 213,
     "hierarchicalCode": "07.01.28",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 27,
     "externalSourceCode": "89712",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4142,11 +4536,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "185.7"
   },
   {
+    "fixtureLineId": "c3279ffb-f42d-464e-a1a4-005b2d4b37ee",
     "sourceRowNumber": 214,
     "hierarchicalCode": "07.01.29",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 28,
     "externalSourceCode": "89714",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4162,11 +4558,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "258.72"
   },
   {
+    "fixtureLineId": "d3ed895a-327f-4311-9f60-c9599d54f16e",
     "sourceRowNumber": 215,
     "hierarchicalCode": "07.01.30",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 29,
     "externalSourceCode": "89726",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4182,11 +4580,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "22.88"
   },
   {
+    "fixtureLineId": "e621ea47-9e9c-48a2-8fc4-6a0f1b80c97f",
     "sourceRowNumber": 216,
     "hierarchicalCode": "07.01.31",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 30,
     "externalSourceCode": "89731",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4202,11 +4602,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "17.73"
   },
   {
+    "fixtureLineId": "72cb661a-f910-4528-95b9-3e21f88041cc",
     "sourceRowNumber": 217,
     "hierarchicalCode": "07.01.32",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 31,
     "externalSourceCode": "89744",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4222,11 +4624,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "32.6"
   },
   {
+    "fixtureLineId": "193f289a-9099-4e04-9301-40e76ebfa66c",
     "sourceRowNumber": 218,
     "hierarchicalCode": "07.01.33",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 32,
     "externalSourceCode": "97902",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4242,11 +4646,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "657.01"
   },
   {
+    "fixtureLineId": "1d1827e1-492c-4b43-9d45-d3c0b0444d13",
     "sourceRowNumber": 219,
     "hierarchicalCode": "07.01.34",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 33,
     "externalSourceCode": "86888",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4262,11 +4668,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "616.8"
   },
   {
+    "fixtureLineId": "afb6efbf-a942-4fc2-a90a-748a416f2ae8",
     "sourceRowNumber": 220,
     "hierarchicalCode": "07.01.35",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 34,
     "externalSourceCode": "86902",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4282,11 +4690,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "397.23"
   },
   {
+    "fixtureLineId": "d0fd8e71-5bba-4fe8-b22f-fc27ea3e9758",
     "sourceRowNumber": 221,
     "hierarchicalCode": "07.01.36",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 35,
     "externalSourceCode": "100860",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4302,11 +4712,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "128.76"
   },
   {
+    "fixtureLineId": "419443df-3227-49cb-9743-9fefcee27cda",
     "sourceRowNumber": 222,
     "hierarchicalCode": "07.01.37",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 36,
     "externalSourceCode": "89482",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4322,11 +4734,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "40.84"
   },
   {
+    "fixtureLineId": "371f5315-2702-4753-8f02-63f5c0698f75",
     "sourceRowNumber": 223,
     "hierarchicalCode": "07.01.38",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 37,
     "externalSourceCode": "74131/1",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4342,11 +4756,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "499.65"
   },
   {
+    "fixtureLineId": "0b18702a-55fd-4d26-9bcf-f12c64a4a871",
     "sourceRowNumber": 224,
     "hierarchicalCode": "07.01.39",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 38,
     "externalSourceCode": "97584",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4362,11 +4778,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "860.34"
   },
   {
+    "fixtureLineId": "0543e742-7b06-4cc9-a0e1-3ef7e412d2b9",
     "sourceRowNumber": 225,
     "hierarchicalCode": "07.01.40",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 39,
     "externalSourceCode": "74130/1",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4382,11 +4800,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "49.11"
   },
   {
+    "fixtureLineId": "1303c642-fb47-42a6-a331-fa09e117949a",
     "sourceRowNumber": 226,
     "hierarchicalCode": "07.01.41",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 40,
     "externalSourceCode": "89957",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4402,11 +4822,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "467.55"
   },
   {
+    "fixtureLineId": "622ab3c0-3171-4464-acef-3a0edcc9b892",
     "sourceRowNumber": 227,
     "hierarchicalCode": "07.01.42",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 41,
     "externalSourceCode": "89971",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4422,11 +4844,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "59.84"
   },
   {
+    "fixtureLineId": "35e7c0e0-8c24-4697-afde-bb00fd6c6057",
     "sourceRowNumber": 228,
     "hierarchicalCode": "07.01.43",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 42,
     "externalSourceCode": "89969",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4442,11 +4866,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "52.45"
   },
   {
+    "fixtureLineId": "b59fb9c7-6820-43c0-ba9b-bb188d3949ec",
     "sourceRowNumber": 229,
     "hierarchicalCode": "07.01.44",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 43,
     "externalSourceCode": "102622",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4462,11 +4888,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "719.12"
   },
   {
+    "fixtureLineId": "4c1ce1d5-76e5-486f-b8c4-d24056bbb170",
     "sourceRowNumber": 230,
     "hierarchicalCode": "07.01.45",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 44,
     "externalSourceCode": "72934",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4482,11 +4910,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1024"
   },
   {
+    "fixtureLineId": "93c6c1ca-a1bb-4dc8-9c05-78c8e5d92946",
     "sourceRowNumber": 231,
     "hierarchicalCode": "07.01.46",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 45,
     "externalSourceCode": "91926",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4502,11 +4932,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1728"
   },
   {
+    "fixtureLineId": "2b73996a-13db-4521-905a-ffb35e3e5457",
     "sourceRowNumber": 232,
     "hierarchicalCode": "07.01.47",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 46,
     "externalSourceCode": "92023",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4522,11 +4954,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "404.53"
   },
   {
+    "fixtureLineId": "10342625-5f53-4e2b-9254-aa884607cd17",
     "sourceRowNumber": 233,
     "hierarchicalCode": "07.01.48",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 47,
     "externalSourceCode": "83540",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4542,11 +4976,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "244.64"
   },
   {
+    "fixtureLineId": "61e966c3-90b6-426c-a229-4486624cbc21",
     "sourceRowNumber": 234,
     "hierarchicalCode": "07.01.49",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 48,
     "externalSourceCode": "83387",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4562,11 +4998,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "187.38"
   },
   {
+    "fixtureLineId": "7848d8b1-570b-48eb-9694-8d4f21697884",
     "sourceRowNumber": 235,
     "hierarchicalCode": "07.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "07.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -4582,11 +5020,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "ec55e58c-cb72-40ab-a5b9-ab4a9a6c379d",
     "sourceRowNumber": 236,
     "hierarchicalCode": "07.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "4915744",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -4602,11 +5042,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "10.08"
   },
   {
+    "fixtureLineId": "311e9119-879b-4108-ba3b-1d975f232e52",
     "sourceRowNumber": 237,
     "hierarchicalCode": "07.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "99059",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4622,11 +5064,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1489.8"
   },
   {
+    "fixtureLineId": "fe4519c2-38c7-4b01-8120-e070da71694b",
     "sourceRowNumber": 238,
     "hierarchicalCode": "07.02.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "6122",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4642,11 +5086,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1709.99"
   },
   {
+    "fixtureLineId": "c8780916-8efe-4b44-9682-6d9a3f6f1c32",
     "sourceRowNumber": 239,
     "hierarchicalCode": "07.02.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "6110",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4662,11 +5108,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "381.33"
   },
   {
+    "fixtureLineId": "f101a05e-8c79-441c-b910-5e3323adb510",
     "sourceRowNumber": 240,
     "hierarchicalCode": "07.02.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "78018",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4682,11 +5130,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "370.13"
   },
   {
+    "fixtureLineId": "6502560b-d951-4df3-89e5-b637f0861b4b",
     "sourceRowNumber": 241,
     "hierarchicalCode": "07.02.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 5,
     "externalSourceCode": "73935/002",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4702,11 +5152,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "6773.22"
   },
   {
+    "fixtureLineId": "2b070728-c28c-4671-b125-c10c5140a0e5",
     "sourceRowNumber": 242,
     "hierarchicalCode": "07.02.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 6,
     "externalSourceCode": "73346",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4722,11 +5174,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "5069.04"
   },
   {
+    "fixtureLineId": "342bf8c5-9b14-4d83-8fa5-ce906d6db496",
     "sourceRowNumber": 243,
     "hierarchicalCode": "07.02.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 7,
     "externalSourceCode": "87873",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4742,11 +5196,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "931.12"
   },
   {
+    "fixtureLineId": "8847b877-02df-4940-9bbb-a0301d224412",
     "sourceRowNumber": 244,
     "hierarchicalCode": "07.02.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 8,
     "externalSourceCode": "87527",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4762,11 +5218,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "640.08"
   },
   {
+    "fixtureLineId": "9cbb4f2e-bab7-46fe-bcf1-a096e356e43f",
     "sourceRowNumber": 245,
     "hierarchicalCode": "07.02.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 9,
     "externalSourceCode": "84076",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4782,11 +5240,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "4066.38"
   },
   {
+    "fixtureLineId": "d81a72b6-b1a7-44e3-8295-29ec0bd71fb2",
     "sourceRowNumber": 246,
     "hierarchicalCode": "07.02.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 10,
     "externalSourceCode": "83534",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4802,11 +5262,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "458.58"
   },
   {
+    "fixtureLineId": "f49485ae-e523-4b81-a83d-824e7455bad4",
     "sourceRowNumber": 247,
     "hierarchicalCode": "07.02.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 11,
     "externalSourceCode": "87247",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4822,11 +5284,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "772.35"
   },
   {
+    "fixtureLineId": "c0ee3ffa-35cc-4fbc-a896-f08b7f762da4",
     "sourceRowNumber": 248,
     "hierarchicalCode": "07.02.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 12,
     "externalSourceCode": "9875",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4842,11 +5306,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "49.02"
   },
   {
+    "fixtureLineId": "b435a3d9-9fb5-4a05-bb1b-4806973d5667",
     "sourceRowNumber": 249,
     "hierarchicalCode": "07.02.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 13,
     "externalSourceCode": "83901",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4862,11 +5328,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "131.54"
   },
   {
+    "fixtureLineId": "9fa4faad-873f-410e-87aa-0996984b565d",
     "sourceRowNumber": 250,
     "hierarchicalCode": "07.02.15",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 14,
     "externalSourceCode": "88489",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4882,11 +5350,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "546.25"
   },
   {
+    "fixtureLineId": "7f58114d-f51f-4d35-8de9-7b20366bc65c",
     "sourceRowNumber": 251,
     "hierarchicalCode": "07.02.16",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 15,
     "externalSourceCode": "88488",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4902,11 +5372,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "846.8"
   },
   {
+    "fixtureLineId": "38e13acd-7105-4c2b-b716-140faeeda22b",
     "sourceRowNumber": 252,
     "hierarchicalCode": "07.02.17",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 16,
     "externalSourceCode": "87265",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4922,11 +5394,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1096.38"
   },
   {
+    "fixtureLineId": "c0982367-db6c-4245-9c03-6d8b7773e1eb",
     "sourceRowNumber": 253,
     "hierarchicalCode": "07.02.18",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 17,
     "externalSourceCode": "91337",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4942,11 +5416,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2989.37"
   },
   {
+    "fixtureLineId": "9864b61c-be38-4c84-9622-4eabacc5e558",
     "sourceRowNumber": 254,
     "hierarchicalCode": "07.02.19",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 18,
     "externalSourceCode": "90842",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -4962,11 +5438,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1207.61"
   },
   {
+    "fixtureLineId": "21dacdc6-83f6-4548-af2f-b51929a101cf",
     "sourceRowNumber": 255,
     "hierarchicalCode": "07.02.20",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 19,
     "externalSourceCode": "74202/1",
     "fonte": "Composição",
     "tipo": "obS",
@@ -4982,11 +5460,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "9441.56"
   },
   {
+    "fixtureLineId": "6b23f299-0b6b-44ca-bd28-c9430aa182ca",
     "sourceRowNumber": 256,
     "hierarchicalCode": "07.02.21",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 20,
     "externalSourceCode": "73892/002",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5002,11 +5482,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "479.28"
   },
   {
+    "fixtureLineId": "969e095c-1344-4851-b92d-fc62fc2f1bf2",
     "sourceRowNumber": 257,
     "hierarchicalCode": "07.02.22",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 21,
     "externalSourceCode": "74197/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5022,11 +5504,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2781.83"
   },
   {
+    "fixtureLineId": "af6395f3-f4e9-48da-acd9-7cc5b37dead8",
     "sourceRowNumber": 258,
     "hierarchicalCode": "07.02.23",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 22,
     "externalSourceCode": "74198/001",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5042,11 +5526,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2113.82"
   },
   {
+    "fixtureLineId": "4f51790d-64fa-4c93-a554-5c559a05a884",
     "sourceRowNumber": 259,
     "hierarchicalCode": "07.02.24",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 23,
     "externalSourceCode": "89711",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5062,11 +5548,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "145.86"
   },
   {
+    "fixtureLineId": "97da3bd6-b1e1-4ded-9664-30ba2ff33d8e",
     "sourceRowNumber": 260,
     "hierarchicalCode": "07.02.25",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 24,
     "externalSourceCode": "89712",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5082,11 +5570,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "185.7"
   },
   {
+    "fixtureLineId": "c6cf600d-272c-4394-9aa0-3458e38af538",
     "sourceRowNumber": 261,
     "hierarchicalCode": "07.02.26",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 25,
     "externalSourceCode": "89714",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5102,11 +5592,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "258.72"
   },
   {
+    "fixtureLineId": "eb99bc45-7900-44c9-95f1-001460f1c44b",
     "sourceRowNumber": 262,
     "hierarchicalCode": "07.02.27",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 26,
     "externalSourceCode": "89726",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5122,11 +5614,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "22.88"
   },
   {
+    "fixtureLineId": "ce711691-f4ba-436c-8c0e-e5cad4da7c27",
     "sourceRowNumber": 263,
     "hierarchicalCode": "07.02.28",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 27,
     "externalSourceCode": "89731",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5142,11 +5636,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "17.73"
   },
   {
+    "fixtureLineId": "eb118844-f970-447e-a7c7-041bd765d841",
     "sourceRowNumber": 264,
     "hierarchicalCode": "07.02.29",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 28,
     "externalSourceCode": "89744",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5162,11 +5658,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "32.6"
   },
   {
+    "fixtureLineId": "2556f880-7a4b-4abc-8f03-af7599c7f0c9",
     "sourceRowNumber": 265,
     "hierarchicalCode": "07.02.30",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 29,
     "externalSourceCode": "97902",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5182,11 +5680,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "657.01"
   },
   {
+    "fixtureLineId": "a66c6c29-3559-4ae6-9cb7-6bbd0ff805a0",
     "sourceRowNumber": 266,
     "hierarchicalCode": "07.02.31",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 30,
     "externalSourceCode": "86888",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5202,11 +5702,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "616.8"
   },
   {
+    "fixtureLineId": "eb04f168-672c-4df1-8b2f-e5515930afaa",
     "sourceRowNumber": 267,
     "hierarchicalCode": "07.02.32",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 31,
     "externalSourceCode": "86902",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5222,11 +5724,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "397.23"
   },
   {
+    "fixtureLineId": "9fe877a9-d92b-4804-927a-adddfa304051",
     "sourceRowNumber": 268,
     "hierarchicalCode": "07.02.33",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 32,
     "externalSourceCode": "100860",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5242,11 +5746,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "128.76"
   },
   {
+    "fixtureLineId": "051cb6e1-e73e-4089-92b6-fe3a2f80f5b0",
     "sourceRowNumber": 269,
     "hierarchicalCode": "07.02.34",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 33,
     "externalSourceCode": "89482",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5262,11 +5768,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "40.84"
   },
   {
+    "fixtureLineId": "014ba7a8-2c71-4b4c-98c3-b25301b0fe2b",
     "sourceRowNumber": 270,
     "hierarchicalCode": "07.02.35",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 34,
     "externalSourceCode": "74131/1",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5282,11 +5790,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "499.65"
   },
   {
+    "fixtureLineId": "90f9c381-80fd-4a3d-a0a4-3c1632535bf0",
     "sourceRowNumber": 271,
     "hierarchicalCode": "07.02.36",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 35,
     "externalSourceCode": "97584",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5302,11 +5812,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "143.39"
   },
   {
+    "fixtureLineId": "97a88ac6-1705-4e39-bcf5-e7b6b2a3783d",
     "sourceRowNumber": 272,
     "hierarchicalCode": "07.02.37",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 36,
     "externalSourceCode": "74130/1",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5322,11 +5834,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "49.11"
   },
   {
+    "fixtureLineId": "a1acc476-c405-48cc-8c28-84806e5cbbb6",
     "sourceRowNumber": 273,
     "hierarchicalCode": "07.02.38",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 37,
     "externalSourceCode": "89957",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5342,11 +5856,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "467.55"
   },
   {
+    "fixtureLineId": "ae327572-f9d4-4c5a-a11e-09a6f75ef30c",
     "sourceRowNumber": 274,
     "hierarchicalCode": "07.02.39",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 38,
     "externalSourceCode": "89971",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5362,11 +5878,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "59.84"
   },
   {
+    "fixtureLineId": "5384058b-fe1a-4e67-9d45-b407e9632483",
     "sourceRowNumber": 275,
     "hierarchicalCode": "07.02.40",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 39,
     "externalSourceCode": "89969",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5382,11 +5900,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "52.45"
   },
   {
+    "fixtureLineId": "ba4df18e-1f27-4ad4-8e76-7372a16f57a3",
     "sourceRowNumber": 276,
     "hierarchicalCode": "07.02.41",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 40,
     "externalSourceCode": "102622",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5402,11 +5922,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "719.12"
   },
   {
+    "fixtureLineId": "88c07372-7c0d-421b-a123-a1b8dbe3e956",
     "sourceRowNumber": 277,
     "hierarchicalCode": "07.02.42",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 41,
     "externalSourceCode": "72934",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5422,11 +5944,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "512"
   },
   {
+    "fixtureLineId": "8f9d29bd-9098-41f5-9061-9b6369ca4b74",
     "sourceRowNumber": 278,
     "hierarchicalCode": "07.02.43",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 42,
     "externalSourceCode": "91928",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5442,11 +5966,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1350"
   },
   {
+    "fixtureLineId": "e2a41ab6-52ca-4a8f-b23f-81928eed3e2d",
     "sourceRowNumber": 279,
     "hierarchicalCode": "07.02.44",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 43,
     "externalSourceCode": "92023",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5462,11 +5988,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "115.58"
   },
   {
+    "fixtureLineId": "18c497ea-503a-4ae7-81e9-d2ef058fdcb9",
     "sourceRowNumber": 280,
     "hierarchicalCode": "07.02.45",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 44,
     "externalSourceCode": "83540",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5482,11 +6010,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "66.72"
   },
   {
+    "fixtureLineId": "db537aca-14eb-4301-92c4-8461eee34b72",
     "sourceRowNumber": 281,
     "hierarchicalCode": "07.02.46",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 45,
     "externalSourceCode": "83387",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5502,11 +6032,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "52.05"
   },
   {
+    "fixtureLineId": "45a91ba6-5a8a-4c51-b0ca-4772a3c0d4b3",
     "sourceRowNumber": 282,
     "hierarchicalCode": "07.02.47",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 46,
     "externalSourceCode": "74067/002",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5522,11 +6054,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2397.27"
   },
   {
+    "fixtureLineId": "306ff187-f9b1-4dfe-bdcb-0f94757afe63",
     "sourceRowNumber": 283,
     "hierarchicalCode": "07.02.48",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 47,
     "externalSourceCode": "84089",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5542,11 +6076,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "153.25"
   },
   {
+    "fixtureLineId": "f7fe3465-0595-4ed0-b111-93410e609a9b",
     "sourceRowNumber": 284,
     "hierarchicalCode": "07.02.49",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "07.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 48,
     "externalSourceCode": "68058",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5562,11 +6098,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1968.68"
   },
   {
+    "fixtureLineId": "942ca752-2191-4d93-afa0-07f85235ad4b",
     "sourceRowNumber": 286,
     "hierarchicalCode": "08.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
     "parentResolutionMethod": "TopLevelNoParent",
+    "documentaryPosition": 7,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -5582,11 +6120,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "337938.47"
   },
   {
+    "fixtureLineId": "0b68e21f-6072-4160-b27f-5ee06a3de2ba",
     "sourceRowNumber": 287,
     "hierarchicalCode": "08.00.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "C4970",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5602,11 +6142,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "11942.7"
   },
   {
+    "fixtureLineId": "63533be9-9e9c-42e5-a846-90d82be1cde6",
     "sourceRowNumber": 288,
     "hierarchicalCode": "08.00.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "1094",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
@@ -5622,11 +6164,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "113.4"
   },
   {
+    "fixtureLineId": "7ae2017f-c3da-4a67-aa61-ed704af42a74",
     "sourceRowNumber": 289,
     "hierarchicalCode": "08.00.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "I1580",
     "fonte": "Insumo SEINFRA",
     "tipo": "obM",
@@ -5642,11 +6186,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "29.36"
   },
   {
+    "fixtureLineId": "e3ab92f9-492d-46ce-80aa-62c18cc81882",
     "sourceRowNumber": 290,
     "hierarchicalCode": "08.00.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "3398",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
@@ -5662,11 +6208,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "24.92"
   },
   {
+    "fixtureLineId": "b7d9b373-688c-409c-b9f8-e1fd3745ef78",
     "sourceRowNumber": 291,
     "hierarchicalCode": "08.00.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "4274",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
@@ -5682,11 +6230,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "191.12"
   },
   {
+    "fixtureLineId": "204c7319-4b66-4c04-86d3-552b4b688e5d",
     "sourceRowNumber": 292,
     "hierarchicalCode": "08.00.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 5,
     "externalSourceCode": "I0206",
     "fonte": "Insumo SEINFRA",
     "tipo": "obM",
@@ -5702,11 +6252,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "130.44"
   },
   {
+    "fixtureLineId": "591a279a-5dfd-42c2-b9b1-e38c181592d3",
     "sourceRowNumber": 293,
     "hierarchicalCode": "08.00.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 6,
     "externalSourceCode": "I6472",
     "fonte": "Insumo SEINFRA",
     "tipo": "obM",
@@ -5722,11 +6274,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "190.2"
   },
   {
+    "fixtureLineId": "16e3799a-f460-40a7-992a-2cd2fb53de6a",
     "sourceRowNumber": 294,
     "hierarchicalCode": "08.00.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 7,
     "externalSourceCode": "11270",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
@@ -5742,11 +6296,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "66.4"
   },
   {
+    "fixtureLineId": "6e4eaf6a-d66a-4315-9f10-925637344ceb",
     "sourceRowNumber": 295,
     "hierarchicalCode": "08.00.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 8,
     "externalSourceCode": "3380",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
@@ -5762,11 +6318,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1330.5"
   },
   {
+    "fixtureLineId": "1e6685d5-d31b-42fb-a8d3-a779e6146b71",
     "sourceRowNumber": 296,
     "hierarchicalCode": "08.00.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 9,
     "externalSourceCode": "C3909",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5782,11 +6340,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "744.6"
   },
   {
+    "fixtureLineId": "b8ff4be4-093d-4df8-9390-9f07edbb31e5",
     "sourceRowNumber": 297,
     "hierarchicalCode": "08.00.11",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 10,
     "externalSourceCode": "CX INSPECAO",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5802,11 +6362,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "4684.95"
   },
   {
+    "fixtureLineId": "ca6c9961-ecc1-4a96-82fc-8ee064ececc4",
     "sourceRowNumber": 298,
     "hierarchicalCode": "08.00.12",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 11,
     "externalSourceCode": "96971",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5822,11 +6384,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "3483.84"
   },
   {
+    "fixtureLineId": "de1bb0cd-55c3-4cf3-9084-85c4f084bd47",
     "sourceRowNumber": 299,
     "hierarchicalCode": "08.00.13",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 12,
     "externalSourceCode": "INSTAL-ELET",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5842,11 +6406,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "14649.6"
   },
   {
+    "fixtureLineId": "79d1e382-a18a-4360-aebe-abb60baf6592",
     "sourceRowNumber": 300,
     "hierarchicalCode": "08.00.14",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 13,
     "externalSourceCode": "INSTAL-SPDA",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5862,11 +6428,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "10987.2"
   },
   {
+    "fixtureLineId": "ae123770-1c31-4ecd-9be3-9de67a5ed6c6",
     "sourceRowNumber": 301,
     "hierarchicalCode": "08.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 14,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -5882,11 +6450,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "eadfc9ef-6ead-4bde-ab71-0d84e5d0fca6",
     "sourceRowNumber": 302,
     "hierarchicalCode": "08.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "C3925",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5902,11 +6472,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "46857.21"
   },
   {
+    "fixtureLineId": "b9f389b2-34f3-4ea7-ae0a-600561a5543a",
     "sourceRowNumber": 303,
     "hierarchicalCode": "08.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "CPU – 08.01.02",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5922,11 +6494,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "3133.42"
   },
   {
+    "fixtureLineId": "cbc6c3aa-38fa-4fdb-a18a-cbd514260e6b",
     "sourceRowNumber": 304,
     "hierarchicalCode": "08.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 15,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -5942,11 +6516,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "2d902787-ca0b-4f39-b286-b1db69c248f6",
     "sourceRowNumber": 305,
     "hierarchicalCode": "08.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "97668",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -5962,11 +6538,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "12158.4"
   },
   {
+    "fixtureLineId": "f6ec84b1-493f-4c9a-9448-138c9eb63495",
     "sourceRowNumber": 306,
     "hierarchicalCode": "08.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "CPU – 08.02.02",
     "fonte": "Composição",
     "tipo": "obS",
@@ -5982,11 +6560,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "6730.18"
   },
   {
+    "fixtureLineId": "5602187f-5d09-4609-8a38-942baa427da9",
     "sourceRowNumber": 307,
     "hierarchicalCode": "08.02.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "C4810",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6002,11 +6582,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "5850.72"
   },
   {
+    "fixtureLineId": "af320794-c169-40c5-af64-3f8f96e16849",
     "sourceRowNumber": 308,
     "hierarchicalCode": "08.02.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "CPU – 08.02.04",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6022,11 +6604,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1987.32"
   },
   {
+    "fixtureLineId": "aec4fa83-f090-496f-9015-c9b6f4809d84",
     "sourceRowNumber": 309,
     "hierarchicalCode": "08.02.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "CPU – 08.02.05",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6042,11 +6626,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "46416.52"
   },
   {
+    "fixtureLineId": "745bb3e4-7c0f-42c1-81d0-ada5cf05a12f",
     "sourceRowNumber": 310,
     "hierarchicalCode": "08.02.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 5,
     "externalSourceCode": "91935",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -6062,11 +6648,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1561.05"
   },
   {
+    "fixtureLineId": "e39ea222-e4c5-4ec7-9aab-def0a8105925",
     "sourceRowNumber": 311,
     "hierarchicalCode": "08.02.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 6,
     "externalSourceCode": "CPU – 08.02.07",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6082,11 +6670,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "35959"
   },
   {
+    "fixtureLineId": "7346cd88-9e73-41ce-a895-a327ac84c88d",
     "sourceRowNumber": 312,
     "hierarchicalCode": "08.02.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 7,
     "externalSourceCode": "CPU – 08.02.08",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6102,11 +6692,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "3636.61"
   },
   {
+    "fixtureLineId": "08dbeb4b-d51c-43a8-a0da-41f08eb0eb21",
     "sourceRowNumber": 313,
     "hierarchicalCode": "08.02.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 8,
     "externalSourceCode": "CPU – 08.02.09",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6122,11 +6714,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "4470.3"
   },
   {
+    "fixtureLineId": "b25fb5de-ff90-4108-bbdc-4e24e16ba817",
     "sourceRowNumber": 314,
     "hierarchicalCode": "08.03.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 16,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -6142,11 +6736,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "52caac29-e0f9-44fe-a7a4-be5e3a45639b",
     "sourceRowNumber": 315,
     "hierarchicalCode": "08.03.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "101632",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -6162,11 +6758,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "494.56"
   },
   {
+    "fixtureLineId": "08414aaa-0712-40bc-9de0-4832c8928356",
     "sourceRowNumber": 316,
     "hierarchicalCode": "08.03.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "39380",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
@@ -6182,11 +6780,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "257.07"
   },
   {
+    "fixtureLineId": "9004224a-deb8-4d96-9b70-f068006b0cba",
     "sourceRowNumber": 317,
     "hierarchicalCode": "08.03.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "101562",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -6202,11 +6802,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "65556"
   },
   {
+    "fixtureLineId": "becde466-512e-4a72-b6e9-de887d4461e0",
     "sourceRowNumber": 318,
     "hierarchicalCode": "08.03.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "101658",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -6222,11 +6824,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "6034.16"
   },
   {
+    "fixtureLineId": "9b434961-84c5-4a02-825c-56648ab1510d",
     "sourceRowNumber": 319,
     "hierarchicalCode": "08.03.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "101636",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -6242,11 +6846,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1943.37"
   },
   {
+    "fixtureLineId": "52c577d9-547b-4692-89c6-afb9b79cfa04",
     "sourceRowNumber": 320,
     "hierarchicalCode": "08.03.06",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 5,
     "externalSourceCode": "91927",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -6262,11 +6868,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1953"
   },
   {
+    "fixtureLineId": "a3858481-3673-4dff-8fcd-76e991a24382",
     "sourceRowNumber": 321,
     "hierarchicalCode": "08.03.07",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 6,
     "externalSourceCode": "I8438",
     "fonte": "Insumo SEINFRA",
     "tipo": "obM",
@@ -6282,11 +6890,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "1162"
   },
   {
+    "fixtureLineId": "e2bb7bbe-7d92-424e-bae6-24477de5b585",
     "sourceRowNumber": 322,
     "hierarchicalCode": "08.03.08",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 7,
     "externalSourceCode": "862",
     "fonte": "Insumo SINAPI",
     "tipo": "obM",
@@ -6302,11 +6912,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "4984"
   },
   {
+    "fixtureLineId": "501f4522-7b60-447e-8427-c6ebdda52d97",
     "sourceRowNumber": 323,
     "hierarchicalCode": "08.03.09",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 8,
     "externalSourceCode": "C4960",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6322,11 +6934,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "28131.18"
   },
   {
+    "fixtureLineId": "4d9bdfef-b778-423e-b250-067d429b1d27",
     "sourceRowNumber": 324,
     "hierarchicalCode": "08.03.10",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.03.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 9,
     "externalSourceCode": "CPU – 08.03.10",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6342,11 +6956,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "4703.52"
   },
   {
+    "fixtureLineId": "8eecf2bd-7fba-4df2-ad54-659ee9752259",
     "sourceRowNumber": 325,
     "hierarchicalCode": "08.04.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "08.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 17,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -6362,11 +6978,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "3eb7b24f-dcc7-4040-af17-7a6b4a793bce",
     "sourceRowNumber": 326,
     "hierarchicalCode": "08.04.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "101507",
     "fonte": "Serv SINAPI",
     "tipo": "obS",
@@ -6382,11 +7000,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2795.76"
   },
   {
+    "fixtureLineId": "c069ffa8-2d25-4364-ba5c-625e40d695b6",
     "sourceRowNumber": 327,
     "hierarchicalCode": "08.04.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "08.04.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "C4979",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6402,11 +7022,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2593.89"
   },
   {
+    "fixtureLineId": "5d63dc92-43c5-44dc-9d7e-d67895219902",
     "sourceRowNumber": 328,
     "hierarchicalCode": "09.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
     "parentResolutionMethod": "TopLevelNoParent",
+    "documentaryPosition": 8,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -6422,11 +7044,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "54831.5"
   },
   {
+    "fixtureLineId": "515c80a0-cc5b-4802-92cf-0b5c748babec",
     "sourceRowNumber": 329,
     "hierarchicalCode": "09.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "09.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -6442,11 +7066,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "ea3f53e2-2733-45d1-ba17-8a0d4f3ea29a",
     "sourceRowNumber": 330,
     "hierarchicalCode": "09.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "09.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "72218",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6462,11 +7088,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "337.68"
   },
   {
+    "fixtureLineId": "46036b9f-e097-4f44-b628-9f50e669a018",
     "sourceRowNumber": 331,
     "hierarchicalCode": "09.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "09.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "72225",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6482,11 +7110,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "207.24"
   },
   {
+    "fixtureLineId": "44e01158-e904-46cc-aaf5-9403dc09e590",
     "sourceRowNumber": 332,
     "hierarchicalCode": "09.01.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "09.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "85379",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6502,11 +7132,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "307.63"
   },
   {
+    "fixtureLineId": "8898b76d-5e2a-417e-8992-1d7219e64376",
     "sourceRowNumber": 333,
     "hierarchicalCode": "09.01.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "09.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "72895",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6522,11 +7154,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "217.78"
   },
   {
+    "fixtureLineId": "c133cf72-4934-4605-a996-b22567961878",
     "sourceRowNumber": 334,
     "hierarchicalCode": "09.01.05",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "09.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 4,
     "externalSourceCode": "72900",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6542,11 +7176,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "61.93"
   },
   {
+    "fixtureLineId": "425be775-aac2-48de-b2d0-6fa51c05eb2f",
     "sourceRowNumber": 335,
     "hierarchicalCode": "09.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "09.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -6562,11 +7198,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "ad983c45-8e4e-457c-8762-69f236c9731b",
     "sourceRowNumber": 336,
     "hierarchicalCode": "09.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "09.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "CERCA-6 FIOS",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6582,11 +7220,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "49098"
   },
   {
+    "fixtureLineId": "be7065cb-639c-49ab-987b-d7cf143944a5",
     "sourceRowNumber": 337,
     "hierarchicalCode": "09.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "09.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "85189",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6602,11 +7242,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "4601.24"
   },
   {
+    "fixtureLineId": "2bd9b818-597b-4683-93be-e4f84a61b620",
     "sourceRowNumber": 339,
     "hierarchicalCode": "10.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
     "parentResolutionMethod": "TopLevelNoParent",
+    "documentaryPosition": 9,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -6622,11 +7264,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "2786.4799999999996"
   },
   {
+    "fixtureLineId": "0a00617d-3289-4cb3-9350-c9a4638d5c18",
     "sourceRowNumber": 340,
     "hierarchicalCode": "10.00.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "10.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "73903/1",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6642,11 +7286,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "871"
   },
   {
+    "fixtureLineId": "f1dfb823-d147-4e68-a57f-abf1c5dfd7bf",
     "sourceRowNumber": 341,
     "hierarchicalCode": "10.00.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "10.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "5502986",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -6662,11 +7308,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "899.3"
   },
   {
+    "fixtureLineId": "eb4b694f-c76b-4ef1-87ba-c4770b0daae1",
     "sourceRowNumber": 342,
     "hierarchicalCode": "10.00.03",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "10.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 2,
     "externalSourceCode": "4413942",
     "fonte": "Serv SICRO",
     "tipo": "obS",
@@ -6682,11 +7330,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "558.9"
   },
   {
+    "fixtureLineId": "afc79571-3407-487e-a696-1c44e5452340",
     "sourceRowNumber": 343,
     "hierarchicalCode": "10.00.04",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "10.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 3,
     "externalSourceCode": "FORMIG",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6702,11 +7352,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "457.28"
   },
   {
+    "fixtureLineId": "ffe68148-81c9-415c-9ea1-f0d2aa90414a",
     "sourceRowNumber": 345,
     "hierarchicalCode": "11.00.00",
     "classification": "Grupo",
     "parentHierarchicalCode": null,
     "parentResolutionMethod": "TopLevelNoParent",
+    "documentaryPosition": 10,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -6722,11 +7374,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "173920.56"
   },
   {
+    "fixtureLineId": "6412fd5c-b5b5-4bcb-bd1c-b1b010d6858a",
     "sourceRowNumber": 346,
     "hierarchicalCode": "11.01.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "11.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -6742,11 +7396,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "47649f82-762e-4948-a75e-aadda954e01f",
     "sourceRowNumber": 347,
     "hierarchicalCode": "11.01.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "11.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "ANA-001",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -6762,11 +7418,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "85374.12"
   },
   {
+    "fixtureLineId": "d0922ffe-fc41-442f-8c75-d44f9883b5af",
     "sourceRowNumber": 348,
     "hierarchicalCode": "11.01.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "11.01.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "INSTAL-METEO",
     "fonte": "Composição",
     "tipo": "obS",
@@ -6782,11 +7440,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "3374.88"
   },
   {
+    "fixtureLineId": "6f6ea063-8d93-4282-ae61-0eff55cc884b",
     "sourceRowNumber": 349,
     "hierarchicalCode": "11.02.00",
     "classification": "Subgrupo",
     "parentHierarchicalCode": "11.00.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": null,
     "fonte": null,
     "tipo": null,
@@ -6802,11 +7462,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": null
   },
   {
+    "fixtureLineId": "40f9cc60-9bfe-4626-a491-63dd50957c27",
     "sourceRowNumber": 350,
     "hierarchicalCode": "11.02.01",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "11.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 0,
     "externalSourceCode": "ANA-002",
     "fonte": "Cotação",
     "tipo": "obM",
@@ -6822,11 +7484,13 @@ export const LAGOA_DO_ARROZ_OFFICIAL_LINES: ReadonlyArray<LagoaDoArrozOfficialLi
     "totalComBdiReais": "80432.88"
   },
   {
+    "fixtureLineId": "05234604-0720-4df7-97c8-a31f1e76cbc4",
     "sourceRowNumber": 351,
     "hierarchicalCode": "11.02.02",
     "classification": "ServiceItem",
     "parentHierarchicalCode": "11.02.00",
     "parentResolutionMethod": "HierarchicalCode",
+    "documentaryPosition": 1,
     "externalSourceCode": "INSTAL-MED",
     "fonte": "Composição",
     "tipo": "obS",

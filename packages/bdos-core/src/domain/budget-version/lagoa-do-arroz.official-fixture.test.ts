@@ -7,7 +7,7 @@ import {
   LAGOA_DO_ARROZ_OFFICIAL_LINES,
   LAGOA_DO_ARROZ_SOURCE_PROVENANCE,
 } from "./lagoa-do-arroz.official-fixture";
-import { ABSENT_DESCRIPTION_PRESENTATION_LABEL, buildLagoaDoArrozOfficialScenario } from "./lagoa-do-arroz.official-fixture-loader";
+import { buildLagoaDoArrozOfficialScenario } from "./lagoa-do-arroz.official-fixture-loader";
 
 // Testes de aceitação da fixture REAL (planilha oficial DNOCS 90006/2025,
 // aba "ORÇAMENTO") — ver proveniência completa no topo de
@@ -128,12 +128,6 @@ runTest("fixture real: ordenação é governada pela posição declarada, não p
   const documentary = buildLagoaDoArrozOfficialScenario({ siblingInsertionOrder: "Documentary" });
   const reversedSiblings = buildLagoaDoArrozOfficialScenario({ siblingInsertionOrder: "ReversedWithinSiblings" });
 
-  // Confirma que a segunda estratégia realmente inseriu em ordem diferente
-  // internamente (não é um no-op disfarçado) — verificado indiretamente:
-  // como as duas cargas usam identificadores estáveis por linha de origem
-  // (não pela ordem de inserção), a igualdade abaixo só se sustenta porque
-  // `orderedChildren`/a leitura por posição recupera a mesma estrutura
-  // final independentemente de como cada carga inseriu as linhas.
   const byId = (lines: typeof documentary.consolidatedBudgetVersion.lines) => new Map(lines.map((l) => [l.id, l]));
   const documentaryById = byId(documentary.consolidatedBudgetVersion.lines);
   const reversedById = byId(reversedSiblings.consolidatedBudgetVersion.lines);
@@ -161,10 +155,6 @@ runTest("fixture real: ordenação é governada pela posição declarada, não p
     "both loads must produce the same total, regardless of sibling insertion order",
   );
 
-  // A leitura ordenada (orderedChildren, indiretamente via a posição
-  // registrada em cada linha) deve produzir a mesma sequência final de
-  // irmãos em ambas as cargas, mesmo tendo sido inseridas em sequências
-  // opostas.
   const rootGroupsDocumentary = documentary.consolidatedBudgetVersion.lines
     .filter((l) => l.parentLineId === null)
     .slice()
@@ -178,17 +168,52 @@ runTest("fixture real: ordenação é governada pela posição declarada, não p
   assertEqual(rootGroupsDocumentary.join(","), rootGroupsReversed.join(","), "final position-ordered sequence of root Grupos must be identical between the two insertion strategies");
 });
 
+runTest("fixture real: identidade opaca é preservada mesmo com a fixture reorganizada (índice do array irrelevante)", () => {
+  const shuffled = [...LAGOA_DO_ARROZ_OFFICIAL_LINES].reverse();
+  assertEqual(
+    shuffled.map((l) => l.sourceRowNumber).join(",") === LAGOA_DO_ARROZ_OFFICIAL_LINES.map((l) => l.sourceRowNumber).join(","),
+    false,
+    "precondition: the shuffled copy must actually be in a different array order",
+  );
+
+  const fromOriginalOrder = buildLagoaDoArrozOfficialScenario();
+  const fromShuffledOrder = buildLagoaDoArrozOfficialScenario({ lines: shuffled });
+
+  const idsBySourceRow = new Map(LAGOA_DO_ARROZ_OFFICIAL_LINES.map((l) => [l.sourceRowNumber, l.fixtureLineId]));
+
+  fromOriginalOrder.consolidatedBudgetVersion.lines.forEach((line) => {
+    const sourceRowNumber = line.metadata.sourceRowNumber as number;
+    assertEqual(line.id, idsBySourceRow.get(sourceRowNumber), `line for row ${sourceRowNumber} must carry the fixture's own fixtureLineId, not one derived from array position`);
+  });
+
+  const originalIds = new Set(fromOriginalOrder.consolidatedBudgetVersion.lines.map((l) => l.id));
+  const shuffledIds = new Set(fromShuffledOrder.consolidatedBudgetVersion.lines.map((l) => l.id));
+  assertEqual(originalIds.size, shuffledIds.size, "both loads must produce the same number of distinct identities");
+  originalIds.forEach((id) => {
+    assertEqual(shuffledIds.has(id), true, `identity ${id} from the original-order load must also be present in the shuffled-order load — identity does not depend on array index`);
+  });
+});
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 runTest("fixture real: identidade interna nunca é derivada de código externo, descrição ou posição da fonte", () => {
   const scenario = buildLagoaDoArrozOfficialScenario();
   scenario.consolidatedBudgetVersion.lines.forEach((line) => {
+    // A identidade é um UUID opaco (fixtureLineId) — a própria forma já
+    // comprova que não é, nem poderia ser, igual ao código externo, à
+    // descrição, ou a uma string simples derivada da posição/linha da
+    // fonte (uma substring numérica isolada, como "6" para a linha 6,
+    // ocorreria por coincidência em qualquer UUID — não é um teste válido
+    // de derivação; a forma UUID em si é a prova).
+    assertEqual(UUID_PATTERN.test(line.id), true, `line id "${line.id}" must be an opaque UUID, unrelated to external code, description, or source position`);
+
     if (line.externalCode !== null) {
       assertEqual(line.id === line.externalCode, false, `line id must never equal its own external code (line ${line.id})`);
-      assertEqual(line.id.includes(line.externalCode), false, `line id must never contain its own external code (line ${line.id})`);
     }
 
     const sourceRowNumber = line.metadata.sourceRowNumber;
     assertEqual(typeof sourceRowNumber, "number", `line ${line.id} must preserve sourceRowNumber as provenance metadata`);
-    assertEqual(line.id.includes(String(sourceRowNumber)), false, `line id must not be derived from its sourceRowNumber (line ${line.id}, row ${sourceRowNumber})`);
+    assertEqual(line.id === String(sourceRowNumber), false, `line id must not equal its sourceRowNumber (line ${line.id}, row ${sourceRowNumber})`);
   });
 });
 
@@ -204,7 +229,7 @@ runTest("fixture real: carrega, consolida e torna-se imutável sem violar os inv
   assertEqual(scenario.scope.procurementCaseId, scenario.procurementCase.id, "scope must reference the same Processo — whole case, since the source declares no lots");
 });
 
-runTest("fixture real: lacuna documental de descrição — estado explícito preservado, nenhum texto inventado na fixture", () => {
+runTest("fixture real: lacuna documental de descrição — estado explícito no domínio, nenhum rótulo produzido pela fixture", () => {
   const linesWithAbsentDescription = LAGOA_DO_ARROZ_OFFICIAL_LINES.filter((l) => l.descricao.status === "AbsentFromSource");
   assertEqual(linesWithAbsentDescription.length, 8, "expected exactly 8 source rows with status AbsentFromSource (all Cotação-type items)");
   assertEqual(
@@ -219,25 +244,19 @@ runTest("fixture real: lacuna documental de descrição — estado explícito pr
   const linesWithConfirmedDescription = LAGOA_DO_ARROZ_OFFICIAL_LINES.filter((l) => l.descricao.status === "ConfirmedFromSource");
   assertEqual(linesWithConfirmedDescription.length, 336 - 8, "confirmed-description lines mismatch");
 
-  // O rótulo de apresentação só existe no carregador, nunca na fixture —
-  // e mesmo carregado no domínio, não pode ser confundido com descrição
-  // confirmada: a proveniência (descricaoConfirmadaNaFonte) preserva o
-  // estado real distintamente do texto exibido.
+  // O domínio (BudgetLine.description) preserva a mesma união discriminada,
+  // sem produzir rótulo algum — o carregador mapeia diretamente
+  // "ConfirmedFromSource"/"AbsentFromSource" da fixture para
+  // "Confirmed"/"AbsentFromSource" do domínio.
   const scenario = buildLagoaDoArrozOfficialScenario();
-  const flaggedLines = scenario.consolidatedBudgetVersion.lines.filter((line) => line.metadata.descricaoConfirmadaNaFonte === false);
-  assertEqual(flaggedLines.length, 8, "the loader must flag every line with a source-absent description as descricaoConfirmadaNaFonte: false");
-  assertEqual(
-    flaggedLines.every((line) => line.description === ABSENT_DESCRIPTION_PRESENTATION_LABEL),
-    true,
-    "lines with an absent source description must carry the derived presentation label — never fabricated content, and always distinguishable via descricaoConfirmadaNaFonte",
-  );
+  const absentInDomain = scenario.consolidatedBudgetVersion.lines.filter((line) => line.description.status === "AbsentFromSource");
+  assertEqual(absentInDomain.length, 8, "the domain model must preserve exactly 8 lines with an AbsentFromSource description");
+  absentInDomain.forEach((line) => {
+    assertEqual("text" in line.description, false, `line ${line.id}: an AbsentFromSource BudgetLineDescription must carry no text field`);
+  });
 
-  const confirmedLines = scenario.consolidatedBudgetVersion.lines.filter((line) => line.metadata.descricaoConfirmadaNaFonte === true);
-  assertEqual(
-    confirmedLines.every((line) => line.description !== ABSENT_DESCRIPTION_PRESENTATION_LABEL),
-    true,
-    "a confirmed description must never equal the absence-presentation label",
-  );
+  const confirmedInDomain = scenario.consolidatedBudgetVersion.lines.filter((line) => line.description.status === "Confirmed");
+  assertEqual(confirmedInDomain.length, 336 - 8, "the domain model must preserve exactly 328 lines with a Confirmed description");
 });
 
 function runTest(name: string, testCase: () => void): void {

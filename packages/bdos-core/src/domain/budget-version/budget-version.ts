@@ -1,10 +1,11 @@
 import { ProcurementScopeKind, isWellFormedProcurementScope } from "../procurement-case";
-import type { ProcurementScope } from "../procurement-case";
+import type { ProcurementLot, ProcurementScope } from "../procurement-case";
 import { isValidMoneyCents, sumCents } from "./budget-version-money";
 import type { MoneyCents } from "./budget-version-money";
 import type {
   AddBudgetLineInput,
   BudgetLine,
+  BudgetLineDescription,
   BudgetVersion,
   BudgetVersionError,
   BudgetVersionErrorCode,
@@ -22,41 +23,59 @@ import type {
 } from "./budget-version.types";
 import { BudgetLineKind, BudgetVersionStatus, LineageRelationNature } from "./budget-version.types";
 
+/**
+ * `procurementCase` é o contexto validado do domínio de Licitação — `id` e
+ * `organizationId` da Versão são sempre derivados dele, nunca aceitos como
+ * fatos independentes. Quando `scope` for de lote, `procurementLot` prova a
+ * existência do lote (organização, Processo e identidade confrontados) —
+ * `isWellFormedProcurementScope` sozinha nunca é suficiente.
+ */
 export function createBudgetVersion(input: CreateBudgetVersionInput): BudgetVersionResult {
   const metadata = createVersionMetadata(input);
   const errors: BudgetVersionError[] = [];
+
+  if (input.procurementCase === undefined || input.procurementCase === null) {
+    errors.push(createVersionError("missing_procurement_case_id", "procurementCase", "A Processo de Licitação e Contratação is required.", metadata));
+    return freezeDomainObject<BudgetVersionFailure>({ success: false, budgetVersion: null, errors, warnings: [], metadata });
+  }
 
   if (isBlank(input.id)) {
     errors.push(createVersionError("missing_id", "id", "Identity is required.", metadata));
   }
 
-  if (isBlank(input.organizationId)) {
-    errors.push(createVersionError("missing_organization_id", "organizationId", "Organization id is required.", metadata));
+  if (isBlank(input.procurementCase.organizationId)) {
+    errors.push(createVersionError("missing_organization_id", "procurementCase.organizationId", "Organization id is required.", metadata));
   }
 
-  if (isBlank(input.procurementCaseId)) {
-    errors.push(
-      createVersionError("missing_procurement_case_id", "procurementCaseId", "Processo de Licitação e Contratação id is required.", metadata),
-    );
+  if (isBlank(input.procurementCase.id)) {
+    errors.push(createVersionError("missing_procurement_case_id", "procurementCase.id", "Processo de Licitação e Contratação id is required.", metadata));
   }
 
   if (!isWellFormedProcurementScope(input.scope)) {
     errors.push(createVersionError("malformed_scope", "scope", "Escopo da Licitação must be a well-formed WholeCase or Lot scope.", metadata));
-  } else if (!isBlank(input.procurementCaseId) && input.scope.procurementCaseId !== input.procurementCaseId) {
-    errors.push(
-      createVersionError(
-        "scope_case_mismatch",
-        "scope",
-        "The Escopo da Licitação must belong to the same Processo de Licitação e Contratação as the Versão do Orçamento.",
-        metadata,
-      ),
-    );
+  } else {
+    if (input.scope.procurementCaseId !== input.procurementCase.id) {
+      errors.push(
+        createVersionError(
+          "scope_case_mismatch",
+          "scope",
+          "The Escopo da Licitação must belong to the same Processo de Licitação e Contratação as the Versão do Orçamento.",
+          metadata,
+        ),
+      );
+    }
+
+    errors.push(...validateLotProof(input.scope, input.procurementCase.organizationId, input.procurementCase.id, input.procurementLot, metadata));
   }
 
   if (input.origin.kind === "DocumentaryOpaqueReference" && isBlank(input.origin.reference)) {
     errors.push(
       createVersionError("invalid_origin_reference", "origin.reference", "Documentary opaque reference must not be blank.", metadata),
     );
+  }
+
+  if (input.originLineageId !== undefined && isBlank(input.originLineageId)) {
+    errors.push(createVersionError("missing_lineage_relation_id", "originLineageId", "Lineage relation identity, when provided, must not be blank.", metadata));
   }
 
   if (errors.length > 0) {
@@ -69,22 +88,26 @@ export function createBudgetVersion(input: CreateBudgetVersionInput): BudgetVers
     });
   }
 
-  const originLineage: LineageRelation = {
-    id: `${input.id}-origin-lineage`,
-    organizationId: input.organizationId,
-    nature: LineageRelationNature.Origin,
-    origin: input.origin,
-    destinationBudgetVersionId: input.id,
-    metadata,
-  };
+  const originLineage: LineageRelation | null =
+    input.originLineageId === undefined
+      ? null
+      : {
+          id: input.originLineageId,
+          organizationId: input.procurementCase.organizationId,
+          nature: LineageRelationNature.Origin,
+          origin: input.origin,
+          destinationBudgetVersionId: input.id,
+          metadata,
+        };
 
   return freezeDomainObject<BudgetVersionSuccess>({
     success: true,
     budgetVersion: {
       id: input.id,
-      organizationId: input.organizationId,
-      procurementCaseId: input.procurementCaseId,
+      organizationId: input.procurementCase.organizationId,
+      procurementCaseId: input.procurementCase.id,
       scope: input.scope,
+      origin: input.origin,
       status: BudgetVersionStatus.Draft,
       originLineage,
       lines: [],
@@ -97,9 +120,10 @@ export function createBudgetVersion(input: CreateBudgetVersionInput): BudgetVers
 }
 
 /**
- * Registro posterior (ou substituição) da origem/Relação de Rastreabilidade
- * da Versão — somente em rascunho (mapa §13). Substitui `originLineage` por
- * um novo registro; não acumula uma coleção de relações nesta Sprint.
+ * Registro posterior — uma única vez — da Relação de Rastreabilidade que
+ * documenta a origem já declarada em `budgetVersion.origin`. Somente em
+ * rascunho; retorna erro explícito se uma Relação já existir (nunca
+ * substitui).
  */
 export function registerLineageRelation(input: RegisterLineageRelationInput): BudgetVersionResult {
   const { budgetVersion } = input;
@@ -109,23 +133,38 @@ export function registerLineageRelation(input: RegisterLineageRelationInput): Bu
     return immutableVersionFailure(budgetVersion, "budgetVersion", metadata);
   }
 
-  if (input.origin.kind === "DocumentaryOpaqueReference" && isBlank(input.origin.reference)) {
+  if (budgetVersion.originLineage !== null) {
     return freezeDomainObject<BudgetVersionFailure>({
       success: false,
       budgetVersion: null,
       errors: [
-        createVersionError("invalid_origin_reference", "origin.reference", "Documentary opaque reference must not be blank.", metadata),
+        createVersionError(
+          "origin_lineage_already_registered",
+          "originLineage",
+          `Versão do Orçamento "${budgetVersion.id}" already has a registered origin Relação de Rastreabilidade.`,
+          metadata,
+        ),
       ],
       warnings: [],
       metadata,
     });
   }
 
+  if (isBlank(input.id)) {
+    return freezeDomainObject<BudgetVersionFailure>({
+      success: false,
+      budgetVersion: null,
+      errors: [createVersionError("missing_lineage_relation_id", "id", "Lineage relation identity is required.", metadata)],
+      warnings: [],
+      metadata,
+    });
+  }
+
   const originLineage: LineageRelation = {
-    id: `${budgetVersion.id}-origin-lineage`,
+    id: input.id,
     organizationId: budgetVersion.organizationId,
     nature: LineageRelationNature.Origin,
-    origin: input.origin,
+    origin: budgetVersion.origin,
     destinationBudgetVersionId: budgetVersion.id,
     metadata,
   };
@@ -144,7 +183,8 @@ export function registerLineageRelation(input: RegisterLineageRelationInput): Bu
  * estiver em rascunho (ADR-003 §F.2). Grupo nunca possui pai; Subgrupo
  * sempre possui Grupo como pai; Item de Serviço possui Grupo ou Subgrupo
  * como pai. Código externo é sempre opcional — o caso real `COT-015` (Item
- * de Serviço sem código) é representável sem exceção especial.
+ * de Serviço sem código) é representável sem exceção especial. Quando o
+ * Escopo for de lote, `procurementLot` prova sua existência real.
  */
 export function addBudgetLine(input: AddBudgetLineInput): BudgetVersionResult {
   const { budgetVersion } = input;
@@ -160,9 +200,7 @@ export function addBudgetLine(input: AddBudgetLineInput): BudgetVersionResult {
     errors.push(createVersionError("missing_id", "id", "Identity is required.", metadata));
   }
 
-  if (isBlank(input.description)) {
-    errors.push(createVersionError("missing_description", "description", "Description is required.", metadata));
-  }
+  errors.push(...validateDescription(input.description, metadata));
 
   if (budgetVersion.lines.some((line) => line.id === input.id)) {
     errors.push(createVersionError("duplicate_line_id", "id", `A line with id "${input.id}" already exists in this version.`, metadata));
@@ -180,12 +218,17 @@ export function addBudgetLine(input: AddBudgetLineInput): BudgetVersionResult {
   } else {
     errors.push(...validateLineScope(budgetVersion.scope, input.scope, metadata));
     errors.push(...validateParentChildScope(budgetVersion, input.parentLineId ?? null, input.scope, metadata));
+    errors.push(...validateLotProof(input.scope, budgetVersion.organizationId, budgetVersion.procurementCaseId, input.procurementLot, metadata));
   }
 
   const totalErrors = validateLineTotal(input.kind, input.totalCents, metadata);
   errors.push(...totalErrors);
 
-  if (budgetVersion.lines.some((line) => line.parentLineId === (input.parentLineId ?? null) && line.position === input.position)) {
+  if (!isValidBudgetLinePosition(input.position)) {
+    errors.push(createVersionError("invalid_position", "position", "Position must be a non-negative safe integer.", metadata));
+  } else if (
+    budgetVersion.lines.some((line) => line.parentLineId === (input.parentLineId ?? null) && line.position === input.position)
+  ) {
     errors.push(
       createVersionError(
         "duplicate_position",
@@ -234,8 +277,8 @@ export function addBudgetLine(input: AddBudgetLineInput): BudgetVersionResult {
 /**
  * Alteração controlada de campos de uma Linha existente (descrição, código
  * externo, escopo, total) — somente em rascunho. Reaplica as mesmas
- * validações de `addBudgetLine` para os campos alterados (compatibilidade
- * de escopo com a Versão e com o pai, validade do total econômico).
+ * validações de `addBudgetLine` para os campos alterados, incluindo a
+ * prova de existência do lote quando o Escopo for alterado para um lote.
  */
 export function updateBudgetLine(input: UpdateBudgetLineInput): BudgetVersionResult {
   const { budgetVersion, lineId } = input;
@@ -259,8 +302,8 @@ export function updateBudgetLine(input: UpdateBudgetLineInput): BudgetVersionRes
 
   const errors: BudgetVersionError[] = [];
 
-  if (input.description !== undefined && isBlank(input.description)) {
-    errors.push(createVersionError("missing_description", "description", "Description is required.", metadata));
+  if (input.description !== undefined) {
+    errors.push(...validateDescription(input.description, metadata));
   }
 
   const nextScope = input.scope ?? target.scope;
@@ -272,6 +315,7 @@ export function updateBudgetLine(input: UpdateBudgetLineInput): BudgetVersionRes
       errors.push(...validateLineScope(budgetVersion.scope, input.scope, metadata));
       errors.push(...validateParentChildScope(budgetVersion, target.parentLineId, input.scope, metadata));
       errors.push(...validateChildrenScopeAgainstNewParentScope(budgetVersion, lineId, input.scope, metadata));
+      errors.push(...validateLotProof(input.scope, budgetVersion.organizationId, budgetVersion.procurementCaseId, input.procurementLot, metadata));
     }
   }
 
@@ -375,6 +419,16 @@ export function updateBudgetLinePosition(input: UpdateBudgetLinePositionInput): 
       success: false,
       budgetVersion: null,
       errors: [createVersionError("unknown_line", "lineId", `No line with id "${lineId}" exists in this version.`, metadata)],
+      warnings: [],
+      metadata,
+    });
+  }
+
+  if (!isValidBudgetLinePosition(position)) {
+    return freezeDomainObject<BudgetVersionFailure>({
+      success: false,
+      budgetVersion: null,
+      errors: [createVersionError("invalid_position", "position", "Position must be a non-negative safe integer.", metadata)],
       warnings: [],
       metadata,
     });
@@ -512,6 +566,68 @@ export function hasHierarchyCycle(lines: ReadonlyArray<BudgetLine>): boolean {
   });
 }
 
+function validateDescription(description: BudgetLineDescription, metadata: BudgetVersionMetadata): ReadonlyArray<BudgetVersionError> {
+  if (description.status === "Confirmed" && isBlank(description.text)) {
+    return [createVersionError("missing_description", "description", "A confirmed description requires non-blank text.", metadata)];
+  }
+  return [];
+}
+
+/**
+ * Prova de existência de um lote referenciado por Escopo: exige o objeto
+ * `ProcurementLot` real, confronta sua organização usuária, seu Processo, e
+ * confirma que `scope.procurementLotId` é exatamente sua identidade. Não
+ * consulta banco ou repositório — usa apenas os objetos de domínio
+ * recebidos na própria operação. Não se aplica a Escopo de processo
+ * inteiro.
+ */
+function validateLotProof(
+  scope: ProcurementScope,
+  organizationId: string,
+  procurementCaseId: string,
+  procurementLot: ProcurementLot | undefined,
+  metadata: BudgetVersionMetadata,
+): ReadonlyArray<BudgetVersionError> {
+  if (scope.kind !== ProcurementScopeKind.Lot) {
+    return [];
+  }
+
+  if (procurementLot === undefined) {
+    return [
+      createVersionError(
+        "missing_procurement_lot",
+        "procurementLot",
+        "A ProcurementLot must be provided to prove the existence of a Lot-scoped reference.",
+        metadata,
+      ),
+    ];
+  }
+
+  if (isBlank(procurementLot.id)) {
+    return [createVersionError("missing_id", "procurementLot.id", "The provided lot's identity must not be blank.", metadata)];
+  }
+
+  if (procurementLot.organizationId !== organizationId) {
+    return [
+      createVersionError("lot_organization_mismatch", "procurementLot", "The provided lot belongs to a different organização usuária.", metadata),
+    ];
+  }
+
+  if (procurementLot.procurementCaseId !== procurementCaseId) {
+    return [
+      createVersionError("lot_case_mismatch", "procurementLot", "The provided lot belongs to a different Processo de Licitação e Contratação.", metadata),
+    ];
+  }
+
+  if (scope.procurementLotId !== procurementLot.id) {
+    return [
+      createVersionError("scope_lot_mismatch", "scope", "The scope's procurementLotId does not match the provided lot's identity.", metadata),
+    ];
+  }
+
+  return [];
+}
+
 function validateParent(
   budgetVersion: BudgetVersion,
   kind: BudgetLineKind,
@@ -559,11 +675,12 @@ function validateParent(
  * Linha (mapa §11): mesmo Processo sempre exigido; Versão de processo
  * inteiro aceita linhas do processo inteiro ou de qualquer lote válido
  * daquele processo; Versão de lote só aceita linhas do mesmo lote. A
- * existência do próprio lote é responsabilidade de `procurement-case`
- * (`createLotScope`), consultado antes desta chamada. A mesma função
- * também governa a compatibilidade de Escopo entre uma Linha-pai e sua
- * Linha-filha (o Escopo do pai age como teto, exatamente como o Escopo da
- * Versão age como teto para uma Linha de nível superior).
+ * existência do próprio lote é comprovada por `validateLotProof`, não por
+ * esta função (que trata apenas de compatibilidade estrutural entre dois
+ * Escopos já bem-formados). A mesma função também governa a
+ * compatibilidade de Escopo entre uma Linha-pai e sua Linha-filha (o
+ * Escopo do pai age como teto, exatamente como o Escopo da Versão age como
+ * teto para uma Linha de nível superior).
  */
 function isScopeCompatible(ceilingScope: ProcurementScope, candidateScope: ProcurementScope): boolean {
   if (candidateScope.procurementCaseId !== ceilingScope.procurementCaseId) {
@@ -609,10 +726,11 @@ function validateParentChildScope(
 
   const parent = budgetVersion.lines.find((line) => line.id === parentLineId);
 
-  if (parent === undefined || !isScopeCompatible(parent.scope, childScope)) {
-    if (parent === undefined) {
-      return [];
-    }
+  if (parent === undefined) {
+    return [];
+  }
+
+  if (!isScopeCompatible(parent.scope, childScope)) {
     return [
       createVersionError(
         "child_scope_incompatible_with_parent",
@@ -679,6 +797,11 @@ function validateLineTotal(
   return [];
 }
 
+/** Posição válida: `number` finito, inteiro seguro, maior ou igual a zero. */
+function isValidBudgetLinePosition(value: number): boolean {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
 function immutableVersionFailure(budgetVersion: BudgetVersion, field: string, metadata: BudgetVersionMetadata): BudgetVersionFailure {
   return freezeDomainObject<BudgetVersionFailure>({
     success: false,
@@ -709,11 +832,12 @@ function createVersionMetadata(input: CreateBudgetVersionInput): BudgetVersionMe
   return {
     ...(input.metadata ?? {}),
     budgetVersionId: input.id,
-    organizationId: input.organizationId,
-    procurementCaseId: input.procurementCaseId,
-    correlationId: input.correlationId,
-    createdBy: input.createdBy,
-    sourceSystem: input.sourceSystem,
+    ...(input.procurementCase !== undefined && input.procurementCase !== null
+      ? { organizationId: input.procurementCase.organizationId, procurementCaseId: input.procurementCase.id }
+      : {}),
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    ...(input.createdBy !== undefined ? { createdBy: input.createdBy } : {}),
+    ...(input.sourceSystem !== undefined ? { sourceSystem: input.sourceSystem } : {}),
   };
 }
 

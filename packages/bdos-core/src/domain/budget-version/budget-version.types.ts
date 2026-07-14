@@ -1,4 +1,4 @@
-import type { ProcurementCaseId, ProcurementScope } from "../procurement-case";
+import type { ProcurementCase, ProcurementCaseId, ProcurementLot, ProcurementScope } from "../procurement-case";
 import type { MoneyCents } from "./budget-version-money";
 
 export type BudgetVersionMetadata = Readonly<Record<string, unknown>>;
@@ -41,10 +41,14 @@ export type BudgetVersionOrigin =
 
 /**
  * Relação de Rastreabilidade mínima (`LineageRelation`, ADR-001 §G.6 /
- * ADR-004). Preserva origem, destino, natureza da relação e organização
- * usuária. Esta Sprint usa uma única natureza (`Origin`: origem da Versão do
- * Orçamento) — a representação completa e as demais naturezas permanecem
- * abertas para Sprints futuras.
+ * ADR-004). Documenta formalmente a origem já declarada na Versão do
+ * Orçamento (`BudgetVersion.origin`) — origem e Relação de Rastreabilidade
+ * são conceitos distintos: a origem é sempre declarada na criação; a
+ * Relação que a documenta pode ser registrada na criação ou depois,
+ * enquanto em rascunho, e nunca é substituída (registrar uma segunda vez é
+ * erro, não sobrescrita). Esta Sprint usa uma única natureza (`Origin`) — a
+ * representação completa e as demais naturezas permanecem abertas para
+ * Sprints futuras.
  */
 export enum LineageRelationNature {
   Origin = "Origin",
@@ -66,6 +70,17 @@ export enum BudgetLineKind {
 }
 
 /**
+ * Descrição de uma Linha do Orçamento — união discriminada que diferencia
+ * explicitamente descrição confirmada na fonte de descrição ausente na
+ * fonte. O domínio nunca produz um rótulo de apresentação para o estado
+ * ausente; um eventual rótulo visual pertence a uma futura camada de
+ * apresentação, fora desta Sprint.
+ */
+export type BudgetLineDescription =
+  | { readonly status: "Confirmed"; readonly text: string }
+  | { readonly status: "AbsentFromSource" };
+
+/**
  * Linha do Orçamento (`BudgetLine`, ADR-001 §G.2). As três classificações
  * (Grupo/Subgrupo/Item de Serviço) pertencem à mesma família — não possuem
  * identidades ou sistemas de código independentes. `externalCode` é sempre
@@ -78,7 +93,7 @@ export interface BudgetLine {
   readonly id: BudgetLineId;
   readonly budgetVersionId: BudgetVersionId;
   readonly kind: BudgetLineKind;
-  readonly description: string;
+  readonly description: BudgetLineDescription;
   readonly externalCode: string | null;
   readonly parentLineId: BudgetLineId | null;
   readonly position: BudgetLinePosition;
@@ -92,55 +107,86 @@ export interface BudgetLine {
  * rascunho, referencia o Processo de Licitação e Contratação nesta primeira
  * fatia (ADR-003 — obrigatoriedade universal fora desta fatia permanece
  * aberta), e se torna imutável após a consolidação explícita.
+ *
+ * `origin` é sempre declarada na criação. `originLineage` — a Relação de
+ * Rastreabilidade que documenta formalmente essa origem — pode estar
+ * ausente (`null`) inicialmente e ser registrada depois, enquanto em
+ * rascunho, via `registerLineageRelation`; uma vez registrada, nunca é
+ * substituída nesta Sprint.
  */
 export interface BudgetVersion {
   readonly id: BudgetVersionId;
   readonly organizationId: BudgetOrganizationId;
   readonly procurementCaseId: ProcurementCaseId;
   readonly scope: ProcurementScope;
+  readonly origin: BudgetVersionOrigin;
   readonly status: BudgetVersionStatus;
-  readonly originLineage: LineageRelation;
+  readonly originLineage: LineageRelation | null;
   readonly lines: ReadonlyArray<BudgetLine>;
   readonly metadata: BudgetVersionMetadata;
 }
 
 /**
+ * `procurementCase` é o contexto validado do domínio de Licitação e
+ * Contratação — `organizationId` e `procurementCaseId` da Versão são
+ * sempre derivados dele, nunca aceitos como fatos independentes que
+ * poderiam divergir. Quando `scope` for de lote, `procurementLot` é
+ * obrigatório, e seus fatos (organização, Processo, identidade) são
+ * confrontados contra `procurementCase` e `scope` — a existência de um
+ * `ProcurementLot` real é a prova contra Escopo de lote fabricado.
+ *
+ * `originLineageId`, quando fornecido, registra imediatamente a Relação de
+ * Rastreabilidade de origem na criação; quando omitido, a Versão nasce sem
+ * Relação de Rastreabilidade registrada (`originLineage: null`), a ser
+ * registrada depois via `registerLineageRelation`.
+ *
  * `correlationId`, `createdBy` e `sourceSystem` são precedentes técnicos a
  * avaliar (mapa §L), não um contrato obrigatório já aprovado — por isso são
  * opcionais aqui; quando ausentes, simplesmente não entram em `metadata`.
  */
 export interface CreateBudgetVersionInput {
   readonly id: BudgetVersionId;
-  readonly organizationId: BudgetOrganizationId;
-  readonly procurementCaseId: ProcurementCaseId;
+  readonly procurementCase: ProcurementCase;
+  readonly procurementLot?: ProcurementLot;
   readonly scope: ProcurementScope;
   readonly origin: BudgetVersionOrigin;
+  readonly originLineageId?: string;
   readonly correlationId?: BudgetCorrelationId;
   readonly createdBy?: BudgetCreatedBy;
   readonly sourceSystem?: BudgetSourceSystem;
   readonly metadata?: BudgetVersionMetadata;
 }
 
+/**
+ * `procurementLot` é obrigatório quando `scope` for de lote — mesma prova
+ * contra Escopo de lote fabricado exigida na criação da Versão.
+ */
 export interface AddBudgetLineInput {
   readonly budgetVersion: BudgetVersion;
   readonly id: BudgetLineId;
   readonly kind: BudgetLineKind;
-  readonly description: string;
+  readonly description: BudgetLineDescription;
   readonly externalCode?: string | null;
   readonly parentLineId?: BudgetLineId | null;
   readonly position: BudgetLinePosition;
   readonly scope: ProcurementScope;
+  readonly procurementLot?: ProcurementLot;
   readonly totalCents?: MoneyCents | null;
   readonly metadata?: BudgetVersionMetadata;
 }
 
-/** Alteração controlada de campos de uma Linha já existente — somente em rascunho. */
+/**
+ * Alteração controlada de campos de uma Linha já existente — somente em
+ * rascunho. `procurementLot` é exigido quando `scope` for alterado para um
+ * Escopo de lote, com a mesma prova exigida em `addBudgetLine`.
+ */
 export interface UpdateBudgetLineInput {
   readonly budgetVersion: BudgetVersion;
   readonly lineId: BudgetLineId;
-  readonly description?: string;
+  readonly description?: BudgetLineDescription;
   readonly externalCode?: string | null;
   readonly scope?: ProcurementScope;
+  readonly procurementLot?: ProcurementLot;
   readonly totalCents?: MoneyCents | null;
 }
 
@@ -161,14 +207,17 @@ export interface ConsolidateBudgetVersionInput {
 }
 
 /**
- * Registro posterior (ou substituição, enquanto em rascunho) da Relação de
- * Rastreabilidade de origem da Versão do Orçamento — mapa §13: "pode ser
- * declarada na criação ou registrada posteriormente enquanto a versão
- * estiver em rascunho, se houver evidência suficiente".
+ * Registro posterior (uma única vez) da Relação de Rastreabilidade de
+ * origem da Versão do Orçamento — mapa §13: "pode ser declarada na criação
+ * ou registrada posteriormente enquanto a versão estiver em rascunho, se
+ * houver evidência suficiente". Usa sempre a origem já declarada em
+ * `budgetVersion.origin` — não aceita uma origem independente. `id` é a
+ * identidade própria, opaca e não vazia da Relação. Registrar uma segunda
+ * vez, quando já existir uma, é erro — nunca sobrescrita.
  */
 export interface RegisterLineageRelationInput {
   readonly budgetVersion: BudgetVersion;
-  readonly origin: BudgetVersionOrigin;
+  readonly id: string;
 }
 
 export type BudgetVersionErrorCode =
@@ -177,10 +226,15 @@ export type BudgetVersionErrorCode =
   | "missing_procurement_case_id"
   | "scope_case_mismatch"
   | "malformed_scope"
+  | "missing_procurement_lot"
+  | "lot_organization_mismatch"
+  | "lot_case_mismatch"
+  | "scope_lot_mismatch"
   | "invalid_origin_reference"
   | "consolidated_version_immutable"
   | "missing_description"
   | "duplicate_line_id"
+  | "invalid_position"
   | "duplicate_position"
   | "missing_parent_line"
   | "parent_from_another_version"
@@ -190,7 +244,9 @@ export type BudgetVersionErrorCode =
   | "child_scope_incompatible_with_parent"
   | "invalid_total_cents"
   | "unknown_line"
-  | "line_has_children";
+  | "line_has_children"
+  | "missing_lineage_relation_id"
+  | "origin_lineage_already_registered";
 
 export interface BudgetVersionError {
   readonly code: BudgetVersionErrorCode;

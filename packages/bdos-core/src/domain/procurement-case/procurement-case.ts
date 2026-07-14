@@ -178,12 +178,20 @@ export function createLotScope(input: CreateLotScopeInput): CreateProcurementSco
 /**
  * Proibição de Escopo estrutural arbitrário: um `ProcurementScope` só é
  * bem-formado quando corresponde exatamente a uma das duas formas
- * aprovadas — processo inteiro (`kind` + `procurementCaseId`, nada mais) ou
- * lote específico (`kind` + `procurementCaseId` + `procurementLotId`, nada
- * mais). Um valor com campos a mais, a menos, ou de tipo incorreto — ainda
- * que estruturalmente compatível o suficiente para escapar à checagem de
- * tipos em algum ponto de passagem — é rejeitado em tempo de execução, não
+ * aprovadas — processo inteiro (`kind` + `procurementCaseId` não vazio,
+ * nada mais) ou lote específico (`kind` + `procurementCaseId` +
+ * `procurementLotId`, ambos não vazios, nada mais). Um valor com campos a
+ * mais, a menos, em branco, ou de tipo incorreto — ainda que
+ * estruturalmente compatível o suficiente para escapar à checagem de tipos
+ * em algum ponto de passagem — é rejeitado em tempo de execução, não
  * apenas em tempo de compilação.
+ *
+ * Esta função é **apenas** validação estrutural: confirma a forma do
+ * valor, não que o Processo existe, que o lote existe, que o lote
+ * pertence ao Processo, ou que pertence à mesma organização usuária. Não é,
+ * isoladamente, proteção suficiente contra um Escopo de lote fabricado —
+ * para isso, os consumidores (ex.: `budget-version`) exigem o objeto
+ * `ProcurementLot` real correspondente e confrontam seus fatos.
  */
 export function isWellFormedProcurementScope(scope: ProcurementScope): boolean {
   if (scope === null || typeof scope !== "object") {
@@ -192,7 +200,13 @@ export function isWellFormedProcurementScope(scope: ProcurementScope): boolean {
 
   if (scope.kind === ProcurementScopeKind.WholeCase) {
     const keys = Object.keys(scope).sort();
-    return keys.length === 2 && keys[0] === "kind" && keys[1] === "procurementCaseId" && typeof scope.procurementCaseId === "string";
+    return (
+      keys.length === 2 &&
+      keys[0] === "kind" &&
+      keys[1] === "procurementCaseId" &&
+      typeof scope.procurementCaseId === "string" &&
+      !isBlank(scope.procurementCaseId)
+    );
   }
 
   if (scope.kind === ProcurementScopeKind.Lot) {
@@ -203,7 +217,9 @@ export function isWellFormedProcurementScope(scope: ProcurementScope): boolean {
       keys[1] === "procurementCaseId" &&
       keys[2] === "procurementLotId" &&
       typeof scope.procurementCaseId === "string" &&
-      typeof scope.procurementLotId === "string"
+      typeof scope.procurementLotId === "string" &&
+      !isBlank(scope.procurementCaseId) &&
+      !isBlank(scope.procurementLotId)
     );
   }
 
@@ -224,9 +240,9 @@ function createCaseMetadata(input: CreateProcurementCaseInput): ProcurementCaseM
     ...(input.metadata ?? {}),
     caseId: input.id,
     organizationId: input.organizationId,
-    correlationId: input.correlationId,
-    createdBy: input.createdBy,
-    sourceSystem: input.sourceSystem,
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    ...(input.createdBy !== undefined ? { createdBy: input.createdBy } : {}),
+    ...(input.sourceSystem !== undefined ? { sourceSystem: input.sourceSystem } : {}),
   };
 }
 
@@ -235,9 +251,9 @@ function createLotMetadata(input: CreateProcurementLotInput): ProcurementCaseMet
     ...(input.metadata ?? {}),
     lotId: input.id,
     procurementCaseId: input.procurementCase?.id ?? null,
-    correlationId: input.correlationId,
-    createdBy: input.createdBy,
-    sourceSystem: input.sourceSystem,
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
+    ...(input.createdBy !== undefined ? { createdBy: input.createdBy } : {}),
+    ...(input.sourceSystem !== undefined ? { sourceSystem: input.sourceSystem } : {}),
   };
 }
 

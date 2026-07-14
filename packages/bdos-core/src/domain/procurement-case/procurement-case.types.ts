@@ -22,8 +22,11 @@ export type ProcurementSourceSystem = string;
  * ADR-002). Núcleo coordenador enxuto: não guarda coleções não limitadas de
  * lotes, propostas ou decisões — apenas os fatos processuais próprios desta
  * primeira fatia (identidade, organização usuária, título, referência
- * externa opcional). `externalReference` (ex.: número do edital) nunca é
- * usada como identidade — `id` é sempre gerado internamente.
+ * externa opcional). O identificador interno (`id`) é distinto da
+ * referência externa (ex.: número do edital) e nunca é derivado dela — o
+ * mecanismo de geração da identidade permanece fora do escopo desta
+ * Sprint; a operação de criação recebe uma identidade interna já
+ * atribuída.
  */
 export interface ProcurementCase {
   readonly id: ProcurementCaseId;

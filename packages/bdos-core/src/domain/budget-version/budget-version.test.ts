@@ -1,4 +1,4 @@
-import { ProcurementScopeKind, type ProcurementScope } from "../procurement-case";
+import { ProcurementScopeKind, createProcurementCase, createProcurementLot, type ProcurementCase, type ProcurementLot, type ProcurementScope } from "../procurement-case";
 import {
   BudgetLineKind,
   BudgetVersionOriginKind,
@@ -7,28 +7,40 @@ import {
   addBudgetLine,
   calculateBudgetVersionTotal,
   calculateLineTotal,
+  centsFromDecimalString,
+  centsFromExactReais,
+  centsFromInteger,
   consolidateBudgetVersion,
   createBudgetVersion,
   hasHierarchyCycle,
   orderedChildren,
-  centsFromExactReais,
   registerLineageRelation,
   removeBudgetLine,
+  sumCents,
   updateBudgetLine,
   updateBudgetLinePosition,
   type BudgetLine,
+  type BudgetLineDescription,
   type BudgetVersion,
+  type LineageRelation,
 } from "./index";
 
 const organizationId = "organization-alpha-engenharia";
-const procurementCaseId = "case-lagoa-do-arroz";
 const correlationId = "budget-version-correlation-001";
 const createdBy = "engenharia-de-custos";
 const sourceSystem = "bdos-core";
 
+const procurementCase: ProcurementCase = requireCaseSuccess(
+  createProcurementCase({ id: "case-lagoa-do-arroz", organizationId, title: "Processo de teste — Barragem Lagoa do Arroz" }),
+);
+const procurementCaseId = procurementCase.id;
+
+const lotA: ProcurementLot = requireLotSuccess(createProcurementLot({ id: "lot-a", procurementCase, title: "Lote A" }));
+const lotB: ProcurementLot = requireLotSuccess(createProcurementLot({ id: "lot-b", procurementCase, title: "Lote B" }));
+
 const wholeCaseScope: ProcurementScope = { kind: ProcurementScopeKind.WholeCase, procurementCaseId };
-const lotAScope: ProcurementScope = { kind: ProcurementScopeKind.Lot, procurementCaseId, procurementLotId: "lot-a" };
-const lotBScope: ProcurementScope = { kind: ProcurementScopeKind.Lot, procurementCaseId, procurementLotId: "lot-b" };
+const lotAScope: ProcurementScope = { kind: ProcurementScopeKind.Lot, procurementCaseId, procurementLotId: lotA.id };
+const lotBScope: ProcurementScope = { kind: ProcurementScopeKind.Lot, procurementCaseId, procurementLotId: lotB.id };
 
 // ---------------------------------------------------------------------------
 // 18.3 — Versão do Orçamento
@@ -44,7 +56,7 @@ runTest("Versão do Orçamento nasce em rascunho", () => {
 runTest("admite origem nativa", () => {
   const result = createVersion({ origin: { kind: BudgetVersionOriginKind.Native } });
   assertVersionSuccess(result, "expected version creation success");
-  assertEqual(result.budgetVersion.originLineage.origin.kind, BudgetVersionOriginKind.Native, "origin kind mismatch");
+  assertEqual(requireLineage(result.budgetVersion).origin.kind, BudgetVersionOriginKind.Native, "origin kind mismatch");
 });
 
 runTest("admite referência documental opaca", () => {
@@ -52,7 +64,7 @@ runTest("admite referência documental opaca", () => {
     origin: { kind: BudgetVersionOriginKind.DocumentaryOpaqueReference, reference: "evidencia-opaca-001" },
   });
   assertVersionSuccess(result, "expected version creation success");
-  assertEqual(result.budgetVersion.originLineage.origin.kind, BudgetVersionOriginKind.DocumentaryOpaqueReference, "origin kind mismatch");
+  assertEqual(requireLineage(result.budgetVersion).origin.kind, BudgetVersionOriginKind.DocumentaryOpaqueReference, "origin kind mismatch");
 });
 
 runTest("pertence ao Processo e à organização corretos", () => {
@@ -228,6 +240,26 @@ runTest("reordenação permitida em rascunho, proibida após consolidação", ()
   assertEqual(attempt.errors[0]?.code, "consolidated_version_immutable", "error code mismatch");
 });
 
+runTest("posição: rejeita negativa, decimal, NaN, Infinity e inteiro não seguro em addBudgetLine", () => {
+  const version = requireSuccess(createVersion());
+  const invalidPositions: ReadonlyArray<number> = [-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 2];
+
+  invalidPositions.forEach((position, index) => {
+    const attempt = addBudgetLine(groupInput(version, `group-invalid-position-${index}`, position));
+    assertVersionFailure(attempt, `expected failure for invalid position ${position}`);
+    assertEqual(attempt.errors[0]?.code, "invalid_position", `error code mismatch for position ${position}`);
+  });
+});
+
+runTest("posição: updateBudgetLinePosition rejeita posição inválida", () => {
+  let version = requireSuccess(createVersion());
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0)));
+
+  const attempt = updateBudgetLinePosition({ budgetVersion: version, lineId: "group-1", position: -3 });
+  assertVersionFailure(attempt, "expected failure for negative position");
+  assertEqual(attempt.errors[0]?.code, "invalid_position", "error code mismatch");
+});
+
 // ---------------------------------------------------------------------------
 // 18.6 — Escopo das linhas
 // ---------------------------------------------------------------------------
@@ -235,25 +267,25 @@ runTest("reordenação permitida em rascunho, proibida após consolidação", ()
 runTest("versão global com linha global e com linha de lote válido", () => {
   let version = requireSuccess(createVersion({ scope: wholeCaseScope }));
   version = requireSuccess(addBudgetLine(groupInput(version, "group-global", 0, wholeCaseScope)));
-  version = requireSuccess(addBudgetLine(groupInput(version, "group-lot-a", 1, lotAScope)));
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-lot-a", 1, lotAScope, lotA)));
   assertEqual(version.lines.length, 2, "both a global-scoped and a lot-scoped line must be accepted");
 });
 
 runTest("versão de lote com linha do mesmo lote", () => {
-  let version = requireSuccess(createVersion({ scope: lotAScope }));
-  version = requireSuccess(addBudgetLine(groupInput(version, "group-lot-a", 0, lotAScope)));
+  let version = requireSuccess(createVersion({ scope: lotAScope, procurementLot: lotA }));
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-lot-a", 0, lotAScope, lotA)));
   assertEqual(version.lines.length, 1, "line scoped to the same lot must be accepted");
 });
 
 runTest("rejeição de linha de outro lote dentro de versão restrita a lote", () => {
-  const version = requireSuccess(createVersion({ scope: lotAScope }));
-  const attempt = addBudgetLine(groupInput(version, "group-lot-b", 0, lotBScope));
+  const version = requireSuccess(createVersion({ scope: lotAScope, procurementLot: lotA }));
+  const attempt = addBudgetLine(groupInput(version, "group-lot-b", 0, lotBScope, lotB));
   assertVersionFailure(attempt, "expected failure: line from another lot");
   assertEqual(attempt.errors[0]?.code, "line_scope_incompatible", "error code mismatch");
 });
 
 runTest("rejeição de linha global dentro de versão restrita a lote", () => {
-  const version = requireSuccess(createVersion({ scope: lotAScope }));
+  const version = requireSuccess(createVersion({ scope: lotAScope, procurementLot: lotA }));
   const attempt = addBudgetLine(groupInput(version, "group-global", 0, wholeCaseScope));
   assertVersionFailure(attempt, "expected failure: whole-case line cannot widen a lot-scoped version");
   assertEqual(attempt.errors[0]?.code, "line_scope_incompatible", "error code mismatch");
@@ -325,10 +357,10 @@ runTest("totalização respeita o Escopo consultado", () => {
   let version = requireSuccess(createVersion({ scope: wholeCaseScope }));
   version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0, wholeCaseScope)));
   version = requireSuccess(
-    addBudgetLine(serviceItemInput(version, "item-lot-a", "group-1", 1, centsFromExactReais(300), null, lotAScope)),
+    addBudgetLine(serviceItemInput(version, "item-lot-a", "group-1", 1, centsFromExactReais(300), null, lotAScope, lotA)),
   );
   version = requireSuccess(
-    addBudgetLine(serviceItemInput(version, "item-lot-b", "group-1", 2, centsFromExactReais(700), null, lotBScope)),
+    addBudgetLine(serviceItemInput(version, "item-lot-b", "group-1", 2, centsFromExactReais(700), null, lotBScope, lotB)),
   );
 
   assertEqual(calculateBudgetVersionTotal(version, lotAScope), centsFromExactReais(300), "lot A total mismatch");
@@ -344,61 +376,140 @@ runTest("rejeita totalCents em Grupo ou Subgrupo (nunca uma parcela própria)", 
 });
 
 // ---------------------------------------------------------------------------
-// 18.8 — Rastreabilidade
+// 18.14 — Inteiros monetários seguros
 // ---------------------------------------------------------------------------
+
+runTest("centavos: maior valor seguro é aceito, primeiro valor inseguro é rejeitado", () => {
+  const maxSafe = Number.MAX_SAFE_INTEGER;
+  assertEqual(centsFromInteger(maxSafe), maxSafe, "MAX_SAFE_INTEGER cents must be accepted");
+  assertEqual(assertThrows(() => centsFromInteger(maxSafe + 2)), true, "a value beyond the safe integer range must be rejected");
+});
+
+runTest("centavos: sumCents rejeita soma que ultrapassa o intervalo seguro", () => {
+  const nearMax = Number.MAX_SAFE_INTEGER - 1;
+  assertEqual(assertThrows(() => sumCents([nearMax, 10])), true, "sum exceeding the safe integer range must be rejected, not silently wrapped");
+});
+
+runTest("centavos: sumCents rejeita parcela inválida (negativa ou fracionária)", () => {
+  assertEqual(assertThrows(() => sumCents([100, -5])), true, "a negative parcel inside sumCents must be rejected");
+  assertEqual(assertThrows(() => sumCents([100, 1.5])), true, "a fractional parcel inside sumCents must be rejected");
+});
+
+runTest("centavos: centsFromDecimalString nunca arredonda — rejeita negativos, mais de duas casas, NaN, Infinity", () => {
+  const invalidDecimals: ReadonlyArray<string> = ["-1.00", "1.234", "abc", "NaN", "Infinity", "-0.01", "1.999"];
+  invalidDecimals.forEach((value) => {
+    assertEqual(assertThrows(() => centsFromDecimalString(value)), true, `expected "${value}" to be rejected, never rounded`);
+  });
+});
+
+runTest("centavos: centsFromInteger rejeita fração, NaN e infinito", () => {
+  assertEqual(assertThrows(() => centsFromInteger(1.5)), true, "fractional cents must be rejected");
+  assertEqual(assertThrows(() => centsFromInteger(NaN)), true, "NaN cents must be rejected");
+  assertEqual(assertThrows(() => centsFromInteger(Infinity)), true, "infinite cents must be rejected");
+  assertEqual(assertThrows(() => centsFromInteger(-1)), true, "negative cents must be rejected");
+});
+
+// ---------------------------------------------------------------------------
+// 18.8 — Relação de Rastreabilidade (origem separada da relação que a documenta)
+// ---------------------------------------------------------------------------
+
+runTest("criação com Relação de Rastreabilidade já registrada", () => {
+  const version = requireSuccess(createVersion({ id: "version-with-lineage", originLineageId: "lineage-with-id" }));
+  assertEqual(version.originLineage !== null, true, "expected a registered lineage relation");
+  assertEqual(requireLineage(version).id, "lineage-with-id", "lineage id mismatch");
+});
+
+runTest("criação sem Relação de Rastreabilidade", () => {
+  const version = requireSuccess(createVersion({ id: "version-without-lineage", originLineageId: undefined }));
+  assertEqual(version.originLineage, null, "expected no registered lineage relation when originLineageId is omitted");
+});
 
 runTest("Relação de Rastreabilidade preserva origem, destino e natureza", () => {
   const version = requireSuccess(
     createVersion({ origin: { kind: BudgetVersionOriginKind.DocumentaryOpaqueReference, reference: "evidencia-001" } }),
   );
 
-  assertEqual(version.originLineage.nature, LineageRelationNature.Origin, "lineage nature mismatch");
-  assertEqual(version.originLineage.destinationBudgetVersionId, version.id, "lineage destination must be this version");
-  assertEqual(version.originLineage.origin.kind, BudgetVersionOriginKind.DocumentaryOpaqueReference, "lineage origin kind mismatch");
+  const lineage = requireLineage(version);
+  assertEqual(lineage.nature, LineageRelationNature.Origin, "lineage nature mismatch");
+  assertEqual(lineage.destinationBudgetVersionId, version.id, "lineage destination must be this version");
+  assertEqual(lineage.origin.kind, BudgetVersionOriginKind.DocumentaryOpaqueReference, "lineage origin kind mismatch");
 });
 
 runTest("Relação de Rastreabilidade nunca atravessa organização usuária (por construção)", () => {
   const version = requireSuccess(createVersion());
-  assertEqual(version.originLineage.organizationId, version.organizationId, "lineage organization must match the version's organization");
+  assertEqual(requireLineage(version).organizationId, version.organizationId, "lineage organization must match the version's organization");
 });
 
 runTest("Relação de Rastreabilidade não é alterada silenciosamente após consolidação", () => {
   const version = requireSuccess(createVersion());
   const consolidated = requireSuccess(consolidateBudgetVersion({ budgetVersion: version }));
-  assertEqual(consolidated.originLineage.id, version.originLineage.id, "lineage id must be preserved through consolidation");
-  assertEqual(consolidated.originLineage.origin.kind, version.originLineage.origin.kind, "lineage origin must be preserved through consolidation");
+  assertEqual(requireLineage(consolidated).id, requireLineage(version).id, "lineage id must be preserved through consolidation");
+  assertEqual(requireLineage(consolidated).origin.kind, requireLineage(version).origin.kind, "lineage origin must be preserved through consolidation");
 });
 
-runTest("Relação de Rastreabilidade pode ser registrada posteriormente, enquanto em rascunho", () => {
-  const version = requireSuccess(createVersion({ origin: { kind: BudgetVersionOriginKind.Native } }));
-  const updated = registerLineageRelation({
-    budgetVersion: version,
-    origin: { kind: BudgetVersionOriginKind.DocumentaryOpaqueReference, reference: "evidencia-registrada-depois" },
-  });
+runTest("registro posterior da Relação de Rastreabilidade, enquanto em rascunho, usa a origem já declarada", () => {
+  const version = requireSuccess(
+    createVersion({
+      id: "version-lineage-later",
+      origin: { kind: BudgetVersionOriginKind.DocumentaryOpaqueReference, reference: "evidencia-declarada-na-criacao" },
+      originLineageId: undefined,
+    }),
+  );
+  assertEqual(version.originLineage, null, "precondition: version must start without a registered lineage");
+
+  const updated = registerLineageRelation({ budgetVersion: version, id: "lineage-registered-later" });
   assertVersionSuccess(updated, "expected success registering a later lineage relation while in draft");
-  assertEqual(updated.budgetVersion.originLineage.origin.kind, BudgetVersionOriginKind.DocumentaryOpaqueReference, "origin kind must be updated");
+  const lineage = requireLineage(updated.budgetVersion);
+  assertEqual(lineage.id, "lineage-registered-later", "lineage id must equal the provided opaque identity");
+  assertEqual(lineage.origin.kind, BudgetVersionOriginKind.DocumentaryOpaqueReference, "lineage must use the origin already declared on the version");
+  assertEqual(
+    (lineage.origin as { reference: string }).reference,
+    "evidencia-declarada-na-criacao",
+    "lineage origin reference must match the origin declared at creation, never an independent one",
+  );
+  assertEqual(updated.budgetVersion.origin.kind, version.origin.kind, "the version's own declared origin must remain unchanged");
+});
+
+runTest("identidade da Relação de Rastreabilidade não é derivada da Versão", () => {
+  const version = requireSuccess(createVersion({ id: "version-xyz", originLineageId: undefined }));
+  const updated = requireSuccess(registerLineageRelation({ budgetVersion: version, id: "totally-custom-opaque-id" }));
+  assertEqual(requireLineage(updated).id, "totally-custom-opaque-id", "lineage id must be exactly the provided opaque identity");
+  assertEqual(requireLineage(updated).id.includes(version.id), false, "lineage id must not be derived from (or contain) the version id");
+});
+
+runTest("rejeita identificador vazio ao registrar Relação de Rastreabilidade", () => {
+  const version = requireSuccess(createVersion({ id: "version-blank-lineage-id", originLineageId: undefined }));
+  const attempt = registerLineageRelation({ budgetVersion: version, id: "" });
+  assertVersionFailure(attempt, "expected failure for blank lineage relation id");
+  assertEqual(attempt.errors[0]?.code, "missing_lineage_relation_id", "error code mismatch");
+});
+
+runTest("rejeita registro de uma segunda Relação de Rastreabilidade — nunca substitui a primeira", () => {
+  const version = requireSuccess(createVersion({ id: "version-double-lineage", originLineageId: "lineage-first" }));
+  const attempt = registerLineageRelation({ budgetVersion: version, id: "lineage-second" });
+  assertVersionFailure(attempt, "expected failure: a second lineage relation must be rejected");
+  assertEqual(attempt.errors[0]?.code, "origin_lineage_already_registered", "error code mismatch");
+
+  // A primeira relação permanece intacta após a tentativa duplicada.
+  assertEqual(requireLineage(version).id, "lineage-first", "the first lineage relation must be preserved, untouched by the rejected attempt");
 });
 
 runTest("registro posterior de Relação de Rastreabilidade é proibido após consolidação", () => {
-  const version = requireSuccess(createVersion());
+  const version = requireSuccess(createVersion({ id: "version-consolidated-lineage", originLineageId: undefined }));
   const consolidated = requireSuccess(consolidateBudgetVersion({ budgetVersion: version }));
-  const attempt = registerLineageRelation({
-    budgetVersion: consolidated,
-    origin: { kind: BudgetVersionOriginKind.Native },
-  });
+  const attempt = registerLineageRelation({ budgetVersion: consolidated, id: "lineage-after-consolidation" });
   assertVersionFailure(attempt, "expected failure registering a lineage relation on a consolidated version");
   assertEqual(attempt.errors[0]?.code, "consolidated_version_immutable", "error code mismatch");
 });
 
 // ---------------------------------------------------------------------------
-// 18.9 — Validação conjunta Processo/organização/Escopo e identificadores vazios
+// 18.9 — Validação conjunta Processo/organização/Escopo/Lote e identificadores vazios
 // ---------------------------------------------------------------------------
 
 runTest("rejeita Versão do Orçamento com identificador vazio", () => {
   const attempt = createBudgetVersion({
     id: "",
-    organizationId,
-    procurementCaseId,
+    procurementCase,
     scope: wholeCaseScope,
     origin: { kind: BudgetVersionOriginKind.Native },
   });
@@ -417,8 +528,7 @@ runTest("rejeita Versão do Orçamento cujo Escopo pertence a outro Processo (va
   const foreignScope: ProcurementScope = { kind: ProcurementScopeKind.WholeCase, procurementCaseId: "case-other" };
   const attempt = createBudgetVersion({
     id: "version-mismatched-scope",
-    organizationId,
-    procurementCaseId,
+    procurementCase,
     scope: foreignScope,
     origin: { kind: BudgetVersionOriginKind.Native },
   });
@@ -426,17 +536,116 @@ runTest("rejeita Versão do Orçamento cujo Escopo pertence a outro Processo (va
   assertEqual(attempt.errors[0]?.code, "scope_case_mismatch", "error code mismatch");
 });
 
+runTest("organizationId e procurementCaseId da Versão são sempre derivados do Processo, nunca fatos independentes", () => {
+  const result = requireSuccess(createBudgetVersion({
+    id: "version-derived-facts",
+    procurementCase,
+    scope: wholeCaseScope,
+    origin: { kind: BudgetVersionOriginKind.Native },
+  }));
+  assertEqual(result.organizationId, procurementCase.organizationId, "organizationId must be derived from procurementCase");
+  assertEqual(result.procurementCaseId, procurementCase.id, "procurementCaseId must be derived from procurementCase");
+});
+
 runTest("rejeita Escopo estruturalmente arbitrário na criação da Versão", () => {
   const malformedScope = { kind: ProcurementScopeKind.WholeCase, procurementCaseId, procurementLotId: "lot-a" } as unknown as ProcurementScope;
   const attempt = createBudgetVersion({
     id: "version-malformed-scope",
-    organizationId,
-    procurementCaseId,
+    procurementCase,
     scope: malformedScope,
     origin: { kind: BudgetVersionOriginKind.Native },
   });
   assertVersionFailure(attempt, "expected malformed scope failure");
   assertEqual(attempt.errors[0]?.code, "malformed_scope", "error code mismatch");
+});
+
+runTest("rejeita Escopo de lote sem fornecer o Lote correspondente (Versão)", () => {
+  const attempt = createBudgetVersion({
+    id: "version-lot-scope-no-lot",
+    procurementCase,
+    scope: lotAScope,
+    origin: { kind: BudgetVersionOriginKind.Native },
+  });
+  assertVersionFailure(attempt, "expected failure: lot-scoped version without a ProcurementLot proof");
+  assertEqual(attempt.errors[0]?.code, "missing_procurement_lot", "error code mismatch");
+});
+
+runTest("rejeita Escopo com identificador de lote vazio (Versão)", () => {
+  const blankLotIdScope = { kind: ProcurementScopeKind.Lot, procurementCaseId, procurementLotId: "" } as unknown as ProcurementScope;
+  const attempt = createBudgetVersion({
+    id: "version-blank-lot-id",
+    procurementCase,
+    scope: blankLotIdScope,
+    procurementLot: lotA,
+    origin: { kind: BudgetVersionOriginKind.Native },
+  });
+  assertVersionFailure(attempt, "expected failure: blank procurementLotId is not well-formed");
+  assertEqual(attempt.errors[0]?.code, "malformed_scope", "error code mismatch");
+});
+
+runTest("rejeita Escopo com identificador de lote diferente do Lote fornecido (Versão)", () => {
+  const attempt = createBudgetVersion({
+    id: "version-scope-lot-mismatch",
+    procurementCase,
+    scope: lotAScope,
+    procurementLot: lotB,
+    origin: { kind: BudgetVersionOriginKind.Native },
+  });
+  assertVersionFailure(attempt, "expected failure: scope.procurementLotId does not match the provided lot's identity");
+  assertEqual(attempt.errors[0]?.code, "scope_lot_mismatch", "error code mismatch");
+});
+
+runTest("rejeita Lote de outra organização usuária (Versão)", () => {
+  const foreignOrgLot: ProcurementLot = { ...lotA, organizationId: "organization-other" };
+  const attempt = createBudgetVersion({
+    id: "version-lot-foreign-org",
+    procurementCase,
+    scope: lotAScope,
+    procurementLot: foreignOrgLot,
+    origin: { kind: BudgetVersionOriginKind.Native },
+  });
+  assertVersionFailure(attempt, "expected failure: lot from a different organização usuária");
+  assertEqual(attempt.errors[0]?.code, "lot_organization_mismatch", "error code mismatch");
+});
+
+runTest("rejeita Lote de outro Processo (Versão)", () => {
+  const foreignCaseLot: ProcurementLot = { ...lotA, procurementCaseId: "case-other" };
+  const attempt = createBudgetVersion({
+    id: "version-lot-foreign-case",
+    procurementCase,
+    scope: lotAScope,
+    procurementLot: foreignCaseLot,
+    origin: { kind: BudgetVersionOriginKind.Native },
+  });
+  assertVersionFailure(attempt, "expected failure: lot from a different Processo");
+  assertEqual(attempt.errors[0]?.code, "lot_case_mismatch", "error code mismatch");
+});
+
+runTest("aceita Versão de lote com Lote corretamente validado", () => {
+  const result = createBudgetVersion({
+    id: "version-lot-valid",
+    procurementCase,
+    scope: lotAScope,
+    procurementLot: lotA,
+    origin: { kind: BudgetVersionOriginKind.Native },
+  });
+  assertVersionSuccess(result, "expected success with a correctly validated lot");
+});
+
+runTest("rejeita Linha com Escopo de lote não validado", () => {
+  const version = requireSuccess(createVersion());
+  const attempt = addBudgetLine(groupInput(version, "group-lot-unvalidated", 0, lotAScope));
+  assertVersionFailure(attempt, "expected failure: lot-scoped line without a ProcurementLot proof");
+  assertEqual(attempt.errors[0]?.code, "missing_procurement_lot", "error code mismatch");
+});
+
+runTest("rejeita alteração de Linha para Escopo de lote não validado", () => {
+  let version = requireSuccess(createVersion());
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0)));
+
+  const attempt = updateBudgetLine({ budgetVersion: version, lineId: "group-1", scope: lotAScope });
+  assertVersionFailure(attempt, "expected failure: updating to a lot scope without a ProcurementLot proof");
+  assertEqual(attempt.errors[0]?.code, "missing_procurement_lot", "error code mismatch");
 });
 
 runTest("rejeita Escopo estruturalmente arbitrário ao adicionar uma Linha", () => {
@@ -447,15 +656,17 @@ runTest("rejeita Escopo estruturalmente arbitrário ao adicionar uma Linha", () 
   assertEqual(attempt.errors[0]?.code, "malformed_scope", "error code mismatch");
 });
 
-runTest("correlationId, createdBy e sourceSystem podem ser omitidos ao criar a Versão", () => {
+runTest("correlationId, createdBy e sourceSystem podem ser omitidos ao criar a Versão, e não aparecem em metadata", () => {
   const result = createBudgetVersion({
     id: "version-without-provenance-fields",
-    organizationId,
-    procurementCaseId,
+    procurementCase,
     scope: wholeCaseScope,
     origin: { kind: BudgetVersionOriginKind.Native },
   });
   assertVersionSuccess(result, "expected success without correlationId/createdBy/sourceSystem");
+  assertEqual(Object.prototype.hasOwnProperty.call(result.budgetVersion.metadata, "correlationId"), false, "correlationId key must be absent, not undefined");
+  assertEqual(Object.prototype.hasOwnProperty.call(result.budgetVersion.metadata, "createdBy"), false, "createdBy key must be absent, not undefined");
+  assertEqual(Object.prototype.hasOwnProperty.call(result.budgetVersion.metadata, "sourceSystem"), false, "sourceSystem key must be absent, not undefined");
 });
 
 // ---------------------------------------------------------------------------
@@ -464,15 +675,15 @@ runTest("correlationId, createdBy e sourceSystem podem ser omitidos ao criar a V
 
 runTest("aceita filho cujo Escopo é compatível com o Escopo do pai", () => {
   let version = requireSuccess(createVersion());
-  version = requireSuccess(addBudgetLine(groupInput(version, "group-lot-a", 0, lotAScope)));
-  version = requireSuccess(addBudgetLine(subgroupInput(version, "subgroup-lot-a", "group-lot-a", 0, lotAScope)));
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-lot-a", 0, lotAScope, lotA)));
+  version = requireSuccess(addBudgetLine(subgroupInput(version, "subgroup-lot-a", "group-lot-a", 0, lotAScope, lotA)));
   assertEqual(version.lines.length, 2, "expected both lines to be accepted");
 });
 
 runTest("rejeita filho cujo Escopo diverge do Escopo do pai", () => {
   let version = requireSuccess(createVersion());
-  version = requireSuccess(addBudgetLine(groupInput(version, "group-lot-a", 0, lotAScope)));
-  const attempt = addBudgetLine(subgroupInput(version, "subgroup-lot-b", "group-lot-a", 0, lotBScope));
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-lot-a", 0, lotAScope, lotA)));
+  const attempt = addBudgetLine(subgroupInput(version, "subgroup-lot-b", "group-lot-a", 0, lotBScope, lotB));
   assertVersionFailure(attempt, "expected child scope incompatible with parent scope failure");
   assertEqual(attempt.errors[0]?.code, "child_scope_incompatible_with_parent", "error code mismatch");
 });
@@ -489,15 +700,31 @@ runTest("altera descrição, código externo e total de uma Linha em rascunho", 
   const updated = updateBudgetLine({
     budgetVersion: version,
     lineId: "item-1",
-    description: "Descrição alterada",
+    description: { status: "Confirmed", text: "Descrição alterada" },
     externalCode: "NEW-CODE",
     totalCents: centsFromExactReais(20),
   });
   assertVersionSuccess(updated, "expected update success");
   const updatedLine = updated.budgetVersion.lines.find((line) => line.id === "item-1");
-  assertEqual(updatedLine?.description, "Descrição alterada", "description must be updated");
+  assertDescriptionText(updatedLine?.description, "Descrição alterada", "description must be updated");
   assertEqual(updatedLine?.externalCode, "NEW-CODE", "external code must be updated");
   assertEqual(updatedLine?.totalCents, centsFromExactReais(20), "total must be updated");
+});
+
+runTest("atualização de Linha pode corrigir uma lacuna de descrição para confirmada, enquanto em rascunho", () => {
+  let version = requireSuccess(createVersion());
+  version = requireSuccess(
+    addBudgetLine({ ...groupInput(version, "group-1", 0), description: { status: "AbsentFromSource" } }),
+  );
+
+  const beforeUpdate = version.lines.find((line) => line.id === "group-1");
+  assertEqual(beforeUpdate?.description.status, "AbsentFromSource", "precondition: description must start absent");
+
+  const updated = requireSuccess(
+    updateBudgetLine({ budgetVersion: version, lineId: "group-1", description: { status: "Confirmed", text: "Descrição agora confirmada" } }),
+  );
+  const afterUpdate = updated.lines.find((line) => line.id === "group-1");
+  assertDescriptionText(afterUpdate?.description, "Descrição agora confirmada", "description must now be confirmed");
 });
 
 runTest("rejeita alteração de Linha após consolidação", () => {
@@ -505,17 +732,17 @@ runTest("rejeita alteração de Linha após consolidação", () => {
   version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0)));
   const consolidated = requireSuccess(consolidateBudgetVersion({ budgetVersion: version }));
 
-  const attempt = updateBudgetLine({ budgetVersion: consolidated, lineId: "group-1", description: "Nova descrição" });
+  const attempt = updateBudgetLine({ budgetVersion: consolidated, lineId: "group-1", description: { status: "Confirmed", text: "Nova descrição" } });
   assertVersionFailure(attempt, "expected failure updating a line on a consolidated version");
   assertEqual(attempt.errors[0]?.code, "consolidated_version_immutable", "error code mismatch");
 });
 
 runTest("altera o Escopo de uma Linha-pai apenas quando os filhos existentes permanecem compatíveis", () => {
   let version = requireSuccess(createVersion());
-  version = requireSuccess(addBudgetLine(groupInput(version, "group-lot-a", 0, lotAScope)));
-  version = requireSuccess(addBudgetLine(subgroupInput(version, "subgroup-lot-a", "group-lot-a", 0, lotAScope)));
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-lot-a", 0, lotAScope, lotA)));
+  version = requireSuccess(addBudgetLine(subgroupInput(version, "subgroup-lot-a", "group-lot-a", 0, lotAScope, lotA)));
 
-  const incompatibleAttempt = updateBudgetLine({ budgetVersion: version, lineId: "group-lot-a", scope: lotBScope });
+  const incompatibleAttempt = updateBudgetLine({ budgetVersion: version, lineId: "group-lot-a", scope: lotBScope, procurementLot: lotB });
   assertVersionFailure(incompatibleAttempt, "expected failure: changing parent scope would strand an existing child");
   assertEqual(incompatibleAttempt.errors[0]?.code, "child_scope_incompatible_with_parent", "error code mismatch");
 });
@@ -579,10 +806,10 @@ runTest("consolidação repetida é um no-op de domínio, não um mecanismo fís
 function createVersion(overrides: Partial<Parameters<typeof createBudgetVersion>[0]> = {}) {
   return createBudgetVersion({
     id: "version-lagoa-do-arroz",
-    organizationId,
-    procurementCaseId,
+    procurementCase,
     scope: wholeCaseScope,
     origin: { kind: BudgetVersionOriginKind.Native },
+    originLineageId: "lineage-default",
     correlationId,
     createdBy,
     sourceSystem,
@@ -590,26 +817,41 @@ function createVersion(overrides: Partial<Parameters<typeof createBudgetVersion>
   });
 }
 
-function groupInput(version: BudgetVersion, id: string, position: number, scope: ProcurementScope = version.scope) {
+function groupInput(
+  version: BudgetVersion,
+  id: string,
+  position: number,
+  scope: ProcurementScope = version.scope,
+  procurementLot?: ProcurementLot,
+) {
   return {
     budgetVersion: version,
     id,
     kind: BudgetLineKind.Group,
-    description: `Grupo ${id}`,
+    description: { status: "Confirmed" as const, text: `Grupo ${id}` },
     position,
     scope,
+    procurementLot,
   };
 }
 
-function subgroupInput(version: BudgetVersion, id: string, parentLineId: string | null, position: number, scope: ProcurementScope = version.scope) {
+function subgroupInput(
+  version: BudgetVersion,
+  id: string,
+  parentLineId: string | null,
+  position: number,
+  scope: ProcurementScope = version.scope,
+  procurementLot?: ProcurementLot,
+) {
   return {
     budgetVersion: version,
     id,
     kind: BudgetLineKind.Subgroup,
-    description: `Subgrupo ${id}`,
+    description: { status: "Confirmed" as const, text: `Subgrupo ${id}` },
     parentLineId,
     position,
     scope,
+    procurementLot,
   };
 }
 
@@ -621,15 +863,17 @@ function serviceItemInput(
   totalCents: number,
   externalCode: string | null = `COD-${id}`,
   scope: ProcurementScope = version.scope,
+  procurementLot?: ProcurementLot,
 ) {
   return {
     budgetVersion: version,
     id,
     kind: BudgetLineKind.ServiceItem,
-    description: `Item de Serviço ${id}`,
+    description: { status: "Confirmed" as const, text: `Item de Serviço ${id}` },
     parentLineId,
     position,
     scope,
+    procurementLot,
     externalCode,
     totalCents,
   };
@@ -640,7 +884,7 @@ function lineLiteral(id: string, kind: BudgetLineKind, parentLineId: string | nu
     id,
     budgetVersionId: "version-synthetic",
     kind,
-    description: id,
+    description: { status: "Confirmed", text: id },
     externalCode: null,
     parentLineId,
     position: 0,
@@ -650,11 +894,48 @@ function lineLiteral(id: string, kind: BudgetLineKind, parentLineId: string | nu
   };
 }
 
+function requireLineage(version: BudgetVersion): LineageRelation {
+  if (version.originLineage === null) {
+    throw new Error("requireLineage: expected a registered origin Relação de Rastreabilidade");
+  }
+  return version.originLineage;
+}
+
+function assertDescriptionText(description: BudgetLineDescription | undefined, expectedText: string, message: string): void {
+  if (description === undefined || description.status !== "Confirmed") {
+    throw new Error(`${message}: expected a Confirmed description, got ${JSON.stringify(description)}`);
+  }
+  assertEqual(description.text, expectedText, message);
+}
+
+function assertThrows(fn: () => unknown): boolean {
+  try {
+    fn();
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 function requireSuccess(result: ReturnType<typeof createBudgetVersion>): BudgetVersion {
   if (!result.success) {
     throw new Error(`requireSuccess: unexpected failure — ${JSON.stringify(result.errors)}`);
   }
   return result.budgetVersion;
+}
+
+function requireCaseSuccess(result: ReturnType<typeof createProcurementCase>): ProcurementCase {
+  if (!result.success) {
+    throw new Error(`requireCaseSuccess: unexpected failure — ${JSON.stringify(result.errors)}`);
+  }
+  return result.procurementCase;
+}
+
+function requireLotSuccess(result: ReturnType<typeof createProcurementLot>): ProcurementLot {
+  if (!result.success) {
+    throw new Error(`requireLotSuccess: unexpected failure — ${JSON.stringify(result.errors)}`);
+  }
+  return result.procurementLot;
 }
 
 function assertVersionSuccess(
