@@ -34,7 +34,7 @@ import {
 
 if (process.env.BDOS_ALLOW_DESTRUCTIVE_INTEGRATION_TESTS !== "true") {
   throw new Error(
-    "Refusing to run: set BDOS_ALLOW_DESTRUCTIVE_INTEGRATION_TESTS=true to confirm this run targets a dedicated test environment, never the app's normal environment. See supabase/tests/procurement-engineering/README.md.",
+    "Refusing to run: set BDOS_ALLOW_DESTRUCTIVE_INTEGRATION_TESTS=true to confirm explicit authorization to run these destructive tests, aware that they write and clean up real data against the shared controlled environment described in supabase/tests/procurement-engineering/README.md. This variable proves authorization and awareness, never physical isolation from the app's normal environment — it does not, by itself, guarantee a dedicated project.",
   );
 }
 
@@ -42,7 +42,7 @@ function requireEnv(name) {
   const value = process.env[name];
   if (value === undefined || value.trim().length === 0) {
     throw new Error(
-      `Missing required environment variable ${name}. This test requires an explicit, dedicated test environment (see supabase/tests/procurement-engineering/README.md) — it never falls back to a default or to apps/web/.env.local.`,
+      `Missing required environment variable ${name}. These tests require an explicitly authorized environment (see supabase/tests/procurement-engineering/README.md) — the current approved state is a shared controlled environment, not a dedicated one; a separate project remains the preferred option. This never falls back to a default or to apps/web/.env.local.`,
     );
   }
   return value;
@@ -67,6 +67,14 @@ async function signIn(email, password) {
   const { error } = await client.auth.signInWithPassword({ email, password });
   if (error) throw new Error(`Authentication failed for ${email}: ${error.message}`);
   return client;
+}
+
+function createAnonClient() {
+  // Sem login algum — a mesma credencial pública que um visitante não
+  // autenticado teria. Usada só para provar que os dois auxiliares
+  // (get_company_id_for_actor/is_bba_admin_actor) negam EXECUTE mesmo sem
+  // nenhuma sessão, não só para usuários autenticados de outra organização.
+  return createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
 function createServiceRoleClient() {
@@ -189,6 +197,63 @@ async function main() {
         p_lineage_origin_reference: null,
       });
       assertPermissionDenied(snapshotError, "persist_budget_version_snapshot");
+    });
+
+    await runTest("última verificação de privilégios dos auxiliares: nem anon nem authenticated executam get_company_id_for_actor/is_bba_admin_actor — a migração 20260714000004 restringiu as 4 funções de mutação, mas nunca havia restringido os dois auxiliares que elas chamam (achado desta correção), corrigido em 20260714000005", async () => {
+      const anonClient = createAnonClient();
+
+      const { error: anonCompanyError } = await anonClient.rpc("get_company_id_for_actor", { p_actor_id: clientAId });
+      assertPermissionDenied(anonCompanyError, "get_company_id_for_actor via anon (sem sessão nenhuma)");
+
+      const { error: anonAdminError } = await anonClient.rpc("is_bba_admin_actor", { p_actor_id: clientAId });
+      assertPermissionDenied(anonAdminError, "is_bba_admin_actor via anon (sem sessão nenhuma)");
+
+      const { error: authCompanyError } = await authenticatedClient.rpc("get_company_id_for_actor", { p_actor_id: clientAId });
+      assertPermissionDenied(authCompanyError, "get_company_id_for_actor via authenticated");
+
+      const { error: authAdminError } = await authenticatedClient.rpc("is_bba_admin_actor", { p_actor_id: clientAId });
+      assertPermissionDenied(authAdminError, "is_bba_admin_actor via authenticated");
+
+      // A negação de EXECUTE em si é a prova de que não há enumeração
+      // possível: sem nenhum caminho de chamada disponível para
+      // `authenticated`/`anon`, não existe forma de usar estes auxiliares
+      // para descobrir a organização ou o papel de outro usuário — não é
+      // um filtro de resultado, é a ausência total de acesso à função.
+    });
+
+    await runTest("última verificação de privilégios dos auxiliares: service_role obtém o resultado correto — ator conhecido, ator sem organização, administrador BBA, ator inexistente", async () => {
+      const { data: ownCompany, error: ownCompanyError } = await serviceRoleClient.rpc("get_company_id_for_actor", { p_actor_id: clientAId });
+      assertEqual(ownCompanyError, null, ownCompanyError?.message);
+      assertEqual(ownCompany, companyAId, "get_company_id_for_actor must return the actor's real company_id");
+
+      const { data: notAdmin, error: notAdminError } = await serviceRoleClient.rpc("is_bba_admin_actor", { p_actor_id: clientAId });
+      assertEqual(notAdminError, null, notAdminError?.message);
+      assertEqual(notAdmin, false, "a regular client actor must not be reported as bba_admin");
+
+      const nonExistentActorId = crypto.randomUUID();
+      const { data: missingCompany, error: missingCompanyError } = await serviceRoleClient.rpc("get_company_id_for_actor", { p_actor_id: nonExistentActorId });
+      assertEqual(missingCompanyError, null, missingCompanyError?.message);
+      assertEqual(missingCompany, null, "a non-existent actor must resolve to no organization, never an error masking as authorization");
+
+      const { data: missingIsAdmin, error: missingIsAdminError } = await serviceRoleClient.rpc("is_bba_admin_actor", { p_actor_id: nonExistentActorId });
+      assertEqual(missingIsAdminError, null, missingIsAdminError?.message);
+      assertEqual(missingIsAdmin, false, "a non-existent actor must never be reported as bba_admin — absence of a row must never grant authorization");
+
+      if (adminId === undefined) {
+        console.log("  (skipped: RLS_TEST_ADMIN_ID not set — admin/no-organization scenario not exercised)");
+        return;
+      }
+
+      // O administrador BBA de teste (profiles.role = 'bba_admin') não tem
+      // company_id própria — serve também como o caso real de "ator sem
+      // organização", sem precisar de um terceiro perfil de teste.
+      const { data: adminCompany, error: adminCompanyError } = await serviceRoleClient.rpc("get_company_id_for_actor", { p_actor_id: adminId });
+      assertEqual(adminCompanyError, null, adminCompanyError?.message);
+      assertEqual(adminCompany, null, "the approved behavior for an actor with no organization is a null company_id, never an error");
+
+      const { data: isAdmin, error: isAdminError } = await serviceRoleClient.rpc("is_bba_admin_actor", { p_actor_id: adminId });
+      assertEqual(isAdminError, null, isAdminError?.message);
+      assertEqual(isAdmin, true, "is_bba_admin_actor must report true for the real bba_admin actor");
     });
 
     let realCaseId;

@@ -21,14 +21,17 @@ import {
 } from "../../../apps/web/lib/bdos/procurement-engineering-server-repository.ts";
 
 // Sprint 21.3C — testes de integração com o banco real. Exige um ambiente
-// de teste explicitamente dedicado — ver README.md nesta pasta. Roda via
+// explicitamente autorizado — ver README.md nesta pasta ("Ambiente:
+// compartilhado controlado, não dedicado"; o estado atual é compartilhado
+// controlado, um projeto separado continua sendo a opção preferencial).
+// Roda via
 // `npx tsx` (não `node --test`, para reusar o mesmo padrão runTest/
 // assertEqual de todo o resto do repositório), fora do glob `*.test.ts` de
 // propósito (mesma razão de supabase/tests/rls ser `.test.mjs`).
 
 if (process.env.BDOS_ALLOW_DESTRUCTIVE_INTEGRATION_TESTS !== "true") {
   throw new Error(
-    "Refusing to run: set BDOS_ALLOW_DESTRUCTIVE_INTEGRATION_TESTS=true to confirm this run targets a dedicated test environment, never the app's normal environment. See supabase/tests/procurement-engineering/README.md.",
+    "Refusing to run: set BDOS_ALLOW_DESTRUCTIVE_INTEGRATION_TESTS=true to confirm explicit authorization to run these destructive tests, aware that they write and clean up real data against the shared controlled environment described in supabase/tests/procurement-engineering/README.md. This variable proves authorization and awareness, never physical isolation from the app's normal environment — it does not, by itself, guarantee a dedicated project.",
   );
 }
 
@@ -36,7 +39,7 @@ function requireEnv(name) {
   const value = process.env[name];
   if (value === undefined || value.trim().length === 0) {
     throw new Error(
-      `Missing required environment variable ${name}. This test requires an explicit, dedicated test environment (see supabase/tests/procurement-engineering/README.md) — it never falls back to a default or to apps/web/.env.local.`,
+      `Missing required environment variable ${name}. These tests require an explicitly authorized environment (see supabase/tests/procurement-engineering/README.md) — the current approved state is a shared controlled environment, not a dedicated one; a separate project remains the preferred option. This never falls back to a default or to apps/web/.env.local.`,
     );
   }
   return value;

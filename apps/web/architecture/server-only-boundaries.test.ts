@@ -11,8 +11,18 @@
  * funciona (para escrita) com um cliente Supabase de `service_role` —
  * uma credencial que nunca pode chegar ao navegador. Este arquivo garante
  * que nenhum arquivo com a diretiva `"use client"` e nenhum arquivo sob
- * apps/mobile importa esse módulo, mesmo transitivamente pelo caminho
- * direto de import.
+ * apps/mobile importa esse módulo **diretamente** (por nome ou por
+ * caminho relativo resolvido para o arquivo do módulo).
+ *
+ * Esta proteção é intencionalmente só de importação direta, não de todo o
+ * grafo transitivo (não detecta, por exemplo, um arquivo "use client" que
+ * importa um módulo intermediário que por sua vez importa o adaptador).
+ * Hoje isso é suficiente: nenhum outro arquivo do repositório reexporta ou
+ * envolve este adaptador — os únicos importadores são os testes reais em
+ * supabase/tests/procurement-engineering/*.mjs e este próprio guard. Se um
+ * módulo intermediário passar a reexportar o adaptador no futuro, esta
+ * proteção direta deixa de ser suficiente e precisará ser ampliada para
+ * percorrer o grafo de importações.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";

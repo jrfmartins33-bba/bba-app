@@ -123,9 +123,12 @@ prepara e desfaz os dados.
 
 ## Não pertencem à suíte comum
 
-`pnpm test` (125+ arquivos `*.test.ts`, incluindo os testes unitários dos
+`pnpm test` (126+ arquivos `*.test.ts`, incluindo os testes unitários dos
 Serviços de Aplicação e dos mapeadores desta mesma Sprint, com repositórios
 falsos) não executa nada nesta pasta — os quatro arquivos aqui são reais,
-mais lentos, e exigem um ambiente dedicado. Rode-os manualmente, ou em um
-job de CI separado com as variáveis acima configuradas como secrets, nunca
-como parte do pipeline padrão sem essas variáveis.
+mais lentos, e exigem um ambiente explicitamente autorizado (ver "Ambiente:
+compartilhado controlado, não dedicado" acima — o estado atual não é um
+ambiente dedicado, é o mesmo projeto compartilhado da demonstração
+pública, sob os controles documentados). Rode-os manualmente, ou em um job
+de CI separado com as variáveis acima configuradas como secrets, nunca como
+parte do pipeline padrão sem essas variáveis.
