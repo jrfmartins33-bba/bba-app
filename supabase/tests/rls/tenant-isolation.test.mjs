@@ -3,23 +3,35 @@ import assert from 'node:assert/strict';
 import process from 'node:process';
 import { createClient } from '@supabase/supabase-js';
 
+// Correção de segurança (Epic 21, Sprint 21.3C): nenhuma credencial, email
+// ou identificador tem mais valor-padrão versionado — toda variável abaixo
+// é obrigatória, e a ausência de qualquer uma falha imediatamente, antes
+// de autenticar ou tocar no banco.
+function requireEnv(name) {
+  const value = process.env[name];
+  if (value === undefined || value.trim().length === 0) {
+    throw new Error(`Missing required environment variable ${name}. This test requires explicit credentials — no default is provided.`);
+  }
+  return value;
+}
+
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-const clientAEmail = process.env.RLS_TEST_CLIENT_A_EMAIL || 'carlos@carlosmendes.com.br';
-const clientAPassword = process.env.RLS_TEST_CLIENT_A_PASSWORD || 'Teste123!';
-const clientBEmail = process.env.RLS_TEST_CLIENT_B_EMAIL || 'vitoria@vitoriamodas.com.br';
-const clientBPassword = process.env.RLS_TEST_CLIENT_B_PASSWORD || 'Teste123!';
-const adminEmail = process.env.RLS_TEST_ADMIN_EMAIL || 'admin@bbabrazil.com.br';
-const adminPassword = process.env.RLS_TEST_ADMIN_PASSWORD || 'BBAadmin2025!';
+const clientAEmail = requireEnv('RLS_TEST_CLIENT_A_EMAIL');
+const clientAPassword = requireEnv('RLS_TEST_CLIENT_A_PASSWORD');
+const clientBEmail = requireEnv('RLS_TEST_CLIENT_B_EMAIL');
+const clientBPassword = requireEnv('RLS_TEST_CLIENT_B_PASSWORD');
+const adminEmail = requireEnv('RLS_TEST_ADMIN_EMAIL');
+const adminPassword = requireEnv('RLS_TEST_ADMIN_PASSWORD');
 
-const clientAId = process.env.RLS_TEST_CLIENT_A_ID || 'd9e849b1-cd4a-4855-888c-857d8a7a6050';
-const clientBId = process.env.RLS_TEST_CLIENT_B_ID || '9ff84319-08bf-4a67-975e-4a229effdf4d';
-const adminId = process.env.RLS_TEST_ADMIN_ID || '673e0c35-5afc-4c54-a82a-0c8e63279b99';
-const companyAId = process.env.RLS_TEST_COMPANY_A_ID || 'eeeeeeee-0000-0000-0000-000000000001';
-const companyBId = process.env.RLS_TEST_COMPANY_B_ID || 'eeeeeeee-0000-0000-0000-000000000002';
-const taskAId = process.env.RLS_TEST_TASK_A_ID || '30000000-0000-0000-0000-000000000001';
-const taskBId = process.env.RLS_TEST_TASK_B_ID || '30000000-0000-0000-0000-000000000002';
+const clientAId = requireEnv('RLS_TEST_CLIENT_A_ID');
+const clientBId = requireEnv('RLS_TEST_CLIENT_B_ID');
+const adminId = requireEnv('RLS_TEST_ADMIN_ID');
+const companyAId = requireEnv('RLS_TEST_COMPANY_A_ID');
+const companyBId = requireEnv('RLS_TEST_COMPANY_B_ID');
+const taskAId = requireEnv('RLS_TEST_TASK_A_ID');
+const taskBId = requireEnv('RLS_TEST_TASK_B_ID');
 
 function createSupabaseClient() {
   if (!supabaseUrl || !supabaseAnonKey) {
