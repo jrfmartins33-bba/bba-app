@@ -221,7 +221,7 @@ Os marcos da Aplicação da Metodologia de BDI não são uma sequência obrigat�
 
 ## L. Serviços de Aplicação futuros
 
-Serviços de Aplicação não pertencem ao domínio puro — pertencem à camada de coordenação e persistência (Sprint 21.3C em diante). Na Sprint 21.3B, os comportamentos correspondentes existem apenas como operações do modelo de domínio puro, validadas por testes unitários, sem orquestração nem persistência.
+Serviços de Aplicação não pertencem ao domínio puro. Pertencem à camada de aplicação e coordenação. Na Sprint 21.3C, serão implementados juntamente com contratos de repositório, persistência e adaptadores, mantendo essas responsabilidades em camadas separadas. Na Sprint 21.3B, os comportamentos correspondentes existem apenas como operações do modelo de domínio puro, validadas por testes unitários, sem orquestração nem persistência.
 
 | Serviço de Aplicação conceitual | Agrupamento | Objetivo | Natureza | Coordena outros agrupamentos? | Sprint provável |
 |---|---|---|---|---|---|
@@ -296,7 +296,7 @@ Serviços de Aplicação não pertencem ao domínio puro — pertencem à camada
 | Necessidade de identidade própria do BDI Apurado | Aberta | Médio | 21.6B | Ver gatilho 6 | Resultado derivado ≠ ausência de identidade |
 | Modelo próprio de versionamento da Composição de Referência | Aberta | Médio | 21.6A | Ver gatilho 5 | Distinto da versão da fonte |
 | Representação técnica da Formação do Preço Unitário | Aberta | Médio | 21.6A/21.6B | Ver gatilho 6 | — |
-| Identidade e representação mínima da Relação de Rastreabilidade | Aberta | Bloqueia 21.3B apenas no nível mínimo necessário à origem do orçamento | 21.3B (mínimo) | — | Representação completa permanece aberta além disso |
+| Identidade e representação mínima da Relação de Rastreabilidade | Aberta | Médio | 21.3B, somente no nível mínimo necessário à origem do orçamento | Antes de 21.3B | A representação completa permanece aberta além dessa fatia |
 | Identidade e representação técnica de Avaliação de Correspondência | Aberta | Médio | Transversal | — | — |
 | Colisão `ManagedServiceItem` | Aberta | Alto | Integração com Medições/Execução | Ver gatilho 1 | — |
 | Colisão `EngineeringContract`/`contract-management` | Aberta | Alto | Vínculo persistido com execução | Ver gatilho 2 | `EngineeringContract` sem `organizationId` |
