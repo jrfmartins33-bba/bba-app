@@ -74,16 +74,6 @@ export async function registerOrReuseDocumentVersionService(
     return { outcome: "document_not_found" };
   }
 
-  const existing = await documentVersionRepository.findDocumentVersionByDocumentAndSha256(
-    context.organizationId,
-    document.id,
-    command.sha256,
-  );
-
-  if (existing !== null) {
-    return { outcome: "reused", documentVersion: existing };
-  }
-
   const domainResult = createDocumentVersion({
     id: crypto.randomUUID(),
     document,
@@ -105,12 +95,12 @@ export async function registerOrReuseDocumentVersionService(
   }
 
   try {
-    const documentVersion = await documentVersionRepository.createDocumentVersion(
+    const persisted = await documentVersionRepository.createOrReuseDocumentVersion(
       context.organizationId,
       context.actor,
       domainResult.documentVersion,
     );
-    return { outcome: "created", documentVersion };
+    return { outcome: persisted.outcome, documentVersion: persisted.documentVersion };
   } catch (error) {
     return { outcome: "persistence_failure", message: toInfrastructureErrorMessage(error) };
   }
@@ -126,16 +116,6 @@ export async function requestDocumentProcessingAttemptService(
 
   if (documentVersion === null) {
     return { outcome: "document_version_not_found" };
-  }
-
-  const existing = await attemptRepository.findDocumentProcessingAttemptByRequestKey(
-    context.organizationId,
-    documentVersion.id,
-    command.requestIdempotencyKey,
-  );
-
-  if (existing !== null) {
-    return { outcome: "reused", attempt: existing.entity, revision: existing.revision };
   }
 
   const domainResult = createDocumentProcessingAttempt({
@@ -156,8 +136,16 @@ export async function requestDocumentProcessingAttemptService(
   }
 
   try {
-    const persisted = await attemptRepository.createDocumentProcessingAttempt(context.organizationId, context.actor, domainResult.attempt);
-    return { outcome: "created", attempt: persisted.entity, revision: persisted.revision };
+    const persisted = await attemptRepository.createOrReuseDocumentProcessingAttempt(
+      context.organizationId,
+      context.actor,
+      domainResult.attempt,
+    );
+    return {
+      outcome: persisted.outcome,
+      attempt: persisted.persisted.entity,
+      revision: persisted.persisted.revision,
+    };
   } catch (error) {
     return { outcome: "persistence_failure", message: toInfrastructureErrorMessage(error) };
   }

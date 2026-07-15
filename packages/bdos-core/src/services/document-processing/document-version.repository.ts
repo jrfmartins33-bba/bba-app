@@ -1,11 +1,15 @@
 import type { DocumentVersion } from "../../domain/document-processing";
 
+export type PersistDocumentVersionResult =
+  | { readonly outcome: "created"; readonly documentVersion: DocumentVersion }
+  | { readonly outcome: "reused"; readonly documentVersion: DocumentVersion };
+
 export interface DocumentVersionRepository {
-  createDocumentVersion(
+  createOrReuseDocumentVersion(
     organizationId: string,
     actor: string,
     documentVersion: DocumentVersion,
-  ): Promise<DocumentVersion>;
+  ): Promise<PersistDocumentVersionResult>;
 
   findDocumentVersionById(
     organizationId: string,

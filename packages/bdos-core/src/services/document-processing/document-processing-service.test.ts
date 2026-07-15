@@ -28,8 +28,11 @@ const SHA_A = "5031da751eff0bb9bd892c0bd9f71a786ac0d575ff52877aeced6c118ffb92c5"
 const SHA_B = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 interface FakeDocumentRepository extends DocumentRepository {}
-interface FakeDocumentVersionRepository extends DocumentVersionRepository {}
+interface FakeDocumentVersionRepository extends DocumentVersionRepository {
+  countByDocumentAndSha256(organizationId: string, documentId: string, sha256: string): number;
+}
 interface FakeAttemptRepository extends DocumentProcessingAttemptRepository {
+  countByRequestKey(organizationId: string, documentVersionId: string, requestIdempotencyKey: string): number;
   forceConflict(): void;
   revisionOf(organizationId: string, id: string): number | null;
 }
@@ -57,10 +60,20 @@ function createFakeDocumentVersionRepository(): FakeDocumentVersionRepository {
   const versionsByHash = new Map<string, DocumentVersion>();
 
   return {
-    async createDocumentVersion(organizationId, _actor, documentVersion) {
+    countByDocumentAndSha256(organizationId, documentId, sha256) {
+      return versionsByHash.has(`${organizationId}:${documentId}:${sha256}`) ? 1 : 0;
+    },
+    async createOrReuseDocumentVersion(organizationId, _actor, documentVersion) {
+      const idempotencyKey = `${organizationId}:${documentVersion.documentId}:${documentVersion.sha256}`;
+      const existing = versionsByHash.get(idempotencyKey);
+
+      if (existing !== undefined) {
+        return { outcome: "reused", documentVersion: existing };
+      }
+
       versions.set(`${organizationId}:${documentVersion.id}`, documentVersion);
-      versionsByHash.set(`${organizationId}:${documentVersion.documentId}:${documentVersion.sha256}`, documentVersion);
-      return documentVersion;
+      versionsByHash.set(idempotencyKey, documentVersion);
+      return { outcome: "created", documentVersion };
     },
     async findDocumentVersionById(organizationId, id) {
       return versions.get(`${organizationId}:${id}`) ?? null;
@@ -80,17 +93,27 @@ function createFakeAttemptRepository(): FakeAttemptRepository {
   let conflict = false;
 
   return {
+    countByRequestKey(organizationId, documentVersionId, requestIdempotencyKey) {
+      return attemptsByKey.has(`${organizationId}:${documentVersionId}:${requestIdempotencyKey}`) ? 1 : 0;
+    },
     forceConflict() {
       conflict = true;
     },
     revisionOf(organizationId, id) {
       return attempts.get(`${organizationId}:${id}`)?.revision ?? null;
     },
-    async createDocumentProcessingAttempt(organizationId, _actor, attempt) {
+    async createOrReuseDocumentProcessingAttempt(organizationId, _actor, attempt) {
+      const idempotencyKey = `${organizationId}:${attempt.documentVersionId}:${attempt.requestIdempotencyKey}`;
+      const existing = attemptsByKey.get(idempotencyKey);
+
+      if (existing !== undefined) {
+        return { outcome: "reused", persisted: existing };
+      }
+
       const persisted = { entity: attempt, revision: INITIAL_DOCUMENT_PROCESSING_ATTEMPT_REVISION };
       attempts.set(`${organizationId}:${attempt.id}`, persisted);
-      attemptsByKey.set(`${organizationId}:${attempt.documentVersionId}:${attempt.requestIdempotencyKey}`, persisted);
-      return persisted;
+      attemptsByKey.set(idempotencyKey, persisted);
+      return { outcome: "created", persisted };
     },
     async findDocumentProcessingAttemptById(organizationId, id) {
       return attempts.get(`${organizationId}:${id}`) ?? null;
@@ -199,6 +222,36 @@ async function main(): Promise<void> {
     assertEqual(repeated.documentVersion.id, first.documentVersion.id);
   });
 
+  await runTest("concurrent Document Version requests return the single persisted identity", async () => {
+    const documentRepository = createFakeDocumentRepository();
+    const documentVersionRepository = createFakeDocumentVersionRepository();
+
+    const createdDocument = await registerDocumentService(contextFor(ORG_A), { context: "official-budget-source" }, documentRepository);
+    assertEqual(createdDocument.outcome, "created");
+    if (createdDocument.outcome !== "created") return;
+
+    const [first, second] = await Promise.all([
+      registerOrReuseDocumentVersionService(
+        contextFor(ORG_A),
+        versionCommand(createdDocument.document.id, SHA_A),
+        documentRepository,
+        documentVersionRepository,
+      ),
+      registerOrReuseDocumentVersionService(
+        contextFor(ORG_A),
+        versionCommand(createdDocument.document.id, SHA_A),
+        documentRepository,
+        documentVersionRepository,
+      ),
+    ]);
+
+    assertEqual(first.outcome === "created" || first.outcome === "reused", true);
+    assertEqual(second.outcome === "created" || second.outcome === "reused", true);
+    if ((first.outcome !== "created" && first.outcome !== "reused") || (second.outcome !== "created" && second.outcome !== "reused")) return;
+    assertEqual(first.documentVersion.id, second.documentVersion.id);
+    assertEqual(documentVersionRepository.countByDocumentAndSha256(ORG_A, createdDocument.document.id, SHA_A), 1);
+  });
+
   await runTest("new hash creates a new Document Version, while a different Document may reuse identical bytes independently", async () => {
     const documentRepository = createFakeDocumentRepository();
     const documentVersionRepository = createFakeDocumentVersionRepository();
@@ -278,6 +331,33 @@ async function main(): Promise<void> {
     if (reprocess.outcome !== "created") return;
     assertEqual(reprocess.attempt.id === first.attempt.id, false);
     assertEqual(reprocess.attempt.documentVersionId, first.attempt.documentVersionId);
+  });
+
+  await runTest("concurrent Processing Attempt requests return the single persisted identity", async () => {
+    const { documentVersionRepository, documentVersion } = await seedDocumentAndVersion();
+    const attemptRepository = createFakeAttemptRepository();
+
+    const [first, second] = await Promise.all([
+      requestDocumentProcessingAttemptService(
+        contextFor(ORG_A),
+        { documentVersionId: documentVersion.id, mechanism: "minimal-v1", requestIdempotencyKey: "request-concurrent" },
+        documentVersionRepository,
+        attemptRepository,
+      ),
+      requestDocumentProcessingAttemptService(
+        contextFor(ORG_A),
+        { documentVersionId: documentVersion.id, mechanism: "minimal-v1", requestIdempotencyKey: "request-concurrent" },
+        documentVersionRepository,
+        attemptRepository,
+      ),
+    ]);
+
+    assertEqual(first.outcome === "created" || first.outcome === "reused", true);
+    assertEqual(second.outcome === "created" || second.outcome === "reused", true);
+    if ((first.outcome !== "created" && first.outcome !== "reused") || (second.outcome !== "created" && second.outcome !== "reused")) return;
+    assertEqual(first.attempt.id, second.attempt.id);
+    assertEqual(first.revision, second.revision);
+    assertEqual(attemptRepository.countByRequestKey(ORG_A, documentVersion.id, "request-concurrent"), 1);
   });
 
   await runTest("transitions validate state and preserve previous attempts", async () => {

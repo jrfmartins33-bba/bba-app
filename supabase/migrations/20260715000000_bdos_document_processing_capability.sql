@@ -225,6 +225,9 @@ SECURITY INVOKER
 SET search_path = public, pg_temp
 LANGUAGE plpgsql
 AS $$
+DECLARE
+  v_document_version document_versions%ROWTYPE;
+  v_outcome TEXT;
 BEGIN
   IF p_actor_id IS NULL THEN
     RAISE EXCEPTION 'Actor is required.' USING ERRCODE = '28000';
@@ -294,9 +297,30 @@ BEGIN
     p_id, p_company_id, p_document_id, p_sha256, p_original_file_name, p_mime_type, p_size_bytes,
     p_storage_reference, COALESCE(p_technical_metadata, '{}'::JSONB), COALESCE(p_metadata, '{}'::JSONB),
     p_correlation_id, p_actor_id, p_source_system, COALESCE(p_uploaded_at, NOW())
-  );
+  )
+  ON CONFLICT (company_id, document_id, sha256) DO NOTHING
+  RETURNING * INTO v_document_version;
 
-  RETURN jsonb_build_object('id', p_id);
+  IF FOUND THEN
+    v_outcome := 'created';
+  ELSE
+    SELECT * INTO v_document_version
+    FROM document_versions
+    WHERE company_id = p_company_id
+      AND document_id = p_document_id
+      AND sha256 = p_sha256;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Document Version idempotency conflict was not recoverable.' USING ERRCODE = '40001';
+    END IF;
+
+    v_outcome := 'reused';
+  END IF;
+
+  RETURN jsonb_build_object(
+    'outcome', v_outcome,
+    'document_version', to_jsonb(v_document_version)
+  );
 END;
 $$;
 
@@ -324,7 +348,8 @@ SET search_path = public, pg_temp
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_revision INTEGER;
+  v_attempt document_processing_attempts%ROWTYPE;
+  v_outcome TEXT;
 BEGIN
   IF p_actor_id IS NULL THEN
     RAISE EXCEPTION 'Actor is required.' USING ERRCODE = '28000';
@@ -350,9 +375,29 @@ BEGIN
     COALESCE(p_requested_at, NOW()), p_request_idempotency_key, COALESCE(p_metadata, '{}'::JSONB),
     p_correlation_id, p_actor_id, p_source_system
   )
-  RETURNING revision INTO v_revision;
+  ON CONFLICT (company_id, document_version_id, request_idempotency_key) DO NOTHING
+  RETURNING * INTO v_attempt;
 
-  RETURN jsonb_build_object('revision', v_revision);
+  IF FOUND THEN
+    v_outcome := 'created';
+  ELSE
+    SELECT * INTO v_attempt
+    FROM document_processing_attempts
+    WHERE company_id = p_company_id
+      AND document_version_id = p_document_version_id
+      AND request_idempotency_key = p_request_idempotency_key;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Document Processing Attempt idempotency conflict was not recoverable.' USING ERRCODE = '40001';
+    END IF;
+
+    v_outcome := 'reused';
+  END IF;
+
+  RETURN jsonb_build_object(
+    'outcome', v_outcome,
+    'document_processing_attempt', to_jsonb(v_attempt)
+  );
 END;
 $$;
 
@@ -378,6 +423,7 @@ SET search_path = public, pg_temp
 LANGUAGE plpgsql
 AS $$
 DECLARE
+  v_current_attempt document_processing_attempts%ROWTYPE;
   v_new_revision INTEGER;
 BEGIN
   IF p_actor_id IS NULL THEN
@@ -390,6 +436,32 @@ BEGIN
 
   IF p_company_id IS DISTINCT FROM get_company_id_for_actor(p_actor_id) AND NOT is_bba_admin_actor(p_actor_id) THEN
     RAISE EXCEPTION 'Actor % is not authorized to transition a processing attempt for this organization.', p_actor_id USING ERRCODE = '42501';
+  END IF;
+
+  SELECT * INTO v_current_attempt
+  FROM document_processing_attempts
+  WHERE id = p_attempt_id
+    AND company_id = p_company_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('conflict', true);
+  END IF;
+
+  IF v_current_attempt.revision <> p_expected_revision THEN
+    RETURN jsonb_build_object('conflict', true);
+  END IF;
+
+  IF p_status IS NULL OR p_status NOT IN ('Requested', 'Processing', 'Completed', 'PartiallyCompleted', 'Failed', 'Abandoned') THEN
+    RAISE EXCEPTION 'Unknown Document Processing Attempt status: %.', p_status USING ERRCODE = '23514';
+  END IF;
+
+  IF NOT (
+    (v_current_attempt.status = 'Requested' AND p_status IN ('Processing', 'Abandoned'))
+    OR (v_current_attempt.status = 'Processing' AND p_status IN ('Completed', 'PartiallyCompleted', 'Failed', 'Abandoned'))
+  ) THEN
+    RAISE EXCEPTION 'Invalid Document Processing Attempt transition: % -> %.', v_current_attempt.status, p_status
+      USING ERRCODE = '23514';
   END IF;
 
   UPDATE document_processing_attempts

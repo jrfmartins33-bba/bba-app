@@ -1,81 +1,97 @@
-# Epic 21 - Sprint 21.4A.1 - Capacidade Documental Minima
+# Epic 21 - Sprint 21.4A.1 - Capacidade Documental Mínima
 
 **Status:** implementada como fatia 21.4A.1.
-**A Sprint 21.4A continua em andamento.** Esta entrega nao conclui a ingestao documental completa nem inicia materializacao de Orcamento.
+**A Sprint 21.4A continua em andamento.** Esta entrega não conclui a ingestão documental completa nem inicia materialização de Orçamento.
 
 ## O que foi implementado
 
-- Documento (`DocumentArtifact`): identidade logica do documento ao longo do tempo.
-- Versao do Documento (`DocumentVersion`): versao concreta e imutavel de um arquivo.
-- Tentativa de Processamento Documental (`DocumentProcessingAttempt`): execucao operacional sobre uma Versao.
-- Contratos de repositorio para os tres conceitos.
-- Servicos de Aplicacao pequenos e explicitos.
-- Persistencia real em tres tabelas separadas.
-- Isolamento por organizacao usuaria.
-- Idempotencia de versao por `(organizationId, documentId, sha256)`.
-- Idempotencia de tentativa por `(organizationId, documentVersionId, requestIdempotencyKey)`.
-- Reprocessamento explicito sem sobrescrita.
-- Concorrencia otimista por `revision` da tentativa.
-- Guardas arquiteturais contra PDF/OCR/IA e contra dependencia do dominio economico.
+- Documento (`DocumentArtifact`): identidade lógica do documento ao longo do tempo.
+- Versão do Documento (`DocumentVersion`): versão concreta e imutável de um arquivo.
+- Tentativa de Processamento Documental (`DocumentProcessingAttempt`): execução operacional sobre uma Versão.
+- Contratos de repositório para os três conceitos.
+- Serviços de Aplicação pequenos e explícitos.
+- Persistência real em três tabelas separadas.
+- Isolamento por organização usuária.
+- Idempotência atômica de versão por `(organizationId, documentId, sha256)`.
+- Idempotência atômica de tentativa por `(organizationId, documentVersionId, requestIdempotencyKey)`.
+- Reprocessamento explícito sem sobrescrita.
+- Concorrência otimista por `revision` da tentativa.
+- Proteção persistente da máquina de estados da tentativa.
+- Guardas arquiteturais contra PDF/OCR/IA e contra dependência do domínio econômico.
 
-## Localizacao fisica
+## Localização física
 
-- Dominio puro minimo: `packages/bdos-core/src/domain/document-processing`.
-- Servicos e contratos: `packages/bdos-core/src/services/document-processing`.
+- Domínio puro mínimo: `packages/bdos-core/src/domain/document-processing`.
+- Serviços e contratos: `packages/bdos-core/src/services/document-processing`.
 - Adaptador Supabase server-side: `apps/web/lib/bdos/document-processing-server-repository.ts`.
-- Mapeadores banco <-> dominio: `apps/web/lib/bdos/document-processing-mappers.ts`.
-- Persistencia: `supabase/migrations/20260715000000_bdos_document_processing_capability.sql`.
+- Mapeadores banco <-> domínio: `apps/web/lib/bdos/document-processing-mappers.ts`.
+- Persistência: `supabase/migrations/20260715000000_bdos_document_processing_capability.sql`.
 
 Alternativas rejeitadas:
 
-- `domain/budget-version`: rejeitado porque Documento e Versao do Documento sao evidencia documental, nao identidade economica.
-- `domain/document-reconstruction`: rejeitado porque Reconstrucao Documental estrutura reconstrucao logica, mas nao deve virar dona universal de upload, armazenamento ou processamento fisico.
-- Um repositorio generico universal de documentos: rejeitado por generalizacao prematura.
-- Colocar processamento fisico dentro de dominio puro: rejeitado; dominio so valida invariantes e transicoes.
+- `domain/budget-version`: rejeitado porque Documento e Versão do Documento são evidência documental, não identidade econômica.
+- `domain/document-reconstruction`: rejeitado porque Reconstrução Documental estrutura reconstrução lógica, mas não deve virar dona universal de upload, armazenamento ou processamento físico.
+- Um repositório genérico universal de documentos: rejeitado por generalização prematura.
+- Colocar processamento físico dentro de domínio puro: rejeitado; o domínio só valida invariantes e transições.
 
 ## Fronteira
 
-Esta fatia nao interpreta conteudo economicamente e nao decide Grupo, Subgrupo, Item de Servico, quantidade, preco, BDI, composicao, total, correspondencia, materializacao ou consolidacao.
+Esta fatia não interpreta conteúdo economicamente e não decide Grupo, Subgrupo, Item de Serviço, quantidade, preço, BDI, composição, total, correspondência, materialização ou consolidação.
 
-Tambem nao implementa:
+Também não implementa:
 
 - leitura de PDF;
 - OCR;
-- localizacao de paginas;
-- Evidencia Estruturada Neutra;
-- caracterizacao economica;
+- localização de páginas;
+- Evidência Estruturada Neutra;
+- caracterização econômica;
 - Linha Candidata;
-- Proposta de Importacao do Orcamento;
-- API publica;
+- Proposta de Importação do Orçamento;
+- API pública;
 - interface;
-- Versao do Orcamento;
-- Simulacao;
-- comparacao lado a lado.
+- Versão do Orçamento;
+- Simulação;
+- comparação lado a lado.
 
-## Idempotencia e reprocessamento
+## Idempotência e reprocessamento
 
-Versao do Documento:
+Versão do Documento:
 
-- Mesma organizacao, mesmo Documento e mesmo SHA-256 retornam a versao existente.
-- Mesmo Documento com SHA-256 diferente cria nova versao.
-- Documentos logicos diferentes podem conter bytes identicos sem virarem o mesmo Documento.
+- Mesma organização, mesmo Documento e mesmo SHA-256 retornam a versão existente.
+- Mesmo Documento com SHA-256 diferente cria nova versão.
+- Documentos lógicos diferentes podem conter bytes idênticos sem virarem o mesmo Documento.
+- A criação ou reutilização é resolvida de forma atômica na persistência; duas solicitações concorrentes não produzem falha por colisão idempotente e retornam a identidade efetivamente persistida.
 
 Tentativa:
 
-- Mesma organizacao, mesma Versao e mesma chave de solicitacao retornam a tentativa existente.
-- Nova chave de solicitacao para a mesma Versao cria nova tentativa.
-- Reprocessamento nunca cria nova Versao do Documento e nunca sobrescreve tentativa anterior.
+- Mesma organização, mesma Versão e mesma chave de solicitação retornam a tentativa existente.
+- Nova chave de solicitação para a mesma Versão cria nova tentativa.
+- Reprocessamento nunca cria nova Versão do Documento e nunca sobrescreve tentativa anterior.
+- A criação ou reutilização é resolvida de forma atômica na persistência; duas solicitações concorrentes retornam a mesma tentativa e a mesma revisão inicial.
 
-## Persistencia e seguranca
+## Máquina de estados
 
-As tabelas sao:
+A função persistente de transição valida as mesmas regras do domínio antes de gravar:
+
+- solicitada -> processando;
+- solicitada -> abandonada;
+- processando -> concluída;
+- processando -> concluída parcialmente;
+- processando -> falhou;
+- processando -> abandonada.
+
+Transições a partir de estados terminais, transições incompatíveis com o estado atual e estados desconhecidos são rejeitados no banco. Conflito de revisão continua sendo devolvido como conflito de concorrência, sem sobrescrever a tentativa mais recente.
+
+## Persistência e segurança
+
+As tabelas são:
 
 - `document_artifacts`;
 - `document_versions`;
 - `document_processing_attempts`.
 
-`document_versions` e imutavel por trigger. A referencia de armazenamento precisa comecar por `company_id/` e nao pode ser caminho local. Escritas diretas por `authenticated` sao bloqueadas por RLS e por ausencia de privilegio de escrita. Mutacoes passam por funcoes com `EXECUTE` concedido somente a `service_role`, recebendo `p_actor_id` ja resolvido pela fronteira confiavel do servidor.
+`document_versions` é imutável por trigger. A referência de armazenamento precisa começar por `company_id/` e não pode ser caminho local. Escritas diretas por `authenticated` são bloqueadas por RLS e por ausência de privilégio de escrita. Mutações passam por funções com `EXECUTE` concedido somente a `service_role`, recebendo `p_actor_id` já resolvido pela fronteira confiável do servidor.
 
-## Proximo incremento
+## Próximo incremento
 
-O proximo incremento esperado e a localizacao das paginas orcamentarias do documento oficial, ainda sem materializar Versao do Orcamento automaticamente.
+O próximo incremento esperado é a localização das páginas orçamentárias do documento oficial, ainda sem materializar Versão do Orçamento automaticamente.

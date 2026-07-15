@@ -13,6 +13,8 @@ import {
   mapDocumentArtifactRow,
   mapDocumentProcessingAttemptRow,
   mapDocumentVersionRow,
+  type DocumentProcessingAttemptRow,
+  type DocumentVersionRow,
 } from "./document-processing-mappers";
 
 const DOCUMENT_COLUMNS = "id, company_id, document_context, title, registered_by, registered_at, metadata";
@@ -55,7 +57,7 @@ export function createDocumentRepository(supabase: SupabaseClient): DocumentRepo
 
 export function createDocumentVersionRepository(supabase: SupabaseClient): DocumentVersionRepository {
   return {
-    async createDocumentVersion(organizationId, actor, documentVersion) {
+    async createOrReuseDocumentVersion(organizationId, actor, documentVersion) {
       const { data, error } = await supabase.rpc(
         "create_document_version",
         documentVersionCreateRpcParams(organizationId, actor, documentVersion),
@@ -65,7 +67,9 @@ export function createDocumentVersionRepository(supabase: SupabaseClient): Docum
         throw error ?? new Error("Failed to persist the Document Version.");
       }
 
-      return documentVersion;
+      const outcome = readCreatedOrReusedOutcome(data, "create_document_version");
+      const persistedRow = readRpcRecordField<DocumentVersionRow>(data, "document_version", "create_document_version");
+      return { outcome, documentVersion: mapDocumentVersionRow(persistedRow) };
     },
 
     async findDocumentVersionById(organizationId, id) {
@@ -118,7 +122,7 @@ export function createDocumentVersionRepository(supabase: SupabaseClient): Docum
 
 export function createDocumentProcessingAttemptRepository(supabase: SupabaseClient): DocumentProcessingAttemptRepository {
   return {
-    async createDocumentProcessingAttempt(organizationId, actor, attempt) {
+    async createOrReuseDocumentProcessingAttempt(organizationId, actor, attempt) {
       const { data, error } = await supabase.rpc(
         "create_document_processing_attempt",
         documentProcessingAttemptCreateRpcParams(organizationId, actor, attempt),
@@ -128,11 +132,13 @@ export function createDocumentProcessingAttemptRepository(supabase: SupabaseClie
         throw error ?? new Error("Failed to persist the Document Processing Attempt.");
       }
 
-      if (typeof data.revision !== "number") {
-        throw new Error("create_document_processing_attempt did not return a numeric revision.");
-      }
-
-      return { entity: attempt, revision: data.revision };
+      const outcome = readCreatedOrReusedOutcome(data, "create_document_processing_attempt");
+      const persistedRow = readRpcRecordField<DocumentProcessingAttemptRow>(
+        data,
+        "document_processing_attempt",
+        "create_document_processing_attempt",
+      );
+      return { outcome, persisted: mapDocumentProcessingAttemptRow(persistedRow) };
     },
 
     async findDocumentProcessingAttemptById(organizationId, id) {
@@ -202,4 +208,36 @@ export function createDocumentProcessingAttemptRepository(supabase: SupabaseClie
       return { outcome: "saved", revision: data.revision };
     },
   };
+}
+
+function readCreatedOrReusedOutcome(data: unknown, functionName: string): "created" | "reused" {
+  const outcome = readRpcRecord(data, functionName).outcome;
+
+  if (outcome === "created" || outcome === "reused") {
+    return outcome;
+  }
+
+  throw new Error(`${functionName} did not return a created/reused outcome.`);
+}
+
+function readRpcRecordField<T>(data: unknown, field: string, functionName: string): T {
+  const value = readRpcRecord(data, functionName)[field];
+
+  if (isRecord(value)) {
+    return value as T;
+  }
+
+  throw new Error(`${functionName} did not return ${field}.`);
+}
+
+function readRpcRecord(data: unknown, functionName: string): Record<string, unknown> {
+  if (isRecord(data)) {
+    return data;
+  }
+
+  throw new Error(`${functionName} returned an invalid payload.`);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

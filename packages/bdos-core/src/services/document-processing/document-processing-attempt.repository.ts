@@ -7,16 +7,20 @@ export interface PersistedDocumentProcessingAttempt {
 
 export const INITIAL_DOCUMENT_PROCESSING_ATTEMPT_REVISION = 0;
 
+export type PersistDocumentProcessingAttemptResult =
+  | { readonly outcome: "created"; readonly persisted: PersistedDocumentProcessingAttempt }
+  | { readonly outcome: "reused"; readonly persisted: PersistedDocumentProcessingAttempt };
+
 export type SaveDocumentProcessingAttemptResult =
   | { readonly outcome: "saved"; readonly revision: number }
   | { readonly outcome: "concurrency_conflict" };
 
 export interface DocumentProcessingAttemptRepository {
-  createDocumentProcessingAttempt(
+  createOrReuseDocumentProcessingAttempt(
     organizationId: string,
     actor: string,
     attempt: DocumentProcessingAttempt,
-  ): Promise<PersistedDocumentProcessingAttempt>;
+  ): Promise<PersistDocumentProcessingAttemptResult>;
 
   findDocumentProcessingAttemptById(
     organizationId: string,
