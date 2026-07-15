@@ -225,9 +225,6 @@ SECURITY INVOKER
 SET search_path = public, pg_temp
 LANGUAGE plpgsql
 AS $$
-DECLARE
-  v_document_version document_versions%ROWTYPE;
-  v_outcome TEXT;
 BEGIN
   IF p_actor_id IS NULL THEN
     RAISE EXCEPTION 'Actor is required.' USING ERRCODE = '28000';
@@ -277,6 +274,9 @@ SECURITY INVOKER
 SET search_path = public, pg_temp
 LANGUAGE plpgsql
 AS $$
+DECLARE
+  v_document_version document_versions%ROWTYPE;
+  v_outcome TEXT;
 BEGIN
   IF p_actor_id IS NULL THEN
     RAISE EXCEPTION 'Actor is required.' USING ERRCODE = '28000';
