@@ -1,0 +1,35 @@
+-- Epic 21, Sprint 21.4A.1 (continuação) — reprodutibilidade do bootstrap Supabase.
+--
+-- Achado: a validação real da Sprint 21.4A.1 contra um projeto Supabase
+-- genuinamente novo (nunca contra o projeto real/produção) revelou que
+-- nenhuma migração até 20260715000000 concede SELECT em public.profiles
+-- para service_role. A migração 20260714000005 tornou
+-- get_company_id_for_actor e is_bba_admin_actor SECURITY INVOKER,
+-- presumindo explicitamente — no próprio comentário daquela migração —
+-- que service_role já possuía esse privilégio, "herdado da criação
+-- original da tabela, fora daquela Sprint". Essa premissa é verdadeira
+-- apenas no projeto real: lá o privilégio existe, mas nunca foi
+-- representado em nenhuma migração rastreada.
+--
+-- Um projeto Supabase novo, recebendo somente as migrações versionadas,
+-- não herda esse privilégio. Toda função server-only que dependa dos dois
+-- auxiliares (get_company_id_for_actor/is_bba_admin_actor) — o que cobre
+-- praticamente toda escrita via service_role, incluindo as funções de
+-- Procurement Engineering e as de Document Processing — falha com
+-- "permission denied for table profiles" (42501) antes mesmo de validar a
+-- autorização do ator. Esta lacuna foi descoberta pela validação real da
+-- Sprint 21.4A.1 num projeto Supabase novo, não introduzida por ela.
+--
+-- Esta migração formaliza explicitamente o privilégio que o projeto real
+-- já possuía fora do histórico de migrações, tornando o bootstrap a partir
+-- do repositório reproduzível em qualquer projeto Supabase novo. GRANT é
+-- idempotente por natureza no Postgres: reaplicar esta migração contra o
+-- projeto real não amplia nenhum acesso além do estado que já existe lá.
+--
+-- service_role continua sendo o único papel autorizado a executar
+-- get_company_id_for_actor/is_bba_admin_actor e as funções de mutação que
+-- dependem deles — EXECUTE nessas funções não é alterado por esta
+-- migração. Esta migração não concede nenhum privilégio novo a anon ou a
+-- authenticated, e não remove nenhum privilégio existente desses papéis.
+
+GRANT SELECT ON TABLE public.profiles TO service_role;

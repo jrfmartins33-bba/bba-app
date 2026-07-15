@@ -92,6 +92,16 @@ As tabelas são:
 
 `document_versions` é imutável por trigger. A referência de armazenamento precisa começar por `company_id/` e não pode ser caminho local. Escritas diretas por `authenticated` são bloqueadas por RLS e por ausência de privilégio de escrita. Mutações passam por funções com `EXECUTE` concedido somente a `service_role`, recebendo `p_actor_id` já resolvido pela fronteira confiável do servidor.
 
+## Achado de infraestrutura — validação em projeto Supabase novo
+
+A validação real desta Sprint contra um projeto Supabase genuinamente novo (nunca contra o projeto real) revelou que nenhuma migração até `20260715000000` concede `SELECT` em `public.profiles` para `service_role`. A migração `20260714000005` tornou `get_company_id_for_actor`/`is_bba_admin_actor` `SECURITY INVOKER`, presumindo que `service_role` já possuía esse privilégio — o que é verdade no projeto real, mas nunca foi representado em nenhuma migração rastreada. Um projeto novo, recebendo só as migrações versionadas, não herda esse privilégio, e qualquer função server-only que dependa desses dois auxiliares falha com `permission denied for table profiles` (42501).
+
+**Causa raiz:** lacuna pré-existente de infraestrutura, anterior a esta Sprint — descoberta, não introduzida, pela exigência desta Sprint de validar persistência real em ambiente limpo.
+
+**Correção:** `supabase/migrations/20260715010000_bdos_service_role_profiles_access.sql`, formalizando `GRANT SELECT ON TABLE public.profiles TO service_role;`. Não amplia acesso no projeto real (o privilégio já existia lá); torna o bootstrap a partir do repositório reproduzível em qualquer projeto novo. Nenhum privilégio novo foi concedido a `anon` ou `authenticated`.
+
+**Estado da validação real:** pendente até esta migração ser aplicada ao projeto de teste e os nove cenários de `supabase/tests/document-processing/document-processing-capability.test.mjs` passarem.
+
 ## Próximo incremento
 
 O próximo incremento esperado é a localização das páginas orçamentárias do documento oficial, ainda sem materializar Versão do Orçamento automaticamente.

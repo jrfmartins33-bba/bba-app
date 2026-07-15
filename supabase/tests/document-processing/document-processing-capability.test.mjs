@@ -69,12 +69,28 @@ async function confirmTestEnvironment(serviceClient) {
     throw new Error("Refusing to run: SUPABASE_TEST_URL matches a configured production Supabase URL.");
   }
 
+  // This select doubles as the concrete proof that
+  // has_table_privilege('service_role', 'public.profiles', 'select') is
+  // true on the connected project. A project bootstrapped from the
+  // repository's migrations alone did not have this privilege before
+  // supabase/migrations/20260715010000_bdos_service_role_profiles_access.sql
+  // (see that migration for the root cause) — every server-only function
+  // that resolves an actor's company via get_company_id_for_actor depends
+  // on it. Surface that specific gap here, before any scenario runs,
+  // instead of letting it surface as an opaque 42501 mid-scenario.
   const { data: profiles, error: profilesError } = await serviceClient
     .from("profiles")
     .select("id, company_id, role")
     .in("id", [clientAId, clientBId]);
 
-  if (profilesError) throw profilesError;
+  if (profilesError) {
+    if (profilesError.code === "42501") {
+      throw new Error(
+        `service_role is missing SELECT on public.profiles (42501). Apply supabase/migrations/20260715010000_bdos_service_role_profiles_access.sql (and every migration before it) to this project before running this test. Original error: ${profilesError.message}`,
+      );
+    }
+    throw profilesError;
+  }
 
   const profileA = profiles?.find((profile) => profile.id === clientAId);
   const profileB = profiles?.find((profile) => profile.id === clientBId);
