@@ -582,5 +582,9 @@ async function main() {
 
 main().catch((error) => {
   console.error(error);
-  process.exit(1);
+  // process.exit(1) can truncate this console.error write before it
+  // finishes flushing when stdout is redirected (observed on Windows) —
+  // setting exitCode and letting the event loop drain naturally avoids
+  // silently losing the real failure message.
+  process.exitCode = 1;
 });

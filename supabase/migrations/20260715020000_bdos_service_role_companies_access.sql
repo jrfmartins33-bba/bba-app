@@ -1,0 +1,29 @@
+-- Epic 21, Sprint 21.4A.1 (continuação) — reprodutibilidade do bootstrap Supabase (parte 2).
+--
+-- Achado: a mesma validação real que motivou 20260715010000 (projeto
+-- Supabase genuinamente novo, nunca o projeto real/produção) revelou uma
+-- segunda lacuna do mesmo tipo: nenhuma migração concede SELECT em
+-- public.companies para service_role. A confirmação de ambiente do teste
+-- de integração (`document-processing-capability.test.mjs`) só passou a
+-- avançar depois de corrigir o SELECT em public.profiles — a etapa
+-- seguinte, uma contagem sobre public.companies, falhou pelo mesmo motivo:
+-- "permission denied for table companies" (42501). O corpo de erro vazio
+-- observado inicialmente era um artefato de a consulta usar `head: true`
+-- (requisição HTTP HEAD nunca tem corpo de resposta) — a causa real,
+-- confirmada com uma consulta equivalente sem `head`, é idêntica à de
+-- 20260715010000.
+--
+-- Assim como profiles, esse privilégio sempre existiu no projeto real,
+-- fora do histórico de migrações. Um projeto Supabase novo, recebendo só
+-- as migrações versionadas, não o herda.
+--
+-- Esta migração formaliza explicitamente o privilégio que o projeto real
+-- já possuía fora do histórico de migrações, na mesma linha de
+-- 20260715010000. GRANT é idempotente por natureza no Postgres: reaplicar
+-- esta migração contra o projeto real não amplia nenhum acesso além do
+-- estado que já existe lá.
+--
+-- Esta migração não concede nenhum privilégio novo a anon ou a
+-- authenticated, e não remove nenhum privilégio existente desses papéis.
+
+GRANT SELECT ON TABLE public.companies TO service_role;

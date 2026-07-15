@@ -100,7 +100,9 @@ A validação real desta Sprint contra um projeto Supabase genuinamente novo (nu
 
 **Correção:** `supabase/migrations/20260715010000_bdos_service_role_profiles_access.sql`, formalizando `GRANT SELECT ON TABLE public.profiles TO service_role;`. Não amplia acesso no projeto real (o privilégio já existia lá); torna o bootstrap a partir do repositório reproduzível em qualquer projeto novo. Nenhum privilégio novo foi concedido a `anon` ou `authenticated`.
 
-**Estado da validação real:** pendente até esta migração ser aplicada ao projeto de teste e os nove cenários de `supabase/tests/document-processing/document-processing-capability.test.mjs` passarem.
+Depois de corrigir `profiles`, a mesma validação avançou e revelou uma segunda lacuna idêntica em `public.companies` (`permission denied for table companies`, 42501 — inicialmente mascarada por uma mensagem de erro vazia, artefato de uma consulta `head: true` sem corpo de resposta). Corrigida por `supabase/migrations/20260715020000_bdos_service_role_companies_access.sql`, mesma justificativa e mesmas garantias (não amplia acesso real, não concede nada a `anon`/`authenticated`).
+
+**Estado da validação real:** pendente até as duas migrações serem aplicadas ao projeto de teste e os nove cenários de `supabase/tests/document-processing/document-processing-capability.test.mjs` passarem.
 
 ## Próximo incremento
 
