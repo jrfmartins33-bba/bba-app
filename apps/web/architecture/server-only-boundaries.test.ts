@@ -31,7 +31,7 @@ const WEB_ROOT = resolve(__dirname, "..");
 const REPO_ROOT = resolve(WEB_ROOT, "..", "..");
 const MOBILE_ROOT = resolve(REPO_ROOT, "apps", "mobile");
 
-const SERVER_ONLY_MODULE_MARKER = "procurement-engineering-server-repository";
+const SERVER_ONLY_MODULE_MARKERS = ["procurement-engineering-server-repository", "document-processing-server-repository"] as const;
 const IGNORED_DIRS = new Set(["node_modules", ".git", ".next", ".turbo", "dist", "build", "coverage"]);
 
 interface ImportRef {
@@ -51,7 +51,7 @@ runTest("guard scans a non-trivial number of source files", () => {
   assertEqual(total > 0, true, `expected to scan at least 1 file, scanned ${total}`);
 });
 
-runTest("no client-marked file (\"use client\") imports the server-only procurement-engineering adapter", () => {
+runTest("no client-marked file (\"use client\") imports a server-only BDOS adapter", () => {
   const violations: Violation[] = [];
 
   listSourceFiles(WEB_ROOT).forEach((file) => {
@@ -71,10 +71,10 @@ runTest("no client-marked file (\"use client\") imports the server-only procurem
     });
   });
 
-  assertNoViolations(violations, 'client-marked file importing the server-only adapter');
+  assertNoViolations(violations, "client-marked file importing a server-only adapter");
 });
 
-runTest("apps/mobile never imports the server-only procurement-engineering adapter", () => {
+runTest("apps/mobile never imports a server-only BDOS adapter", () => {
   const violations: Violation[] = [];
 
   listSourceFiles(MOBILE_ROOT).forEach((file) => {
@@ -90,11 +90,11 @@ runTest("apps/mobile never imports the server-only procurement-engineering adapt
     });
   });
 
-  assertNoViolations(violations, "apps/mobile importing the server-only adapter");
+  assertNoViolations(violations, "apps/mobile importing a server-only adapter");
 });
 
 function referencesServerOnlyModule(fromFile: string, specifier: string): boolean {
-  if (specifier.includes(SERVER_ONLY_MODULE_MARKER)) {
+  if (SERVER_ONLY_MODULE_MARKERS.some((marker) => specifier.includes(marker))) {
     return true;
   }
 
@@ -103,7 +103,7 @@ function referencesServerOnlyModule(fromFile: string, specifier: string): boolea
   }
 
   const resolved = resolve(dirname(fromFile), specifier);
-  return resolved.includes(SERVER_ONLY_MODULE_MARKER);
+  return SERVER_ONLY_MODULE_MARKERS.some((marker) => resolved.includes(marker));
 }
 
 function hasUseClientDirective(filePath: string): boolean {
@@ -140,7 +140,7 @@ function listSourceFiles(dir: string): ReadonlyArray<string> {
       (entry.endsWith(".ts") || entry.endsWith(".tsx")) &&
       !entry.endsWith(".test.ts") &&
       !entry.endsWith(".test.tsx") &&
-      entry !== "procurement-engineering-server-repository.ts"
+      !SERVER_ONLY_MODULE_MARKERS.some((marker) => entry === `${marker}.ts`)
     ) {
       files.push(fullPath);
     }

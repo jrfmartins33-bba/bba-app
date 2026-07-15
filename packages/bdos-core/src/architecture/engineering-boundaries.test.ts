@@ -52,6 +52,8 @@ const OPERATIONAL_DOMAINS = [
   // importa "budget-version".
   "procurement-case",
   "budget-version",
+  // Epic 21, Sprint 21.4A.1 - minimal document capability.
+  "document-processing",
 ] as const;
 
 // Rule A — exact repo-relative directories an operational domain may never
