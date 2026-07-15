@@ -1,10 +1,22 @@
 name: Claude Code Review
 
-# Sprint-merge gate: runs Claude over each PR's diff and fails the job on
-# CONFIRMED correctness bugs (not style/nits — those stay in local
-# /code-review or /simplify runs). Requires an ANTHROPIC_API_KEY repository
-# secret (Settings -> Secrets and variables -> Actions) — the job is
-# skipped-with-warning if it's missing rather than failing CI outright.
+# Sprint-merge gate: runs Claude over each PR's diff and fails the job only
+# on a successfully completed review with CONFIRMED correctness bugs (not
+# style/nits — those stay in local /code-review or /simplify runs).
+# Requires an ANTHROPIC_API_KEY repository secret (Settings -> Secrets and
+# variables -> Actions). Three distinct non-blocking outcomes are treated as
+# warnings, never as a failing PR check:
+#   1. the secret isn't configured;
+#   2. the review step itself fails for an infrastructure/provider reason
+#      (auth, billing, rate limit, timeout, action bug, ...) rather than
+#      completing a review — see steps.claude_review.outcome below;
+#   3. the review completed but produced no (or a malformed) result file.
+# Only a review that completed successfully (steps.claude_review.outcome ==
+# 'success') and reported blocking_findings > 0 fails the job.
+#
+# id-token: write is required for the Claude GitHub App's OIDC handshake —
+# removing it reproduces an early failure mode of this workflow
+# ("Could not fetch an OIDC token").
 
 on:
   pull_request:
@@ -23,6 +35,10 @@ permissions:
 jobs:
   code-review:
     runs-on: ubuntu-latest
+    # Generous headroom above the one observed genuine review (18 of 25
+    # available turns, ~5 minutes wall time including setup) — bounds a
+    # hung run without risking cutting off a real, larger review.
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,18 +46,15 @@ jobs:
           fetch-depth: 0
 
       - name: Run Claude code review
+        id: claude_review
         if: ${{ env.ANTHROPIC_API_KEY != '' }}
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # TEMPORARY DIAGNOSTIC (CI maintenance branch only) — do not merge
-          # to main with this enabled. Surfaces the real provider error
-          # behind the recurring is_error:true/$0-cost failure; remove once
-          # the root cause is captured.
-          show_full_output: true
           prompt: |
             Review this pull request's diff against its base branch:
             `git diff origin/${{ github.event.pull_request.base.ref }}...HEAD`
@@ -59,7 +72,6 @@ jobs:
           claude_args: |
             --max-turns 25
             --allowedTools "Bash,Read,Grep,Glob,Write"
-            --debug
 
       - name: Warn if ANTHROPIC_API_KEY is missing
         if: ${{ env.ANTHROPIC_API_KEY == '' }}
@@ -68,16 +80,39 @@ jobs:
         run: echo "::warning::ANTHROPIC_API_KEY secret not set — skipping automated code review. Add it under Settings > Secrets and variables > Actions to enable this gate."
 
       - name: Enforce gate
-        if: ${{ env.ANTHROPIC_API_KEY != '' }}
+        if: always() && env.ANTHROPIC_API_KEY != ''
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_OUTCOME: ${{ steps.claude_review.outcome }}
         run: |
+          # Distinguish "the reviewer itself broke" (infra/provider failure —
+          # auth, billing, rate limit, action bug) from "the reviewer ran and
+          # found something". Only the latter can block the PR.
+          if [ "$CLAUDE_OUTCOME" != "success" ]; then
+            {
+              echo "### Claude Code Review"
+              echo "⚠️ The review did not complete (infrastructure/provider failure, not a code finding). This PR is not blocked by this gate — please review it manually. See the \"Run Claude code review\" step log for details."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Claude Code Review did not complete (infrastructure/provider issue, outcome=$CLAUDE_OUTCOME) — not treated as a blocking finding. Review this PR manually."
+            exit 0
+          fi
+
           if [ ! -f code-review-result.json ]; then
             echo "::warning::code-review-result.json was not produced — skipping gate, review this PR manually."
             exit 0
           fi
-          BLOCKING=$(node -e "console.log(JSON.parse(require('fs').readFileSync('code-review-result.json','utf8')).blocking_findings)")
-          SUMMARY=$(node -e "console.log(JSON.parse(require('fs').readFileSync('code-review-result.json','utf8')).summary)")
+
+          if ! jq -e '
+            (keys_unsorted | sort) == ["blocking_findings","summary"]
+            and (.blocking_findings | type == "number" and floor == . and . >= 0)
+            and (.summary | type == "string" and length > 0)
+          ' code-review-result.json > /dev/null 2>&1; then
+            echo "::warning::code-review-result.json has an unexpected shape — skipping gate, review this PR manually."
+            exit 0
+          fi
+
+          BLOCKING=$(jq -r '.blocking_findings' code-review-result.json)
+          SUMMARY=$(jq -r '.summary' code-review-result.json)
           {
             echo "### Claude Code Review"
             echo "$SUMMARY"
