@@ -18,585 +18,585 @@ Também existe a Reconstrução Documental, que pode organizar estrutura lógica
 
 Portanto, antes da Sprint 21.4A, era necessário decidir quem é responsável por preservar o documento, processar sua versão concreta, produzir evidência estruturada neutra e entregar essa evidência para a Engenharia de Custos e Licitações.
 
-## 2. Decisao
+## 2. Decisão
 
-A alternativa selecionada e a responsabilidade dividida por fronteira explicita.
+A alternativa selecionada é a responsabilidade dividida por fronteira explícita.
 
-A capacidade de aplicacao e infraestrutura documental sera responsavel por preservar Documento e Versao do Documento, executar Tentativas de Processamento Documental e produzir evidencia estruturada neutra.
+A capacidade de aplicação e infraestrutura documental será responsável por preservar Documento e Versão do Documento, executar Tentativas de Processamento Documental e produzir evidência estruturada neutra.
 
-A Reconstrucao Documental podera ser reutilizada para reconstrucao logica a partir da evidencia tecnica disponivel, quando aplicavel.
+A Reconstrução Documental poderá ser reutilizada para reconstrução lógica a partir da evidência técnica disponível, quando aplicável.
 
-A Engenharia de Custos e Licitacoes sera responsavel por interpretar economicamente a evidencia, aplicar regras deterministicas, distinguir dados confirmados, premissas propostas e lacunas economicas, e criar a Versao do Orcamento em rascunho somente apos comando humano explicito.
+A Engenharia de Custos e Licitações será responsável por interpretar economicamente a evidência, aplicar regras determinísticas, distinguir dados confirmados, premissas propostas e lacunas econômicas, e criar a Versão do Orçamento em rascunho somente após comando humano explícito.
 
-Os Servicos de Aplicacao coordenarao o acesso a Versao do Documento, a solicitacao do processamento, a obtencao da evidencia, a aplicacao das regras economicas, a criacao da Proposta de Importacao do Orcamento, a revisao humana, a materializacao e a preservacao da rastreabilidade.
+Os Serviços de Aplicação coordenarão o acesso à Versão do Documento, a solicitação do processamento, a obtenção da evidência, a aplicação das regras econômicas, a criação da Proposta de Importação do Orçamento, a revisão humana, a materialização e a preservação da rastreabilidade.
 
-A inteligencia artificial podera sugerir, explicar e apoiar a revisao, mas nao podera confirmar sozinha fato economico, correspondencia economica, materializacao ou consolidacao.
+A inteligência artificial poderá sugerir, explicar e apoiar a revisão, mas não poderá confirmar sozinha fato econômico, correspondência econômica, materialização ou consolidação.
 
 ## 3. Conceitos
 
 ### Documento
 
-Documento e o registro logico de um documento ao longo do tempo.
+Documento é o registro lógico de um documento ao longo do tempo.
 
-O nome interno previsto pelos ADRs anteriores e `DocumentArtifact`, mas o conceito principal neste ADR e Documento.
+O nome interno previsto pelos ADRs anteriores é `DocumentArtifact`, mas o conceito principal neste ADR é Documento.
 
-O Documento nao e uma Versao do Orcamento e nao representa, por si so, uma verdade economica.
+O Documento não é uma Versão do Orçamento e não representa, por si só, uma verdade econômica.
 
-### Versao do Documento
+### Versão do Documento
 
-Versao do Documento e uma versao concreta e imutavel de um arquivo.
+Versão do Documento é uma versão concreta e imutável de um arquivo.
 
 Ela preserva conceitualmente:
 
 - identidade;
-- organizacao usuaria;
+- organização usuária;
 - arquivo correspondente;
-- resumo criptografico;
+- resumo criptográfico;
 - nome;
 - tipo MIME;
 - tamanho;
-- referencia segura de armazenamento;
+- referência segura de armazenamento;
 - data;
 - autor do envio.
 
-Uma mudanca nos bytes ou no conteudo do arquivo produz nova Versao do Documento.
+Uma mudança nos bytes ou no conteúdo do arquivo produz nova Versão do Documento.
 
-A Versao do Documento nao deve receber estados operacionais de processamento. Ela e a evidencia preservada.
+A Versão do Documento não deve receber estados operacionais de processamento. Ela é a evidência preservada.
 
-O nome interno previsto pelos ADRs anteriores e `DocumentVersion`, mas o conceito principal neste ADR e Versao do Documento.
+O nome interno previsto pelos ADRs anteriores é `DocumentVersion`, mas o conceito principal neste ADR é Versão do Documento.
 
 ### Tentativa de Processamento Documental
 
-Tentativa de Processamento Documental e uma execucao especifica realizada sobre determinada Versao do Documento.
+Tentativa de Processamento Documental é uma execução específica realizada sobre determinada Versão do Documento.
 
 Ela pode possuir estados conceituais como:
 
 - solicitada;
 - processando;
-- concluida;
-- concluida parcialmente;
+- concluída;
+- concluída parcialmente;
 - falhou;
 - abandonada.
 
-O reprocessamento da mesma Versao do Documento cria nova tentativa, nao nova Versao do Documento.
+O reprocessamento da mesma Versão do Documento cria nova tentativa, não nova Versão do Documento.
 
 Cada tentativa deve preservar:
 
-- Versao do Documento processada;
-- mecanismo e versao do extrator;
-- inicio;
-- termino;
+- Versão do Documento processada;
+- mecanismo e versão do extrator;
+- início;
+- término;
 - resultado;
 - falhas;
-- lacunas tecnicas;
-- referencias a evidencia produzida.
+- lacunas técnicas;
+- referências à evidência produzida.
 
-Este ADR nao fecha a representacao fisica da tentativa.
+Este ADR não fecha a representação física da tentativa.
 
-### Evidencia Estruturada Neutra
+### Evidência Estruturada Neutra
 
-Evidencia Estruturada Neutra e o resultado tecnico produzido a partir de uma Tentativa de Processamento Documental.
+Evidência Estruturada Neutra é o resultado técnico produzido a partir de uma Tentativa de Processamento Documental.
 
 Ela pode conter:
 
-- paginas;
+- páginas;
 - abas;
 - tabelas;
 - linhas;
 - colunas;
-- celulas;
+- células;
 - coordenadas;
-- posicoes;
-- formulas;
+- posições;
+- fórmulas;
 - valores brutos;
 - valores exibidos;
 - texto reconhecido;
-- confianca tecnica;
-- lacunas tecnicas.
+- confiança técnica;
+- lacunas técnicas.
 
-A evidencia estruturada neutra nao classifica economicamente uma linha como Grupo, Subgrupo ou Item de Servico.
+A evidência estruturada neutra não classifica economicamente uma linha como Grupo, Subgrupo ou Item de Serviço.
 
-### Caracterizacao Economica
+### Caracterização Econômica
 
-Caracterizacao Economica e a atividade ou resultado intermediario pelo qual a Engenharia de Custos e Licitacoes interpreta a evidencia estruturada neutra.
+Caracterização Econômica é a atividade ou resultado intermediário pelo qual a Engenharia de Custos e Licitações interpreta a evidência estruturada neutra.
 
 Ela pode identificar candidatos a:
 
 - Grupo;
 - Subgrupo;
-- Item de Servico;
+- Item de Serviço;
 - subtotal;
 - total;
 - nota;
-- cabecalho;
+- cabeçalho;
 - separador;
-- residuo;
-- elemento ambiguo.
+- resíduo;
+- elemento ambíguo.
 
-Caracterizacao Economica nao e sinonimo de Proposta de Importacao do Orcamento.
+Caracterização Econômica não é sinônimo de Proposta de Importação do Orçamento.
 
-### Estados da informacao e confirmacao
+### Estados da informação e confirmação
 
-Dado confirmado somente pode designar um valor ou significado diretamente sustentado pela fonte documental ou por regra deterministica formalmente aprovada para aquele contexto. Confianca tecnica da extracao, reconhecimento optico de texto ou leitura da celula nao confirma, por si so, o significado economico do dado.
+Dado confirmado somente pode designar um valor ou significado diretamente sustentado pela fonte documental ou por regra determinística formalmente aprovada para aquele contexto. Confiança técnica da extração, reconhecimento óptico de texto ou leitura da célula não confirma, por si só, o significado econômico do dado.
 
-Presenca tecnica na fonte nao equivale automaticamente a confirmacao economica.
+Presença técnica na fonte não equivale automaticamente a confirmação econômica.
 
-Uma classificacao economica pode permanecer proposta mesmo quando o texto ou valor foi extraido exatamente.
+Uma classificação econômica pode permanecer proposta mesmo quando o texto ou valor foi extraído exatamente.
 
-Premissa proposta continua premissa ate reclassificacao explicita.
+Premissa proposta continua premissa até reclassificação explícita.
 
-Lacuna documental nao pode ser convertida em dado confirmado pela inteligencia artificial.
+Lacuna documental não pode ser convertida em dado confirmado pela inteligência artificial.
 
-Validacao humana deve preservar a fonte, a decisao, o ator e a data.
+Validação humana deve preservar a fonte, a decisão, o ator e a data.
 
-Validacao humana nao pode apagar proveniencia.
+Validação humana não pode apagar proveniência.
 
-Quando aplicavel, a Proposta de Importacao do Orcamento deve preservar separadamente:
+Quando aplicável, a Proposta de Importação do Orçamento deve preservar separadamente:
 
-- estado da evidencia documental;
-- estado da interpretacao economica;
-- decisao da revisao humana.
+- estado da evidência documental;
+- estado da interpretação econômica;
+- decisão da revisão humana.
 
-Este ADR nao cria enumeracoes tecnicas nem representacao fisica para esses estados.
+Este ADR não cria enumerações técnicas nem representação física para esses estados.
 
-### Proposta de Importacao do Orcamento
+### Proposta de Importação do Orçamento
 
-Proposta de Importacao do Orcamento e o registro revisavel que reune os resultados da ingestao documental e da caracterizacao economica.
+Proposta de Importação do Orçamento é o registro revisável que reúne os resultados da ingestão documental e da caracterização econômica.
 
-Ela nao e uma Versao do Orcamento.
+Ela não é uma Versão do Orçamento.
 
-Ela nao e fonte definitiva da verdade economica.
+Ela não é fonte definitiva da verdade econômica.
 
-Ela nao e um segundo nucleo de orcamento.
+Ela não é um segundo núcleo de orçamento.
 
-Ela nao e consolidavel.
+Ela não é consolidável.
 
-Ela nao substitui as invariantes da Versao do Orcamento.
+Ela não substitui as invariantes da Versão do Orçamento.
 
-Ela nao deve duplicar o motor definitivo de totalizacao.
+Ela não deve duplicar o motor definitivo de totalização.
 
-Ela nao deve duplicar todas as operacoes do dominio economico.
+Ela não deve duplicar todas as operações do domínio econômico.
 
 Ela deve preservar:
 
-- Versao do Documento de origem;
+- Versão do Documento de origem;
 - Tentativa de Processamento utilizada;
-- candidatos extraidos;
-- classificacoes propostas;
+- candidatos extraídos;
+- classificações propostas;
 - hierarquia proposta;
-- referencias documentais;
+- referências documentais;
 - dados confirmados;
 - premissas propostas;
 - lacunas documentais;
-- lacunas economicas;
-- divergencias;
-- decisoes humanas;
-- estado da revisao;
-- resultado da materializacao, quando ocorrer.
+- lacunas econômicas;
+- divergências;
+- decisões humanas;
+- estado da revisão;
+- resultado da materialização, quando ocorrer.
 
-Estados conceituais minimos podem incluir:
+Estados conceituais mínimos podem incluir:
 
 - criada;
-- precisa de revisao;
-- pronta para materializacao;
+- precisa de revisão;
+- pronta para materialização;
 - rejeitada;
 - abandonada;
 - materializada.
 
-Este ADR nao fecha nomes tecnicos, tabelas ou formato fisico da Proposta de Importacao do Orcamento.
+Este ADR não fecha nomes técnicos, tabelas ou formato físico da Proposta de Importação do Orçamento.
 
 ## 4. Responsabilidades
 
-### Capacidade de Aplicacao e Infraestrutura Documental
+### Capacidade de Aplicação e Infraestrutura Documental
 
-E responsavel por:
+É responsável por:
 
-- receber a referencia do arquivo;
+- receber a referência do arquivo;
 - preservar Documento;
-- preservar Versao do Documento;
+- preservar Versão do Documento;
 - realizar armazenamento seguro;
-- registrar resumo criptografico;
+- registrar resumo criptográfico;
 - registrar tipo MIME;
 - registrar tamanho;
-- realizar leitura fisica de XLSX e PDF;
-- realizar reconhecimento optico de texto, quando aplicavel;
-- identificar de forma neutra paginas, abas, tabelas, linhas, colunas e celulas;
-- preservar formulas, valores brutos e valores exibidos;
-- preservar coordenadas e posicoes;
-- registrar lacunas tecnicas;
+- realizar leitura física de XLSX e PDF;
+- realizar reconhecimento óptico de texto, quando aplicável;
+- identificar de forma neutra páginas, abas, tabelas, linhas, colunas e células;
+- preservar fórmulas, valores brutos e valores exibidos;
+- preservar coordenadas e posições;
+- registrar lacunas técnicas;
 - registrar Tentativas de Processamento Documental;
-- produzir evidencia estruturada neutra.
+- produzir evidência estruturada neutra.
 
-Nao classifica economicamente a evidencia.
+Não classifica economicamente a evidência.
 
-Nao decide Grupo, Subgrupo ou Item de Servico.
+Não decide Grupo, Subgrupo ou Item de Serviço.
 
-Nao decide suficiencia economica.
+Não decide suficiência econômica.
 
-Nao cria Versao do Orcamento.
+Não cria Versão do Orçamento.
 
-Nao consolida orcamento.
+Não consolida orçamento.
 
-### Reconstrucao Documental
+### Reconstrução Documental
 
-A Reconstrucao Documental pode ser reutilizada para reconstruir estrutura logica a partir da evidencia tecnica disponivel, quando aplicavel.
+A Reconstrução Documental pode ser reutilizada para reconstruir estrutura lógica a partir da evidência técnica disponível, quando aplicável.
 
-Ela nao le armazenamento diretamente dentro do dominio puro.
+Ela não lê armazenamento diretamente dentro do domínio puro.
 
-Ela nao e responsavel, atualmente, por envio de arquivo, armazenamento ou leitura fisica de arquivos.
+Ela não é responsável, atualmente, por envio de arquivo, armazenamento ou leitura física de arquivos.
 
-Ela nao deve receber responsabilidade economica.
+Ela não deve receber responsabilidade econômica.
 
-Ela nao deve ser declarada dona universal da ingestao documental.
+Ela não deve ser declarada dona universal da ingestão documental.
 
-Ela nao decide Grupo, Subgrupo, Item de Servico, preco, quantidade, BDI, composicao ou consolidacao.
+Ela não decide Grupo, Subgrupo, Item de Serviço, preço, quantidade, BDI, composição ou consolidação.
 
-### Engenharia de Custos e Licitacoes
+### Engenharia de Custos e Licitações
 
-E responsavel por:
+É responsável por:
 
-- regras deterministicas de caracterizacao economica;
-- candidatos a Grupo, Subgrupo e Item de Servico;
-- identificacao de subtotal, total, nota, cabecalho, separador e residuo;
-- hierarquia economica proposta;
-- valores economicos candidatos;
+- regras determinísticas de caracterização econômica;
+- candidatos a Grupo, Subgrupo e Item de Serviço;
+- identificação de subtotal, total, nota, cabeçalho, separador e resíduo;
+- hierarquia econômica proposta;
+- valores econômicos candidatos;
 - dados confirmados;
 - premissas propostas;
-- lacunas economicas;
-- divergencias;
-- suficiencia para materializacao;
-- criacao da Versao do Orcamento em rascunho;
-- edicao economica posterior;
-- consolidacao explicita.
+- lacunas econômicas;
+- divergências;
+- suficiência para materialização;
+- criação da Versão do Orçamento em rascunho;
+- edição econômica posterior;
+- consolidação explícita.
 
-A Engenharia de Custos e Licitacoes nao deve colocar detalhes de planilha ou PDF diretamente dentro da Versao do Orcamento.
+A Engenharia de Custos e Licitações não deve colocar detalhes de planilha ou PDF diretamente dentro da Versão do Orçamento.
 
-### Servicos de Aplicacao
+### Serviços de Aplicação
 
-Sao responsaveis por coordenar:
+São responsáveis por coordenar:
 
-- acesso a Versao do Documento;
-- solicitacao do processamento;
-- obtencao da evidencia estruturada;
-- aplicacao das regras economicas;
-- criacao da Proposta de Importacao do Orcamento;
-- revisao humana;
-- materializacao da proposta;
-- preservacao da rastreabilidade.
+- acesso à Versão do Documento;
+- solicitação do processamento;
+- obtenção da evidência estruturada;
+- aplicação das regras econômicas;
+- criação da Proposta de Importação do Orçamento;
+- revisão humana;
+- materialização da proposta;
+- preservação da rastreabilidade.
 
-Os Servicos de Aplicacao nao substituem as invariantes do dominio economico.
+Os Serviços de Aplicação não substituem as invariantes do domínio econômico.
 
-### Usuario Autorizado
+### Usuário Autorizado
 
-E responsavel por:
+É responsável por:
 
 - revisar;
 - corrigir;
 - incluir;
 - excluir;
 - resolver lacunas;
-- aceitar classificacoes propostas;
-- rejeitar classificacoes propostas;
-- comandar a materializacao;
-- comandar a consolidacao.
+- aceitar classificações propostas;
+- rejeitar classificações propostas;
+- comandar a materialização;
+- comandar a consolidação.
 
-### Inteligencia Artificial
+### Inteligência Artificial
 
-A inteligencia artificial apenas sugere, explica e apoia a revisao.
+A inteligência artificial apenas sugere, explica e apoia a revisão.
 
 Ela pode:
 
 - sugerir candidatos;
 - ordenar candidatos;
-- explicar diferencas;
+- explicar diferenças;
 - resumir lacunas;
-- apontar divergencias;
-- apoiar a revisao humana.
+- apontar divergências;
+- apoiar a revisão humana.
 
-Ela nao pode:
+Ela não pode:
 
-- inventar codigo, descricao, unidade, quantidade, preco ou total;
-- confirmar fato economico;
-- confirmar correspondencia economica sozinha;
+- inventar código, descrição, unidade, quantidade, preço ou total;
+- confirmar fato econômico;
+- confirmar correspondência econômica sozinha;
 - materializar proposta;
-- consolidar orcamento;
-- transformar evidencia insuficiente em dado confirmado.
+- consolidar orçamento;
+- transformar evidência insuficiente em dado confirmado.
 
 ## 5. Fluxo Conceitual
 
 ```text
 Documento
-  -> Versao do Documento
-    -> nova Versao do Documento quando o arquivo mudar
+  -> Versão do Documento
+    -> nova Versão do Documento quando o arquivo mudar
     -> Tentativa de Processamento Documental 1
-      -> falha tecnica
+      -> falha técnica
       -> processamento parcial
-      -> evidencia estruturada neutra
-        -> ausencia de tabela
-        -> multiplas tabelas
-        -> multiplos orcamentos candidatos
-        -> caracterizacao economica
-          -> Proposta de Importacao do Orcamento
-            -> revisao humana
-              -> rejeicao
+      -> evidência estruturada neutra
+        -> ausência de tabela
+        -> múltiplas tabelas
+        -> múltiplos orçamentos candidatos
+        -> caracterização econômica
+          -> Proposta de Importação do Orçamento
+            -> revisão humana
+              -> rejeição
               -> abandono
-              -> pronta para materializacao
-                -> comando humano explicito
-                  -> Versao do Orcamento em rascunho
-                    -> edicao economica
-                    -> consolidacao explicita
+              -> pronta para materialização
+                -> comando humano explícito
+                  -> Versão do Orçamento em rascunho
+                    -> edição econômica
+                    -> consolidação explícita
     -> Tentativa de Processamento Documental 2
-      -> reprocessamento da mesma Versao do Documento
-      -> nova evidencia estruturada neutra
+      -> reprocessamento da mesma Versão do Documento
+      -> nova evidência estruturada neutra
 ```
 
-Nenhuma etapa promove automaticamente evidencia documental a Versao do Orcamento.
+Nenhuma etapa promove automaticamente evidência documental a Versão do Orçamento.
 
-Nenhuma etapa consolida automaticamente orcamento.
+Nenhuma etapa consolida automaticamente orçamento.
 
-Nenhuma decisao da inteligencia artificial materializa ou consolida orcamento.
+Nenhuma decisão da inteligência artificial materializa ou consolida orçamento.
 
-## 6. Materializacao
+## 6. Materialização
 
-A materializacao deve seguir o fluxo:
+A materialização deve seguir o fluxo:
 
-1. A Proposta de Importacao do Orcamento e criada.
-2. O usuario revisa e resolve as pendencias necessarias.
-3. O usuario executa comando explicito para materializar.
-4. O Servico de Aplicacao transforma a proposta revisada em entradas para o dominio.
-5. O dominio cria a Versao do Orcamento em rascunho.
-6. A Proposta de Importacao do Orcamento preserva a identidade da versao materializada.
-7. A proposta utilizada na materializacao fica preservada como fotografia auditavel.
-8. Alteracoes economicas posteriores utilizam os Servicos de Aplicacao e o dominio de Versao do Orcamento.
-9. A consolidacao permanece uma acao humana posterior e independente.
+1. A Proposta de Importação do Orçamento é criada.
+2. O usuário revisa e resolve as pendências necessárias.
+3. O usuário executa comando explícito para materializar.
+4. O Serviço de Aplicação transforma a proposta revisada em entradas para o domínio.
+5. O domínio cria a Versão do Orçamento em rascunho.
+6. A Proposta de Importação do Orçamento preserva a identidade da versão materializada.
+7. A proposta utilizada na materialização fica preservada como fotografia auditável.
+8. Alterações econômicas posteriores utilizam os Serviços de Aplicação e o domínio de Versão do Orçamento.
+9. A consolidação permanece uma ação humana posterior e independente.
 
-Nao e permitido:
+Não é permitido:
 
-- materializacao automatica pelo processamento;
-- materializacao automatica pela inteligencia artificial;
-- consolidacao automatica;
-- alteracao silenciosa da proposta ja materializada;
-- alteracao da Versao do Orcamento por meio da proposta depois da materializacao.
+- materialização automática pelo processamento;
+- materialização automática pela inteligência artificial;
+- consolidação automática;
+- alteração silenciosa da proposta já materializada;
+- alteração da Versão do Orçamento por meio da proposta depois da materialização.
 
-Caso seja necessario corrigir a importacao apos a materializacao, a correcao deve ocorrer na Versao do Orcamento em rascunho ou em nova proposta/reprocessamento explicitamente registrado, sem sobrescrever o historico.
+Caso seja necessário corrigir a importação após a materialização, a correção deve ocorrer na Versão do Orçamento em rascunho ou em nova proposta/reprocessamento com registro explícito, sem sobrescrever o histórico.
 
-## 7. Proveniencia
+## 7. Proveniência
 
-A evidencia minima podera ser associada:
+A evidência mínima poderá ser associada:
 
-- a proposta inteira;
+- à proposta inteira;
 - a um candidato de linha;
-- a um campo especifico do candidato.
+- a um campo específico do candidato.
 
-Campos que podem exigir proveniencia independente:
+Campos que podem exigir proveniência independente:
 
-- codigo externo;
-- descricao;
+- código externo;
+- descrição;
 - unidade;
 - quantidade;
-- preco unitario;
+- preço unitário;
 - valor total;
-- classificacao;
+- classificação;
 - pai ou hierarquia;
-- posicao;
-- Escopo da Licitacao.
+- posição;
+- Escopo da Licitação.
 
-Uma linha podera combinar evidencias de multiplas celulas.
+Uma linha poderá combinar evidências de múltiplas células.
 
-A referencia devera poder preservar, quando disponivel:
+A referência deverá poder preservar, quando disponível:
 
 - Documento;
-- Versao do Documento;
+- Versão do Documento;
 - Tentativa de Processamento Documental;
-- pagina;
+- página;
 - aba;
 - tabela;
 - linha;
 - coluna;
-- celula;
+- célula;
 - coordenada;
 - valor bruto;
 - valor exibido;
-- formula;
-- regra de extracao;
-- regra de caracterizacao economica;
-- decisao humana.
+- fórmula;
+- regra de extração;
+- regra de caracterização econômica;
+- decisão humana.
 
-Essas referencias pertencem a Proposta de Importacao do Orcamento e as Relacoes de Rastreabilidade.
+Essas referências pertencem à Proposta de Importação do Orçamento e às Relações de Rastreabilidade.
 
-Detalhes de planilha ou PDF nao devem ser colocados diretamente dentro do dominio de Versao do Orcamento.
+Detalhes de planilha ou PDF não devem ser colocados diretamente dentro do domínio de Versão do Orçamento.
 
-## 8. Relacao de Rastreabilidade e Avaliacao de Correspondencia
+## 8. Relação de Rastreabilidade e Avaliação de Correspondência
 
-### Relacao de Rastreabilidade
+### Relação de Rastreabilidade
 
-Relacao de Rastreabilidade e o vinculo conhecido de origem, derivacao, incorporacao ou continuidade.
+Relação de Rastreabilidade é o vínculo conhecido de origem, derivação, incorporação ou continuidade.
 
 Exemplos:
 
-- candidato extraido de determinada celula;
-- Linha do Orcamento materializada a partir de determinado candidato;
-- Versao do Orcamento criada a partir de determinada proposta.
+- candidato extraído de determinada célula;
+- Linha do Orçamento materializada a partir de determinado candidato;
+- Versão do Orçamento criada a partir de determinada proposta.
 
-A Relacao de Rastreabilidade preserva origem e derivacao. Ela nao resolve, por si so, identidade entre registros independentes.
+A Relação de Rastreabilidade preserva origem e derivação. Ela não resolve, por si só, identidade entre registros independentes.
 
-### Avaliacao de Correspondencia
+### Avaliação de Correspondência
 
-Avaliacao de Correspondencia e o julgamento sobre possivel identidade entre registros criados independentemente.
+Avaliação de Correspondência é o julgamento sobre possível identidade entre registros criados independentemente.
 
-Este ADR nao define regra universal de correspondencia automatica.
+Este ADR não define regra universal de correspondência automática.
 
-A Avaliacao de Correspondencia somente pode ser confirmada automaticamente quando existir uma regra deterministica formalmente aprovada para aquele contexto.
+A Avaliação de Correspondência somente pode ser confirmada automaticamente quando existir uma regra determinística formalmente aprovada para aquele contexto.
 
-Na ausencia dessa regra, diante de multiplos candidatos, divergencias ou evidencia insuficiente, o resultado permanece proposto e depende de validacao humana.
+Na ausência dessa regra, diante de múltiplos candidatos, divergências ou evidência insuficiente, o resultado permanece proposto e depende de validação humana.
 
-A inteligencia artificial pode sugerir candidatos, ordenar candidatos e explicar diferencas.
+A inteligência artificial pode sugerir candidatos, ordenar candidatos e explicar diferenças.
 
-A inteligencia artificial nao confirma sozinha correspondencia economica.
+A inteligência artificial não confirma sozinha correspondência econômica.
 
-## 9. Seguranca e Organizacao Usuaria
+## 9. Segurança e Organização Usuária
 
-Toda ingestao documental deve respeitar a organizacao usuaria.
+Toda ingestão documental deve respeitar a organização usuária.
 
-A organizacao usuaria deve ser resolvida no servidor quando houver operacao sensivel.
+A organização usuária deve ser resolvida no servidor quando houver operação sensível.
 
-O navegador nao deve ser autoridade final para informar a organizacao usuaria.
+O navegador não deve ser autoridade final para informar a organização usuária.
 
-Referencias documentais nao podem atravessar organizacoes usuarias.
+Referências documentais não podem atravessar organizações usuárias.
 
-Uma Versao do Documento so pode sustentar Proposta de Importacao do Orcamento e Versao do Orcamento compativeis com a mesma organizacao usuaria e com o Escopo da Licitacao aplicavel.
+Uma Versão do Documento só pode sustentar Proposta de Importação do Orçamento e Versão do Orçamento compatíveis com a mesma organização usuária e com o Escopo da Licitação aplicável.
 
-Escritas sensiveis devem permanecer protegidas por servicos no servidor.
+Escritas sensíveis devem permanecer protegidas por serviços no servidor.
 
 ## 10. Impacto na Sprint 21.4A
 
-A Sprint 21.4A deve ser Ingestao documental e Proposta de Importacao do Orcamento.
+A Sprint 21.4A deve ser Ingestão documental e Proposta de Importação do Orçamento.
 
-Ela deve entregar, no maximo:
+Ela deve entregar, no máximo:
 
-- registro de Documento e Versao do Documento, no nivel necessario;
+- registro de Documento e Versão do Documento, no nível necessário;
 - Tentativa de Processamento Documental;
-- leitura tecnica do primeiro formato aprovado;
-- evidencia estruturada neutra;
-- caracterizacao economica deterministica inicial;
-- Proposta de Importacao do Orcamento persistida;
-- dados confirmados, premissas propostas e lacunas distinguiveis;
-- proveniencia;
+- leitura técnica do primeiro formato aprovado;
+- evidência estruturada neutra;
+- caracterização econômica determinística inicial;
+- Proposta de Importação do Orçamento persistida;
+- dados confirmados, premissas propostas e lacunas distinguíveis;
+- proveniência;
 - falhas e processamento parcial;
-- nenhuma Versao do Orcamento criada automaticamente;
-- nenhuma consolidacao.
+- nenhuma Versão do Orçamento criada automaticamente;
+- nenhuma consolidação.
 
-Este ADR nao promete suporte completo simultaneo a XLSX, PDF textual e PDF digitalizado.
+Este ADR não promete suporte completo simultâneo a XLSX, PDF textual e PDF digitalizado.
 
-A Sprint devera escolher a primeira fatia real conforme o documento oficial disponivel e a capacidade existente.
+A Sprint deverá escolher a primeira fatia real conforme o documento oficial disponível e a capacidade existente.
 
-Decisoes futuras da propria Sprint 21.4A incluem, quando aplicavel:
+Decisões futuras da própria Sprint 21.4A incluem, quando aplicável:
 
 - primeiro formato documental;
-- contrato fisico minimo da evidencia;
-- representacao fisica minima da proposta;
-- politica minima de reprocessamento.
+- contrato físico mínimo da evidência;
+- representação física mínima da proposta;
+- política mínima de reprocessamento.
 
 ## 11. Impacto na Sprint 21.4B
 
-A Sprint 21.4B deve ser revisao visual orientada a decisao e materializacao.
+A Sprint 21.4B deve ser revisão visual orientada à decisão e materialização.
 
 Ela deve entregar:
 
-- espaco visual de revisao;
-- correcao de classificacoes;
-- inclusao de item ausente;
-- alteracao de descricao, codigo, valor e posicao;
-- criacao de Grupo ou Subgrupo quando necessario;
-- exclusao de linha nao economica;
-- resolucao de lacunas;
+- espaço visual de revisão;
+- correção de classificações;
+- inclusão de item ausente;
+- alteração de descrição, código, valor e posição;
+- criação de Grupo ou Subgrupo quando necessário;
+- exclusão de linha não econômica;
+- resolução de lacunas;
 - origem documental sob demanda;
 - confronto entre total declarado e calculado;
-- comando explicito de materializacao;
-- criacao da Versao do Orcamento em rascunho;
-- edicao posterior usando os Servicos de Aplicacao ja existentes;
-- comando separado de consolidacao.
+- comando explícito de materialização;
+- criação da Versão do Orçamento em rascunho;
+- edição posterior usando os Serviços de Aplicação já existentes;
+- comando separado de consolidação.
 
 A interface deve comunicar:
 
 - status;
 - problema;
 - impacto;
-- proxima acao;
+- próxima ação;
 - detalhes sob demanda.
 
-A interface nao deve ter aparencia de ERP.
+A interface não deve ter aparência de ERP.
 
-## 12. Decisoes Fisicas Mantidas Abertas
+## 12. Decisões Físicas Mantidas Abertas
 
-Este ADR nao decide:
+Este ADR não decide:
 
 - nomes finais de tabelas;
-- modulos fisicos;
+- módulos físicos;
 - pastas;
-- fornecedor de reconhecimento optico de texto;
+- fornecedor de reconhecimento óptico de texto;
 - biblioteca de leitura;
-- formato final do contrato de evidencia;
-- banco ou formato da Proposta de Importacao do Orcamento;
-- politica final de reprocessamento;
-- suporte simultaneo a todos os formatos;
+- formato final do contrato de evidência;
+- banco ou formato da Proposta de Importação do Orçamento;
+- política final de reprocessamento;
+- suporte simultâneo a todos os formatos;
 - mecanismo universal de documentos para todo o BDOS.
 
-A decomposicao fisica devera seguir generalizacao tardia.
+A decomposição física deverá seguir generalização tardia.
 
-A primeira implementacao deve resolver a fatia concreta da Sprint sem congelar uma arquitetura universal antes da necessidade real.
+A primeira implementação deve resolver a fatia concreta da Sprint sem congelar uma arquitetura universal antes da necessidade real.
 
 ## 13. Alternativas Rejeitadas
 
-### Reconstrucao Documental como responsavel por tudo
+### Reconstrução Documental como responsável por tudo
 
-Rejeitada porque colocaria interpretacao economica em uma capacidade que deve permanecer documental e logica.
+Rejeitada porque colocaria interpretação econômica em uma capacidade que deve permanecer documental e lógica.
 
-Essa alternativa faria a reconstrucao decidir Grupo, Subgrupo, Item de Servico, suficiencia economica e materializacao, o que viola a separacao definida pelos ADRs anteriores.
+Essa alternativa faria a reconstrução decidir Grupo, Subgrupo, Item de Serviço, suficiência econômica e materialização, o que viola a separação definida pelos ADRs anteriores.
 
-### Engenharia de Custos e Licitacoes como responsavel por tudo
+### Engenharia de Custos e Licitações como responsável por tudo
 
-Rejeitada porque colocaria leitura fisica de arquivos, reconhecimento optico de texto, armazenamento, resumo criptografico e detalhes de planilha/PDF dentro do dominio economico.
+Rejeitada porque colocaria leitura física de arquivos, reconhecimento óptico de texto, armazenamento, resumo criptográfico e detalhes de planilha/PDF dentro do domínio econômico.
 
-Essa alternativa dificultaria reutilizacao, rastreabilidade e evolucao futura.
+Essa alternativa dificultaria reutilização, rastreabilidade e evolução futura.
 
-### Proposta de Importacao como segunda Versao do Orcamento
+### Proposta de Importação como segunda Versão do Orçamento
 
-Rejeitada porque duplicaria o dominio economico, criaria dois lugares para editar orcamento e enfraqueceria as invariantes da Versao do Orcamento.
+Rejeitada porque duplicaria o domínio econômico, criaria dois lugares para editar orçamento e enfraqueceria as invariantes da Versão do Orçamento.
 
-A Proposta de Importacao do Orcamento e revisavel e auditavel, mas nao e consolidavel e nao substitui a Versao do Orcamento.
+A Proposta de Importação do Orçamento é revisável e auditável, mas não é consolidável e não substitui a Versão do Orçamento.
 
-## 14. Consequencias
+## 14. Consequências
 
-A ingestao documental fica separada da interpretacao economica.
+A ingestão documental fica separada da interpretação econômica.
 
-A Versao do Documento permanece imutavel e livre de estados operacionais de processamento.
+A Versão do Documento permanece imutável e livre de estados operacionais de processamento.
 
 O reprocessamento passa a ser registrado como nova tentativa.
 
-A Proposta de Importacao do Orcamento cria uma area segura de revisao antes da Versao do Orcamento.
+A Proposta de Importação do Orçamento cria uma área segura de revisão antes da Versão do Orçamento.
 
-A materializacao passa a ser explicita, auditavel e humana.
+A materialização passa a ser explícita, auditável e humana.
 
-A consolidacao continua explicita e posterior.
+A consolidação continua explícita e posterior.
 
-A inteligencia artificial permanece auxiliar.
+A inteligência artificial permanece auxiliar.
 
-A decomposicao fisica permanece aberta para generalizacao tardia.
+A decomposição física permanece aberta para generalização tardia.
 
-## 15. Criterios de Aceite Arquitetural
+## 15. Critérios de Aceite Arquitetural
 
-Esta decisao sera respeitada quando:
+Esta decisão será respeitada quando:
 
-- Documento, Versao do Documento e Tentativa de Processamento Documental estiverem conceitualmente separados;
-- a Versao do Documento nao carregar estados de processamento;
-- a ingestao produzir evidencia estruturada neutra;
-- a Engenharia de Custos e Licitacoes fizer a interpretacao economica;
-- a Proposta de Importacao do Orcamento for revisavel e nao consolidavel;
-- a Versao do Orcamento nascer somente por materializacao explicita;
-- a proposta materializada ficar preservada como fotografia auditavel;
-- alteracoes posteriores ocorrerem na Versao do Orcamento em rascunho ou em nova proposta/reprocessamento;
-- a rastreabilidade puder chegar ao campo especifico quando houver evidencia;
-- a Avaliacao de Correspondencia nao for automatica sem regra deterministica formalmente aprovada;
-- a inteligencia artificial nao confirmar sozinha fatos economicos;
-- a decomposicao fisica permanecer aberta ate necessidade real.
+- Documento, Versão do Documento e Tentativa de Processamento Documental estiverem conceitualmente separados;
+- a Versão do Documento não carregar estados de processamento;
+- a ingestão produzir evidência estruturada neutra;
+- a Engenharia de Custos e Licitações fizer a interpretação econômica;
+- a Proposta de Importação do Orçamento for revisável e não consolidável;
+- a Versão do Orçamento nascer somente por materialização explícita;
+- a proposta materializada ficar preservada como fotografia auditável;
+- alterações posteriores ocorrerem na Versão do Orçamento em rascunho ou em nova proposta/reprocessamento;
+- a rastreabilidade puder chegar ao campo específico quando houver evidência;
+- a Avaliação de Correspondência não for automática sem regra determinística formalmente aprovada;
+- a inteligência artificial não confirmar sozinha fatos econômicos;
+- a decomposição física permanecer aberta até necessidade real.
