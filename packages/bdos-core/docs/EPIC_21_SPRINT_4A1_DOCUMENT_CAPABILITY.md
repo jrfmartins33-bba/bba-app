@@ -1,7 +1,6 @@
 # Epic 21 - Sprint 21.4A.1 - Capacidade Documental Mínima
 
-**Status:** implementada como fatia 21.4A.1.
-**A Sprint 21.4A continua em andamento.** Esta entrega não conclui a ingestão documental completa nem inicia materialização de Orçamento.
+**Status:** Sprint 21.4A.1 concluída, com validação real em ambiente Supabase de teste. **A Sprint 21.4A permanece em andamento** — esta entrega não conclui a ingestão documental completa nem inicia materialização de Orçamento. Próximo incremento: 21.4A.2 — localização das páginas orçamentárias do documento oficial.
 
 ## O que foi implementado
 
@@ -102,7 +101,28 @@ A validação real desta Sprint contra um projeto Supabase genuinamente novo (nu
 
 Depois de corrigir `profiles`, a mesma validação avançou e revelou uma segunda lacuna idêntica em `public.companies` (`permission denied for table companies`, 42501 — inicialmente mascarada por uma mensagem de erro vazia, artefato de uma consulta `head: true` sem corpo de resposta). Corrigida por `supabase/migrations/20260715020000_bdos_service_role_companies_access.sql`, mesma justificativa e mesmas garantias (não amplia acesso real, não concede nada a `anon`/`authenticated`).
 
-**Estado da validação real:** pendente até as duas migrações serem aplicadas ao projeto de teste e os nove cenários de `supabase/tests/document-processing/document-processing-capability.test.mjs` passarem.
+### Validação real concluída
+
+Executada contra um projeto Supabase exclusivamente de teste, nunca contra o projeto real. Resultado:
+
+- **49/49 migrações** locais e remotas confirmadas (`supabase migration list`), incluindo `20260715000000` (capacidade documental), `20260715010000` (acesso de `service_role` a `profiles`) e `20260715020000` (acesso de `service_role` a `companies`).
+- **Nove cenários reais aprovados**, todos em `supabase/tests/document-processing/document-processing-capability.test.mjs`:
+  1. Caminho confiável cria Documento, primeira Versão e Tentativa de Processamento.
+  2. Idempotência de Versão do Documento (mesmo hash reutiliza, hash novo cria).
+  3. Idempotência concorrente de Versão do Documento.
+  4. Idempotência concorrente de Tentativa de Processamento.
+  5. Concorrência otimista da Tentativa, com resultado terminal preservado.
+  6. Máquina de estados persistente: transições válidas aceitas, inválidas rejeitadas no banco.
+  7. Versão do Documento imutável na persistência.
+  8. Escrita direta e chamada de função server-only bloqueadas para `authenticated`.
+  9. Caminho confiável rejeita ator operando organização alheia.
+- **Idempotência concorrente** confirmada (cenários 3 e 4).
+- **Máquina de estados persistente** confirmada (cenário 6).
+- **Imutabilidade** da Versão do Documento confirmada (cenário 7).
+- **Isolamento entre organizações** confirmado (cenário 9).
+- **Escrita direta de `authenticated`** bloqueada (cenário 8).
+- **Limpeza** confirmada: todos os registros criados pelo teste foram removidos (`documents=1 documentVersions=3`), verificado pelo próprio script.
+- **Produção não foi utilizada** em nenhum momento desta validação.
 
 ## Próximo incremento
 
