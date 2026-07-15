@@ -8,8 +8,8 @@ Este status aprova o planejamento e a sequência recomendada. Não aprova anteci
 
 - **Epic**: 21 — Engenharia de Custos e Licitações.
 - **Sprint de origem**: 21.3A.
-- **Natureza do documento**: mapa de implementação e planejamento — não é um ADR. Consolida e organiza para implementação as decisões já aprovadas em ADR-001, ADR-002, ADR-003 e ADR-004.
-- **Fundamentação**: ADR-001 (Identidade e Rastreabilidade), ADR-002 (Limite do Processo de Licitação e Contratação), ADR-003 (Versão do Orçamento e Transformações Orçamentárias), ADR-004 (Composição de Custos, Formação de Preços e BDI).
+- **Natureza do documento**: mapa de implementação e planejamento — não é um ADR. Consolida e organiza para implementação as decisões já aprovadas em ADR-001, ADR-002, ADR-003, ADR-004 e ADR-005.
+- **Fundamentação**: ADR-001 (Identidade e Rastreabilidade), ADR-002 (Limite do Processo de Licitação e Contratação), ADR-003 (Versão do Orçamento e Transformações Orçamentárias), ADR-004 (Composição de Custos, Formação de Preços e BDI), ADR-005 (Responsabilidade pela Ingestão Documental na Engenharia de Custos e Licitações).
 - **Este documento não substitui os ADRs.** Em conflito aparente, os ADRs prevalecem.
 - **Hipóteses físicas continuam abertas.**
 
@@ -154,7 +154,7 @@ Nenhuma etapa posterior é obrigatória; a Versão de origem nunca é alterada s
 
 **Regra de não duplicidade** (formulação normativa completa, vinculante): *"A mesma parcela econômica não pode ser incluída simultaneamente na composição de custos e nos componentes ou parâmetros econômicos da Aplicação da Metodologia de BDI. O BDI Apurado é resultado derivado e nunca pode ser acrescentado novamente ao preço como parcela econômica independente. Divisão explícita e não sobreposta é permitida. Dupla contagem não é."*
 
-**Transversais**: isolamento por organização usuária; proveniência preservada; identidade interna nunca é código externo; imutabilidade após consolidação apenas onde aprovada; preservação histórica; validação humana nunca substitui fonte; três estados de evidência nunca fundidos; Relação de Rastreabilidade distinta de Avaliação de Correspondência; idempotência, correlação, correspondência e rastreabilidade nunca sinônimos; temporalidade; referência documental opaca não resolve responsabilidade sobre `DocumentArtifact`/`DocumentVersion`; nenhuma promoção automática entre contextos.
+**Transversais**: isolamento por organização usuária; proveniência preservada; identidade interna nunca é código externo; imutabilidade após consolidação apenas onde aprovada; preservação histórica; validação humana nunca substitui fonte; três estados de evidência nunca fundidos; Relação de Rastreabilidade distinta de Avaliação de Correspondência; idempotência, correlação, correspondência e rastreabilidade nunca sinônimos; temporalidade; referência documental opaca não substitui Documento, Versão do Documento, Tentativa de Processamento Documental nem Proposta de Importação do Orçamento; nenhuma promoção automática entre contextos.
 
 ## H. Ciclos de vida conceituais
 
@@ -234,7 +234,7 @@ Serviços de Aplicação não pertencem ao domínio puro. Pertencem à camada de
 | Consolidar Versão | Orçamento | Tornar imutável | Operação de domínio iniciada por decisão humana | Não | 21.3C |
 | Consultar estrutura consolidada | Orçamento | Leitura | Consulta ou leitura derivada | Não | 21.3C |
 | Registrar origem nativa/referência documental opaca | Orçamento | Rastreabilidade mínima | Registro de evidência | Não | 21.3C |
-| Criar versão a partir de ingestão documental validada | Orçamento | Caminho documental | Registro de evidência + decisão humana | Referencia Documento (responsabilidade aberta) | 21.4A/21.4B |
+| Criar versão a partir de ingestão documental validada | Orçamento | Caminho documental | Materialização explícita da Proposta de Importação do Orçamento revisada | Coordena Documento, Versão do Documento, Tentativa de Processamento e evidência neutra conforme ADR-005 | 21.4A/21.4B |
 | Registrar Avaliação de Correspondência | Transversal | Reconciliar registros independentes | Avaliação sobre registros independentes, com resultado e Grau de Confiança; validação humana quando necessária. A inteligência artificial pode explicar, mas não cria o fato confirmado | Pode coordenar qualquer agrupamento | 21.4B |
 | Criar Simulação Orçamentária | Orçamento | Testar cenário | Cálculo determinístico | Não | 21.5A |
 | Autorizar Transformação Orçamentária | Orçamento | Congelar parâmetros | Decisão humana | Não | 21.5B |
@@ -269,8 +269,8 @@ Serviços de Aplicação não pertencem ao domínio puro. Pertencem à camada de
 |---|---|---|---|---|---|
 | 21.3B — Primeira fatia de domínio puro | Modelo de domínio puro: identidades conceituais, invariantes, comportamentos determinísticos, rascunho/consolidação, hierarquia, totalizações | Testes unitários passando com a fixture Lagoa do Arroz + cenário sintético multi-lote | Nenhuma | Forma técnica mínima do Escopo da Licitação | Serviços de Aplicação, repositórios, persistência, políticas de segurança, API, interface |
 | 21.3C — Serviços de Aplicação, persistência e isolamento | Serviços de Aplicação, contratos de repositório, coordenação entre Licitação e Orçamento, persistência, isolamento por organização usuária, políticas de segurança, adaptadores | Mesma fatia funcionando de ponta a ponta com persistência real | 21.3B | Mecanismo de concorrência mínimo | Transformação, Simulação, Formação Econômica |
-| 21.4A — Ingestão documental do orçamento | Classificação e extração, sem consolidação automática | Leitura de planilha/documento produzindo dados classificados | 21.3C | Responsabilidade pela camada de ingestão (gatilho 7) | Consolidação automática |
-| 21.4B — Revisão human-first e consolidação do orçamento importado | Entrega utilizável pelo cliente: API necessária, espaço visual de revisão, dados confirmados, premissas propostas, lacunas documentais, correspondências, correções, ação de consolidação, primeira Versão do Orçamento utilizável | Tela real de revisão, não aparência de sistema burocrático ou ERP | 21.4A | — | Transformação, Simulação |
+| 21.4A — Ingestão documental e Proposta de Importação do Orçamento | Ingestão documental e Proposta de Importação do Orçamento | Documento e Versão do Documento no nível necessário; Tentativa de Processamento Documental; leitura técnica do primeiro formato aprovado; evidência estruturada neutra; caracterização econômica determinística inicial; Proposta de Importação do Orçamento persistida; dados confirmados, premissas propostas e lacunas distinguíveis; proveniência; falhas e processamento parcial; nenhuma Versão do Orçamento criada automaticamente; nenhuma consolidação | 21.3C | Nenhuma decisão arquitetural pendente; a própria Sprint decidirá primeiro formato documental, contrato físico mínimo da evidência, representação física mínima da proposta e política mínima de reprocessamento | Criação automática de Versão do Orçamento; consolidação; suporte simultâneo obrigatório a todos os formatos |
+| 21.4B — Revisão visual orientada à decisão e materialização | Revisão visual orientada à decisão e materialização | Revisão visual; correção das classificações; inclusão de item ausente; alteração de descrição, código, valor e posição; criação de Grupo ou Subgrupo; exclusão de linha não econômica; resolução de lacunas; origem documental sob demanda; confronto entre total declarado e calculado; comando explícito de materialização; criação da Versão do Orçamento em rascunho; edição econômica pelos Serviços de Aplicação existentes; comando separado de consolidação; comunicação de status, problema, impacto, próxima ação e detalhes sob demanda, sem aparência de ERP | 21.4A | — | Transformação, Simulação |
 | 21.5A — Simulação Orçamentária | Redução de preços e comparação de cenários | Simulações calculadas e comparáveis | 21.3C | Precisão/arredondamento (ADR-003 §T) | Inferência sobre custo/BDI |
 | 21.5B — Transformação Orçamentária autorizada | Autorização, execução idempotente, versão resultante, memória de cálculo | Nova Versão do Orçamento rastreável a partir de uma Transformação | 21.5A | Formato do identificador de execução idempotente | Formação Econômica |
 | 21.6A — Composição de custos e referências | Composição de Referência, Versão da Composição de Custos, insumos, coeficientes, produtividade, referências de preço | Item de Serviço com composição associada e validada | 21.3C | Gatilho 5 | Metodologia/Aplicação/BDI Apurado |
@@ -284,7 +284,7 @@ Serviços de Aplicação não pertencem ao domínio puro. Pertencem à camada de
 |---|---|---|---|---|---|
 | Nome de produto/UI do Processo de Licitação e Contratação | Aberta | Baixo | UI futura | Antes da primeira tela | — |
 | Nome futuro da Visão Consolidada | Aberta | Baixo | Leitura derivada futura | Antes de implementar leitura derivada | Padrão por agrupamento, opcional |
-| Responsabilidade pela camada de ingestão documental | Aberta | Médio | 21.4A | Ver gatilho 7 | `document-reconstruction` candidato parcial |
+| Responsabilidade pela camada de ingestão documental | Resolvida — ADR-005 | Médio | Não bloqueia mais o planejamento da Sprint 21.4A | Encerrado | Responsabilidade dividida por fronteira explícita entre capacidade documental, Reconstrução Documental, Engenharia de Custos, Serviços de Aplicação e revisão humana. |
 | Vínculo entre Licitação e Contrato — representação técnica | Conceito resolvido; forma técnica aberta | Médio | Modelagem técnica | Antes de 21.3B, se envolver este conceito | Nome ainda provisório |
 | Modelo de aditivos da Base Contratual da Obra | Aberta | Baixo | Fora da 1ª implementação | Ver gatilho 4 | — |
 | Formato técnico do identificador de execução idempotente | Aberta | Alto | 21.5B | Antes de 21.5B | Índice único parcial é hipótese |
@@ -317,11 +317,11 @@ Serviços de Aplicação não pertencem ao domínio puro. Pertencem à camada de
 | 4 | Aditivos | Antes de permitir alteração da Base Contratual consolidada | Modelo de aditivos e vigência | Fora da 1ª implementação | Modelo prematuro sem caso real | Histórico contratual corrompido |
 | 5 | Composição de Referência | Primeiro import de catálogo oficial (SINAPI/SICRO) | Modelo de versionamento interno | 21.6A | Import sem modelo definido | Composição sem proveniência confiável |
 | 6 | Conceitos relacionados ao BDI (Formação do Preço Unitário, Metodologia, Versão da Metodologia, Aplicação, BDI Apurado, memória de cálculo) | Primeiro motor determinístico de Aplicação/BDI Apurado | Representação técnica da Formação do Preço Unitário; representação de Metodologia/Versão/Aplicação/BDI Apurado; identidade persistida necessária para auditoria | 21.6B | Motor sem definição de auditoria | Resultado não auditável |
-| 7 | `DocumentArtifact`/`DocumentVersion` | Primeira integração real com ingestão documental ou `document-reconstruction` | Responsabilidade pela camada de ingestão | 21.4A | Integração prematura com domínio de propósito diferente | Duplicação de responsabilidade documental |
+| 7 | Documento / Versão do Documento | Primeira integração real com ingestão documental ou Reconstrução Documental | Encerrado pelo ADR-005: preservação documental e evidência neutra fora do domínio econômico; interpretação econômica pela Engenharia de Custos; coordenação pelos Serviços de Aplicação; Proposta de Importação do Orçamento antes da Versão do Orçamento; materialização por comando humano; consolidação separada; decisões físicas ainda abertas | 21.4A | Decidido conceitualmente; não autoriza generalização física antecipada | Decisão encerrada; risco remanescente é escolher prematuramente formato, OCR, tabelas, contrato físico de evidência ou política final de reprocessamento |
 
 ## Q. Critérios de aceite do mapa
 
-O documento estará apto para gravação quando: não contrariar os quatro ADRs; não transformar fluxo opcional em pipeline obrigatório; não transformar agrupamento em fronteira física; não escolher persistência física; não confundir autoria com isolamento; não confundir idempotência com reprodução; não confundir correlação com correspondência; não impor Processo de Licitação a todo orçamento futuro; preservar decisões abertas; definir a primeira fatia testável; definir sequência recomendada; registrar pendências e gatilhos; permanecer sem implementação.
+O documento estará apto para gravação quando: não contrariar os cinco ADRs; não transformar fluxo opcional em pipeline obrigatório; não transformar agrupamento em fronteira física; não escolher persistência física; não confundir autoria com isolamento; não confundir idempotência com reprodução; não confundir correlação com correspondência; não impor Processo de Licitação a todo orçamento futuro; preservar decisões abertas; definir a primeira fatia testável; definir sequência recomendada; registrar pendências e gatilhos; permanecer sem implementação.
 
 ---
 
@@ -336,11 +336,12 @@ O documento estará apto para gravação quando: não contrariar os quatro ADRs;
 - Primeira fatia de domínio testável e Opção B.
 - Regra de não duplicidade: "A mesma parcela econômica não pode ser incluída simultaneamente na composição de custos e nos componentes ou parâmetros econômicos da Aplicação da Metodologia de BDI. O BDI Apurado é resultado derivado e nunca pode ser acrescentado novamente ao preço como parcela econômica independente. Divisão explícita e não sobreposta é permitida. Dupla contagem não é."
 - Registro Consolidado de Decisões Pendentes (Seção O).
-- Sete gatilhos de reavaliação (Seção P).
+- Sete gatilhos de reavaliação (Seção P), com o Gatilho 7 encerrado pelo ADR-005.
 - Cardinalidade do caso Lagoa do Arroz.
 - Distinção entre Transformação Orçamentária, Simulação Orçamentária e Autorização da Transformação.
+- Responsabilidade pela ingestão documental dividida por fronteira explícita, com Proposta de Importação do Orçamento antes da Versão do Orçamento.
 - 21.6A como ordem recomendada de implementação para o primeiro cenário estruturado de BDI, não como dependência conceitual universal.
 
 ### Hipóteses ou decisões técnicas ainda abertas
 
-Todas as linhas "Aberta" da Seção O; representação física de qualquer conceito (Seção I); decomposição física de Formação Econômica; forma técnica do Escopo da Licitação; mecanismo físico de idempotência e concorrência; sequência de Sprints 21.4A em diante (proposta, não vinculante); confirmação de lotes no caso real; catálogo compartilhado entre organizações usuárias.
+Todas as linhas "Aberta" da Seção O; representação física de qualquer conceito (Seção I); decomposição física de Formação Econômica; forma técnica do Escopo da Licitação; mecanismo físico de idempotência e concorrência; primeiro formato documental da Sprint 21.4A; contrato físico mínimo da evidência; representação física mínima da Proposta de Importação do Orçamento; política mínima de reprocessamento; confirmação de lotes no caso real; catálogo compartilhado entre organizações usuárias.
