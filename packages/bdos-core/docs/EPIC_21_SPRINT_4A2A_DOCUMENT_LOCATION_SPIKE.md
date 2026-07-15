@@ -29,7 +29,7 @@ Sem persistência definitiva, sem migração, sem nova tabela, sem RLS nova, sem
 |---|---|---|---|---|
 | Tentativa de Processamento Documental | `packages/bdos-core/src/domain/document-processing/document-processing.ts` (`createDocumentProcessingAttempt`, `completeDocumentProcessingAttempt`, `partiallyCompleteDocumentProcessingAttempt`, `failDocumentProcessingAttempt`, `abandonDocumentProcessingAttempt`), `document-processing.types.ts` | Sim | A fotografia de localização deve se pendurar em `metadata` de uma tentativa `Completed`/`PartiallyCompleted`, ou em um tipo próprio versionado persistido à parte (ver item 6) — nunca criar uma 2ª máquina de estados | Nenhum campo dedicado a "resultado de localização" existe hoje; é aditivo |
 | Metadados da Tentativa | `DocumentProcessingMetadata = Readonly<Record<string, unknown>>` (`document-processing.types.ts:1`); coluna `metadata JSONB NOT NULL DEFAULT '{}'` (`supabase/migrations/20260715000000_bdos_document_processing_capability.sql:104`) | Parcial | É JSON livre, sem validação de shape; domínio só faz merge raso em transições | Se o resultado precisar de garantia de shape ao longo do tempo, o padrão correto (item 6) é um tipo próprio com `schemaVersion`, não o `metadata` cru |
-| Resolução de arquivo por referência | `DocumentVersion.storageReference` (string opaca) + `isSafeStorageReference()` (`document-processing.ts:284-299`) | Não existe abstração genérica | `storageReference` só é validado como *safe*, nunca resolvido/baixado. Não há `StorageAdapter` compartilhado | Um adaptador de PDF terá que baixar do Supabase Storage por conta própria, seguindo o padrão de `measurement-bulletin-import-service.ts` |
+| Resolução de arquivo por referência | `DocumentVersion.storageReference` (string opaca) + `isSafeStorageReference()` (`document-processing.ts:284-299`) | Não existe abstração genérica | `storageReference` só é validado como *safe*, nunca resolvido/baixado. Não há `StorageAdapter` compartilhado | Duas responsabilidades distintas e ainda não criadas: um **Resolvedor de Conteúdo Documental** (obtém bytes/fluxo a partir de `storageReference`, seguindo o padrão de acesso já usado em `measurement-bulletin-import-service.ts`) e um **leitor físico de PDF** (recebe uma fonte binária neutra e extrai observações por página). O resolvedor nunca deve conhecer `pdfjs-dist`; o leitor de PDF nunca deve conhecer Supabase. O Serviço de Aplicação coordena os dois. Nenhuma das duas peças foi criada nesta Sprint |
 | Leitor de arquivo por formato | `domain/schedule-management/adapters/ms-project-xml-import/*`, `domain/schedule-management/adapters/excel-import/xlsx-reader.ts` (hand-rolled, zero dependência de runtime) | Sim, como precedente de estilo | Não há leitor genérico — cada formato tem leitor próprio e isolado | O leitor de PDF deve seguir a mesma disciplina: mínimo, isolado, sem dependência desnecessária |
 | Versionamento de "mecanismo" | `DocumentProcessingAttempt.mechanism: string` (obrigatório) / `mechanismVersion: string \| null` (`document-processing.types.ts:58-59`) | Sim | Campo livre, sem catálogo fechado | Um mecanismo como `"budget-page-location-v1"` se encaixa diretamente, sem alteração de schema |
 | Versionamento de schema/parser | `MEASUREMENT_ANALYSIS_RESULT_SCHEMA_VERSION`, `MEASUREMENT_ANALYSIS_PARSER_KEY` (`measurement-bulletin-import.types.ts:277-278`), `PLANNING_DATASET_SCHEMA_VERSION` | Sim, como padrão de referência | É convenção, não infraestrutura compartilhada | A futura Localização deve ter constantes equivalentes (`PAGE_LOCATION_RULES_VERSION`, `PAGE_LOCATION_SCHEMA_VERSION`, versão do perfil de extração) |
@@ -46,10 +46,11 @@ Tentativa de Processamento Documental (estados, idempotência, concorrência oti
 
 ## 6. Lacunas reais
 
-- Não existe resolvedor de arquivo por referência compartilhado — o adaptador de PDF terá que implementar seu próprio download via Supabase Storage.
+- Não existe resolvedor de conteúdo documental compartilhado (obtenção de bytes/fluxo a partir de `storageReference`) — precisará ser criado como peça própria, separada do leitor físico de PDF, e não nesta Sprint.
+- Não existe leitor físico de PDF — precisará ser criado como peça própria, que recebe uma fonte binária neutra (já resolvida) e nunca conhece Supabase.
 - Não existe campo tipado para o resultado de localização — hoje só há `metadata` JSON livre.
 - Não existe guard de arquitetura ainda para uma futura capacidade de localização de páginas (será necessário criar um, seguindo o padrão de `document-processing-boundaries.test.ts`).
-- Não há decisão tomada sobre onde o código que importa `pdfjs-dist` deve fisicamente residir, dado que as pastas hoje mais óbvias para um adaptador de document-processing estão sob proibição textual explícita dessa mesma biblioteca.
+- Não há decisão tomada sobre onde o código que importa `pdfjs-dist` deve fisicamente residir, dado que as pastas hoje mais óbvias para um adaptador de document-processing estão sob proibição textual explícita dessa mesma biblioteca. A decisão recomendada preliminarmente (não definitiva) é: manter domínio e Serviços de Aplicação de `document-processing` livres de `pdfjs-dist`, e colocar a dependência concreta em um adaptador de infraestrutura de uma capacidade irmã, sem enfraquecer o guard atual — caminho físico exato a confirmar na 21.4A.2.c após inspeção das convenções reais do repositório.
 
 ## 7. Ambiente do spike
 
@@ -84,7 +85,7 @@ Para cada página física 40–60 (índices técnicos 39–59): abertura via `do
 | Caracteres de substituição (U+FFFD) em toda a janela | 0 |
 | Caracteres de controle inesperados em toda a janela | 0 |
 | Tempo de extração por página | mín. 1,99 ms — máx. 59,92 ms |
-| Memória heap antes/depois da janela | 46,90 MB → 58,91 MB (delta 12,01 MB para 21 páginas, incluindo páginas com >1.400 itens) |
+| Heap JavaScript (`heapUsed`) antes/depois da janela — **não medido**: `rss`, `heapTotal`, `external`, `arrayBuffers` | 46,90 MB → 58,91 MB (delta 12,01 MB para 21 páginas, incluindo páginas com >1.400 itens). Ver item 18 para o escopo e as limitações desta medição |
 | Recursos liberados | Sim — `page.cleanup()` por página e `doc.destroy()` ao final, sem erro |
 
 ## 12. Observações por página/grupos (achado geométrico)
@@ -125,11 +126,19 @@ Disponíveis via `item.transform[4]` (x) e `item.transform[5]` (y), junto com `i
 
 ## 18. Consumo diagnóstico de memória
 
-Delta de 12,01 MB de heap para 21 páginas, incluindo várias com mais de 1.000 itens textuais cada. Sem crescimento anômalo perceptível ao longo da janela. `page.cleanup()` e `doc.destroy()` executados sem erro. Não há indício, nesta janela, de que processar página a página (em vez de carregar tudo de uma vez) seja necessário por limite de memória — mas a recomendação de leitura incremental permanece válida como política de baixo custo para as 1.033 páginas completas.
+**Correção de escopo desta métrica**: o spike mediu somente `process.memoryUsage().heapUsed` — o heap do JavaScript. Não foram medidos `rss`, `heapTotal`, `external` nem `arrayBuffers`. O PDF foi fornecido ao `pdfjs-dist` como `data` (buffer já carregado em memória), portanto esta medição **não prova** que o arquivo binário completo deixou de permanecer em memória durante o processamento, nem caracteriza o custo total do processo (que inclui memória fora do heap V8, onde bibliotecas nativas/WASM e buffers grandes tipicamente residem).
 
-## 19. Evidência mínima recomendada — confirmada com ajuste
+O único resultado confirmado é: **não houve crescimento anômalo perceptível do heap JavaScript durante a janela 40–60** (delta de 12,01 MB para 21 páginas, incluindo várias com mais de 1.000 itens textuais cada), e `page.cleanup()`/`doc.destroy()` executaram sem erro.
 
-A proposta avaliada (hash do documento + página física + índice técnico + versão do `pdfjs-dist` + versão do adaptador + versão do perfil de extração + índice do item textual + trecho original mínimo + trecho normalizado + identificador do sinal + código da regra) é **tecnicamente suficiente e confirmada** pelo spike. Nenhum campo adicional se mostrou necessário. Nenhum campo se mostrou dispensável — em particular, a versão do *perfil de extração* separada da versão da *biblioteca* é justificada: as opções passadas a `getDocument` (`useSystemFonts`, `disableFontFace`, `isEvalSupported`) afetam o que é observável sem mudar a versão do pacote instalado.
+**Não é possível concluir ainda** que a estratégia de leitura (página a página vs. documento inteiro em memória) seja adequada para o processamento completo das 1.033 páginas — essa conclusão exigiria medir o processo completo, não apenas uma janela de 21 páginas com um subconjunto de métricas.
+
+Para uma fase futura, registra-se a necessidade de medir, com o documento completo ou uma amostra maior: `rss`, `heapUsed`, `heapTotal`, `external`, `arrayBuffers`, tamanho da fonte binária fornecida ao `pdfjs-dist`, e o comportamento de cada uma dessas métricas antes e depois de `doc.destroy()`. Esta Sprint não processou o documento completo e não deve ser lida como validação de custo de memória em escala.
+
+## 19. Evidência mínima recomendada — tecnicamente viável, provisoriamente suficiente
+
+A proposta avaliada (hash do documento + página física + índice técnico + versão do `pdfjs-dist` + versão do adaptador + versão do perfil de extração + índice do item textual + trecho original mínimo + trecho normalizado + identificador do sinal + código da regra) é **tecnicamente viável e provisoriamente suficiente, condicionada à confirmação de repetibilidade entre execuções independentes com o mesmo documento, versão da biblioteca, versão do adaptador e perfil de extração**. Esta Sprint executou uma única extração da janela 40–60 — não há, ainda, evidência de que uma segunda execução independente produza o mesmo hash normalizado, a mesma contagem/ordem de itens e os mesmos índices associados aos mesmos trechos. Nenhum campo da proposta se mostrou dispensável nesta única execução — em particular, a versão do *perfil de extração* separada da versão da *biblioteca* é justificada: as opções passadas a `getDocument` (`useSystemFonts`, `disableFontFace`, `isEvalSupported`) afetam o que é observável sem mudar a versão do pacote instalado. Coordenadas geométricas permanecem fora do contrato desta fatia (não se tornam campo obrigatório).
+
+**Critério obrigatório para a 21.4A.2.b**, antes de qualquer persistência definitiva do contrato: executar pelo menos duas extrações independentes da mesma fixture; comparar o hash do texto normalizado entre as execuções; comparar quantidade e ordem dos itens; verificar a estabilidade dos índices usados nas evidências; e verificar que cada índice permanece associado ao mesmo trecho nas duas execuções.
 
 ## 20. Sinais preliminares (caracterização, não catálogo definitivo)
 
@@ -143,10 +152,10 @@ Observáveis nesta janela, como famílias, não como grafias fixas — nenhum fo
 ## 21. Riscos
 
 1. **Guard de arquitetura vs. biblioteca de PDF** (novo, encontrado nesta Sprint): `document-processing-boundaries.test.ts` proíbe textualmente `pdfjs` dentro de `domain/document-processing` e `services/document-processing`. Precisa de decisão consciente na 21.4A.2.c (ver item 24).
-2. **Ausência de resolvedor de storage genérico**: o adaptador terá que reimplementar download, replicando código já existente em `measurement-bulletin-import-service.ts` — risco de duplicação se não for extraído com cuidado.
+2. **Ausência de Resolvedor de Conteúdo Documental compartilhado**: se essa responsabilidade não for extraída como peça própria e separada do leitor de PDF, há risco de o leitor físico de PDF acabar conhecendo Supabase (ou o resolvedor acabar conhecendo `pdfjs-dist`), violando a separação de responsabilidades recomendada, além de risco de duplicação do padrão de acesso já existente em `measurement-bulletin-import-service.ts`.
 3. **Janela 40–60 não representa o documento inteiro**: qualidade de extração só foi validada numa fatia pequena; páginas digitalizadas/degradadas em outras partes do documento não foram observadas.
 4. **Geometria como sinal é nova e não testada contra falso positivo**: um documento diferente pode ter mudança de geometria sem relação com orçamento (ex. um mapa ou desenho técnico anexado). Não deve ser usada como sinal único.
-5. **`metadata` JSON livre não é o padrão recomendado pelo próprio repositório** para resultados que precisam de garantia de shape ao longo do tempo — reforça a necessidade de um tipo próprio versionado (Decisão 24.1 abaixo).
+5. **`metadata` JSON livre não é o padrão recomendado pelo próprio repositório** para resultados que precisam de garantia de shape ao longo do tempo — reforça a necessidade de um tipo próprio versionado (item 24.3 abaixo).
 
 ## 22. Governança da fonte documental
 
@@ -165,7 +174,13 @@ Classificação conservadora mantida, na ausência de autorização adicional ex
 
 Nenhum conteúdo textual do documento foi incluído neste relatório — apenas hash, contagem de páginas, dimensões físicas e contagens de itens, que são metadados técnicos e não têm valor comercial ou sensível isoladamente.
 
-**Nota adicional (herdada da discussão de arquitetura que precedeu esta Sprint):** a fonte documental pertence a uma empresa com a qual há relação comercial ativa em curso, não apenas uma fonte anônima. Antes de qualquer fixture "inspirada" na estrutura real ser criada na 21.4A.2.b, recomenda-se confirmação explícita, mesmo que informal, de que o uso do *padrão estrutural* (não do conteúdo) para testar o produto sendo vendido a essa mesma empresa é aceitável.
+**Nota adicional (herdada da discussão de arquitetura que precedeu esta Sprint):** a fonte documental pertence a uma empresa com a qual há relação comercial ativa em curso, não apenas uma fonte anônima. Antes de qualquer fixture "inspirada" na estrutura real ser criada na 21.4A.2.b, é exigida **autorização explícita, documentada e rastreável** dessa empresa — não uma confirmação informal — para o uso do *padrão estrutural* (não do conteúdo) na construção e nos testes do produto que está sendo vendido a essa mesma empresa.
+
+Sem essa autorização explícita, documentada e rastreável:
+- nenhuma fixture poderá ser derivada diretamente do documento real;
+- nenhuma transformação automática ou manual do conteúdo real poderá ser commitada;
+- fixtures deverão ser sintéticas e independentes, sem derivação do documento real;
+- observações conceituais desta Sprint (famílias de sinais, geometria, fragmentação) poderão orientar a construção de famílias genéricas de sinais, desde que não reproduzam conteúdo, valores, códigos, nomes ou formatação identificável do documento real.
 
 ## 23. Recomendações para a Sprint 21.4A.2.b
 
@@ -173,16 +188,17 @@ Nenhum conteúdo textual do documento foi incluído neste relatório — apenas 
 - **Métricas de qualidade a formalizar**: proporção de caracteres de substituição, proporção de caracteres de controle inesperados, proporção de itens fragmentados — infraestrutura de cálculo já escrita no spike, pronta para virar detector versionado.
 - **Limiares**: nenhum ainda aprovado; nenhum caso positivo real de degradação foi observado na janela testada — qualquer limiar de "degradado" precisa de uma fixture sintética deliberadamente degradada, não de um número arbitrário.
 - **Fixtures sintéticas necessárias**: ao menos duas estruturas orçamentárias materialmente distintas (uma podendo ecoar o padrão real via fixture sintética, uma estruturalmente diferente — ordem de colunas, rótulo de BDI, forma de fechamento) e ao menos três falsos positivos (índice/sumário, tabela financeira não orçamentária, cronograma físico-financeiro), incluindo um adversarial.
-- **Riscos prioritários a endereçar primeiro**: o guard de arquitetura (item 21.1) e a ausência de resolvedor de storage (item 21.2), pois ambos afetam onde e como o código da 21.4A.2.c poderá ser escrito.
+- **Riscos prioritários a endereçar primeiro**: o guard de arquitetura (item 21.1) e a separação entre Resolvedor de Conteúdo Documental e leitor físico de PDF (item 21.2), pois ambos afetam onde e como o código da 21.4A.2.c poderá ser escrito. Nenhuma dessas duas capacidades deve ser criada antes da 21.4A.2.c.
 - **Plano mínimo**: fechar o catálogo e as fixtures antes de tocar em contrato persistente (21.4A.2.c), mantendo a ordem já acordada spike → catálogo → contrato → persistência.
 
 ## 24. Decisões ainda abertas
 
-1. **Onde o adaptador de PDF deve residir fisicamardente**, dado que `domain/document-processing` e `services/document-processing` estão sob proibição textual explícita de `pdfjs` — decidir entre (a) atualizar conscientemente o guard existente para permitir um arquivo específico e nomeado, ou (b) criar uma capacidade/domínio irmão (ex. `document-location`) com guard próprio, nunca importado por `document-processing` no sentido inverso. Nenhuma das duas foi escolhida nesta Sprint.
-2. **Forma final de persistência do resultado**: `metadata` JSON livre da Tentativa vs. um tipo próprio versionado (seguindo o precedente de `MeasurementAnalysisResult`) — inclinação para a segunda opção, não decidida.
-3. **Formato final de referência à evidência posicional** (índice do item + trecho, sem coordenada obrigatória) — confirmado como suficiente pelo spike, mas o *shape* exato do tipo ainda não foi desenhado.
-4. **Se geometria de página vira sinal formal de primeira classe ou apenas um sinal auxiliar de continuidade** — precisa de mais de um documento real/sintético para não virar regra específica deste caso.
-5. **Nome final da capacidade/mecanismo** (`budget-page-location-v1` foi usado apenas como exemplo, não como decisão).
+1. **Onde o leitor físico de PDF deve residir fisicamente**, dado que `domain/document-processing` e `services/document-processing` estão sob proibição textual explícita de `pdfjs` — decidir entre (a) atualizar conscientemente o guard existente para permitir um arquivo específico e nomeado, ou (b) criar uma capacidade/domínio irmão (ex. `document-location`) com guard próprio, nunca importado por `document-processing` no sentido inverso. Nenhuma das duas foi escolhida nesta Sprint. Decisão recomendada, ainda não ratificada: manter domínio e Serviços de Aplicação de `document-processing` livres de `pdfjs-dist`, sem enfraquecer o guard atual, e colocar a dependência concreta em um adaptador de infraestrutura de uma capacidade irmã.
+2. **Separação física entre Resolvedor de Conteúdo Documental e leitor de PDF**: os dois papéis foram distinguidos conceitualmente nesta Sprint (item 6), mas nenhum dos dois foi criado, e o caminho exato de cada um (arquivo/pasta) não foi decidido — fica para a 21.4A.2.c, após inspeção das convenções reais do repositório.
+3. **Forma final de persistência do resultado**: `metadata` JSON livre da Tentativa vs. um tipo próprio versionado (seguindo o precedente de `MeasurementAnalysisResult`) — inclinação para a segunda opção, não decidida.
+4. **Formato final de referência à evidência posicional** (índice do item + trecho, sem coordenada obrigatória) — considerado tecnicamente viável e provisoriamente suficiente pelo spike (ver item 19), mas o *shape* exato do tipo ainda não foi desenhado e depende de confirmação de repetibilidade.
+5. **Se geometria de página vira sinal formal de primeira classe ou apenas um sinal auxiliar de continuidade** — precisa de mais de um documento real/sintético para não virar regra específica deste caso.
+6. **Nome final da capacidade/mecanismo** (`budget-page-location-v1` foi usado apenas como exemplo, não como decisão).
 
 ## 25. Ações expressamente proibidas até nova aprovação
 
