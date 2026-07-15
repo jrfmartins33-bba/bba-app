@@ -37,6 +37,11 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # TEMPORARY DIAGNOSTIC (CI maintenance branch only) — do not merge
+          # to main with this enabled. Surfaces the real provider error
+          # behind the recurring is_error:true/$0-cost failure; remove once
+          # the root cause is captured.
+          show_full_output: true
           prompt: |
             Review this pull request's diff against its base branch:
             `git diff origin/${{ github.event.pull_request.base.ref }}...HEAD`
@@ -54,6 +59,7 @@ jobs:
           claude_args: |
             --max-turns 25
             --allowedTools "Bash,Read,Grep,Glob,Write"
+            --debug
 
       - name: Warn if ANTHROPIC_API_KEY is missing
         if: ${{ env.ANTHROPIC_API_KEY == '' }}
