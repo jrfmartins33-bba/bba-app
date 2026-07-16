@@ -23,7 +23,7 @@ function deepFreeze<T>(value: T): T {
  * budget spreadsheet pages inside a larger PDF. This is not a decision
  * engine: it only names what can be observed and why, on its own, it is
  * never enough. The mechanism that decides candidate pages belongs to a
- * later Sprint (21.4A.2.d) and must consult this catalog, not duplicate it.
+ * later Sprint (21.4A.2.e) and must consult this catalog, not duplicate it.
  * Frozen at module load so it is immutable at runtime, not only at the
  * type level.
  */
