@@ -26,7 +26,7 @@ cd packages/bdos-core && npx tsx src/domain/schedule-management/schedule-managem
 
 `pnpm test` (via `run-tests.mjs`) replicates this per-file `cwd` automatically by walking up to the nearest `package.json`, so CI and local single-file runs behave identically.
 
-CI (`.github/workflows/ci.yml`) runs typecheck → lint → build → test in that order. A second workflow (`.github/workflows/code-review.yml`) runs Claude over each PR's diff against `main` and fails the job on confirmed correctness bugs; it degrades to a warning (non-blocking) if the `ANTHROPIC_API_KEY` repo secret isn't set.
+CI (`.github/workflows/ci.yml`) runs typecheck → lint → build → test in that order.
 
 ## Architecture
 
