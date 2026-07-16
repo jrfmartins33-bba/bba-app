@@ -5,18 +5,26 @@ import {
   PAGE_LOCATION_SOURCE_SIGNAL_IDS,
   getPageLocationDecisionRule,
 } from "./page-location-decision-rule-registry";
+import type { PageLocationDecisionRule } from "./page-location-decision-rule-registry";
 
 function geometryEvaluation(page: PageLocationWorkingPage): SignalEvaluation | null {
   return page.evaluations.get(PAGE_LOCATION_SOURCE_SIGNAL_IDS.stableGeometry) ?? null;
 }
 
-function referencedNeighborPageNumbers(page: PageLocationWorkingPage): ReadonlyArray<number> {
+function referencedNeighborPageNumbers(
+  page: PageLocationWorkingPage,
+  neighborRequirement: PageLocationDecisionRule["neighborRequirement"],
+): ReadonlyArray<number> {
   const evaluation = geometryEvaluation(page);
-  if (evaluation?.outcome !== "observed" || evaluation.evidence === null) {
+  if (evaluation?.outcome !== "observed" || evaluation.evidence === null || neighborRequirement === "none") {
     return [];
   }
   return evaluation.evidence.references
-    .filter((reference) => reference.roleInRule === "earlier_page" || reference.roleInRule === "later_page")
+    .filter((reference) =>
+      neighborRequirement === "earlier_anchor_only"
+        ? reference.roleInRule === "earlier_page"
+        : reference.roleInRule === "earlier_page" || reference.roleInRule === "later_page",
+    )
     .map((reference) => reference.pageNumber)
     .sort((left, right) => left - right);
 }
@@ -24,8 +32,9 @@ function referencedNeighborPageNumbers(page: PageLocationWorkingPage): ReadonlyA
 function qualifyingAnchorPageNumbers(
   page: PageLocationWorkingPage,
   pagesByNumber: ReadonlyMap<number, PageLocationWorkingPage>,
+  neighborRequirement: PageLocationDecisionRule["neighborRequirement"],
 ): ReadonlyArray<number> {
-  return referencedNeighborPageNumbers(page).filter((pageNumber) => {
+  return referencedNeighborPageNumbers(page, neighborRequirement).filter((pageNumber) => {
     const neighbor = pagesByNumber.get(pageNumber);
     return neighbor?.decision?.classification === "candidate" && neighbor.decision.canAnchor;
   });
@@ -51,7 +60,7 @@ export function propagateStructuralCandidates(
       ) {
         return;
       }
-      const anchors = qualifyingAnchorPageNumbers(page, pagesByNumber);
+      const anchors = qualifyingAnchorPageNumbers(page, pagesByNumber, rule.neighborRequirement);
       if (anchors.length === 0) {
         return;
       }
@@ -96,7 +105,7 @@ export function classifyClosingCandidates(
     ) {
       return;
     }
-    const anchors = qualifyingAnchorPageNumbers(page, pagesByNumber);
+    const anchors = qualifyingAnchorPageNumbers(page, pagesByNumber, rule.neighborRequirement);
     if (anchors.length === 0) {
       return;
     }

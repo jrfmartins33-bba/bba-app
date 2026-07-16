@@ -72,6 +72,19 @@ runTest("contiguous direct, structural, and closing candidates form one group", 
   );
 });
 
+runTest("a closing member ends its group before a consecutive independent candidate", () => {
+  const result = locateBudgetDocumentPages(
+    buildObservation([
+      { texts: [SIGNAL_TEXT.serviceItem, SIGNAL_TEXT.bdi] },
+      { texts: [SIGNAL_TEXT.total] },
+      { texts: [SIGNAL_TEXT.serviceItem, SIGNAL_TEXT.bdi] },
+    ]),
+  );
+  assertArrayEqual(result.candidateGroups.map((group) => group.pageNumbers), [[1, 2], [3]]);
+  assertEqual(result.candidateGroups[0].members[1].candidateType, "closing");
+  assertEqual(result.candidateGroups[1].members[0].candidateType, "direct");
+});
+
 runTest("a non-candidate gap creates two candidate groups", () => {
   const result = locateBudgetDocumentPages(
     buildObservation([
@@ -219,6 +232,10 @@ runTest("result integrity ties every decision and group to its required evidence
   result.candidateGroups.forEach((group) => {
     assertTrue(group.pageNumbers.every((pageNumber) => decisionsByPage.get(pageNumber)?.classification === "candidate"), "group contains non-candidate");
     assertTrue(group.pageNumbers.every((pageNumber, index) => index === 0 || pageNumber === group.pageNumbers[index - 1] + 1), "group is not contiguous");
+    assertTrue(
+      group.members.every((member, index) => member.candidateType !== "closing" || index === group.members.length - 1),
+      "closing candidate is not the final group member",
+    );
   });
   assertEqual(new Set(result.candidateGroups.map((group) => group.groupKey)).size, result.candidateGroups.length);
 });

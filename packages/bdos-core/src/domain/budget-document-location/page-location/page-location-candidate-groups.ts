@@ -84,7 +84,12 @@ export function formCandidateGroups(
   const runs: BudgetDocumentPageDecision[][] = [];
   candidates.forEach((candidate) => {
     const currentRun = runs[runs.length - 1];
-    if (currentRun === undefined || candidate.pageNumber !== currentRun[currentRun.length - 1].pageNumber + 1) {
+    const previousCandidate = currentRun?.[currentRun.length - 1];
+    if (
+      previousCandidate === undefined ||
+      candidate.pageNumber !== previousCandidate.pageNumber + 1 ||
+      previousCandidate.candidateType === "closing"
+    ) {
       runs.push([candidate]);
       return;
     }

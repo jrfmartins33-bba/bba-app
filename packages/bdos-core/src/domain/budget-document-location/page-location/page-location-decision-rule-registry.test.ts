@@ -74,6 +74,19 @@ runTest("only the two approved structural candidate rules can anchor", () => {
   assertArrayEqual(anchors, ["candidate-service-item-and-bdi-v1", "candidate-service-item-by-continuity-v1"]);
 });
 
+runTest("neighbor direction is explicit and consistent for every decision rule", () => {
+  const byId = new Map(PAGE_LOCATION_DECISION_RULE_REGISTRY.map((rule) => [rule.ruleId, rule]));
+  assertEqual(byId.get("candidate-service-item-and-bdi-v1")?.neighborRequirement, "none");
+  assertEqual(byId.get("candidate-service-item-and-total-v1")?.neighborRequirement, "none");
+  assertEqual(byId.get("candidate-service-item-by-continuity-v1")?.neighborRequirement, "any_adjacent_anchor");
+  assertEqual(byId.get("candidate-closing-page-by-continuity-v1")?.neighborRequirement, "earlier_anchor_only");
+  assertEqual(byId.get("candidate-closing-page-by-continuity-v1")?.canAnchor, false);
+  assertArrayEqual(
+    PAGE_LOCATION_DECISION_RULE_REGISTRY.filter((rule) => rule.neighborRequirement !== "none").map((rule) => rule.ruleId),
+    ["candidate-service-item-by-continuity-v1", "candidate-closing-page-by-continuity-v1"],
+  );
+});
+
 runTest("ambiguity declares any positive content signal and excludes geometry", () => {
   const rule = PAGE_LOCATION_DECISION_RULE_REGISTRY.find((entry) => entry.ruleId === "ambiguous-positive-content-evidence-v1");
   assertArrayEqual(rule?.requiredAnyObservedSignalIds ?? [], CONTENT_DECISION_SIGNAL_IDS);

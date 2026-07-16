@@ -114,7 +114,7 @@ export interface PageLocationDecisionRule {
   readonly requiredObservedSignalIds: ReadonlyArray<BudgetDocumentSignalId>;
   readonly requiredAnyObservedSignalIds: ReadonlyArray<BudgetDocumentSignalId>;
   readonly requiredNotObservedSignalIds: ReadonlyArray<BudgetDocumentSignalId>;
-  readonly dependsOnNeighborCandidate: boolean;
+  readonly neighborRequirement: "none" | "any_adjacent_anchor" | "earlier_anchor_only";
   readonly canAnchor: boolean;
   readonly precedence: number;
 }
@@ -130,7 +130,7 @@ export const PAGE_LOCATION_DECISION_RULE_REGISTRY: ReadonlyArray<PageLocationDec
     requiredObservedSignalIds: [PAGE_LOCATION_SOURCE_SIGNAL_IDS.noExtractableText],
     requiredAnyObservedSignalIds: [],
     requiredNotObservedSignalIds: [],
-    dependsOnNeighborCandidate: false,
+    neighborRequirement: "none",
     canAnchor: false,
     precedence: 10,
   },
@@ -144,7 +144,7 @@ export const PAGE_LOCATION_DECISION_RULE_REGISTRY: ReadonlyArray<PageLocationDec
     requiredObservedSignalIds: [PAGE_LOCATION_SOURCE_SIGNAL_IDS.extractionError],
     requiredAnyObservedSignalIds: [],
     requiredNotObservedSignalIds: [],
-    dependsOnNeighborCandidate: false,
+    neighborRequirement: "none",
     canAnchor: false,
     precedence: 11,
   },
@@ -158,7 +158,7 @@ export const PAGE_LOCATION_DECISION_RULE_REGISTRY: ReadonlyArray<PageLocationDec
     requiredObservedSignalIds: [PAGE_LOCATION_SOURCE_SIGNAL_IDS.serviceItem, PAGE_LOCATION_SOURCE_SIGNAL_IDS.bdi],
     requiredAnyObservedSignalIds: [],
     requiredNotObservedSignalIds: [],
-    dependsOnNeighborCandidate: false,
+    neighborRequirement: "none",
     canAnchor: true,
     precedence: 20,
   },
@@ -172,7 +172,7 @@ export const PAGE_LOCATION_DECISION_RULE_REGISTRY: ReadonlyArray<PageLocationDec
     requiredObservedSignalIds: [PAGE_LOCATION_SOURCE_SIGNAL_IDS.serviceItem, PAGE_LOCATION_SOURCE_SIGNAL_IDS.total],
     requiredAnyObservedSignalIds: [],
     requiredNotObservedSignalIds: [],
-    dependsOnNeighborCandidate: false,
+    neighborRequirement: "none",
     canAnchor: false,
     precedence: 21,
   },
@@ -186,7 +186,7 @@ export const PAGE_LOCATION_DECISION_RULE_REGISTRY: ReadonlyArray<PageLocationDec
     requiredObservedSignalIds: [],
     requiredAnyObservedSignalIds: [],
     requiredNotObservedSignalIds: [],
-    dependsOnNeighborCandidate: false,
+    neighborRequirement: "none",
     canAnchor: false,
     precedence: 30,
   },
@@ -200,7 +200,7 @@ export const PAGE_LOCATION_DECISION_RULE_REGISTRY: ReadonlyArray<PageLocationDec
     requiredObservedSignalIds: [PAGE_LOCATION_SOURCE_SIGNAL_IDS.serviceItem, PAGE_LOCATION_SOURCE_SIGNAL_IDS.stableGeometry],
     requiredAnyObservedSignalIds: [],
     requiredNotObservedSignalIds: [],
-    dependsOnNeighborCandidate: true,
+    neighborRequirement: "any_adjacent_anchor",
     canAnchor: true,
     precedence: 40,
   },
@@ -214,7 +214,7 @@ export const PAGE_LOCATION_DECISION_RULE_REGISTRY: ReadonlyArray<PageLocationDec
     requiredObservedSignalIds: [PAGE_LOCATION_SOURCE_SIGNAL_IDS.total, PAGE_LOCATION_SOURCE_SIGNAL_IDS.stableGeometry],
     requiredAnyObservedSignalIds: [],
     requiredNotObservedSignalIds: [],
-    dependsOnNeighborCandidate: true,
+    neighborRequirement: "earlier_anchor_only",
     canAnchor: false,
     precedence: 50,
   },
@@ -232,7 +232,7 @@ export const PAGE_LOCATION_DECISION_RULE_REGISTRY: ReadonlyArray<PageLocationDec
       PAGE_LOCATION_SOURCE_SIGNAL_IDS.bdi,
       PAGE_LOCATION_SOURCE_SIGNAL_IDS.total,
     ],
-    dependsOnNeighborCandidate: false,
+    neighborRequirement: "none",
     canAnchor: false,
     precedence: 60,
   },
@@ -246,7 +246,7 @@ export const PAGE_LOCATION_DECISION_RULE_REGISTRY: ReadonlyArray<PageLocationDec
     requiredObservedSignalIds: [],
     requiredAnyObservedSignalIds: CONTENT_DECISION_SIGNAL_IDS,
     requiredNotObservedSignalIds: [],
-    dependsOnNeighborCandidate: false,
+    neighborRequirement: "none",
     canAnchor: false,
     precedence: 70,
   },
@@ -260,7 +260,7 @@ export const PAGE_LOCATION_DECISION_RULE_REGISTRY: ReadonlyArray<PageLocationDec
     requiredObservedSignalIds: [],
     requiredAnyObservedSignalIds: [],
     requiredNotObservedSignalIds: CONTENT_DECISION_SIGNAL_IDS,
-    dependsOnNeighborCandidate: false,
+    neighborRequirement: "none",
     canAnchor: false,
     precedence: 80,
   },

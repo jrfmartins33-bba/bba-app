@@ -58,18 +58,18 @@ O status tecnico do localizador e `completed`, `completed_with_problems` ou `fai
 
 ## Regras de candidatura e ancoragem
 
-| Regra | Versao | Fase | Sinais exigidos | Classificacao | Tipo | Pode ancorar | Evidencia | Limitacao principal |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `not-evaluable-no-extractable-text-v1` | 1 | tecnica | sem texto extraivel | `not_evaluable` | - | nao | campo de disponibilidade | nao descreve conteudo |
-| `not-evaluable-extraction-error-v1` | 1 | tecnica | erro de extracao | `not_evaluable` | - | nao | campo de disponibilidade | falha tecnica local |
-| `candidate-service-item-and-bdi-v1` | 1 | direta | item + BDI | `candidate` | direta | sim | avaliacoes textuais originais | coexistencia nao prova mesma linha |
-| `candidate-service-item-and-total-v1` | 1 | direta | item + total | `candidate` | direta | nao | avaliacoes textuais originais | pode ser lista ou quadro-resumo |
-| `not-evaluable-content-rule-failure-v1` | 1 | tecnica | falha capaz de mudar decisao | `not_evaluable` | - | nao | avaliacao com falha | depende do impacto decisorio |
-| `candidate-service-item-by-continuity-v1` | 1 | continuidade | item + geometria + ancora vizinha | `candidate` | continuidade | sim | item, geometria e vizinhos | geometria isolada nao basta |
-| `candidate-closing-page-by-continuity-v1` | 1 | fechamento | total + geometria + ancora vizinha | `candidate` | fechamento | nao | total, geometria e vizinhos | fechamento nunca propaga |
-| `documentary-context-budget-reference-v1` | 1 | restante | referencia; item, BDI e total ausentes | `documentary_context` | - | nao | referencia textual | remissao nao e estrutura |
-| `ambiguous-positive-content-evidence-v1` | 1 | restante | ao menos um sinal positivo insuficiente | `ambiguous` | - | nao | sinais positivos originais | nao promove por contagem |
-| `no-positive-content-evidence-v1` | 1 | restante | quatro sinais de conteudo ausentes | `no_positive_evidence` | - | nao | avaliacoes negativas completas | nao equivale a descarte |
+| Regra | Versao | Fase | Sinais exigidos | Vizinhanca | Classificacao | Tipo | Pode ancorar | Evidencia | Limitacao principal |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `not-evaluable-no-extractable-text-v1` | 1 | tecnica | sem texto extraivel | `none` | `not_evaluable` | - | nao | campo de disponibilidade | nao descreve conteudo |
+| `not-evaluable-extraction-error-v1` | 1 | tecnica | erro de extracao | `none` | `not_evaluable` | - | nao | campo de disponibilidade | falha tecnica local |
+| `candidate-service-item-and-bdi-v1` | 1 | direta | item + BDI | `none` | `candidate` | direta | sim | avaliacoes textuais originais | coexistencia nao prova mesma linha |
+| `candidate-service-item-and-total-v1` | 1 | direta | item + total | `none` | `candidate` | direta | nao | avaliacoes textuais originais | pode ser lista ou quadro-resumo |
+| `not-evaluable-content-rule-failure-v1` | 1 | tecnica | falha capaz de mudar decisao | `none` | `not_evaluable` | - | nao | avaliacao com falha | depende do impacto decisorio |
+| `candidate-service-item-by-continuity-v1` | 1 | continuidade | item + geometria + ancora vizinha | `any_adjacent_anchor` | `candidate` | continuidade | sim | item, geometria e vizinhos | geometria isolada nao basta |
+| `candidate-closing-page-by-continuity-v1` | 1 | fechamento | total + geometria + ancora anterior | `earlier_anchor_only` | `candidate` | fechamento | nao | total, geometria e pagina anterior | nunca usa pagina posterior |
+| `documentary-context-budget-reference-v1` | 1 | restante | referencia; item, BDI e total ausentes | `none` | `documentary_context` | - | nao | referencia textual | remissao nao e estrutura |
+| `ambiguous-positive-content-evidence-v1` | 1 | restante | ao menos um sinal positivo insuficiente | `none` | `ambiguous` | - | nao | sinais positivos originais | nao promove por contagem |
+| `no-positive-content-evidence-v1` | 1 | restante | quatro sinais de conteudo ausentes | `none` | `no_positive_evidence` | - | nao | avaliacoes negativas completas | nao equivale a descarte |
 
 Item de servico mais total geral permanece candidatura direta, mas nao amplifica paginas vizinhas. Esta restricao reduz falsos positivos em listas numeradas, quadros-resumo e demonstrativos financeiros.
 
@@ -92,6 +92,8 @@ Geometria observada + quatro sinais de conteudo not_observed = no_positive_evide
 Item + BDI = candidata direta que pode ancorar.
 Item + total = candidata direta que nao pode ancorar.
 Somente candidata item + BDI e candidata por continuidade podem ancorar.
+Continuidade estrutural pode usar ancora anterior, posterior ou ambas.
+Candidata de fechamento exige ancora fisica imediatamente anterior e nunca usa pagina posterior.
 Falha de conteudo bloqueia somente se uma completacao possivel mudar a decisao.
 Nao releia texto, nao recalcule sinal e nao use score.
 ```
@@ -105,7 +107,7 @@ Nao releia texto, nao recalcule sinal e nao use score.
 5. Classificacao das paginas restantes.
 6. Formacao de grupos contiguos de candidatas.
 
-A propagacao registra todos os vizinhos qualificadores, ordenados pelo numero fisico. A decisao nao depende da direcao do loop.
+A propagacao estrutural registra todos os vizinhos qualificadores, anteriores e/ou posteriores, ordenados pelo numero fisico. A decisao nao depende da direcao do loop. O fechamento consulta somente a evidencia `earlier_page` da pagina fisica imediatamente anterior.
 
 ## Falhas parciais
 
@@ -139,7 +141,15 @@ A validacao confirma a coerencia do contrato recebido. Ela nao reexecuta a regra
 
 ## Grupos candidatos
 
-Somente paginas `candidate` fisicamente contiguas formam um grupo. Paginas de contexto imediatamente anterior ou posterior sao registradas como informacao, sem entrar no grupo.
+Grupos sao formados somente por paginas `candidate` fisicamente contiguas, respeitada a fronteira semantica de fechamento. Paginas de contexto imediatamente anterior ou posterior sao registradas como informacao, sem entrar no grupo.
+
+Candidata de fechamento:
+
+- exige ancora fisica imediatamente anterior;
+- nunca usa pagina posterior como ancora;
+- pode ser o ultimo membro de um grupo;
+- encerra o grupo e nunca pode ser membro intermediario;
+- faz qualquer candidata posterior iniciar novo grupo, mesmo quando fisicamente consecutiva.
 
 A chave deterministica e composta por:
 

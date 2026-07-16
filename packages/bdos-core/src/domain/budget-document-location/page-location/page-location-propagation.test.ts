@@ -1,4 +1,6 @@
 import { locateBudgetDocumentPages } from "./locate-budget-document-pages";
+import { classifyTechnicalAndDirectPages } from "./page-location-classification";
+import { propagateStructuralCandidates } from "./page-location-propagation";
 import { buildObservation, SIGNAL_TEXT } from "./testing/page-location-test-fixtures";
 
 function runTest(name: string, testCase: () => void): void {
@@ -104,7 +106,7 @@ runTest("a total page adjacent to a structural anchor is a closing candidate", (
   assertEqual(result.pageDecisions[1].canAnchor, false);
 });
 
-runTest("a closing page records every qualifying structural neighbor", () => {
+runTest("a closing page uses only its earlier structural anchor and closes its group", () => {
   const result = locateBudgetDocumentPages(
     buildObservation([
       { texts: [SIGNAL_TEXT.serviceItem, SIGNAL_TEXT.bdi] },
@@ -112,7 +114,46 @@ runTest("a closing page records every qualifying structural neighbor", () => {
       { texts: [SIGNAL_TEXT.serviceItem, SIGNAL_TEXT.bdi] },
     ]),
   );
-  assertArrayEqual(result.pageDecisions[1].neighborPageNumbersUsed, [1, 3]);
+  assertEqual(result.pageDecisions[1].candidateType, "closing");
+  assertArrayEqual(result.pageDecisions[1].neighborPageNumbersUsed, [1]);
+  assertArrayEqual(result.candidateGroups.map((group) => group.pageNumbers), [[1, 2], [3]]);
+});
+
+runTest("closing is never inferred retroactively from a later direct candidate", () => {
+  const result = locateBudgetDocumentPages(
+    buildObservation([
+      { texts: [SIGNAL_TEXT.total] },
+      { texts: [SIGNAL_TEXT.serviceItem, SIGNAL_TEXT.bdi] },
+    ]),
+  );
+  assertEqual(result.pageDecisions[0].classification, "ambiguous");
+  assertEqual(result.pageDecisions[0].candidateType, null);
+  assertEqual(result.pageDecisions[1].candidateType, "direct");
+});
+
+runTest("closing at the end follows the last structural candidate", () => {
+  const result = locateBudgetDocumentPages(
+    buildObservation([
+      { texts: [SIGNAL_TEXT.serviceItem, SIGNAL_TEXT.bdi] },
+      { texts: [SIGNAL_TEXT.serviceItem] },
+      { texts: [SIGNAL_TEXT.total] },
+    ]),
+  );
+  assertEqual(result.pageDecisions[2].candidateType, "closing");
+  assertArrayEqual(result.pageDecisions[2].neighborPageNumbersUsed, [2]);
+  assertArrayEqual(result.candidateGroups.map((group) => group.pageNumbers), [[1, 2, 3]]);
+});
+
+runTest("an independent direct candidate after closing starts a new group", () => {
+  const result = locateBudgetDocumentPages(
+    buildObservation([
+      { texts: [SIGNAL_TEXT.serviceItem, SIGNAL_TEXT.bdi] },
+      { texts: [SIGNAL_TEXT.total] },
+      { texts: [SIGNAL_TEXT.serviceItem, SIGNAL_TEXT.bdi] },
+    ]),
+  );
+  assertEqual(result.pageDecisions[2].candidateType, "direct");
+  assertArrayEqual(result.candidateGroups.map((group) => group.pageNumbers), [[1, 2], [3]]);
 });
 
 runTest("a closing candidate never propagates further", () => {
@@ -164,17 +205,29 @@ runTest("an extraction-error page forms a propagation barrier", () => {
   assertEqual(result.pageDecisions[2].classification, "ambiguous");
 });
 
-runTest("propagation output is independent of array traversal direction", () => {
+runTest("propagation output is independent of actual working-page traversal direction", () => {
   const source = buildObservation([
     { texts: [SIGNAL_TEXT.serviceItem, SIGNAL_TEXT.bdi] },
     { texts: [SIGNAL_TEXT.serviceItem] },
     { texts: [SIGNAL_TEXT.serviceItem] },
     { texts: [SIGNAL_TEXT.serviceItem] },
   ]);
-  const first = locateBudgetDocumentPages(source);
-  const second = locateBudgetDocumentPages(source);
+  const ascendingInput = classifyTechnicalAndDirectPages(source);
+  const descendingInput = [...ascendingInput].reverse();
+  const ascending = propagateStructuralCandidates(source, ascendingInput);
+  const descending = propagateStructuralCandidates(source, descendingInput);
+  const decisionSignature = (pages: typeof ascendingInput) =>
+    [...pages]
+      .sort((left, right) => left.pageNumber - right.pageNumber)
+      .map((page) => [
+        page.pageNumber,
+        page.decision?.classification,
+        page.decision?.candidateType,
+        page.decision?.primaryRuleId,
+        page.decision?.neighborPageNumbersUsed,
+      ]);
   assertArrayEqual(
-    first.pageDecisions.map((decision) => [decision.pageNumber, decision.primaryRuleId, decision.neighborPageNumbersUsed]),
-    second.pageDecisions.map((decision) => [decision.pageNumber, decision.primaryRuleId, decision.neighborPageNumbersUsed]),
+    decisionSignature(ascending),
+    decisionSignature(descending),
   );
 });
