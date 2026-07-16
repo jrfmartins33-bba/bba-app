@@ -6,3 +6,4 @@ export * from "./physical-document-text-normalization";
 export * from "./physical-document-page-metrics";
 export * from "./physical-document-technical-problem";
 export * from "./signal-observation";
+export * from "./page-location";

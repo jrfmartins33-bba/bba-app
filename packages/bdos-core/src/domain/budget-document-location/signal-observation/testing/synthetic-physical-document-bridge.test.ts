@@ -9,7 +9,7 @@ import type { DocumentSignalObservationResult, SignalEvaluationOutcome } from ".
  * exaustivamente as 33 páginas da suíte protegida da Sprint 21.4A.2.b —
  * seleciona um subconjunto representativo, autora texto literal novo e
  * determinístico coerente com cada `observedForm` existente, e verifica
- * apenas os 9 sinais suportados nesta versão do observador contra a
+ * apenas os 8 sinais suportados nesta versão do observador contra a
  * expectativa já documentada. Não altera a suíte protegida.
  */
 

@@ -66,7 +66,7 @@ export interface SyntheticSignalOccurrence {
 
 /**
  * The expected truth for one synthetic page, authored by hand. The future
- * decision mechanism (Sprint 21.4A.2.d) is measured against it, never
+ * decision mechanism (Sprint 21.4A.2.e) is measured against it, never
  * computes it.
  */
 export interface SyntheticPageReference {
