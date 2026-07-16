@@ -14,7 +14,15 @@ Sem leitura física de PDF, sem `pdfjs-dist`, sem OCR, sem resolvedor de conteú
 
 ## 3. Catálogo
 
-`packages/bdos-core/src/domain/budget-document-location/budget-document-signal-catalog.ts`. `BUDGET_DOCUMENT_SIGNAL_CATALOG_SCHEMA_VERSION = 1`, `BUDGET_DOCUMENT_SIGNAL_CATALOG_VERSION = "budget-document-signal-catalog-v1"`. 17 definições em 5 famílias: Referencial (2), Estrutural (5), Continuidade (3), Fechamento (3), Condição da extração (4). Nenhuma marcada `sufficientAlone: true` — invariante verificado por teste. Congelado (`Object.freeze` recursivo) em tempo de execução.
+`packages/bdos-core/src/domain/budget-document-location/budget-document-signal-catalog.ts`. `BUDGET_DOCUMENT_SIGNAL_CATALOG_SCHEMA_VERSION = 1`, `BUDGET_DOCUMENT_SIGNAL_CATALOG_VERSION = "budget-document-signal-catalog-v1"`. **23 definições em 5 famílias**: Referencial (2), Estrutural (5), Continuidade (3), Fechamento (3), Condição da extração (10). Nenhuma marcada `sufficientAlone: true` — invariante verificado por teste. Congelado (`Object.freeze` recursivo) em tempo de execução.
+
+A família Condição da Extração separa três dimensões independentes, cada uma com seus próprios sinais, nunca misturadas:
+
+- **Disponibilidade** (3): `extraction-text-available`, `extraction-no-extractable-text`, `extraction-error`.
+- **Qualidade** (3): `extraction-acceptable-quality`, `extraction-degraded-quality`, `extraction-indeterminate-quality`.
+- **Composição** (4): `extraction-composition-predominantly-textual`, `extraction-composition-mixed`, `extraction-composition-graphic-or-image`, `extraction-composition-not-determinable`.
+
+`extraction-text-available` informa somente que o extrator retornou ao menos um item textual útil — não implica qualidade aceitável nem confiabilidade. `extraction-error` representa falha técnica explícita da extração, distinta de ausência de texto ou de página digitalizada. `extraction-acceptable-quality` não fixa limiar numérico nesta Sprint. Os quatro sinais de composição apenas descrevem o tipo predominante de conteúdo observável, sem indicar presença ou ausência de orçamento.
 
 Formulações conservadoras: menção referencial indica remissão documental a uma *possível* estrutura em outro lugar — não que o conteúdo provavelmente existe ali. Unidade/quantidade/valor representam combinação *compatível* com linha de orçamento — não prova de que a linha seja orçamentária.
 
@@ -24,7 +32,7 @@ Formulações conservadoras: menção referencial indica remissão documental a 
 
 ## 5. Disponibilidade, qualidade e composição
 
-Três dimensões separadas por página, sem score nem limiar numérico:
+Três dimensões independentes por página, cada uma respaldada por sinais próprios do catálogo (item 3), sem score nem limiar numérico:
 
 - **Disponibilidade**: texto disponível / ausência de texto extraível / erro de extração.
 - **Qualidade**: aceitável / degradada / indeterminada.
@@ -52,11 +60,11 @@ Duas cargas independentes de `buildSyntheticReferenceSuite()` comparadas por ser
 
 ## 11. Testes
 
-- `budget-document-signal-catalog.test.ts` (10 testes): integridade, versão, ausência de sinal suficiente isoladamente, mínimo por família, imutabilidade em tempo de execução, detecção de id duplicado/sinal suficiente indevido/referência pendente.
+- `budget-document-signal-catalog.test.ts` (17 testes): integridade, versão, ausência de sinal suficiente isoladamente, mínimo por família, imutabilidade em tempo de execução, detecção de id duplicado/sinal suficiente indevido/referência pendente, existência dos dez identificadores de `ExtractionCondition`, exatamente dez sinais na família, `extraction-text-available` distinto de `extraction-acceptable-quality`, `extraction-error` distinto de `extraction-no-extractable-text`, presença dos quatro sinais de composição, ausência de campo de score/limiar não documentado, total de 23 sinais no catálogo.
 - `synthetic-reference-suite.test.ts` (14 testes): versões declaradas, integridade/cobertura completa, detecção de divergência de versão, detecção de contradição de sinais, mínimos de documentos, adversarial nunca candidato, menção referencial sem estrutura (dedicado), estrutura sem frase exata (dedicado), adversarial não vira candidato por contagem lexical (dedicado), geometria nunca suficiente isoladamente (dedicado), fechamento isolado nunca candidato (dedicado), múltiplos papéis, disponibilidade/qualidade/composição obrigatórias, repetibilidade de duas cargas independentes.
 - `budget-document-location-boundaries.test.ts` (6 testes): existência de fonte; ausência de import de `document-processing`/`document-reconstruction`/`budget-version`/`procurement-engineering`/`apps/web`/Supabase; ausência de `pdfjs`/OCR/IA como palavra-chave; direção inversa; fixtures não exportadas no barrel público.
 
-Total: 30 testes novos. `pnpm typecheck`, `pnpm test` (133/133 arquivos) confirmados após esta simplificação.
+Total: 37 testes na capacidade. `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` (133/133 arquivos) confirmados após a separação da família `ExtractionCondition`.
 
 ## 12. Limitações técnicas
 
