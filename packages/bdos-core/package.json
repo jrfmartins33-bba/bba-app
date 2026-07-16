@@ -42,6 +42,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
-    "@next/env": "14.2.23"
+    "@next/env": "14.2.23",
+    "pdfjs-dist": "^6.1.200"
   }
 }
