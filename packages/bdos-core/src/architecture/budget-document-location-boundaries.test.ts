@@ -15,6 +15,7 @@ const OTHER_DOMAINS_THAT_MUST_NOT_BE_IMPORTED = [
   "domain/document-reconstruction",
   "domain/budget-version",
   "services/procurement-engineering",
+  "infrastructure/budget-document-location",
 ] as const;
 
 const FORBIDDEN_KEYWORDS = [
@@ -128,6 +129,13 @@ runTest("synthetic fixtures are not exported from the domain's public barrel", (
   const indexPath = join(BUDGET_DOCUMENT_LOCATION_DIR, "index.ts");
   const content = readFileSync(indexPath, "utf8");
   assertEqual(content.includes("testing"), false, "index.ts must not re-export the testing/ synthetic reference suite as public API");
+});
+
+runTest("the domain's public barrel does not reference infrastructure or pdfjs", () => {
+  const indexPath = join(BUDGET_DOCUMENT_LOCATION_DIR, "index.ts");
+  const content = readFileSync(indexPath, "utf8").toLowerCase();
+  assertEqual(content.includes("infrastructure"), false, "index.ts must not reference the infrastructure/ adapter layer");
+  assertEqual(content.includes("pdfjs"), false, "index.ts must not reference pdfjs-dist");
 });
 
 function findImportsOfBudgetDocumentLocation(dirs: ReadonlyArray<string>): ReadonlyArray<Violation> {

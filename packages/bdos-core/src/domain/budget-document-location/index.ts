@@ -1,2 +1,7 @@
 export * from "./budget-document-signal-catalog";
 export * from "./budget-document-signal-catalog.types";
+export * from "./physical-document-read.types";
+export * from "./physical-document-page-orientation";
+export * from "./physical-document-text-normalization";
+export * from "./physical-document-page-metrics";
+export * from "./physical-document-technical-problem";
