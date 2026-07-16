@@ -474,3 +474,59 @@ runTest("required test 10: two observations with real evidence (text items and g
   // Sanity: this comparison is only meaningful if evidence was actually produced on both sides.
   assertEqual(first.pages[0].signalEvaluations.some((e) => e.evidence !== null), true, "expected at least one populated evidence to make this repeatability check meaningful");
 });
+
+// --- second review round: closure-general-total-mention requires the numeric token adjacent to the expression, not merely present anywhere in the item ---
+
+function closureOutcomeFor(text: string): string | undefined {
+  const page = buildPage({ pageNumber: 1, itemTexts: [text] });
+  const result = observeDocumentSignals(buildReadResult([page]));
+  return result.pages[0].signalEvaluations.find((e) => e.signalId === "closure-general-total-mention")?.outcome;
+}
+
+runTest("lexical fix test 1: \"Total geral — ver página 12\" does not observe closure-general-total-mention (digit not adjacent to the expression)", () => {
+  assertEqual(closureOutcomeFor("Total geral — ver página 12"), "not_observed");
+});
+
+runTest("lexical fix test 2: \"Valor global conforme item 3.2\" does not observe closure-general-total-mention (digit not adjacent to the expression)", () => {
+  assertEqual(closureOutcomeFor("Valor global conforme item 3.2"), "not_observed");
+});
+
+runTest("lexical fix test 3: \"Total da proposta referente ao exercício 2026\" does not observe closure-general-total-mention (digit not adjacent to the expression)", () => {
+  assertEqual(closureOutcomeFor("Total da proposta referente ao exercício 2026"), "not_observed");
+});
+
+runTest("lexical fix test 4: \"Total geral: R$ 100,00\" observes closure-general-total-mention (numeric token adjacent, via a controlled separator)", () => {
+  assertEqual(closureOutcomeFor("Total geral: R$ 100,00"), "observed");
+});
+
+runTest("lexical fix test 5: \"Valor global 7.611.851,65\" observes closure-general-total-mention (numeric token directly adjacent)", () => {
+  assertEqual(closureOutcomeFor("Valor global 7.611.851,65"), "observed");
+});
+
+// --- second review round: structural-bdi-documentary-mention requires a full token, not a substring of another word ---
+
+function bdiOutcomeFor(text: string): string | undefined {
+  const page = buildPage({ pageNumber: 1, itemTexts: [text] });
+  const result = observeDocumentSignals(buildReadResult([page]));
+  return result.pages[0].signalEvaluations.find((e) => e.signalId === "structural-bdi-documentary-mention")?.outcome;
+}
+
+runTest("lexical fix test 6: \"Subdiretoria de Engenharia\" does not observe structural-bdi-documentary-mention (\"bdi\" is a substring of another word, not a token)", () => {
+  assertEqual(bdiOutcomeFor("Subdiretoria de Engenharia"), "not_observed");
+});
+
+runTest("lexical fix test 7: \"Percentual de BDI: 22,40%\" observes structural-bdi-documentary-mention (\"BDI\" is a delimited token)", () => {
+  assertEqual(bdiOutcomeFor("Percentual de BDI: 22,40%"), "observed");
+});
+
+runTest("lexical fix test 8: repeatability holds for both corrected rules together, with populated evidence on both sides", () => {
+  const page = buildPage({ pageNumber: 1, itemTexts: ["Percentual de BDI: 22,40%", "Total geral: R$ 100,00", "Subdiretoria de Engenharia"] });
+  const readResult = buildReadResult([page]);
+  const first = observeDocumentSignals(readResult);
+  const second = observeDocumentSignals(readResult);
+  assertEqual(JSON.stringify(first), JSON.stringify(second));
+  const bdiEvaluation = first.pages[0].signalEvaluations.find((e) => e.signalId === "structural-bdi-documentary-mention");
+  const closureEvaluation = first.pages[0].signalEvaluations.find((e) => e.signalId === "closure-general-total-mention");
+  assertEqual(bdiEvaluation?.outcome, "observed");
+  assertEqual(closureEvaluation?.outcome, "observed");
+});

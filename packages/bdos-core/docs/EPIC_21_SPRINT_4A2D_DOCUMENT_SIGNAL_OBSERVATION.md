@@ -63,7 +63,7 @@ Quatro dimensões distintas, cada uma revisada apenas quando sua própria nature
 
 `signal-observation-rules.ts`. Oito regras, cada uma com `ruleId`/`ruleVersion`/`signalId`/`evaluationScope`/`requiredInputs`/`humanDescription` — nunca uma função anônima sem identidade. Sete locais (`single_page`), uma dependente de página vizinha (`adjacent_pages`, `continuity-stable-geometry`). Casamento textual sempre literal, item a item (nunca sobre o texto concatenado da página, evitando ambiguidade de alinhamento entre item e correspondência), case-insensitive, com espaços consolidados — sem correspondência aproximada, sem distância de edição, sem sinônimos, sem IA.
 
-Revisão pós-implementação removeu a regra original de `referential-annex-listing` (correspondência textual simples, insuficiente frente à definição do catálogo — ver seção 11) e substituiu a de `closure-general-total-mention` por uma versão `v2` que exige um dígito no mesmo item textual (ver seção 15).
+Duas revisões pós-implementação: (1) removeu a regra original de `referential-annex-listing` (correspondência textual simples, insuficiente frente à definição do catálogo — ver seção 11); (2) endureceu duas regras que produziam falso positivo lexical — `closure-general-total-mention` (`v3`) passou a exigir um token numérico imediatamente adjacente à expressão de total, não apenas um dígito em qualquer posição do item (ver seção 15); `structural-bdi-documentary-mention` (`v2`) passou a exigir "BDI" como token delimitado por limite de palavra, não como substring de outra palavra (ex.: "Subdiretoria").
 
 ## 10. Evidências
 
@@ -78,12 +78,12 @@ Revisão pós-implementação removeu a regra original de `referential-annex-lis
 | 3 | `structural-service-item-identification` | Estrutural | `textItems` | `structural-service-item-identification-line-start-pattern-v1` | Suportado | — |
 | 4 | `structural-unit-quantity-price-block` | Estrutural | agrupamento de linha/bloco | — | Não suportado | `unsupported_missing_row_reconstruction_capability` |
 | 5 | `structural-total-value-column` | Estrutural | agrupamento de linha/bloco | — | Não suportado | `unsupported_missing_row_reconstruction_capability` |
-| 6 | `structural-bdi-documentary-mention` | Estrutural | `textItems` | `structural-bdi-documentary-mention-literal-phrase-v1` | Suportado | — |
+| 6 | `structural-bdi-documentary-mention` | Estrutural | `textItems` | `structural-bdi-documentary-mention-token-boundary-v2` | Suportado | — |
 | 7 | `structural-tabular-row-repetition` | Estrutural | detecção de repetição de linha | — | Não suportado | `unsupported_missing_row_reconstruction_capability` |
 | 8 | `continuity-repeated-header` | Continuidade | detecção de cabeçalho de coluna | — | Não suportado | `unsupported_missing_row_reconstruction_capability` |
 | 9 | `continuity-stable-geometry` | Continuidade | geometria de páginas vizinhas | `continuity-stable-geometry-adjacent-match-v1` | Suportado | — |
 | 10 | `continuity-repeated-row-pattern` | Continuidade | extensão de #7 entre páginas | — | Não suportado | `unsupported_missing_row_reconstruction_capability` |
-| 11 | `closure-general-total-mention` | Fechamento | `textItems` | `closure-general-total-mention-literal-phrase-with-numeric-token-v2` | Suportado | — |
+| 11 | `closure-general-total-mention` | Fechamento | `textItems` | `closure-general-total-mention-adjacent-numeric-token-v3` | Suportado | — |
 | 12 | `closure-density-drop` | Fechamento | contagem de linhas por página | — | Não suportado | `unsupported_missing_row_reconstruction_capability` |
 | 13 | `closure-structural-break` | Fechamento | extensão de #7 entre páginas | — | Não suportado | `unsupported_missing_row_reconstruction_capability` |
 | 14 | `extraction-text-available` | Cond. extração — disponibilidade | `extractionAvailability` | `extraction-text-available-field-v1` | Suportado | — |
@@ -121,7 +121,7 @@ Segunda passagem explícita, separada da primeira. `continuity-stable-geometry` 
 
 ## 15. Fechamento
 
-`closure-general-total-mention` (regra `v2`) observa a presença literal de "total geral"/"valor global"/"total da proposta" **e** a presença de ao menos um dígito, ambos no mesmo item textual — comprovando a associação lexical ao valor que o catálogo exige, sem interpretar, converter ou comparar o valor. Se a expressão e o número estiverem em itens de extração diferentes, o sinal permanece `not_observed` nesta versão (nenhuma união de itens por heurística). A observação nunca implica que um bloco orçamentário precedeu o total.
+`closure-general-total-mention` (regra `v3`) observa "total geral"/"valor global"/"total da proposta" imediatamente seguida, no mesmo item textual, por um token numérico — o separador permitido entre a expressão e o número é deliberadamente estreito (espaço, dois-pontos, hífen/travessão, marcador de moeda opcional "R$"), nunca uma palavra. Um dígito em qualquer outra posição do item **não** satisfaz a regra: "Total geral — ver página 12" permanece `not_observed`, enquanto "Total geral: R$ 100,00" é `observed`. A regra nunca interpreta, converte ou compara o valor encontrado — apenas comprova a associação lexical que o catálogo exige. Se a expressão e o número estiverem em itens de extração diferentes, o sinal permanece `not_observed` nesta versão (nenhuma união de itens por heurística). A observação nunca implica que um bloco orçamentário precedeu o total.
 
 ## 16. Determinismo
 
@@ -130,11 +130,11 @@ Duas execuções de `observeDocumentSignals` sobre o mesmo `PhysicalDocumentRead
 ## 17. Testes
 
 - `signal-observation-support-registry.test.ts` (11 casos): os 10 pontos de integridade exigidos — unicidade de `ruleId`, referência real ao catálogo, ausência de regra órfã, todo suportado resolve regra real, todo não suportado tem motivo, os 23 sinais aparecem exatamente uma vez, nenhum sinal desconhecido, nenhuma regra menciona órgão/licitação real, suporte sempre respaldado por objeto real (nunca só prosa), contagens documentadas (8/15) batendo com o registro executável.
-- `signal-observation.test.ts` (29 casos): os 40 casos mínimos da seção 29 do brief original mais os 10 casos de correção exigidos na revisão pós-implementação — separação real das duas fases (a fase local nunca resolve um sinal de página vizinha; a fase de página vizinha preserva intocadas as entradas da fase local; o resultado final mantém a ordem do catálogo), página "Anexo de Preços" isolada não satisfaz `referential-annex-listing`, "total geral" sem dígito não observa `closure-general-total-mention`, "total geral R$ 100,00" observa sem interpretar o valor, item contendo `|` permanece alinhado ao índice sem delimitador artificial, vizinho existente sem geometria utilizável produz `not_evaluable` (não um falso `not_observed`), e repetibilidade completa com evidência real populada após a mudança de contrato.
+- `signal-observation.test.ts` (37 casos): os 40 casos mínimos da seção 29 do brief original, os 10 casos da primeira revisão pós-implementação (separação real das duas fases; página "Anexo de Preços" isolada não satisfaz `referential-annex-listing`; item contendo `|` permanece alinhado ao índice sem delimitador artificial; vizinho existente sem geometria utilizável produz `not_evaluable`, não um falso `not_observed`; repetibilidade completa com evidência real populada) e os 8 casos da segunda revisão (falsos positivos lexicais) — "Total geral — ver página 12"/"Valor global conforme item 3.2"/"Total da proposta referente ao exercício 2026" permanecem `not_observed` (dígito presente, mas não adjacente); "Total geral: R$ 100,00"/"Valor global 7.611.851,65" são `observed` (dígito adjacente via separador controlado); "Subdiretoria de Engenharia" não observa BDI (substring dentro de outra palavra); "Percentual de BDI: 22,40%" observa BDI (token delimitado); repetibilidade das duas regras corrigidas juntas.
 - `testing/synthetic-physical-document-bridge.test.ts` (18 casos): ponte mínima e exclusivamente de teste contra a suíte sintética protegida da Sprint 21.4A.2.b — 11 páginas curadas de 3 documentos reais da suíte (não as 33 completas), texto literal autorado à parte, coerente com cada `observedForm` já documentado, validando os 8 sinais suportados contra a expectativa existente, incluindo o caso do falso positivo geométrico (geometria observada mesmo sem qualquer texto, em documento que a suíte nunca trata como orçamento) e a confirmação de que a página de capa (que menciona literalmente "Anexo de Preços Estimados") não satisfaz `referential-annex-listing`.
 - `document-signal-observation-boundaries.test.ts` (8 casos, guard novo): domínio puro, sem `pdfjs-dist`/OCR/IA/Supabase/`apps/web`/`apps/mobile`/domínios econômicos/`document-reconstruction`, sem campo de vocabulário decisório declarado no código, sem vazamento de fixtures pela API pública, catálogo nunca redeclarado, código de produção nunca importa a ponte de teste.
 
-**Total de testes focados desta Sprint (incluindo a revisão pós-implementação): 66** (11 + 29 + 18 + 8).
+**Total de testes focados desta Sprint (incluindo as duas revisões pós-implementação): 74** (11 + 37 + 18 + 8).
 
 ## 18. Guards
 
@@ -143,7 +143,8 @@ Guard dedicado novo (`document-signal-observation-boundaries.test.ts`) mais o gu
 ## 19. Limitações
 
 - Casamento textual literal não detecta expressão quebrada entre dois itens de extração, hifenização, fragmentação da ordem técnica de extração, variação ortográfica ou caracteres degradados — deliberado, documentado, não corrigido nesta Sprint (heurística, IA e distância de edição continuam fora de escopo).
-- `closure-general-total-mention` só reconhece associação entre expressão de total e valor quando ambos estão no mesmo item textual — se estiverem em itens diferentes (comum quando rótulo e valor são extraídos como fragmentos separados), o sinal permanece `not_observed`, não `observed`.
+- `closure-general-total-mention` só reconhece associação entre expressão de total e valor quando ambos estão no mesmo item textual, com um separador estreito e controlado entre eles — se estiverem em itens diferentes, ou separados por texto livre (ex.: "Total geral — ver página 12"), o sinal permanece `not_observed`, não `observed`.
+- `structural-bdi-documentary-mention` exige "BDI" como token delimitado por limite de palavra ASCII (`\b`); um caso extremo teórico não coberto é um documento que usa diacríticos imediatamente colados a "BDI" sem espaço (ex.: "BDIçãográfico"), onde o limite de palavra Unicode poderia se comportar de forma diferente do ASCII — não observado em nenhuma fixture real ou sintética desta Sprint.
 - `structural-service-item-identification` usa dois padrões de regex conservadores (numeração hierárquica, código alfanumérico curto); não cobre todo formato possível de identificador de item.
 - `referential-annex-listing` não tem regra nesta versão: uma correspondência textual simples validaria falsamente a própria página do anexo econômico como se fosse uma listagem dele — capacidade de reconhecer estrutura de lista fica para versão futura.
 - A ponte de teste sintética cobre 11 de 33 páginas da suíte protegida — representativa, não exaustiva; documentada como tal no próprio arquivo de teste.

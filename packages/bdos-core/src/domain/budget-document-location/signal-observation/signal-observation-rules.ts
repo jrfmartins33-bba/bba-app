@@ -173,26 +173,62 @@ function evaluateStructuralServiceItemIdentification(page: PhysicalDocumentPage)
   return { kind: "observed", references: [buildTextReference(page, matchingIndices, "primary")] };
 }
 
-// --- rule 3: structural-bdi-documentary-mention --------------------------------
+// --- rule 3: structural-bdi-documentary-mention (v2: token-bounded abbreviation) ---
 
-const STRUCTURAL_BDI_MENTION_PHRASES = ["bdi", "bonificação e despesas indiretas"];
-
-function evaluateStructuralBdiDocumentaryMention(page: PhysicalDocumentPage): RuleOutcome {
-  return evaluateLiteralPhrasePresence(page, STRUCTURAL_BDI_MENTION_PHRASES);
+function escapeRegExpLiteral(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// --- rule 4: closure-general-total-mention -------------------------------------
+/**
+ * A forma abreviada "BDI" precisa casar como token completo — não como
+ * substring arbitrária dentro de outra palavra (ex.: "Subdiretoria"
+ * contém a sequência de caracteres "bdi", mas não é uma menção
+ * documental a BDI). `\b` (limite de palavra ASCII) garante que "BDI"
+ * seja precedido e seguido por um caractere que não seja letra/dígito/
+ * sublinhado, ou pelo início/fim da string.
+ */
+const STRUCTURAL_BDI_ABBREVIATION_PATTERN = /\bbdi\b/i;
+const STRUCTURAL_BDI_FULL_PHRASE = "bonificação e despesas indiretas";
+
+function evaluateStructuralBdiDocumentaryMention(page: PhysicalDocumentPage): RuleOutcome {
+  if (page.extractionAvailability !== "text_available") {
+    return { kind: "not_evaluable", reasonCode: "page_text_unavailable" };
+  }
+
+  const matchingIndices = page.textItems
+    .filter(
+      (item) => STRUCTURAL_BDI_ABBREVIATION_PATTERN.test(item.text) || containsLiteralPhrase(item.text, STRUCTURAL_BDI_FULL_PHRASE),
+    )
+    .map((item) => item.index);
+
+  if (matchingIndices.length === 0) {
+    return { kind: "not_observed" };
+  }
+
+  return { kind: "observed", references: [buildTextReference(page, matchingIndices, "primary")] };
+}
+
+// --- rule 4: closure-general-total-mention (v3: numeric token adjacent to the expression) ---
 
 const CLOSURE_GENERAL_TOTAL_MENTION_PHRASES = ["total geral", "valor global", "total da proposta"];
 
 /**
- * Presença de qualquer dígito no mesmo item — comprova apenas associação
- * lexical objetiva a um valor, conforme a definição do catálogo ("...
- * associada a um valor"). Não interpreta, converte, valida ou compara o
- * valor; apenas confirma que um token numérico/monetário coexiste com a
- * expressão de total no mesmo item textual.
+ * Exige um token numérico/monetário diretamente adjacente à expressão de
+ * total — nunca apenas um dígito em qualquer posição do item, o que
+ * também casaria falsamente em frases como "Total geral — ver página 12"
+ * ou "Valor global conforme item 3.2". O separador permitido entre a
+ * expressão e o número é deliberadamente estreito: espaço, dois-pontos,
+ * hífen/travessão, e um marcador de moeda opcional ("R$") — nunca uma
+ * palavra. Não interpreta, converte, valida ou compara o valor
+ * encontrado; apenas comprova a associação lexical exigida pelo
+ * catálogo ("... associada a um valor").
  */
-const NUMERIC_OR_MONETARY_TOKEN_PATTERN = /\d/;
+const CLOSURE_TOTAL_VALUE_SEPARATOR = String.raw`[\s:\-–—]*(?:R\$)?[\s:\-–—]*`;
+const CLOSURE_TOTAL_VALUE_NUMBER = String.raw`\d`;
+
+const CLOSURE_TOTAL_VALUE_ADJACENCY_PATTERNS: ReadonlyArray<RegExp> = CLOSURE_GENERAL_TOTAL_MENTION_PHRASES.map(
+  (phrase) => new RegExp(`${escapeRegExpLiteral(phrase)}${CLOSURE_TOTAL_VALUE_SEPARATOR}${CLOSURE_TOTAL_VALUE_NUMBER}`, "i"),
+);
 
 function evaluateClosureGeneralTotalMention(page: PhysicalDocumentPage): RuleOutcome {
   if (page.extractionAvailability !== "text_available") {
@@ -200,11 +236,7 @@ function evaluateClosureGeneralTotalMention(page: PhysicalDocumentPage): RuleOut
   }
 
   const matchingIndices = page.textItems
-    .filter(
-      (item) =>
-        CLOSURE_GENERAL_TOTAL_MENTION_PHRASES.some((phrase) => containsLiteralPhrase(item.text, phrase)) &&
-        NUMERIC_OR_MONETARY_TOKEN_PATTERN.test(item.text),
-    )
+    .filter((item) => CLOSURE_TOTAL_VALUE_ADJACENCY_PATTERNS.some((pattern) => pattern.test(collapseWhitespace(item.text))))
     .map((item) => item.index);
 
   if (matchingIndices.length === 0) {
@@ -332,22 +364,23 @@ export const SIGNAL_OBSERVATION_RULE_REGISTRY: ReadonlyArray<SignalObservationRu
     evaluate: evaluateStructuralServiceItemIdentification,
   },
   {
-    ruleId: "structural-bdi-documentary-mention-literal-phrase-v1",
-    ruleVersion: 1,
+    ruleId: "structural-bdi-documentary-mention-token-boundary-v2",
+    ruleVersion: 2,
     signalId: "structural-bdi-documentary-mention",
     evaluationScope: "single_page",
     requiredInputs: ["extractionAvailability", "textItems"],
-    humanDescription: "Presença literal de \"BDI\" ou \"bonificação e despesas indiretas\" em algum item textual da página.",
+    humanDescription:
+      "\"BDI\" como token completo delimitado (nunca substring de outra palavra, ex.: \"Subdiretoria\") ou a forma literal por extenso \"bonificação e despesas indiretas\", em algum item textual da página.",
     evaluate: evaluateStructuralBdiDocumentaryMention,
   },
   {
-    ruleId: "closure-general-total-mention-literal-phrase-with-numeric-token-v2",
-    ruleVersion: 2,
+    ruleId: "closure-general-total-mention-adjacent-numeric-token-v3",
+    ruleVersion: 3,
     signalId: "closure-general-total-mention",
     evaluationScope: "single_page",
     requiredInputs: ["extractionAvailability", "textItems"],
     humanDescription:
-      "O mesmo item textual contém, simultaneamente, \"total geral\"/\"valor global\"/\"total da proposta\" e ao menos um dígito — comprova associação lexical ao valor exigida pelo catálogo, sem interpretar o valor.",
+      "O mesmo item textual contém \"total geral\"/\"valor global\"/\"total da proposta\" imediatamente seguida (separador controlado: espaço, dois-pontos, hífen/travessão, marcador de moeda opcional) por um token numérico — comprova associação lexical ao valor exigida pelo catálogo, sem interpretar o valor. Um dígito em qualquer outra posição do item não satisfaz a regra.",
     evaluate: evaluateClosureGeneralTotalMention,
   },
   {

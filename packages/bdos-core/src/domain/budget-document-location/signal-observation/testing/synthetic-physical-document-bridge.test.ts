@@ -92,7 +92,7 @@ const structureAResult = buildPhysicalDocumentReadResultFromSyntheticPages("stru
     itemTexts: [
       "Codigo | Descricao | Unidade | Quantidade | Valor Unitario | BDI | Valor Total",
       "VV-025 Escavacao mecanizada m3 40 50,00 10% 2000,00",
-      "Total Geral Ficticio: 15600,00",
+      "Total Geral: 15.600,00 (ficticio)",
     ],
   },
   {

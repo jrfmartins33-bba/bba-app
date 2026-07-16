@@ -113,7 +113,7 @@ export const SIGNAL_SUPPORT_REGISTRY: SignalSupportRegistry = [
   supported("structural-service-item-identification", "single_page", "structural-service-item-identification-line-start-pattern-v1"),
   unsupportedRowReconstruction("structural-unit-quantity-price-block"),
   unsupportedRowReconstruction("structural-total-value-column"),
-  supported("structural-bdi-documentary-mention", "single_page", "structural-bdi-documentary-mention-literal-phrase-v1"),
+  supported("structural-bdi-documentary-mention", "single_page", "structural-bdi-documentary-mention-token-boundary-v2"),
   unsupportedRowReconstruction("structural-tabular-row-repetition"),
 
   // ---- Continuity --------------------------------------------------------------
@@ -122,7 +122,7 @@ export const SIGNAL_SUPPORT_REGISTRY: SignalSupportRegistry = [
   unsupportedRowReconstruction("continuity-repeated-row-pattern"),
 
   // ---- Closure -------------------------------------------------------------------
-  supported("closure-general-total-mention", "single_page", "closure-general-total-mention-literal-phrase-with-numeric-token-v2"),
+  supported("closure-general-total-mention", "single_page", "closure-general-total-mention-adjacent-numeric-token-v3"),
   unsupportedRowReconstruction("closure-density-drop"),
   unsupportedRowReconstruction("closure-structural-break"),
 
