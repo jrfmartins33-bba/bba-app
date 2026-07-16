@@ -4,9 +4,6 @@ export const SYNTHETIC_REFERENCE_SUITE_SCHEMA_VERSION = 1 as const;
 
 export const SYNTHETIC_REFERENCE_SUITE_VERSION = "budget-document-location-synthetic-suite-v1" as const;
 
-/** Every fixture in this suite must carry this classification — see governance in the Sprint report. */
-export const SYNTHETIC_FIXTURE_CLASSIFICATION = "synthetic-independent" as const;
-
 export enum SyntheticReferenceDocumentCategory {
   PositiveStructureA = "PositiveStructureA",
   PositiveStructureB = "PositiveStructureB",
@@ -62,29 +59,15 @@ export interface SyntheticPageGeometry {
   readonly orientation: SyntheticPageOrientation;
 }
 
-/** A signal the fixture author asserts is present on the page, described conceptually — never literal reproduced real content. */
 export interface SyntheticSignalOccurrence {
   readonly signalId: BudgetDocumentSignalId;
   readonly observedForm: string;
 }
 
-export interface SyntheticFixtureGovernance {
-  readonly classification: typeof SYNTHETIC_FIXTURE_CLASSIFICATION;
-  readonly createdManually: true;
-  readonly independentFromClientDocuments: true;
-  readonly noTranscription: true;
-  readonly noAutomaticDerivation: true;
-  readonly noRealValues: true;
-  readonly noRealCodes: true;
-  readonly noRealNames: true;
-  readonly noIdentifiableClientStructure: true;
-  readonly authorizedForInternalRegression: true;
-}
-
 /**
- * The expected truth for one synthetic page. This is authored by hand — it
- * is never computed by this Sprint, and no future mechanism may write it;
- * the future decision mechanism (Sprint 21.4A.2.d) is measured against it.
+ * The expected truth for one synthetic page, authored by hand. The future
+ * decision mechanism (Sprint 21.4A.2.d) is measured against it, never
+ * computes it.
  */
 export interface SyntheticPageReference {
   readonly pageId: string;
@@ -108,7 +91,6 @@ export interface SyntheticReferenceDocument {
   readonly category: SyntheticReferenceDocumentCategory;
   readonly humanName: string;
   readonly description: string;
-  readonly governance: SyntheticFixtureGovernance;
   readonly pages: ReadonlyArray<SyntheticPageReference>;
   readonly fixtureVersion: number;
 }
@@ -136,8 +118,10 @@ export type SyntheticReferenceSuiteIssueCode =
   | "missing_rationale"
   | "inconsistent_page_numbering"
   | "dangling_continuity_reference"
-  | "non_synthetic_governance"
-  | "dangling_signal_reference";
+  | "dangling_signal_reference"
+  | "contradictory_signal_expectation"
+  | "schema_version_mismatch"
+  | "suite_version_mismatch";
 
 export interface SyntheticReferenceSuiteIssue {
   readonly code: SyntheticReferenceSuiteIssueCode;

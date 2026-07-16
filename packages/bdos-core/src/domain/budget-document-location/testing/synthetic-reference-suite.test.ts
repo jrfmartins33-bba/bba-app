@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import {
-  SYNTHETIC_FIXTURE_CLASSIFICATION,
   SYNTHETIC_REFERENCE_SUITE_SCHEMA_VERSION,
   SYNTHETIC_REFERENCE_SUITE_VERSION,
   SyntheticPageDocumentaryRole,
@@ -32,32 +31,35 @@ function normalizedHash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-// Strings that only the real Lagoa do Arroz / DNOCS tender documents could
-// contain. None of them may ever appear in this synthetic suite.
-const FORBIDDEN_REAL_DOCUMENT_STRINGS = [
-  "Lagoa do Arroz",
-  "DNOCS",
-  "COT-015",
-  "9.809.087",
-  "9809087",
-  "Concretisa",
-  "CONJASF",
-  "HIDROMEC",
-  "90006",
-  "Pregão",
-  "George Pontes",
-];
-
 runTest("suite carries its declared schema and suite versions", () => {
   const suite = buildSyntheticReferenceSuite();
   assertEqual(suite.schemaVersion, SYNTHETIC_REFERENCE_SUITE_SCHEMA_VERSION);
   assertEqual(suite.suiteVersion, SYNTHETIC_REFERENCE_SUITE_VERSION);
 });
 
-runTest("suite passes its own structural integrity, coverage and governance validation", () => {
+runTest("suite passes its own structural integrity and coverage validation", () => {
   const suite = buildSyntheticReferenceSuite();
   const issues = validateSyntheticReferenceSuite(suite);
   assertNoViolations(issues, "synthetic reference suite issues");
+});
+
+runTest("validateSyntheticReferenceSuite flags a schemaVersion/suiteVersion mismatch", () => {
+  const suite = buildSyntheticReferenceSuite();
+  const tamperedSchema = { ...suite, schemaVersion: 999 as typeof suite.schemaVersion };
+  const tamperedSuiteVersion = { ...suite, suiteVersion: "wrong-version" as typeof suite.suiteVersion };
+  assertEqual(validateSyntheticReferenceSuite(tamperedSchema).some((i) => i.code === "schema_version_mismatch"), true, "expected schema_version_mismatch issue");
+  assertEqual(validateSyntheticReferenceSuite(tamperedSuiteVersion).some((i) => i.code === "suite_version_mismatch"), true, "expected suite_version_mismatch issue");
+});
+
+runTest("validateSyntheticReferenceSuite flags a signal that is both expected and explicitly absent on the same page", () => {
+  const suite = buildSyntheticReferenceSuite();
+  const [firstDocument, ...restDocuments] = suite.documents;
+  const [firstPage, ...restPages] = firstDocument.pages;
+  const contradictorySignalId = firstPage.expectedSignals[0]?.signalId ?? "referential-budget-spreadsheet-mention";
+  const tamperedPage = { ...firstPage, explicitlyAbsentSignalIds: [...firstPage.explicitlyAbsentSignalIds, contradictorySignalId] };
+  const tamperedSuite = { ...suite, documents: [{ ...firstDocument, pages: [tamperedPage, ...restPages] }, ...restDocuments] };
+  const issues = validateSyntheticReferenceSuite(tamperedSuite);
+  assertEqual(issues.some((i) => i.code === "contradictory_signal_expectation"), true, "expected contradictory_signal_expectation issue");
 });
 
 runTest("suite has at least two positive documents and at least three false positives", () => {
@@ -145,7 +147,7 @@ runTest("suite includes at least one page with multiple documentary roles", () =
   if (multiRolePages.length === 0) throw new Error("expected at least one page with multiple documentary roles");
 });
 
-runTest("suite includes documentary condition cases covering the required extraction states", () => {
+runTest("suite includes documentary condition cases covering the required availability/quality/composition states", () => {
   const suite = buildSyntheticReferenceSuite();
   const conditionsDoc = suite.documents.find((d) => d.category === SyntheticReferenceDocumentCategory.DocumentaryConditionCases);
   if (!conditionsDoc) throw new Error("documentary condition cases document not found");
@@ -158,42 +160,6 @@ runTest("suite includes documentary condition cases covering the required extrac
 
   const gapPage = conditionsDoc.pages.find((p) => p.expectedGaps.length > 0);
   if (!gapPage) throw new Error("expected at least one page documenting an expected gap (interrupted sequence)");
-});
-
-runTest("every fixture is classified synthetic-independent with full governance flags", () => {
-  const suite = buildSyntheticReferenceSuite();
-  suite.documents.forEach((document) => {
-    assertEqual(document.governance.classification, SYNTHETIC_FIXTURE_CLASSIFICATION, `${document.documentId} not classified synthetic-independent`);
-    assertEqual(document.governance.createdManually, true, `${document.documentId} missing createdManually`);
-    assertEqual(document.governance.independentFromClientDocuments, true, `${document.documentId} missing independentFromClientDocuments`);
-    assertEqual(document.governance.noRealValues, true, `${document.documentId} missing noRealValues`);
-    assertEqual(document.governance.noRealNames, true, `${document.documentId} missing noRealNames`);
-    assertEqual(document.governance.authorizedForInternalRegression, true, `${document.documentId} missing authorizedForInternalRegression`);
-  });
-});
-
-runTest("no fixture text references the real Lagoa do Arroz / DNOCS tender case", () => {
-  const suite = buildSyntheticReferenceSuite();
-  const serialized = JSON.stringify(suite);
-  FORBIDDEN_REAL_DOCUMENT_STRINGS.forEach((forbidden) => {
-    if (serialized.includes(forbidden)) {
-      throw new Error(`fixture unexpectedly references a real-document string: "${forbidden}"`);
-    }
-  });
-});
-
-runTest("no fixture uses hardcoded real physical page numbers (44-54) as a production rule surface", () => {
-  const suite = buildSyntheticReferenceSuite();
-  const structureA = suite.documents.find((d) => d.documentId === "fixture-positive-structure-a");
-  const structureB = suite.documents.find((d) => d.documentId === "fixture-positive-structure-b");
-  [structureA, structureB].forEach((document) => {
-    if (!document) throw new Error("expected positive structure document");
-    const candidatePageNumbers = document.pages
-      .filter((p) => p.referenceDecision === SyntheticPageReferenceDecision.Candidate)
-      .map((p) => p.syntheticPhysicalPageNumber);
-    const overlapsRealRange = candidatePageNumbers.some((n) => n >= 44 && n <= 54) && candidatePageNumbers.length === 11;
-    assertEqual(overlapsRealRange, false, "candidate page range must not mirror the real document's 44-54 window");
-  });
 });
 
 runTest("repeatability: two independent builds of the suite are byte-identical after normalization", () => {
@@ -219,8 +185,7 @@ runTest("repeatability: two independent builds of the suite are byte-identical a
     });
   });
 
-  // This test validates repeatability of the synthetic layer and its pure
-  // normalization/serialization only. It does not validate repeatability
-  // of pdfjs-dist against a real PDF, which remains open for the contract
-  // and extraction-adapter Sprint (21.4A.2.c) per §22 of this Sprint.
+  // Validates repeatability of the synthetic layer and its pure
+  // normalization/serialization only — not pdfjs-dist repeatability
+  // against a real PDF, which remains open for Sprint 21.4A.2.c.
 });

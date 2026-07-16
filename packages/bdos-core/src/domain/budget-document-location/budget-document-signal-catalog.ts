@@ -37,7 +37,7 @@ const MUTABLE_BUDGET_DOCUMENT_SIGNAL_CATALOG: BudgetDocumentSignalCatalog = [
     description:
       "Ocorrência textual de expressões como \"planilha orçamentária\", \"orçamento\" ou \"quadro orçamentário\" em título, sumário, índice remissivo ou texto corrido.",
     documentaryMeaning:
-      "Indica que o documento provavelmente contém, em algum lugar, uma estrutura orçamentária — mas não indica onde, nem que a própria página a contenha.",
+      "Indica uma remissão documental a uma possível estrutura orçamentária em outro lugar do documento — não indica onde, nem se a estrutura de fato existe naquele local.",
     observableForms: [
       "Título de seção ou de página contendo a expressão",
       "Entrada de sumário ou índice remissivo apontando para outra página",
@@ -70,7 +70,7 @@ const MUTABLE_BUDGET_DOCUMENT_SIGNAL_CATALOG: BudgetDocumentSignalCatalog = [
     description:
       "Lista de anexos do documento que nomeia um anexo de preços, custos ou orçamento, sem reproduzir seu conteúdo.",
     documentaryMeaning:
-      "Confirma a existência declarada de um anexo econômico em algum lugar do documento, sem localizá-lo.",
+      "Registra que o documento declara a existência de um anexo econômico em algum lugar, sem confirmar seu conteúdo ou localização.",
     observableForms: [
       "Tabela ou lista numerada de anexos com uma entrada referente a preços/orçamento",
       "Sumário estrutural do documento com uma seção nomeada como anexo de preços",
@@ -128,7 +128,7 @@ const MUTABLE_BUDGET_DOCUMENT_SIGNAL_CATALOG: BudgetDocumentSignalCatalog = [
     humanName: "Bloco de unidade, quantidade e valor unitário",
     description:
       "Coexistência, na mesma linha ou bloco tabular, de uma unidade de medida, uma quantidade e um valor unitário — em qualquer ordem ou rótulo.",
-    documentaryMeaning: "É a combinação semântica mínima de uma linha de orçamento de serviços.",
+    documentaryMeaning: "Representa uma combinação compatível com uma linha de orçamento de serviços — compatibilidade estrutural, não prova de que a linha seja orçamentária.",
     observableForms: [
       "Três valores lado a lado com rótulos compatíveis com unidade/quantidade/valor",
       "Bloco tabular com colunas correspondentes, independentemente da ordem ou da grafia exata dos rótulos",

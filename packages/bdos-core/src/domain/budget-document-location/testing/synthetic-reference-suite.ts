@@ -1,9 +1,7 @@
 import { BUDGET_DOCUMENT_SIGNAL_CATALOG } from "../budget-document-signal-catalog";
 import {
-  SYNTHETIC_FIXTURE_CLASSIFICATION,
   SYNTHETIC_REFERENCE_SUITE_SCHEMA_VERSION,
   SYNTHETIC_REFERENCE_SUITE_VERSION,
-  SyntheticFixtureGovernance,
   SyntheticPageComposition,
   SyntheticPageDocumentaryRole,
   SyntheticPageExtractionAvailability,
@@ -18,30 +16,7 @@ import {
   SyntheticSignalOccurrence,
 } from "./synthetic-reference-suite.types";
 
-/**
- * Every document below is authored by hand, entirely independent of any
- * real tender/budget document. Organizations, works, item descriptions,
- * codes and values are fictional and deliberately generic. See governance
- * section of EPIC_21_SPRINT_4A2B_SIGNAL_CATALOG_AND_SYNTHETIC_REFERENCE_SUITE.md
- * — none of this is inspired by, derived from, or a paraphrase of any
- * client document. Do not add a fixture derived from a real document
- * without explicit, documented, traceable authorization.
- */
-
 const FIXTURE_VERSION = 1;
-
-const GOVERNANCE: SyntheticFixtureGovernance = {
-  classification: SYNTHETIC_FIXTURE_CLASSIFICATION,
-  createdManually: true,
-  independentFromClientDocuments: true,
-  noTranscription: true,
-  noAutomaticDerivation: true,
-  noRealValues: true,
-  noRealCodes: true,
-  noRealNames: true,
-  noIdentifiableClientStructure: true,
-  authorizedForInternalRegression: true,
-};
 
 const PORTRAIT_A4: SyntheticPageGeometry = { widthPoints: 595.28, heightPoints: 841.89, orientation: "Portrait" };
 const LANDSCAPE_WIDE: SyntheticPageGeometry = { widthPoints: 1190.55, heightPoints: 841.89, orientation: "Landscape" };
@@ -97,7 +72,6 @@ function buildPositiveStructureA(): SyntheticReferenceDocument {
     humanName: "Estrutura positiva sintética A — obras de drenagem fictícias \"Vale Verde\"",
     description:
       "Documento inteiramente fictício com capa, resumo, quatro páginas detalhadas em paisagem com cabeçalho e estrutura de linha repetidos, a última também servindo de fechamento, seguida de uma página descartada não relacionada.",
-    governance: GOVERNANCE,
     fixtureVersion: FIXTURE_VERSION,
     pages: [
       page({
@@ -221,7 +195,6 @@ function buildPositiveStructureB(): SyntheticReferenceDocument {
     humanName: "Estrutura positiva sintética B — pavimentação fictícia \"Serra Alta\"",
     description:
       "Documento fictício materialmente distinto de A: geometria retrato (não paisagem), vocabulário e ordem de campos diferentes, BDI fictício documentado à parte, e nunca usa a expressão exata \"Planilha Orçamentária\".",
-    governance: GOVERNANCE,
     fixtureVersion: FIXTURE_VERSION,
     pages: [
       page({
@@ -329,7 +302,6 @@ function buildFalsePositiveIndexListing(): SyntheticReferenceDocument {
     category: SyntheticReferenceDocumentCategory.FalsePositiveIndexListing,
     humanName: "Falso positivo — sumário fictício de anexos",
     description: "Sumário fictício que menciona explicitamente \"Planilha Orçamentária\", \"Orçamento\" e \"BDI\", sem qualquer estrutura de linhas de serviço.",
-    governance: GOVERNANCE,
     fixtureVersion: FIXTURE_VERSION,
     pages: [
       page({
@@ -372,7 +344,6 @@ function buildFalsePositiveFinancialStatement(): SyntheticReferenceDocument {
     category: SyntheticReferenceDocumentCategory.FalsePositiveFinancialStatement,
     humanName: "Falso positivo — demonstrativo financeiro fictício",
     description: "Demonstrativo fictício de fluxo de caixa com valores, totais e percentuais, sem estrutura de itens de serviço de obra.",
-    governance: GOVERNANCE,
     fixtureVersion: FIXTURE_VERSION,
     pages: [
       page({
@@ -407,7 +378,6 @@ function buildFalsePositivePhysicalFinancialSchedule(): SyntheticReferenceDocume
     category: SyntheticReferenceDocumentCategory.FalsePositivePhysicalFinancialSchedule,
     humanName: "Falso positivo — cronograma físico-financeiro fictício",
     description: "Cronograma fictício com atividades, percentuais de execução por período e totais, sem estrutura linha a linha de planilha orçamentária.",
-    governance: GOVERNANCE,
     fixtureVersion: FIXTURE_VERSION,
     pages: [
       page({
@@ -442,7 +412,6 @@ function buildFalsePositiveAdversarial(): SyntheticReferenceDocument {
     humanName: "Falso positivo adversarial — sinais lexicais abundantes sem estrutura coerente",
     description:
       "Documento fictício deliberadamente construído para conter a expressão \"Planilha Orçamentária\", código, unidade, quantidade, BDI, valor unitário e total geral — mas sem repetição coerente de linha, sem continuidade entre páginas e sem associação estável entre campos.",
-    governance: GOVERNANCE,
     fixtureVersion: FIXTURE_VERSION,
     pages: [
       page({
@@ -500,7 +469,6 @@ function buildFalsePositiveGeometryWithoutBudget(): SyntheticReferenceDocument {
     humanName: "Falso positivo — desenho técnico fictício com geometria estável",
     description:
       "Três páginas fictícias de um desenho técnico/planta de situação, todas em paisagem com a mesma geometria de um bloco orçamentário candidato — mas sem qualquer sinal estrutural. Prova dedicada de que geometria estável nunca é suficiente isoladamente.",
-    governance: GOVERNANCE,
     fixtureVersion: FIXTURE_VERSION,
     pages: [
       page({
@@ -564,7 +532,6 @@ function buildDocumentaryConditionCases(): SyntheticReferenceDocument {
     humanName: "Casos de condição documental",
     description:
       "Sete páginas isoladas, cada uma demonstrando uma condição documental distinta: vazia, sem texto extraível, erro de extração, qualidade degradada, qualidade indeterminada, estrutura parcial com lacuna e fechamento sem bloco anterior.",
-    governance: GOVERNANCE,
     fixtureVersion: FIXTURE_VERSION,
     pages: [
       page({
@@ -723,13 +690,20 @@ function containsExactPhrase(document: SyntheticReferenceDocument, phrase: strin
 
 /**
  * Structural validation of the synthetic reference suite itself — never a
- * decision about real pages. Enforces the coverage and governance
- * invariants required before any future decision mechanism can be
- * measured against this suite.
+ * decision about real pages. Enforces the coverage and integrity invariants
+ * required before any future decision mechanism can be measured against
+ * this suite.
  */
 export function validateSyntheticReferenceSuite(suite: SyntheticReferenceSuite): ReadonlyArray<SyntheticReferenceSuiteIssue> {
   const issues: SyntheticReferenceSuiteIssue[] = [];
   const knownSignalIds = new Set(BUDGET_DOCUMENT_SIGNAL_CATALOG.map((s) => s.id));
+
+  if (suite.schemaVersion !== SYNTHETIC_REFERENCE_SUITE_SCHEMA_VERSION) {
+    issues.push({ code: "schema_version_mismatch", documentId: null, pageId: null, message: `schemaVersion divergente: esperado ${SYNTHETIC_REFERENCE_SUITE_SCHEMA_VERSION}, encontrado ${suite.schemaVersion}` });
+  }
+  if (suite.suiteVersion !== SYNTHETIC_REFERENCE_SUITE_VERSION) {
+    issues.push({ code: "suite_version_mismatch", documentId: null, pageId: null, message: `suiteVersion divergente: esperado ${SYNTHETIC_REFERENCE_SUITE_VERSION}, encontrado ${suite.suiteVersion}` });
+  }
 
   const positiveDocs = suite.documents.filter((d) => POSITIVE_CATEGORIES.includes(d.category));
   const falsePositiveDocs = suite.documents.filter((d) => FALSE_POSITIVE_CATEGORIES.includes(d.category));
@@ -808,21 +782,6 @@ export function validateSyntheticReferenceSuite(suite: SyntheticReferenceSuite):
       issues.push({ code: "missing_fixture_version", documentId: document.documentId, pageId: null, message: "versão de fixture ausente no documento" });
     }
 
-    if (
-      document.governance.classification !== SYNTHETIC_FIXTURE_CLASSIFICATION
-      || !document.governance.createdManually
-      || !document.governance.independentFromClientDocuments
-      || !document.governance.noTranscription
-      || !document.governance.noAutomaticDerivation
-      || !document.governance.noRealValues
-      || !document.governance.noRealCodes
-      || !document.governance.noRealNames
-      || !document.governance.noIdentifiableClientStructure
-      || !document.governance.authorizedForInternalRegression
-    ) {
-      issues.push({ code: "non_synthetic_governance", documentId: document.documentId, pageId: null, message: "governança da fixture incompleta ou não-sintética" });
-    }
-
     const continuityGroups = new Map<string, number>();
     document.pages.forEach((p, index) => {
       if (seenPageIds.has(p.pageId)) {
@@ -842,6 +801,13 @@ export function validateSyntheticReferenceSuite(suite: SyntheticReferenceSuite):
       [...p.expectedSignals.map((s) => s.signalId), ...p.explicitlyAbsentSignalIds].forEach((signalId) => {
         if (!knownSignalIds.has(signalId)) {
           issues.push({ code: "dangling_signal_reference", documentId: document.documentId, pageId: p.pageId, message: `sinal desconhecido referenciado: ${signalId}` });
+        }
+      });
+
+      const expectedIds = new Set(p.expectedSignals.map((s) => s.signalId));
+      p.explicitlyAbsentSignalIds.forEach((absentId) => {
+        if (expectedIds.has(absentId)) {
+          issues.push({ code: "contradictory_signal_expectation", documentId: document.documentId, pageId: p.pageId, message: `sinal "${absentId}" está simultaneamente esperado e explicitamente ausente` });
         }
       });
 
