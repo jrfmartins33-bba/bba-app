@@ -103,8 +103,10 @@ const structureAResult = buildPhysicalDocumentReadResultFromSyntheticPages("stru
 
 const observedStructureA = observeDocumentSignals(structureAResult);
 
-runTest("bridge/structure-a: page 1 (cover) observes referential-annex-listing", () => {
-  assertOutcome(observedStructureA, 1, "referential-annex-listing", "observed");
+runTest("bridge/structure-a: page 1 (cover) does not observe referential-annex-listing (unsupported this version: mere phrase presence would falsely satisfy a page that IS the annex itself, not a listing of it)", () => {
+  assertOutcome(observedStructureA, 1, "referential-annex-listing", "not_evaluable");
+  const evaluation = evaluationOf(observedStructureA, 1, "referential-annex-listing");
+  assertEqual(evaluation.notEvaluableReasonCode, "unsupported_missing_list_structure_capability");
 });
 
 runTest("bridge/structure-a: page 1 (cover) does not observe structural-service-item-identification (explicitly absent in the fixture)", () => {

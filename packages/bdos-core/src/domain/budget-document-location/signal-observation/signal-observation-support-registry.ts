@@ -78,17 +78,36 @@ function unsupportedMissingProfile(
   };
 }
 
+function unsupportedListStructure(signalId: BudgetDocumentSignalId): SignalSupportEntry {
+  return {
+    signalId,
+    status: "unsupported",
+    evaluationScope: null,
+    ruleId: null,
+    unsupportedReasonCode: "unsupported_missing_list_structure_capability",
+    unsupportedDimension: null,
+  };
+}
+
 /**
  * Inventário completo dos 23 sinais do catálogo (Sprint 21.4A.2.b), com
- * classificação de suporte desta versão do observador. Nove sinais são
- * suportados por regra determinística real; quatorze permanecem
+ * classificação de suporte desta versão do observador. Oito sinais são
+ * suportados por regra determinística real; quinze permanecem
  * `unsupported` por bloqueio arquitetural documentado — nunca por regra
  * fraca criada apenas para elevar cobertura nominal.
+ *
+ * `referential-annex-listing` foi deliberadamente marcado `unsupported`
+ * (revisão pós-implementação): o catálogo exige uma *listagem* de anexos
+ * que nomeia um anexo econômico, não apenas a menção literal da expressão
+ * — uma correspondência textual simples também dispararia falsamente na
+ * própria página do anexo de preços, que não é uma listagem. Sem uma
+ * capacidade de reconhecer estrutura de lista, a regra estaria observando
+ * uma versão mais fraca do sinal do que a definida no catálogo.
  */
 export const SIGNAL_SUPPORT_REGISTRY: SignalSupportRegistry = [
   // ---- Referential ---------------------------------------------------------
   supported("referential-budget-spreadsheet-mention", "single_page", "referential-budget-spreadsheet-mention-literal-phrase-v1"),
-  supported("referential-annex-listing", "single_page", "referential-annex-listing-literal-phrase-v1"),
+  unsupportedListStructure("referential-annex-listing"),
 
   // ---- Structural ------------------------------------------------------------
   supported("structural-service-item-identification", "single_page", "structural-service-item-identification-line-start-pattern-v1"),
@@ -103,7 +122,7 @@ export const SIGNAL_SUPPORT_REGISTRY: SignalSupportRegistry = [
   unsupportedRowReconstruction("continuity-repeated-row-pattern"),
 
   // ---- Closure -------------------------------------------------------------------
-  supported("closure-general-total-mention", "single_page", "closure-general-total-mention-literal-phrase-v1"),
+  supported("closure-general-total-mention", "single_page", "closure-general-total-mention-literal-phrase-with-numeric-token-v2"),
   unsupportedRowReconstruction("closure-density-drop"),
   unsupportedRowReconstruction("closure-structural-break"),
 

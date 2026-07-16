@@ -58,6 +58,7 @@ export type SignalEvaluationOutcome = "observed" | "not_observed" | "not_evaluab
 export type SignalNotEvaluableReasonCode =
   | "unsupported_missing_evaluation_profile"
   | "unsupported_missing_row_reconstruction_capability"
+  | "unsupported_missing_list_structure_capability"
   | "page_text_unavailable"
   | "page_geometry_unavailable"
   | "adjacent_page_unavailable"
@@ -73,6 +74,29 @@ export interface SignalObservationEvidenceGeometry {
   readonly orientation: PhysicalDocumentPageOrientation;
 }
 
+/** Função controlada de uma referência de evidência dentro de uma regra. */
+export type SignalObservationEvidenceRole =
+  | "primary"
+  | "reference_page"
+  | "earlier_page"
+  | "later_page"
+  | "extraction_availability_field";
+
+/**
+ * Evidência textual de um único item, preservado individualmente — nunca
+ * concatenado com outros itens por um separador artificial. `textItemIndex`
+ * permanece univocamente alinhado a `originalText`, mesmo quando o texto
+ * original contém caracteres que poderiam ser confundidos com um
+ * delimitador (ex.: `|`).
+ */
+export interface SignalObservationTextEvidenceItem {
+  readonly textItemIndex: number;
+  /** Texto original do item, verbatim, sem qualquer alteração. */
+  readonly originalText: string;
+  /** Texto normalizado apenas deste item (`normalizePageText([originalText])`), nunca do texto concatenado da página. */
+  readonly normalizedText: string | null;
+}
+
 /**
  * Uma referência de evidência a uma única página física. Uma observação
  * de sinal de página única tem exatamente uma referência; uma observação
@@ -81,16 +105,12 @@ export interface SignalObservationEvidenceGeometry {
  */
 export interface SignalObservationEvidenceReference {
   readonly pageNumber: number;
-  /** Índices estáveis dos itens textuais que sustentam a observação, preservados individualmente — nunca colapsados em um intervalo. */
-  readonly textItemIndices: ReadonlyArray<number>;
-  /** Trecho original, verbatim, dos itens referenciados. Vazio quando a observação não depende de itens textuais específicos (ex.: campo técnico do leitor). */
-  readonly originalSnippet: string;
-  /** Trecho normalizado correspondente, apenas quando a regra efetivamente comparou contra texto normalizado. */
-  readonly normalizedSnippet: string | null;
+  /** Itens textuais que sustentam a observação, cada um preservado individualmente. Vazio quando a observação não depende de itens textuais específicos (ex.: campo técnico do leitor, ou referência puramente geométrica). */
+  readonly textItems: ReadonlyArray<SignalObservationTextEvidenceItem>;
   /** Geometria da página referenciada, apenas quando a regra é geométrica. */
   readonly geometry: SignalObservationEvidenceGeometry | null;
-  /** Função desta referência dentro da regra (ex.: "primary", "earlier_page", "later_page", "reference_page"). */
-  readonly roleInRule: string;
+  /** Função desta referência dentro da regra. */
+  readonly roleInRule: SignalObservationEvidenceRole;
 }
 
 /**

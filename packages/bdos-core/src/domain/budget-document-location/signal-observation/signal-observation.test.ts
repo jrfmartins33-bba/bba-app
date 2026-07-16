@@ -8,7 +8,7 @@ import {
   PHYSICAL_DOCUMENT_READER_VERSION,
 } from "../physical-document-read.types";
 import type { PhysicalDocumentPage, PhysicalDocumentReadResult, PhysicalDocumentTextExtractionAvailability } from "../physical-document-read.types";
-import { observeDocumentSignals } from "./signal-observation";
+import { evaluateAdjacentPhase, evaluateLocalPhase, observeDocumentSignals } from "./signal-observation";
 import {
   DOCUMENT_SIGNAL_OBSERVER_NAME,
   DOCUMENT_SIGNAL_OBSERVER_VERSION,
@@ -124,7 +124,7 @@ runTest("physical page numbers are preserved as-is", () => {
 
 // --- 1, 11, 12, 13, 14: observed with correct evidence, item index and both texts preserved ---
 
-runTest("case 1/11/12/13/14: an observed signal carries evidence with the correct item index, original and normalized snippets", () => {
+runTest("case 1/11/12/13/14: an observed signal carries evidence with the correct item index, original and normalized text", () => {
   const page = buildPage({ pageNumber: 1, itemTexts: ["Introdução", "Menciona BDI   no   texto", "Rodapé"] });
   const result = observeDocumentSignals(buildReadResult([page]));
   const evaluation = result.pages[0].signalEvaluations.find((e) => e.signalId === "structural-bdi-documentary-mention");
@@ -132,12 +132,14 @@ runTest("case 1/11/12/13/14: an observed signal carries evidence with the correc
   assertEqual(evaluation?.outcome, "observed");
   assertTrue(evaluation?.evidence !== null, "expected evidence to be present");
   assertEqual(evaluation?.evidence?.references[0]?.pageNumber, 1);
-  assertArrayEqual(evaluation?.evidence?.references[0]?.textItemIndices ?? [], [1]);
-  assertEqual(evaluation?.evidence?.references[0]?.originalSnippet, "Menciona BDI   no   texto");
-  assertEqual(evaluation?.evidence?.references[0]?.normalizedSnippet, "Menciona BDI no texto");
+  const textItems = evaluation?.evidence?.references[0]?.textItems ?? [];
+  assertEqual(textItems.length, 1);
+  assertEqual(textItems[0]?.textItemIndex, 1);
+  assertEqual(textItems[0]?.originalText, "Menciona BDI   no   texto");
+  assertEqual(textItems[0]?.normalizedText, "Menciona BDI no texto");
   assertTrue(
-    evaluation?.evidence?.references[0]?.originalSnippet !== evaluation?.evidence?.references[0]?.normalizedSnippet,
-    "original and normalized snippets must remain distinct when normalization actually changed the text",
+    textItems[0]?.originalText !== textItems[0]?.normalizedText,
+    "original and normalized text must remain distinct when normalization actually changed the text",
   );
 });
 
@@ -213,7 +215,25 @@ runTest("case 17: evidence preserves discontinuous item indices exactly, never c
   });
   const result = observeDocumentSignals(buildReadResult([page]));
   const evaluation = result.pages[0].signalEvaluations.find((e) => e.signalId === "structural-bdi-documentary-mention");
-  assertArrayEqual(evaluation?.evidence?.references[0]?.textItemIndices ?? [], [1, 3]);
+  const indices = (evaluation?.evidence?.references[0]?.textItems ?? []).map((item) => item.textItemIndex);
+  assertArrayEqual(indices, [1, 3]);
+});
+
+// --- required test 5: an item containing "|" stays aligned, since there is no artificial delimiter anymore ---
+
+runTest("required test 5: an original item containing the character '|' remains correctly aligned to its own index, with no artificial delimiter", () => {
+  const page = buildPage({
+    pageNumber: 1,
+    itemTexts: ["Coluna A | Coluna BDI | Coluna C", "outra menção a BDI"],
+  });
+  const result = observeDocumentSignals(buildReadResult([page]));
+  const evaluation = result.pages[0].signalEvaluations.find((e) => e.signalId === "structural-bdi-documentary-mention");
+  const textItems = evaluation?.evidence?.references[0]?.textItems ?? [];
+  assertEqual(textItems.length, 2);
+  assertEqual(textItems[0]?.textItemIndex, 0);
+  assertEqual(textItems[0]?.originalText, "Coluna A | Coluna BDI | Coluna C");
+  assertEqual(textItems[1]?.textItemIndex, 1);
+  assertEqual(textItems[1]?.originalText, "outra menção a BDI");
 });
 
 // --- 24, 25: document boundaries for adjacent-page rules -----------------------
@@ -362,4 +382,95 @@ runTest("case 40: the protected synthetic suite still has exactly 8 documents (u
   assertEqual(suite.documents.length, 8);
   const totalPages = suite.documents.reduce((sum, doc) => sum + doc.pages.length, 0);
   assertEqual(totalPages, 33);
+});
+
+// --- required test 1: the two execution phases are genuinely separate, not just labeled ---
+
+runTest("required test 1a: the local phase never resolves an adjacent_pages-scoped signal", () => {
+  const page = buildPage({ pageNumber: 1, itemTexts: ["BDI qualquer coisa"] });
+  const localMap = evaluateLocalPhase(page, "hash", []);
+  assertEqual(localMap.has("continuity-stable-geometry"), false, "an adjacent-pages rule must never be resolved by the local phase");
+  assertEqual(localMap.has("structural-bdi-documentary-mention"), true, "a single_page rule must be fully resolved by the local phase");
+  assertEqual(localMap.get("structural-bdi-documentary-mention")?.outcome, "observed");
+});
+
+runTest("required test 1b: the adjacent phase fills in exactly the adjacent_pages signal, preserving every local-phase entry unchanged", () => {
+  const page1 = buildPage({ pageNumber: 1, widthPoints: 800, heightPoints: 600, itemTexts: ["BDI qualquer coisa"] });
+  const page2 = buildPage({ pageNumber: 2, widthPoints: 800, heightPoints: 600 });
+  const localMap1 = evaluateLocalPhase(page1, "hash", []);
+  assertEqual(localMap1.has("continuity-stable-geometry"), false);
+
+  const finalMap1 = evaluateAdjacentPhase(page1, null, page2, localMap1, "hash", []);
+  assertEqual(finalMap1.has("continuity-stable-geometry"), true, "the adjacent phase must resolve the adjacent-pages signal");
+  assertEqual(finalMap1.get("continuity-stable-geometry")?.outcome, "observed");
+  assertEqual(finalMap1.get("structural-bdi-documentary-mention"), localMap1.get("structural-bdi-documentary-mention"), "local-phase entries must be carried over unchanged, not recomputed");
+});
+
+runTest("required test 1c: observeDocumentSignals composes both phases into the catalog's stable order in the final result", () => {
+  const page1 = buildPage({ pageNumber: 1, widthPoints: 800, heightPoints: 600 });
+  const page2 = buildPage({ pageNumber: 2, widthPoints: 800, heightPoints: 600 });
+  const result = observeDocumentSignals(buildReadResult([page1, page2]));
+  assertArrayEqual(
+    result.pages[0].signalEvaluations.map((e) => e.signalId),
+    BUDGET_DOCUMENT_SIGNAL_CATALOG.map((d) => d.id),
+  );
+  assertEqual(result.pages[0].signalEvaluations.find((e) => e.signalId === "continuity-stable-geometry")?.outcome, "observed");
+});
+
+// --- required test 2: a page that IS the annex itself never falsely satisfies referential-annex-listing ---
+
+runTest("required test 2: a page whose only content is \"Anexo de Preços\" itself does not observe referential-annex-listing (unsupported this version)", () => {
+  const page = buildPage({ pageNumber: 1, itemTexts: ["Anexo de Preços", "Item 1: Escavação"] });
+  const result = observeDocumentSignals(buildReadResult([page]));
+  const evaluation = result.pages[0].signalEvaluations.find((e) => e.signalId === "referential-annex-listing");
+  assertEqual(evaluation?.outcome, "not_evaluable");
+  assertEqual(evaluation?.ruleId, null);
+  assertEqual(evaluation?.notEvaluableReasonCode, "unsupported_missing_list_structure_capability");
+});
+
+// --- required tests 3, 4: closure-general-total-mention requires the numeric token in the same item ---
+
+runTest("required test 3: \"total geral\" without any digit in the same item does not observe closure-general-total-mention", () => {
+  const page = buildPage({ pageNumber: 1, itemTexts: ["O total geral do bloco fictício está descrito a seguir."] });
+  const result = observeDocumentSignals(buildReadResult([page]));
+  const evaluation = result.pages[0].signalEvaluations.find((e) => e.signalId === "closure-general-total-mention");
+  assertEqual(evaluation?.outcome, "not_observed");
+  assertEqual(evaluation?.evidence, null);
+});
+
+runTest("required test 4: \"total geral R$ 100,00\" observes closure-general-total-mention without interpreting the value", () => {
+  const page = buildPage({ pageNumber: 1, itemTexts: ["Total Geral R$ 100,00"] });
+  const result = observeDocumentSignals(buildReadResult([page]));
+  const evaluation = result.pages[0].signalEvaluations.find((e) => e.signalId === "closure-general-total-mention");
+  assertEqual(evaluation?.outcome, "observed");
+  // The rule only proves lexical co-occurrence with the raw text preserved
+  // verbatim — it never parses, converts or exposes a numeric value field.
+  assertEqual(evaluation?.evidence?.references[0]?.textItems[0]?.originalText, "Total Geral R$ 100,00");
+});
+
+// --- required test 9: an existing neighbor without usable geometry is not_evaluable, not observed/not_observed ---
+
+runTest("required test 9: an existing neighbor with unavailable geometry makes continuity-stable-geometry not_evaluable, not a false not_observed", () => {
+  const page1 = buildPage({ pageNumber: 1, widthPoints: 800, heightPoints: 600 });
+  // buildPage's `??` default-substitution would silently turn an explicit
+  // `null` back into 612/792, which is not what this test needs — so the
+  // geometry-unavailable neighbor is built by overriding directly instead.
+  const page2: PhysicalDocumentPage = { ...buildPage({ pageNumber: 2 }), widthPoints: null, heightPoints: null };
+  const result = observeDocumentSignals(buildReadResult([page1, page2]));
+  const evaluation = result.pages[0].signalEvaluations.find((e) => e.signalId === "continuity-stable-geometry");
+  assertEqual(evaluation?.outcome, "not_evaluable");
+  assertEqual(evaluation?.notEvaluableReasonCode, "adjacent_page_unavailable");
+});
+
+// --- required test 10: repeatability after the evidence contract change, with real populated evidence ---
+
+runTest("required test 10: two observations with real evidence (text items and geometry) remain byte-for-byte equivalent after the evidence contract change", () => {
+  const page1 = buildPage({ pageNumber: 1, widthPoints: 800, heightPoints: 600, itemTexts: ["BDI e Total Geral R$ 100,00"] });
+  const page2 = buildPage({ pageNumber: 2, widthPoints: 800, heightPoints: 600 });
+  const readResult = buildReadResult([page1, page2]);
+  const first = observeDocumentSignals(readResult);
+  const second = observeDocumentSignals(readResult);
+  assertEqual(JSON.stringify(first), JSON.stringify(second));
+  // Sanity: this comparison is only meaningful if evidence was actually produced on both sides.
+  assertEqual(first.pages[0].signalEvaluations.some((e) => e.evidence !== null), true, "expected at least one populated evidence to make this repeatability check meaningful");
 });

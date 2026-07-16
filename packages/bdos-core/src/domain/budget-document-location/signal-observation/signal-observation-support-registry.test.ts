@@ -106,8 +106,8 @@ runTest("support status is always backed by a resolvable rule object, never asse
 runTest("the registry's supported/unsupported counts match the documented matrix", () => {
   const supportedCount = SIGNAL_SUPPORT_REGISTRY.filter((entry) => entry.status === "supported").length;
   const unsupportedCount = SIGNAL_SUPPORT_REGISTRY.filter((entry) => entry.status === "unsupported").length;
-  assertEqual(supportedCount, 9, "documented matrix expects exactly 9 supported signals");
-  assertEqual(unsupportedCount, 14, "documented matrix expects exactly 14 unsupported signals");
+  assertEqual(supportedCount, 8, "documented matrix expects exactly 8 supported signals");
+  assertEqual(unsupportedCount, 15, "documented matrix expects exactly 15 unsupported signals");
 });
 
 runTest("getSignalSupportEntry returns null for an unknown signalId", () => {

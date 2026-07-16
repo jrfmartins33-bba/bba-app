@@ -2,13 +2,12 @@ import type { BudgetDocumentSignalId } from "../budget-document-signal-catalog.t
 import type {
   PhysicalDocumentPage,
   PhysicalDocumentTextExtractionAvailability,
-  PhysicalDocumentTextItem,
 } from "../physical-document-read.types";
 import { normalizePageText } from "../physical-document-text-normalization";
 import type {
   SignalNotEvaluableReasonCode,
   SignalObservationEvidenceReference,
-  SignalObservationRuleEvaluationScope,
+  SignalObservationEvidenceRole,
 } from "./signal-observation.types";
 
 /**
@@ -16,7 +15,7 @@ import type {
  * (`ruleId`/`ruleVersion`) referenciando o `signalId` real do catálogo.
  * Contém somente regras realmente implementadas e executáveis — nunca uma
  * regra vazia para um sinal sem capacidade aprovada (ver registro de
- * suporte, que declara os 14 sinais sem regra aqui).
+ * suporte, que declara os 15 sinais sem regra aqui).
  *
  * Casamento textual literal e determinístico apenas: sem correspondência
  * aproximada, sem distância de edição, sem sinônimos, sem IA. Limitações
@@ -46,7 +45,13 @@ interface LocalSignalObservationRule {
  * dependência multipágina usada nesta versão. Recebe explicitamente a
  * página anterior e a posterior (cada uma podendo ser `null` na borda do
  * documento); a ausência de vizinho não é falha técnica, é uma condição
- * de contexto que a própria regra decide como tratar.
+ * de contexto que a própria regra decide como tratar. **Avaliável quando
+ * existe ao menos uma página física vizinha com geometria utilizável** —
+ * a primeira página do documento pode ser avaliada comparando-se com a
+ * próxima, a última com a anterior; somente um documento de página única,
+ * ou vizinhos existentes sem geometria própria disponível, produzem
+ * `not_evaluable`. Não é verdade que toda borda de documento seja
+ * automaticamente `not_evaluable`.
  */
 interface AdjacentPageSignalObservationRule {
   readonly ruleId: string;
@@ -74,33 +79,40 @@ function containsLiteralPhrase(haystack: string, phrase: string): boolean {
   return collapseWhitespace(haystack).toLowerCase().includes(collapseWhitespace(phrase).toLowerCase());
 }
 
+/**
+ * Constrói uma referência de evidência textual a partir de itens
+ * individuais da página — nunca concatenados por um separador artificial.
+ * Cada item preserva seu próprio índice, texto original verbatim e texto
+ * normalizado apenas daquele item, permanecendo alinhado mesmo quando o
+ * texto original contém caracteres que poderiam ser confundidos com um
+ * delimitador (ex.: `|`).
+ */
 function buildTextReference(
   page: PhysicalDocumentPage,
   matchingIndices: ReadonlyArray<number>,
-  roleInRule: string,
+  roleInRule: SignalObservationEvidenceRole,
 ): SignalObservationEvidenceReference {
   const matchingItems = page.textItems.filter((item) => matchingIndices.includes(item.index));
-  // Normalized per matched item individually (never the whole page's
-  // joined normalizedText) — normalizePageText([x]) on a single item is
-  // exactly that item's own normalized form, with no risk of the
-  // item-alignment ambiguity a multi-item join would introduce.
-  const normalizedSnippet = matchingItems.map((item: PhysicalDocumentTextItem) => normalizePageText([item.text])).join(" | ");
   return {
     pageNumber: page.pageNumber,
-    textItemIndices: matchingIndices,
-    originalSnippet: matchingItems.map((item: PhysicalDocumentTextItem) => item.text).join(" | "),
-    normalizedSnippet,
+    textItems: matchingItems.map((item) => ({
+      textItemIndex: item.index,
+      originalText: item.text,
+      // Normalized per matched item individually (never the whole page's
+      // joined normalizedText) — normalizePageText([x]) on a single item is
+      // exactly that item's own normalized form, with no risk of the
+      // item-alignment ambiguity a multi-item join would introduce.
+      normalizedText: normalizePageText([item.text]),
+    })),
     geometry: null,
     roleInRule,
   };
 }
 
-function buildFieldReference(page: PhysicalDocumentPage, roleInRule: string): SignalObservationEvidenceReference {
+function buildFieldReference(page: PhysicalDocumentPage, roleInRule: SignalObservationEvidenceRole): SignalObservationEvidenceReference {
   return {
     pageNumber: page.pageNumber,
-    textItemIndices: [],
-    originalSnippet: "",
-    normalizedSnippet: null,
+    textItems: [],
     geometry: null,
     roleInRule,
   };
@@ -135,15 +147,7 @@ function evaluateReferentialBudgetSpreadsheetMention(page: PhysicalDocumentPage)
   return evaluateLiteralPhrasePresence(page, REFERENTIAL_BUDGET_SPREADSHEET_MENTION_PHRASES);
 }
 
-// --- rule 2: referential-annex-listing ----------------------------------------
-
-const REFERENTIAL_ANNEX_LISTING_PHRASES = ["anexo de preços", "anexo de custos", "anexo orçamentário"];
-
-function evaluateReferentialAnnexListing(page: PhysicalDocumentPage): RuleOutcome {
-  return evaluateLiteralPhrasePresence(page, REFERENTIAL_ANNEX_LISTING_PHRASES);
-}
-
-// --- rule 3: structural-service-item-identification ---------------------------
+// --- rule 2: structural-service-item-identification ---------------------------
 
 const SERVICE_ITEM_IDENTIFICATION_PATTERNS: ReadonlyArray<RegExp> = [
   /^\d{1,3}(\.\d{1,3}){0,3}\s+\S/,
@@ -169,7 +173,7 @@ function evaluateStructuralServiceItemIdentification(page: PhysicalDocumentPage)
   return { kind: "observed", references: [buildTextReference(page, matchingIndices, "primary")] };
 }
 
-// --- rule 4: structural-bdi-documentary-mention --------------------------------
+// --- rule 3: structural-bdi-documentary-mention --------------------------------
 
 const STRUCTURAL_BDI_MENTION_PHRASES = ["bdi", "bonificação e despesas indiretas"];
 
@@ -177,15 +181,40 @@ function evaluateStructuralBdiDocumentaryMention(page: PhysicalDocumentPage): Ru
   return evaluateLiteralPhrasePresence(page, STRUCTURAL_BDI_MENTION_PHRASES);
 }
 
-// --- rule 5: closure-general-total-mention -------------------------------------
+// --- rule 4: closure-general-total-mention -------------------------------------
 
 const CLOSURE_GENERAL_TOTAL_MENTION_PHRASES = ["total geral", "valor global", "total da proposta"];
 
+/**
+ * Presença de qualquer dígito no mesmo item — comprova apenas associação
+ * lexical objetiva a um valor, conforme a definição do catálogo ("...
+ * associada a um valor"). Não interpreta, converte, valida ou compara o
+ * valor; apenas confirma que um token numérico/monetário coexiste com a
+ * expressão de total no mesmo item textual.
+ */
+const NUMERIC_OR_MONETARY_TOKEN_PATTERN = /\d/;
+
 function evaluateClosureGeneralTotalMention(page: PhysicalDocumentPage): RuleOutcome {
-  return evaluateLiteralPhrasePresence(page, CLOSURE_GENERAL_TOTAL_MENTION_PHRASES);
+  if (page.extractionAvailability !== "text_available") {
+    return { kind: "not_evaluable", reasonCode: "page_text_unavailable" };
+  }
+
+  const matchingIndices = page.textItems
+    .filter(
+      (item) =>
+        CLOSURE_GENERAL_TOTAL_MENTION_PHRASES.some((phrase) => containsLiteralPhrase(item.text, phrase)) &&
+        NUMERIC_OR_MONETARY_TOKEN_PATTERN.test(item.text),
+    )
+    .map((item) => item.index);
+
+  if (matchingIndices.length === 0) {
+    return { kind: "not_observed" };
+  }
+
+  return { kind: "observed", references: [buildTextReference(page, matchingIndices, "primary")] };
 }
 
-// --- rules 6-8: extraction condition availability field mapping ---------------
+// --- rules 5-7: extraction condition availability field mapping ---------------
 
 function evaluateExtractionAvailabilityField(
   page: PhysicalDocumentPage,
@@ -209,7 +238,7 @@ function evaluateExtractionError(page: PhysicalDocumentPage): RuleOutcome {
   return evaluateExtractionAvailabilityField(page, "extraction_failed");
 }
 
-// --- rule 9: continuity-stable-geometry (adjacent pages) -----------------------
+// --- rule 8: continuity-stable-geometry (adjacent pages) -----------------------
 
 function hasUsableGeometry(page: PhysicalDocumentPage): boolean {
   return page.widthPoints !== null && page.heightPoints !== null;
@@ -219,6 +248,14 @@ function geometryMatches(a: PhysicalDocumentPage, b: PhysicalDocumentPage): bool
   return a.widthPoints === b.widthPoints && a.heightPoints === b.heightPoints && a.orientation === b.orientation;
 }
 
+/**
+ * Avaliável quando existe ao menos uma página física vizinha (anterior
+ * ou posterior) com geometria utilizável — a primeira página do
+ * documento é avaliada contra a próxima, a última contra a anterior.
+ * `not_evaluable` somente quando não há vizinho algum (documento de
+ * página única) ou quando os vizinhos existentes não têm geometria
+ * própria disponível. Nunca trata borda de documento como erro.
+ */
 function evaluateContinuityStableGeometry(
   current: PhysicalDocumentPage,
   previous: PhysicalDocumentPage | null,
@@ -228,9 +265,9 @@ function evaluateContinuityStableGeometry(
     return { kind: "not_evaluable", reasonCode: "page_geometry_unavailable" };
   }
 
-  const neighbors: ReadonlyArray<{ page: PhysicalDocumentPage; role: string }> = [
-    ...(previous !== null ? [{ page: previous, role: "earlier_page" }] : []),
-    ...(next !== null ? [{ page: next, role: "later_page" }] : []),
+  const neighbors: ReadonlyArray<{ page: PhysicalDocumentPage; role: SignalObservationEvidenceRole }> = [
+    ...(previous !== null ? [{ page: previous, role: "earlier_page" as const }] : []),
+    ...(next !== null ? [{ page: next, role: "later_page" as const }] : []),
   ];
 
   if (neighbors.length === 0) {
@@ -258,17 +295,13 @@ function evaluateContinuityStableGeometry(
   const references: SignalObservationEvidenceReference[] = [
     {
       pageNumber: current.pageNumber,
-      textItemIndices: [],
-      originalSnippet: "",
-      normalizedSnippet: null,
+      textItems: [],
       geometry: geometryOf(current),
       roleInRule: "reference_page",
     },
     ...matching.map((neighbor) => ({
       pageNumber: neighbor.page.pageNumber,
-      textItemIndices: [],
-      originalSnippet: "",
-      normalizedSnippet: null,
+      textItems: [],
       geometry: geometryOf(neighbor.page),
       roleInRule: neighbor.role,
     })),
@@ -290,15 +323,6 @@ export const SIGNAL_OBSERVATION_RULE_REGISTRY: ReadonlyArray<SignalObservationRu
     evaluate: evaluateReferentialBudgetSpreadsheetMention,
   },
   {
-    ruleId: "referential-annex-listing-literal-phrase-v1",
-    ruleVersion: 1,
-    signalId: "referential-annex-listing",
-    evaluationScope: "single_page",
-    requiredInputs: ["extractionAvailability", "textItems"],
-    humanDescription: "Presença literal de \"anexo de preços\", \"anexo de custos\" ou \"anexo orçamentário\" em algum item textual da página.",
-    evaluate: evaluateReferentialAnnexListing,
-  },
-  {
     ruleId: "structural-service-item-identification-line-start-pattern-v1",
     ruleVersion: 1,
     signalId: "structural-service-item-identification",
@@ -317,12 +341,13 @@ export const SIGNAL_OBSERVATION_RULE_REGISTRY: ReadonlyArray<SignalObservationRu
     evaluate: evaluateStructuralBdiDocumentaryMention,
   },
   {
-    ruleId: "closure-general-total-mention-literal-phrase-v1",
-    ruleVersion: 1,
+    ruleId: "closure-general-total-mention-literal-phrase-with-numeric-token-v2",
+    ruleVersion: 2,
     signalId: "closure-general-total-mention",
     evaluationScope: "single_page",
     requiredInputs: ["extractionAvailability", "textItems"],
-    humanDescription: "Presença literal de \"total geral\", \"valor global\" ou \"total da proposta\" em algum item textual da página. Não verifica associação a um valor numérico específico.",
+    humanDescription:
+      "O mesmo item textual contém, simultaneamente, \"total geral\"/\"valor global\"/\"total da proposta\" e ao menos um dígito — comprova associação lexical ao valor exigida pelo catálogo, sem interpretar o valor.",
     evaluate: evaluateClosureGeneralTotalMention,
   },
   {
