@@ -4,10 +4,7 @@ import {
   PHYSICAL_DOCUMENT_TEXT_ITEM_COORDINATE_SPACE_VERSION,
   PHYSICAL_DOCUMENT_TEXT_ITEM_GEOMETRY_PROFILE_VERSION,
 } from "../../../domain/budget-document-location/physical-document-read.types";
-import type {
-  PhysicalDocumentTextItemGeometryProblemCode,
-  PhysicalDocumentTextItemPlacement,
-} from "../../../domain/budget-document-location/physical-document-read.types";
+import type { PhysicalDocumentTextItemPlacement } from "../../../domain/budget-document-location/physical-document-read.types";
 
 /**
  * Derivação geométrica pura de um item textual (Sprint 21.4A.2.f.0).
@@ -83,32 +80,32 @@ export function deriveTextItemPlacement(input: TextItemGeometryInput): PhysicalD
     pageWidthPoints === null ||
     pageHeightPoints === null
   ) {
-    return unresolvedPlacement("unresolved_missing_geometry", "text_item_geometry_missing");
+    return missingGeometryPlacement();
   }
 
   if (!isFiniteSixComponentMatrix(itemTransform) || !isFiniteSixComponentMatrix(viewportTransform)) {
-    return unresolvedPlacement("unresolved_invalid_geometry", "text_item_geometry_invalid");
+    return invalidGeometryPlacement();
   }
 
   if (!Number.isFinite(itemWidth) || itemWidth < 0) {
-    return unresolvedPlacement("unresolved_invalid_geometry", "text_item_geometry_invalid");
+    return invalidGeometryPlacement();
   }
 
   if (!Number.isFinite(style.ascent) || !Number.isFinite(style.descent)) {
-    return unresolvedPlacement("unresolved_invalid_geometry", "text_item_geometry_invalid");
+    return invalidGeometryPlacement();
   }
 
   if (!Number.isFinite(pageWidthPoints) || pageWidthPoints <= 0 || !Number.isFinite(pageHeightPoints) || pageHeightPoints <= 0) {
-    return unresolvedPlacement("unresolved_invalid_geometry", "text_item_geometry_invalid");
+    return invalidGeometryPlacement();
   }
 
   if (style.vertical || itemDir !== "ltr" || !hasAxisAlignedLinearPart(itemTransform)) {
-    return unresolvedPlacement("unresolved_unsupported_orientation", "text_item_orientation_unsupported");
+    return unsupportedOrientationPlacement();
   }
 
   const rawBounds = computeRawLayoutBounds(itemTransform, itemWidth, style, viewportTransform);
   if (rawBounds === null) {
-    return unresolvedPlacement("unresolved_invalid_geometry", "text_item_geometry_invalid");
+    return invalidGeometryPlacement();
   }
 
   const leftPoints = canonicalizeGeometryPoints(rawBounds.left);
@@ -117,7 +114,7 @@ export function deriveTextItemPlacement(input: TextItemGeometryInput): PhysicalD
   const bottomPoints = canonicalizeGeometryPoints(rawBounds.bottom);
 
   if (leftPoints > rightPoints || topPoints >= bottomPoints) {
-    return unresolvedPlacement("unresolved_invalid_geometry", "text_item_geometry_invalid");
+    return invalidGeometryPlacement();
   }
 
   const widthPoints = canonicalizeGeometryPoints(rightPoints - leftPoints);
@@ -126,7 +123,7 @@ export function deriveTextItemPlacement(input: TextItemGeometryInput): PhysicalD
   const centerYPoints = canonicalizeGeometryPoints((topPoints + bottomPoints) / 2);
 
   if (widthPoints < 0 || heightPoints <= 0) {
-    return unresolvedPlacement("unresolved_invalid_geometry", "text_item_geometry_invalid");
+    return invalidGeometryPlacement();
   }
 
   const canonicalPageWidthPoints = canonicalizeGeometryPoints(pageWidthPoints);
@@ -157,11 +154,23 @@ export function deriveTextItemPlacement(input: TextItemGeometryInput): PhysicalD
   };
 }
 
-function unresolvedPlacement(
-  status: "unresolved_missing_geometry" | "unresolved_invalid_geometry" | "unresolved_unsupported_orientation",
-  reasonCode: PhysicalDocumentTextItemGeometryProblemCode,
-): PhysicalDocumentTextItemPlacement {
-  return { status, geometry: null, reasonCode };
+// Three dedicated constructors, each returning a fixed status/reasonCode
+// literal pair, rather than one generic constructor parameterized by
+// both — the union's variants are 1:1 by construction, not merely by
+// convention (audit follow-up to PR #68: a shared status/reasonCode
+// parameter pair could be passed mismatched and still type-check against
+// a looser union).
+
+function missingGeometryPlacement(): PhysicalDocumentTextItemPlacement {
+  return { status: "unresolved_missing_geometry", geometry: null, reasonCode: "text_item_geometry_missing" };
+}
+
+function invalidGeometryPlacement(): PhysicalDocumentTextItemPlacement {
+  return { status: "unresolved_invalid_geometry", geometry: null, reasonCode: "text_item_geometry_invalid" };
+}
+
+function unsupportedOrientationPlacement(): PhysicalDocumentTextItemPlacement {
+  return { status: "unresolved_unsupported_orientation", geometry: null, reasonCode: "text_item_orientation_unsupported" };
 }
 
 function isFiniteSixComponentMatrix(matrix: ReadonlyArray<number>): boolean {

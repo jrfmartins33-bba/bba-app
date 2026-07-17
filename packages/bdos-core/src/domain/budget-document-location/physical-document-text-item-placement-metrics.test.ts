@@ -1,8 +1,8 @@
 import { computeTextItemPlacementMetrics } from "./physical-document-text-item-placement-metrics";
 import type {
   PhysicalDocumentTextItem,
-  PhysicalDocumentTextItemGeometryProblemCode,
   PhysicalDocumentTextItemLayoutGeometry,
+  PhysicalDocumentTextItemPlacement,
 } from "./physical-document-read.types";
 import {
   PHYSICAL_DOCUMENT_TEXT_ITEM_COORDINATE_SPACE_VERSION,
@@ -38,16 +38,27 @@ function placedItem(index: number): PhysicalDocumentTextItem {
   return { index, text: "x", placement: { status: "placed", geometry: SAMPLE_GEOMETRY, reasonCode: null } };
 }
 
-function unresolvedItem(
-  index: number,
-  status:
-    | "unresolved_missing_geometry"
-    | "unresolved_invalid_geometry"
-    | "unresolved_unsupported_orientation"
-    | "unresolved_normalization_failed",
-  reasonCode: PhysicalDocumentTextItemGeometryProblemCode,
-): PhysicalDocumentTextItem {
-  return { index, text: "x", placement: { status, geometry: null, reasonCode } };
+type UnresolvedStatus = Exclude<PhysicalDocumentTextItemPlacement["status"], "placed">;
+
+// Derives the matching reasonCode from status via an exhaustive switch,
+// rather than accepting both as independent parameters — the whole point
+// of splitting the union (audit follow-up to PR #68) is that a caller
+// cannot construct a mismatched pair, including in test fixtures.
+function unresolvedPlacementFor(status: UnresolvedStatus): PhysicalDocumentTextItemPlacement {
+  switch (status) {
+    case "unresolved_missing_geometry":
+      return { status, geometry: null, reasonCode: "text_item_geometry_missing" };
+    case "unresolved_invalid_geometry":
+      return { status, geometry: null, reasonCode: "text_item_geometry_invalid" };
+    case "unresolved_unsupported_orientation":
+      return { status, geometry: null, reasonCode: "text_item_orientation_unsupported" };
+    case "unresolved_normalization_failed":
+      return { status, geometry: null, reasonCode: "text_item_geometry_normalization_failed" };
+  }
+}
+
+function unresolvedItem(index: number, status: UnresolvedStatus): PhysicalDocumentTextItem {
+  return { index, text: "x", placement: unresolvedPlacementFor(status) };
 }
 
 runTest("zero items produces all-zero metrics, not an error", () => {
@@ -70,10 +81,10 @@ runTest("all placed items count only toward placedTextItemCount", () => {
 runTest("each unresolved status is counted in its own bucket", () => {
   const items: PhysicalDocumentTextItem[] = [
     placedItem(0),
-    unresolvedItem(1, "unresolved_missing_geometry", "text_item_geometry_missing"),
-    unresolvedItem(2, "unresolved_invalid_geometry", "text_item_geometry_invalid"),
-    unresolvedItem(3, "unresolved_unsupported_orientation", "text_item_orientation_unsupported"),
-    unresolvedItem(4, "unresolved_normalization_failed", "text_item_geometry_normalization_failed"),
+    unresolvedItem(1, "unresolved_missing_geometry"),
+    unresolvedItem(2, "unresolved_invalid_geometry"),
+    unresolvedItem(3, "unresolved_unsupported_orientation"),
+    unresolvedItem(4, "unresolved_normalization_failed"),
   ];
   const metrics = computeTextItemPlacementMetrics(items);
   assertEqual(metrics.totalAdmittedTextItemCount, 5);
@@ -88,13 +99,13 @@ runTest("the conservation invariant holds: total equals the sum of every bucket"
   const items: PhysicalDocumentTextItem[] = [
     placedItem(0),
     placedItem(1),
-    unresolvedItem(2, "unresolved_missing_geometry", "text_item_geometry_missing"),
-    unresolvedItem(3, "unresolved_missing_geometry", "text_item_geometry_missing"),
-    unresolvedItem(4, "unresolved_invalid_geometry", "text_item_geometry_invalid"),
-    unresolvedItem(5, "unresolved_unsupported_orientation", "text_item_orientation_unsupported"),
-    unresolvedItem(6, "unresolved_unsupported_orientation", "text_item_orientation_unsupported"),
-    unresolvedItem(7, "unresolved_unsupported_orientation", "text_item_orientation_unsupported"),
-    unresolvedItem(8, "unresolved_normalization_failed", "text_item_geometry_normalization_failed"),
+    unresolvedItem(2, "unresolved_missing_geometry"),
+    unresolvedItem(3, "unresolved_missing_geometry"),
+    unresolvedItem(4, "unresolved_invalid_geometry"),
+    unresolvedItem(5, "unresolved_unsupported_orientation"),
+    unresolvedItem(6, "unresolved_unsupported_orientation"),
+    unresolvedItem(7, "unresolved_unsupported_orientation"),
+    unresolvedItem(8, "unresolved_normalization_failed"),
   ];
   const metrics = computeTextItemPlacementMetrics(items);
   const sum =
@@ -108,6 +119,6 @@ runTest("the conservation invariant holds: total equals the sum of every bucket"
 });
 
 runTest("is deterministic across repeated calls with the same input", () => {
-  const items: PhysicalDocumentTextItem[] = [placedItem(0), unresolvedItem(1, "unresolved_invalid_geometry", "text_item_geometry_invalid")];
+  const items: PhysicalDocumentTextItem[] = [placedItem(0), unresolvedItem(1, "unresolved_invalid_geometry")];
   assertEqual(JSON.stringify(computeTextItemPlacementMetrics(items)), JSON.stringify(computeTextItemPlacementMetrics(items)));
 });

@@ -1,5 +1,9 @@
 import type { PhysicalDocumentTextItem, PhysicalDocumentTextItemPlacementMetrics } from "./physical-document-read.types";
 
+function assertUnreachablePlacement(value: never): never {
+  throw new Error(`computeTextItemPlacementMetrics: unhandled placement status: ${JSON.stringify(value)}`);
+}
+
 /**
  * Calcula as contagens objetivas de disposição geométrica de uma página a
  * partir dos itens textuais já admitidos (Sprint 21.4A.2.f.0, seção 17).
@@ -35,6 +39,14 @@ export function computeTextItemPlacementMetrics(
       case "unresolved_normalization_failed":
         unresolvedNormalizationFailedCount += 1;
         break;
+      default:
+        // Exhaustiveness guard (audit follow-up to PR #68): if
+        // `PhysicalDocumentTextItemPlacement` ever gains a new status
+        // variant without this switch being updated, `item.placement`
+        // stops being narrowed to `never` here and this call becomes a
+        // compile error — a future status can no longer silently vanish
+        // from the sum instead of being counted.
+        assertUnreachablePlacement(item.placement);
     }
   }
 

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { pdfjsPhysicalDocumentReader, PDFJS_PHYSICAL_DOCUMENT_READER_ADAPTER_VERSION } from "./pdfjs-physical-document-reader";
 import { buildSyntheticPdfBytes, buildSyntheticPdfBytesWithBrokenPage } from "./testing/synthetic-pdf-bytes";
+import { getKnownTechnicalProblemCodes } from "../../../domain/budget-document-location";
 import type { PhysicalDocumentReadResult } from "../../../domain/budget-document-location";
 
 async function runTest(name: string, testCase: () => Promise<void>): Promise<void> {
@@ -107,12 +108,24 @@ async function main(): Promise<void> {
   });
 
   // 9. Bytes vazios.
-  await runTest("case 9: empty bytes produce a failed document-level result without loading pdfjs-dist", async () => {
-    const result = await pdfjsPhysicalDocumentReader.read(new Uint8Array(0));
-    assertEqual(result.status, "failed");
-    assertEqual(result.technicalProblems[0].code, "document_bytes_empty");
-    assertEqual(result.underlyingLibraryVersion, null);
-  });
+  await runTest(
+    "case 9: empty bytes produce a failed document-level result, still declaring the pinned library identity and a matching fingerprint",
+    async () => {
+      const result = await pdfjsPhysicalDocumentReader.read(new Uint8Array(0));
+      assertEqual(result.status, "failed");
+      assertEqual(result.technicalProblems[0].code, "document_bytes_empty");
+      // pdfjs-dist itself is never loaded for empty bytes, but the
+      // adapter's identity is fixed (package.json pins the dependency
+      // to this exact version) and is known statically, without waiting
+      // for a runtime load (Sprint 21.4A.2.f.0, audit follow-up to PR #68:
+      // the contract declares the library participates in every
+      // fingerprint, including `failed` results, so `null` here would
+      // silently break that guarantee for this one path).
+      assertEqual(result.underlyingLibraryVersion, "pdfjs-dist@6.1.200");
+      assertEqual(result.geometryContextFingerprint.length, 64);
+      assertTrue(/^[0-9a-f]{64}$/.test(result.geometryContextFingerprint), "expected geometryContextFingerprint to be lowercase hex");
+    },
+  );
 
   // 10. Hash SHA-256 estável.
   await runTest("case 10: sourceByteHash is the SHA-256 of the original bytes, unmodified", async () => {
@@ -197,21 +210,44 @@ async function main(): Promise<void> {
     });
   });
 
-  // 17. Problemas técnicos com códigos controlados.
+  // 17. Problemas técnicos com códigos controlados. `knownCodes` vem de
+  // `getKnownTechnicalProblemCodes()` — derivado do `Record` que o `tsc`
+  // já obriga a cobrir a união inteira — nunca de uma segunda lista
+  // mantida à mão neste arquivo, que poderia divergir silenciosamente
+  // (Sprint 21.4A.2.f.0, auditoria pós-PR #68). Os problemas reunidos
+  // vêm de dois cenários reais e independentes: uma página fisicamente
+  // quebrada (`page_load_failed`) e uma falha de normalização geométrica
+  // isolada injetada de forma controlada (`page_text_item_geometry_normalization_failed`)
+  // — não apenas um código de exemplo.
   await runTest("case 17: technical problems always carry one of the controlled stable codes", async () => {
-    const bytes = buildSyntheticPdfBytesWithBrokenPage(2, 1);
-    const result = await pdfjsPhysicalDocumentReader.read(bytes);
-    const allProblems = [...result.technicalProblems, ...result.pages.flatMap((page) => page.technicalProblems)];
-    const knownCodes = new Set([
-      "document_bytes_empty",
-      "document_invalid_structure",
-      "document_protected",
-      "document_open_failed",
-      "page_load_failed",
-      "page_geometry_unavailable",
-      "page_text_extraction_failed",
-      "page_processing_failed",
-    ]);
+    const brokenPageBytes = buildSyntheticPdfBytesWithBrokenPage(2, 1);
+    const brokenPageResult = await pdfjsPhysicalDocumentReader.read(brokenPageBytes);
+
+    const normalizationFailureBytes = buildSyntheticPdfBytes([{ items: [{ text: "Alpha" }] }]);
+    const originalRound = Math.round;
+    Math.round = () => {
+      throw new Error("synthetic failure injected for test purposes");
+    };
+    let normalizationFailureResult: PhysicalDocumentReadResult;
+    try {
+      normalizationFailureResult = await pdfjsPhysicalDocumentReader.read(normalizationFailureBytes);
+    } finally {
+      Math.round = originalRound;
+    }
+
+    const allProblems = [
+      ...brokenPageResult.technicalProblems,
+      ...brokenPageResult.pages.flatMap((page) => page.technicalProblems),
+      ...normalizationFailureResult.technicalProblems,
+      ...normalizationFailureResult.pages.flatMap((page) => page.technicalProblems),
+    ];
+    assertTrue(
+      allProblems.some((problem) => problem.code === "page_text_item_geometry_normalization_failed"),
+      "expected this scenario to actually produce page_text_item_geometry_normalization_failed, not just list it as known",
+    );
+
+    const knownCodes = new Set(getKnownTechnicalProblemCodes());
+    assertTrue(knownCodes.size > 8, `expected the exhaustive code source to list more than 8 codes, found ${knownCodes.size}`);
     allProblems.forEach((problem) => assertTrue(knownCodes.has(problem.code), `unexpected problem code "${problem.code}"`));
   });
 
@@ -392,14 +428,39 @@ async function main(): Promise<void> {
     assertEqual(sum, metrics.totalAdmittedTextItemCount);
   });
 
-  await runTest("v2 case: two independent reads of the same bytes produce equivalent placements, geometry and metrics", async () => {
-    const bytes = buildSyntheticPdfBytes([
+  // Genuinely independent inputs: two separate `Uint8Array` instances
+  // (via `.slice()`), not two reads of the same reference — repeatability
+  // with independent entries is a different property from the adapter
+  // not mutating a reused instance (see the dedicated test right below),
+  // and this scenario proves the former (audit follow-up to PR #68: the
+  // previous version of this test read the same reference twice, which
+  // only proved the latter).
+  await runTest("v2 case: two reads from independent Uint8Array instances of the same bytes produce equivalent placements, geometry and metrics", async () => {
+    const source = buildSyntheticPdfBytes([
       { items: [{ text: "First", x: 72, y: 700 }, { text: "Second", x: 72, y: 600 }] },
     ]);
-    const first = await pdfjsPhysicalDocumentReader.read(bytes);
-    const second = await pdfjsPhysicalDocumentReader.read(bytes);
+    const first = await pdfjsPhysicalDocumentReader.read(source.slice());
+    const second = await pdfjsPhysicalDocumentReader.read(source.slice());
     assertEqual(JSON.stringify(first), JSON.stringify(second));
     assertEqual(first.geometryContextFingerprint, second.geometryContextFingerprint);
+  });
+
+  await runTest("v2 case: reusing the same Uint8Array instance across two reads does not mutate it", async () => {
+    const bytes = buildSyntheticPdfBytes([{ text: "Reused instance" }]);
+    const expectedHash = createHash("sha256").update(bytes).digest("hex");
+    const originalByteLength = bytes.byteLength;
+    const originalBytesCopy = bytes.slice();
+
+    const first = await pdfjsPhysicalDocumentReader.read(bytes);
+    assertEqual(bytes.byteLength, originalByteLength, "expected byteLength to be unchanged after the first read");
+    assertEqual(Buffer.from(bytes).equals(Buffer.from(originalBytesCopy)), true, "expected the caller's buffer to be byte-for-byte unchanged after the first read");
+
+    const second = await pdfjsPhysicalDocumentReader.read(bytes);
+    assertEqual(bytes.byteLength, originalByteLength, "expected byteLength to be unchanged after the second read");
+    assertEqual(Buffer.from(bytes).equals(Buffer.from(originalBytesCopy)), true, "expected the caller's buffer to be byte-for-byte unchanged after the second read");
+
+    assertEqual(first.sourceByteHash, expectedHash);
+    assertEqual(second.sourceByteHash, expectedHash);
   });
 
   await runTest("v2 case: an unexpected per-item normalization failure is isolated, preserves every item, and produces at most one aggregated page problem", async () => {

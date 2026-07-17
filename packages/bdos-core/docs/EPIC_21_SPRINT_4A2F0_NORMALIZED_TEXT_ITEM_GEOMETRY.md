@@ -54,7 +54,9 @@ Texto horizontal comum (`TextItem.dir === "ltr"`, `TextStyle.vertical === false`
 
 ## 13. Disposição do item
 
-União discriminada `PhysicalDocumentTextItemPlacement`: `{ status: "placed", geometry, reasonCode: null }` ou `{ status: "unresolved_*", geometry: null, reasonCode }`. Sem campos opcionais soltos, sem estado ambíguo entre ausência e não resolvido.
+União discriminada `PhysicalDocumentTextItemPlacement` com **cinco variantes totalmente separadas** — `placed` e as quatro `unresolved_*` — cada uma amarrando seu próprio `status` a um único `reasonCode` literal (revisado na auditoria pós-PR #68: a versão original agrupava as quatro variantes não resolvidas sob um `status` combinado com `reasonCode: PhysicalDocumentTextItemGeometryProblemCode` genérico, permitindo pares contraditórios como `status: "unresolved_missing_geometry"` com `reasonCode: "text_item_geometry_invalid"` que passavam pelo `tsc` sem erro). Com a união totalmente separada, essa combinação é um erro de tipo, não apenas uma invariante documentada. Sem campos opcionais soltos, sem estado ambíguo entre ausência e não resolvido.
+
+Os construtores internos (`text-item-geometry.ts`) refletem essa separação: três funções dedicadas (`missingGeometryPlacement`, `invalidGeometryPlacement`, `unsupportedOrientationPlacement`), cada uma retornando um literal fixo, não um construtor genérico parametrizado por `status`+`reasonCode`. O cálculo de métricas (`computeTextItemPlacementMetrics`) usa um `switch` com guarda de exaustividade (`assertUnreachablePlacement(value: never)`): um novo `status` futuro sem o `case` correspondente vira erro de compilação, não desaparece silenciosamente da soma.
 
 ## 14. Códigos por item
 
@@ -68,7 +70,7 @@ Fronteira de admissão inalterada: todo elemento de `TextContent.items` com `str
 
 ## 16. Métricas
 
-`PhysicalDocumentTextItemPlacementMetrics` em cada `PhysicalDocumentPage.textItemPlacementMetrics`: `totalAdmittedTextItemCount`, `placedTextItemCount`, `unresolvedMissingGeometryCount`, `unresolvedInvalidGeometryCount`, `unresolvedUnsupportedOrientationCount`, `unresolvedNormalizationFailedCount`. `totalAdmittedTextItemCount === metrics.textItemCount` sempre (mesma população, duas visões). Computada por `computeTextItemPlacementMetrics` (domínio, `physical-document-text-item-placement-metrics.ts`), exportada pelo barrel.
+`PhysicalDocumentTextItemPlacementMetrics` em cada `PhysicalDocumentPage.textItemPlacementMetrics`: `totalAdmittedTextItemCount`, `placedTextItemCount`, `unresolvedMissingGeometryCount`, `unresolvedInvalidGeometryCount`, `unresolvedUnsupportedOrientationCount`, `unresolvedNormalizationFailedCount`. `totalAdmittedTextItemCount === metrics.textItemCount` sempre (mesma população, duas visões). O *tipo* é público (parte do contrato, exportado via `physical-document-read.types.ts`); a *função* `computeTextItemPlacementMetrics` (domínio, `physical-document-text-item-placement-metrics.ts`) **não** é exportada pelo barrel — revisado na auditoria pós-PR #68 para uma API pública seletiva — o adaptador a importa por caminho direto de módulo.
 
 ## 17. Canonicalização
 
@@ -80,7 +82,9 @@ Fronteira de admissão inalterada: todo elemento de `TextContent.items` com `str
 
 ## 19. Fingerprint
 
-`PHYSICAL_DOCUMENT_GEOMETRY_CONTEXT_FINGERPRINT_VERSION = "physical-document-geometry-context-fingerprint-v1"`. `computeGeometryContextFingerprint` (domínio, `physical-document-geometry-context-fingerprint.ts`, exportado pelo barrel — análogo a `createTechnicalProblem`, uma função de construção de valor de contrato). SHA-256 hex de um array JSON de ordem fixa: `[fingerprintVersion, sourceByteHash, physicalReadSchemaVersion, readerName, readerVersion, adapterVersion, underlyingLibraryVersion, coordinateSpaceVersion, geometryProfileVersion, quantizationDecimalPlaces]`. Presente inclusive em resultado `failed` (identifica o contrato técnico independentemente do sucesso da leitura).
+`PHYSICAL_DOCUMENT_GEOMETRY_CONTEXT_FINGERPRINT_VERSION = "physical-document-geometry-context-fingerprint-v1"`. `computeGeometryContextFingerprint` (domínio, `physical-document-geometry-context-fingerprint.ts` — **não** exportada pelo barrel, revisado na auditoria pós-PR #68; o adaptador a importa por caminho direto de módulo, junto de `GeometryContextFingerprintInput`, sua entrada interna). SHA-256 hex de um array JSON de ordem fixa: `[fingerprintVersion, sourceByteHash, physicalReadSchemaVersion, readerName, readerVersion, adapterVersion, underlyingLibraryVersion, coordinateSpaceVersion, geometryProfileVersion, quantizationDecimalPlaces]`. Presente inclusive em resultado `failed` (identifica o contrato técnico independentemente do sucesso da leitura).
+
+`underlyingLibraryVersion` usado no fingerprint nunca é `null` na prática a partir desta versão: o adaptador declara `EXPECTED_UNDERLYING_LIBRARY_VERSION = "pdfjs-dist@6.1.200"` estaticamente (a dependência está fixada em versão exata) e usa esse valor inclusive para bytes vazios, sem precisar carregar a biblioteca primeiro. Ver seção 29.
 
 ## 20. Repetibilidade
 
@@ -104,7 +108,7 @@ Novos arquivos de teste: `physical-document-text-item-geometry-canonicalization.
 
 ## 25. Guards
 
-`physical-document-read-no-decision-boundaries.test.ts`: vocabulário estendido com linha/segmento/bloco/tabela/coluna/célula/ordem-de-leitura. `physical-document-text-item-geometry-boundaries.test.ts` (novo): módulo geométrico puro não importa `pdfjs-dist`; quantizador e primitivo de relação com a página não exportados pelo barrel; nenhuma regra do observador ou do localizador referencia os novos campos geométricos.
+`physical-document-read-no-decision-boundaries.test.ts`: vocabulário estendido com linha/segmento/bloco/tabela/coluna/célula/ordem-de-leitura. `physical-document-text-item-geometry-boundaries.test.ts` (novo): módulo geométrico puro não importa `pdfjs-dist`; quantizador, primitivo de relação com a página, cálculo de métricas de disposição e cálculo do fingerprint (todos os quatro) não exportados pelo barrel; o adaptador os importa por caminho direto de módulo (verificado mecanicamente); nenhuma regra do observador ou do localizador referencia os novos campos geométricos.
 
 ## 26. Limitações
 
@@ -117,3 +121,15 @@ Limites são de layout, não contorno exato dos glifos. Não existe ordem humana
 ## 28. Desbloqueio da Sprint 21.4A.2.f.1
 
 Com geometria de layout normalizada, canonicalizada e auditável por item textual, a Sprint 21.4A.2.f.1 (reconstrução estrutural — faixas de linha, segmentos, blocos) pode começar a partir de um contrato estável, sem precisar redefinir espaço de coordenadas, canonicalização ou fingerprint. Esta Sprint não inicia essa reconstrução.
+
+## 29. Correções pós-auditoria (PR #68)
+
+Uma revisão do PR #68 (antes do merge, ainda em rascunho) encontrou cinco problemas, todos corrigidos nesta mesma Sprint, na mesma branch:
+
+1. **Fingerprint incompleto para documento vazio.** `underlyingLibraryVersion` era `null` para bytes vazios (a biblioteca nunca chegava a ser carregada), contradizendo a seção 19 ("presente inclusive em resultado `failed`"). Corrigido: o adaptador declara `EXPECTED_UNDERLYING_LIBRARY_VERSION = "pdfjs-dist@6.1.200"` estaticamente (a dependência está fixada em versão exata) e a usa mesmo antes de qualquer carregamento. Depois de carregar a biblioteca, o adaptador **compara** a versão real retornada em runtime com essa identidade esperada; em caso de divergência, a leitura para com o novo código técnico `document_underlying_library_version_mismatch` (nível `document`), sem produzir nenhuma página — nunca continuando com um contexto de repetibilidade geométrica falso.
+2. **União discriminada permitia combinações inválidas.** `PhysicalDocumentTextItemPlacement` agrupava as quatro variantes não resolvidas sob um `status` combinado com `reasonCode: PhysicalDocumentTextItemGeometryProblemCode` genérico — um par contraditório passava pelo `tsc`. Corrigido: cinco variantes totalmente separadas (seção 13), cada uma com `reasonCode` de tipo literal único. `computeTextItemPlacementMetrics` ganhou uma guarda de exaustividade (`assertUnreachablePlacement`).
+3. **API pública expondo helpers internos.** O barrel (`domain/budget-document-location/index.ts`) reexportava `computeTextItemPlacementMetrics` e `computeGeometryContextFingerprint` (mais sua entrada interna `GeometryContextFingerprintInput`). Corrigido: removidos do barrel; o adaptador os importa por caminho direto de módulo; guard estendido confirma ambos ausentes do barrel e presentes como import direto no adaptador.
+4. **Teste de repetibilidade usava a mesma instância de `Uint8Array`.** Corrigido: o teste de repetibilidade agora usa `source.slice()` duas vezes (duas instâncias genuinamente independentes); um teste novo e separado prova que reutilizar a mesma instância não a modifica (duas propriedades diferentes, dois testes diferentes).
+5. **Lista de códigos técnicos controlados incompleta e duplicada.** O teste mantinha sua própria lista de códigos conhecidos, divergente da união de tipos real (faltavam `page_text_item_geometry_normalization_failed` e o novo `document_underlying_library_version_mismatch`). Corrigido: nova função exportada `getKnownTechnicalProblemCodes()` (domínio, `physical-document-technical-problem.ts`) deriva a lista do próprio `Record<PhysicalDocumentTechnicalProblemCode, string>` que o `tsc` já obriga a cobrir a união inteira — fonte única, sem lista duplicada. O teste também passou a produzir de fato o código `page_text_item_geometry_normalization_failed` (injeção controlada em `Math.round`, restaurada em `finally`), não apenas listá-lo.
+
+Nenhuma correção alterou: a matemática geométrica já caracterizada, a política de canonicalização de seis casas, a relação `inside`/`partially_outside`/`outside`, o suporte às quatro rotações de página, o suporte a `ltr` horizontal, a rejeição conservadora de `rtl`/`ttb`/matrizes inclinadas ou cisalhadas, a conservação dos itens, as regras do observador ou do localizador, a fixação exata de `pdfjs-dist@6.1.200`.

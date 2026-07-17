@@ -14,6 +14,11 @@
  * 3. o helper de relação com os limites da página (um primitivo
  *    geométrico de baixo nível, análogo a "helper de composição") também
  *    não é exportado pelo barrel público;
+ * 3b. o cálculo de métricas de disposição e o cálculo do fingerprint
+ *    geométrico (incluindo sua entrada interna) também não são
+ *    exportados pelo barrel público — API seletiva, auditoria pós-PR #68:
+ *    o adaptador os importa por caminho direto de módulo, não pelo
+ *    barrel;
  * 4. nenhuma regra do observador (`signal-observation-rules.ts`,
  *    `signal-observation.ts`) ou do localizador (`page-location/*.ts`,
  *    excluindo `testing/` e `*.test.ts`) referencia os novos campos
@@ -35,6 +40,9 @@ const PAGE_LOCATION_DIR = join(DOMAIN_DIR, "page-location");
 const TEXT_ITEM_GEOMETRY_FILE = join(SRC_ROOT, "infrastructure", "budget-document-location", "pdfjs", "text-item-geometry.ts");
 const CANONICALIZATION_FILE_NAME = "physical-document-text-item-geometry-canonicalization";
 const PAGE_BOUNDS_RELATION_FILE_NAME = "physical-document-text-item-page-bounds-relation";
+const PLACEMENT_METRICS_FILE_NAME = "physical-document-text-item-placement-metrics";
+const GEOMETRY_CONTEXT_FINGERPRINT_FILE_NAME = "physical-document-geometry-context-fingerprint";
+const ADAPTER_FILE = join(SRC_ROOT, "infrastructure", "budget-document-location", "pdfjs", "pdfjs-physical-document-reader.ts");
 
 const GEOMETRY_IDENTIFIERS_FORBIDDEN_IN_RULES = [
   "placement",
@@ -82,6 +90,34 @@ runTest("the domain's public barrel does not export the low-level page-bounds-re
     content.includes(PAGE_BOUNDS_RELATION_FILE_NAME),
     false,
     `index.ts must not re-export ${PAGE_BOUNDS_RELATION_FILE_NAME} — only the resulting pageBoundsRelation value is public, not the deriving function`,
+  );
+});
+
+runTest("the domain's public barrel does not export the placement-metrics or geometry-fingerprint compute helpers", () => {
+  const content = readFileSync(DOMAIN_INDEX_FILE, "utf8");
+  assertEqual(
+    content.includes(PLACEMENT_METRICS_FILE_NAME),
+    false,
+    `index.ts must not re-export ${PLACEMENT_METRICS_FILE_NAME} — computeTextItemPlacementMetrics is an internal helper, imported directly by the adapter (audit follow-up to PR #68)`,
+  );
+  assertEqual(
+    content.includes(GEOMETRY_CONTEXT_FINGERPRINT_FILE_NAME),
+    false,
+    `index.ts must not re-export ${GEOMETRY_CONTEXT_FINGERPRINT_FILE_NAME} — computeGeometryContextFingerprint and its input shape are internal helpers, imported directly by the adapter (audit follow-up to PR #68)`,
+  );
+});
+
+runTest("the pdfjs adapter imports the placement-metrics and fingerprint helpers by direct module path, not the barrel", () => {
+  const content = readFileSync(ADAPTER_FILE, "utf8");
+  assertEqual(
+    content.includes(`from "../../../domain/budget-document-location/${PLACEMENT_METRICS_FILE_NAME}"`),
+    true,
+    "expected the adapter to import computeTextItemPlacementMetrics by direct module path",
+  );
+  assertEqual(
+    content.includes(`from "../../../domain/budget-document-location/${GEOMETRY_CONTEXT_FINGERPRINT_FILE_NAME}"`),
+    true,
+    "expected the adapter to import computeGeometryContextFingerprint by direct module path",
   );
 });
 

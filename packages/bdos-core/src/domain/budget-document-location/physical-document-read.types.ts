@@ -122,6 +122,16 @@ export type PhysicalDocumentTechnicalProblemCode =
   | "document_invalid_structure"
   | "document_protected"
   | "document_open_failed"
+  /**
+   * A biblioteca concreta de extração de PDF efetivamente carregada em
+   * runtime não corresponde à identidade fixada pelo adaptador (Sprint
+   * 21.4A.2.f.0, seção 20 e 6): a partir do schema v2 a geometria e as
+   * métricas tipográficas dependem materialmente da implementação
+   * concreta da biblioteca, então divergência de versão nunca é aceita
+   * silenciosamente — a leitura para antes de produzir qualquer página,
+   * em vez de continuar com um contexto de repetibilidade falso.
+   */
+  | "document_underlying_library_version_mismatch"
   | "page_load_failed"
   | "page_geometry_unavailable"
   | "page_text_extraction_failed"
@@ -226,6 +236,14 @@ export type PhysicalDocumentTextItemGeometryProblemCode =
  * nunca campos opcionais soltos (`x?`, `y?`, `width?`) que permitiriam
  * estado ambíguo entre "ausente" e "não resolvido" (Sprint 21.4A.2.f.0,
  * seção 13).
+ *
+ * Cada estado não resolvido é sua própria variante, com `status` e
+ * `reasonCode` amarrados 1:1 por tipo literal — não um `status` agrupado
+ * combinado com um `reasonCode: PhysicalDocumentTextItemGeometryProblemCode`
+ * genérico. Isso torna combinações contraditórias (ex.: `status:
+ * "unresolved_missing_geometry"` com `reasonCode:
+ * "text_item_geometry_invalid"`) um erro de tipo, não apenas uma
+ * invariante documentada (auditoria pós-PR #68).
  */
 export type PhysicalDocumentTextItemPlacement =
   | {
@@ -234,13 +252,24 @@ export type PhysicalDocumentTextItemPlacement =
       readonly reasonCode: null;
     }
   | {
-      readonly status:
-        | "unresolved_missing_geometry"
-        | "unresolved_invalid_geometry"
-        | "unresolved_unsupported_orientation"
-        | "unresolved_normalization_failed";
+      readonly status: "unresolved_missing_geometry";
       readonly geometry: null;
-      readonly reasonCode: PhysicalDocumentTextItemGeometryProblemCode;
+      readonly reasonCode: "text_item_geometry_missing";
+    }
+  | {
+      readonly status: "unresolved_invalid_geometry";
+      readonly geometry: null;
+      readonly reasonCode: "text_item_geometry_invalid";
+    }
+  | {
+      readonly status: "unresolved_unsupported_orientation";
+      readonly geometry: null;
+      readonly reasonCode: "text_item_orientation_unsupported";
+    }
+  | {
+      readonly status: "unresolved_normalization_failed";
+      readonly geometry: null;
+      readonly reasonCode: "text_item_geometry_normalization_failed";
     };
 
 /**

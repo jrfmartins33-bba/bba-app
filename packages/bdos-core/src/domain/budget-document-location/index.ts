@@ -5,7 +5,5 @@ export * from "./physical-document-page-orientation";
 export * from "./physical-document-text-normalization";
 export * from "./physical-document-page-metrics";
 export * from "./physical-document-technical-problem";
-export * from "./physical-document-text-item-placement-metrics";
-export * from "./physical-document-geometry-context-fingerprint";
 export * from "./signal-observation";
 export * from "./page-location";

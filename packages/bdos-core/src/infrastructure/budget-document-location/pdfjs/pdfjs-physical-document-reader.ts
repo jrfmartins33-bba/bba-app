@@ -1,8 +1,6 @@
 import { createHash } from "node:crypto";
 import {
-  computeGeometryContextFingerprint,
   computePageTextMetrics,
-  computeTextItemPlacementMetrics,
   createTechnicalProblem,
   derivePageOrientation,
   normalizePageText,
@@ -24,6 +22,14 @@ import type {
   PhysicalDocumentTextItem,
   PhysicalDocumentTextItemPlacement,
 } from "../../../domain/budget-document-location";
+// Imported by direct module path, not the public barrel: these two
+// helpers are deliberately excluded from `domain/budget-document-location`'s
+// public API (Sprint 21.4A.2.f.0, audit follow-up to PR #68) — the
+// canonicalizer, the fingerprint entry shape and the page-bounds-relation
+// derivation are internal contract-boundary details, not something a
+// package consumer should call directly.
+import { computeTextItemPlacementMetrics } from "../../../domain/budget-document-location/physical-document-text-item-placement-metrics";
+import { computeGeometryContextFingerprint } from "../../../domain/budget-document-location/physical-document-geometry-context-fingerprint";
 import { deriveTextItemPlacement } from "./text-item-geometry";
 
 /**
@@ -62,6 +68,19 @@ import { deriveTextItemPlacement } from "./text-item-geometry";
  *   objetos concretos de `pdfjs-dist`.
  */
 const UNDERLYING_LIBRARY_NAME = "pdfjs-dist";
+
+/**
+ * Identidade técnica estável do adaptador (Sprint 21.4A.2.f.0, auditoria
+ * pós-PR #68): `pdfjs-dist` está fixado em versão exata (sem `^`) no
+ * `package.json` do pacote, então esta identidade é conhecida
+ * antecipadamente — antes de qualquer carregamento da biblioteca — e é o
+ * único valor de `underlyingLibraryVersion` produzido por este adaptador
+ * enquanto a biblioteca resolvida em runtime confirmar essa mesma versão
+ * (ver `readPhysicalDocument`, verificação logo após `loadPdfjs()`). Não
+ * é o metadado bruto retornado pela biblioteca — é a identidade que o
+ * adaptador declara e depois audita.
+ */
+const EXPECTED_UNDERLYING_LIBRARY_VERSION = `${UNDERLYING_LIBRARY_NAME}@6.1.200` as const;
 
 export const PDFJS_PHYSICAL_DOCUMENT_READER_ADAPTER_VERSION = "pdfjs-physical-document-reader-adapter-v2" as const;
 
@@ -104,11 +123,28 @@ async function readPhysicalDocument(bytes: Uint8Array): Promise<PhysicalDocument
   const sourceByteHash = hashSourceBytes(bytes);
 
   if (bytes.byteLength === 0) {
-    return buildFailedResult(sourceByteHash, null, "document_bytes_empty");
+    // The expected identity is known statically (the dependency is
+    // pinned exactly) — no need to load the library just to reject
+    // empty bytes, and no need to report a null library identity for a
+    // contract that declares the library participates in every
+    // fingerprint (Sprint 21.4A.2.f.0, seção 18).
+    return buildFailedResult(sourceByteHash, EXPECTED_UNDERLYING_LIBRARY_VERSION, "document_bytes_empty");
   }
 
   const pdfjs = await loadPdfjs();
-  const underlyingLibraryVersion = getUnderlyingLibraryVersion(pdfjs);
+  const actualUnderlyingLibraryVersion = getUnderlyingLibraryVersion(pdfjs);
+
+  if (actualUnderlyingLibraryVersion !== EXPECTED_UNDERLYING_LIBRARY_VERSION) {
+    // Never silently continue producing geometry under a mismatched
+    // library context — the geometric fingerprint would misrepresent
+    // what actually ran. Report the real detected identity (possibly
+    // `null`) in this one technical-problem path; every other path
+    // below is only reachable once this check has passed, so it always
+    // carries the expected, verified identity.
+    return buildFailedResult(sourceByteHash, actualUnderlyingLibraryVersion, "document_underlying_library_version_mismatch");
+  }
+
+  const underlyingLibraryVersion = EXPECTED_UNDERLYING_LIBRARY_VERSION;
 
   let doc: PdfjsDocumentProxy;
   let loadingTaskDestroy: () => Promise<void>;
