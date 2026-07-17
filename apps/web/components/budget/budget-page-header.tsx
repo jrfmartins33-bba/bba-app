@@ -16,11 +16,11 @@ export function BudgetPageHeader({ isDemonstration }: { readonly isDemonstration
           <h1>Orçamento da obra</h1>
           {isDemonstration ? <span className="status-badge status-badge--pending">Demonstração</span> : null}
         </div>
-        <p>Entenda o valor do edital, compare a proposta e acompanhe como o orçamento está organizado.</p>
+        <p>Entenda o orçamento oficial, compare a proposta e consulte como os itens estão organizados.</p>
         {isDemonstration ? (
           <p className="budget-demo-note">
-            Estes dados demonstram como esta área apresentará e apoiará a análise do orçamento.
-            Nenhuma versão definitiva será criada sem revisão e confirmação.
+            Esta é uma demonstração da experiência de orçamento. Nenhuma versão definitiva será
+            criada sem revisão e confirmação.
           </p>
         ) : null}
       </div>

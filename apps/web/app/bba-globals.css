@@ -3639,10 +3639,11 @@ button {
   padding: 3px 8px;
 }
 
-/* Epic 21, Sprint 21.4B.1 — Orçamento (primeira experiência visual e
-   demonstrável). Mesma linguagem visual do Decision Hero de Medições
-   (measurement-decision-hero, acima): tokens do tema escuro navy/gold
-   já herdados via `.bba-main__content--standard .bba-card`. */
+/* Epic 21, Sprint 21.4B.2 — Orçamento (planilha orçamentária e
+   composição visual profissional). Mesma linguagem visual do Decision
+   Hero de Medições (measurement-decision-hero, acima): tokens do tema
+   escuro navy/gold já herdados via
+   `.bba-main__content--standard .bba-card`. */
 
 .budget-demo-note {
   color: var(--text-secondary);
@@ -3652,80 +3653,31 @@ button {
   max-width: 640px;
 }
 
-.budget-hero {
-  border-left: 3px solid var(--status-green);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.budget-hero__marker {
-  align-items: center;
-  background: var(--status-green-bg);
-  border-radius: 999px;
-  color: var(--status-green);
-  display: inline-flex;
-  font-size: 13px;
-  font-weight: 600;
-  gap: 8px;
-  padding: 6px 12px;
-  width: fit-content;
-}
-
-.budget-hero__label {
-  color: var(--text-secondary-strong);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  margin: 0;
-  text-transform: uppercase;
-}
-
-.budget-hero__headline {
-  color: var(--text-primary);
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 1.3;
-  margin: 0;
-  max-width: 68ch;
-}
-
-.budget-hero__next-step {
-  align-items: flex-start;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--app-border);
-  border-radius: 10px;
-  display: flex;
-  gap: 12px;
-  padding: 12px 14px;
-}
-
-.budget-hero__next-step-icon {
-  align-items: center;
-  background: var(--bba-gold);
-  border-radius: 8px;
-  color: #1a1204;
+/* Resumo compacto entre o cabeçalho e os indicadores -- nunca um card
+   grande (substitui o antigo "Conclusão Executiva"): no máximo duas
+   linhas, sem min-height, sem painel interno. */
+.budget-summary-strip {
+  border-bottom: 1px solid var(--app-divider);
   display: grid;
-  flex-shrink: 0;
-  height: 28px;
-  place-items: center;
-  width: 28px;
+  gap: 4px;
+  padding: 0 2px 16px;
 }
 
-.budget-hero__next-step-body span {
-  color: var(--bba-gold-soft);
-  display: block;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.budget-summary-strip__headline {
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.4;
+  margin: 0;
 }
 
-.budget-hero__next-step-body p {
+.budget-summary-strip__headline strong {
   color: var(--text-primary);
-  font-size: 14px;
-  line-height: 1.5;
-  margin: 3px 0 0;
+}
+
+.budget-summary-strip__meta {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin: 0;
 }
 
 .budget-indicator-card {
@@ -3836,90 +3788,17 @@ button {
   background: var(--status-green);
 }
 
-.budget-journey {
-  display: grid;
-  gap: 8px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.budget-journey__step {
-  align-items: center;
-  border-left: 3px solid var(--app-divider);
-  display: grid;
-  gap: 4px 12px;
-  grid-template-columns: 30px minmax(0, 1fr);
-  padding: 8px 0 8px 12px;
-}
-
-.budget-journey__index {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 999px;
-  color: var(--text-secondary);
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 700;
-  height: 26px;
-  justify-content: center;
-  width: 26px;
-}
-
-.budget-journey__label {
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.budget-journey__state {
-  align-items: center;
-  color: var(--text-secondary);
-  display: inline-flex;
-  font-size: 12px;
-  gap: 5px;
-}
-
-.budget-journey__step--demonstrated {
-  border-left-color: var(--status-green);
-}
-
-.budget-journey__step--demonstrated .budget-journey__index {
-  background: var(--status-green-bg);
-  color: var(--status-green);
-}
-
-.budget-journey__step--demonstrated .budget-journey__state {
-  color: var(--status-green);
-}
-
-.budget-journey__step--requires_confirmation {
-  border-left-color: var(--status-amber);
-}
-
-.budget-journey__step--requires_confirmation .budget-journey__index {
-  background: var(--status-amber-bg);
-  color: var(--status-amber);
-}
-
-.budget-journey__step--requires_confirmation .budget-journey__state {
-  color: var(--status-amber);
-}
-
-.budget-journey__step--future .budget-journey__label {
-  color: var(--text-secondary);
-}
-
-.budget-structure-diagram {
+/* Faixa compacta 11 → 25 → 300, imediatamente acima da Planilha
+   orçamentária -- nunca um card, só uma tira de contexto. */
+.budget-hierarchy-strip {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 12px;
+  padding: 0 2px 4px;
 }
 
-.budget-structure-diagram__node {
+.budget-hierarchy-strip__node {
   background: rgba(185, 149, 79, 0.12);
   border: 1px solid var(--bba-gold-dim);
   border-radius: 999px;
@@ -3929,66 +3808,217 @@ button {
   padding: 6px 14px;
 }
 
-.budget-structure-diagram__arrow {
+.budget-hierarchy-strip__arrow {
   color: var(--text-muted);
 }
 
-.budget-structure-example__trigger {
-  align-items: center;
-  background: none;
-  border: none;
-  color: var(--bba-gold-soft);
-  cursor: pointer;
-  display: inline-flex;
-  font-size: 13px;
-  font-weight: 700;
-  gap: 6px;
-  margin-top: 6px;
-  padding: 0;
+/* Planilha orçamentária -- elemento principal da experiência. */
+.budget-worksheet__warning {
+  border-left: 2px solid var(--status-amber);
+  color: var(--status-amber);
+  font-size: 12.5px;
+  font-weight: 600;
+  margin: 4px 0 16px;
+  padding-left: 10px;
 }
 
-.budget-structure-example__chevron {
+.budget-worksheet__groups {
+  display: grid;
+  gap: 10px;
+}
+
+.budget-worksheet-group {
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.budget-worksheet-group[open] {
+  border-color: var(--bba-gold-dim);
+}
+
+.budget-worksheet-group__summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  list-style: none;
+  padding: 4px 0;
+}
+
+.budget-worksheet-group__summary::-webkit-details-marker {
+  display: none;
+}
+
+.budget-worksheet-group__summary:focus-visible {
+  outline: 2px solid var(--bba-gold);
+  outline-offset: 3px;
+}
+
+.budget-worksheet-group__summary::after {
+  color: var(--text-muted);
+  content: "▾";
+  margin-left: auto;
   transition: transform var(--fast) var(--ease);
 }
 
-.budget-structure-example__chevron[data-expanded="true"] {
+.budget-worksheet-group[open] .budget-worksheet-group__summary::after {
   transform: rotate(180deg);
 }
 
-.budget-structure-example {
-  border-top: 1px solid var(--app-divider);
-  margin-top: 12px;
-  padding-top: 12px;
-}
-
-.budget-structure-example__disclaimer {
-  color: var(--status-amber);
+.budget-worksheet-group__code {
+  background: rgba(185, 149, 79, 0.12);
+  border-radius: 6px;
+  color: var(--bba-gold-soft);
+  flex-shrink: 0;
   font-size: 12px;
-  font-weight: 600;
-  margin: 0 0 10px;
+  font-weight: 700;
+  padding: 3px 8px;
 }
 
-.budget-structure-example__groups {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+.budget-worksheet-group__label {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
 }
 
-.budget-structure-example__group-label {
+.budget-worksheet-group__count {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.budget-worksheet-table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.budget-worksheet-table th {
+  border-bottom: 1px solid var(--app-border);
+  color: var(--text-secondary-strong);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 8px 10px;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.budget-worksheet-table td {
+  border-bottom: 1px solid var(--app-divider);
   color: var(--text-primary);
   font-size: 13px;
-  font-weight: 700;
-  margin: 0 0 6px;
+  padding: 8px 10px;
 }
 
-.budget-structure-example__group ul {
+.budget-worksheet-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.budget-worksheet-table__numeric {
+  text-align: right;
+}
+
+.budget-worksheet-group__subtotal {
+  border-top: 1px solid var(--app-divider);
   color: var(--text-secondary);
-  display: grid;
   font-size: 12.5px;
-  gap: 4px;
-  list-style: disc;
+  margin: 8px 0 0;
+  padding-top: 8px;
+  text-align: right;
+}
+
+.budget-worksheet-group__subtotal strong {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Etapas do orçamento -- grade de 5 colunas no desktop (nunca lista
+   vertical de linhas largas: era essa a origem do grande espaço vazio
+   à direita). Altura alvo ~150–220px incluindo o título do Card. */
+.budget-journey {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  list-style: none;
   margin: 0;
-  padding-left: 18px;
+  padding: 10px 0 0;
+  position: relative;
+}
+
+.budget-journey::before {
+  background: var(--app-divider);
+  content: "";
+  height: 2px;
+  left: 8%;
+  position: absolute;
+  right: 8%;
+  top: 24px;
+}
+
+.budget-journey__step {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 4px;
+  position: relative;
+  text-align: center;
+}
+
+.budget-journey__index {
+  align-items: center;
+  background: var(--app-sidebar);
+  border: 2px solid var(--app-divider);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.budget-journey__label {
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.budget-journey__state {
+  align-items: center;
+  color: var(--text-secondary);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 4px;
+  justify-content: center;
+}
+
+.budget-journey__step--available .budget-journey__index {
+  background: var(--status-green-bg);
+  border-color: var(--status-green);
+  color: var(--status-green);
+}
+
+.budget-journey__step--available .budget-journey__state {
+  color: var(--status-green);
+}
+
+.budget-journey__step--awaiting_review .budget-journey__index {
+  background: var(--status-amber-bg);
+  border-color: var(--status-amber);
+  color: var(--status-amber);
+}
+
+.budget-journey__step--awaiting_review .budget-journey__state {
+  color: var(--status-amber);
+}
+
+.budget-journey__step--next_step .budget-journey__label {
+  color: var(--text-secondary);
 }
 
 .budget-next-decision__actions,
@@ -4027,12 +4057,12 @@ button {
     width: 100%;
   }
 
-  .budget-structure-diagram {
+  .budget-hierarchy-strip {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .budget-structure-diagram__arrow {
+  .budget-hierarchy-strip__arrow {
     margin-left: 14px;
     transform: rotate(90deg);
   }
@@ -4044,10 +4074,84 @@ button {
   .budget-next-decision__actions .bba-button {
     width: 100%;
   }
+
+  /* Planilha: a mesma <table>/<td> vira layout de cartão -- nenhum dado
+     duplicado em outro markup, só CSS reorganizando o que já existe. */
+  .budget-worksheet-table thead {
+    display: none;
+  }
+
+  .budget-worksheet-table,
+  .budget-worksheet-table tbody,
+  .budget-worksheet-table tr {
+    display: block;
+    width: 100%;
+  }
+
+  .budget-worksheet-table tr {
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    padding: 4px 10px;
+  }
+
+  .budget-worksheet-table tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .budget-worksheet-table td {
+    align-items: baseline;
+    border-bottom: 1px solid var(--app-divider);
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 6px 0;
+    text-align: right;
+  }
+
+  .budget-worksheet-table tr td:last-child {
+    border-bottom: none;
+  }
+
+  .budget-worksheet-table td::before {
+    color: var(--text-secondary);
+    content: attr(data-label);
+    font-weight: 600;
+    text-align: left;
+  }
+
+  /* Etapas: empilha verticalmente, sem conector horizontal, cada etapa
+     numa linha compacta em vez de uma coluna centralizada. */
+  .budget-journey {
+    gap: 8px;
+    grid-template-columns: 1fr;
+  }
+
+  .budget-journey::before {
+    display: none;
+  }
+
+  .budget-journey__step {
+    align-items: center;
+    flex-direction: row;
+    gap: 10px;
+    padding: 4px 0;
+    text-align: left;
+  }
+
+  .budget-journey__label {
+    flex: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .budget-comparison__bar {
     animation: none;
   }
+}
+
+/* Âncora de "Explorar orçamento" -- impede que o título da Planilha
+   fique colado à borda superior da viewport ao rolar até ela. */
+#planilha-orcamentaria {
+  scroll-margin-top: 24px;
 }

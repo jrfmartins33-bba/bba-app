@@ -98,12 +98,11 @@ const CAPABILITIES: CapabilityCard[] = [
   {
     id: "orcamento",
     title: "Orçamento",
-    description:
-      "Veja como o orçamento oficial é apresentado, a proposta é comparada e os itens são organizados para decisão.",
+    description: "Veja o orçamento oficial, a proposta e como os itens são organizados para análise.",
     status: "Demonstração disponível",
     icon: Wallet,
     href: "/orcamentos/demonstracao",
-    actionLabel: "Ver demonstração"
+    actionLabel: "Ver orçamento"
   },
   {
     id: "documentos",

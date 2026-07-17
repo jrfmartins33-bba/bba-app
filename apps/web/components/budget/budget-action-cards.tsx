@@ -42,7 +42,7 @@ export function BudgetActionCards({ simulationServiceAvailable }: { readonly sim
         <p className="workspace-card__description">
           {simulationServiceAvailable
             ? "Explore um novo cenário de desconto antes de confirmar uma decisão."
-            : "Esta simulação ainda depende de um serviço de cálculo dedicado, que será construído em uma próxima etapa."}
+            : "A simulação de novos cenários será disponibilizada em uma próxima etapa."}
         </p>
       </Card>
     </>

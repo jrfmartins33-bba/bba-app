@@ -19,7 +19,14 @@
 
 export type BudgetSourceKind = "demonstration";
 
-export type BudgetJourneyStepState = "demonstrated" | "requires_confirmation" | "future";
+/**
+ * Sprint 21.4B.2 — vocabulário corrigido: "Disponível" / "Aguardando
+ * revisão" / "Próxima etapa". Os nomes técnicos anteriores
+ * ("demonstrated"/"requires_confirmation"/"future") continuam só como
+ * identificadores internos de estado, nunca renderizados — o rótulo
+ * exibido vem sempre do mapa de tradução no componente.
+ */
+export type BudgetJourneyStepState = "available" | "awaiting_review" | "next_step";
 
 export interface BudgetMoneyFigure {
   /** Centavos inteiros — nunca usado para cálculo aqui, só para auditoria de origem. */
@@ -32,15 +39,6 @@ export interface BudgetJourneyStep {
   readonly id: string;
   readonly label: string;
   readonly state: BudgetJourneyStepState;
-}
-
-export interface BudgetStructureExampleItem {
-  readonly label: string;
-}
-
-export interface BudgetStructureExampleGroup {
-  readonly label: string;
-  readonly items: ReadonlyArray<BudgetStructureExampleItem>;
 }
 
 export interface BudgetDemonstrationData {
@@ -56,8 +54,6 @@ export interface BudgetDemonstrationData {
   readonly officialBarWidthPercent: number;
   readonly proposalBarWidthPercent: number;
   readonly journey: ReadonlyArray<BudgetJourneyStep>;
-  /** Bloco sintético e isolado — nunca somado aos indicadores acima. */
-  readonly structureExample: ReadonlyArray<BudgetStructureExampleGroup>;
   /** Reflete a ausência real de um serviço de simulação/transformação de desconto nesta Sprint. */
   readonly simulationServiceAvailable: boolean;
 }
@@ -74,25 +70,11 @@ export const BUDGET_DEMONSTRATION_DATA: BudgetDemonstrationData = {
   officialBarWidthPercent: 100,
   proposalBarWidthPercent: 77.6,
   journey: [
-    { id: "recebido", label: "Orçamento recebido", state: "demonstrated" },
-    { id: "estrutura", label: "Estrutura organizada", state: "demonstrated" },
-    { id: "valores", label: "Valores revisados", state: "requires_confirmation" },
-    { id: "proposta", label: "Proposta comparada", state: "demonstrated" },
-    { id: "decisao", label: "Pronto para decisão", state: "future" }
-  ],
-  structureExample: [
-    {
-      label: "Serviços preliminares",
-      items: [{ label: "Mobilização de equipe" }, { label: "Instalação do canteiro" }]
-    },
-    {
-      label: "Infraestrutura",
-      items: [{ label: "Terraplenagem" }, { label: "Fundações" }]
-    },
-    {
-      label: "Acabamentos",
-      items: [{ label: "Revestimentos" }, { label: "Pintura" }]
-    }
+    { id: "recebido", label: "Orçamento recebido", state: "available" },
+    { id: "estrutura", label: "Estrutura organizada", state: "available" },
+    { id: "valores", label: "Valores revisados", state: "awaiting_review" },
+    { id: "proposta", label: "Proposta comparada", state: "available" },
+    { id: "decisao", label: "Pronto para decisão", state: "next_step" }
   ],
   simulationServiceAvailable: false
 };

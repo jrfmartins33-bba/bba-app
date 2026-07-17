@@ -50,10 +50,13 @@ async function main(): Promise<void> {
     assertEqual(data.simulationServiceAvailable, false);
   });
 
-  await runTest("exemplo sintético de organização não é somado aos indicadores oficiais", () => {
-    assertTrue(data.structureExample.length <= 3, "exemplo deve ter no máximo três grupos sintéticos");
-    const totalSyntheticItems = data.structureExample.reduce((total, group) => total + group.items.length, 0);
-    assertTrue(totalSyntheticItems < data.serviceItemCount, "itens sintéticos nunca podem se aproximar dos 300 itens reais");
+  await runTest("etapas usam somente o vocabulário corrigido (available/awaiting_review/next_step)", () => {
+    const allowedStates = new Set(["available", "awaiting_review", "next_step"]);
+    data.journey.forEach((step) => {
+      assertTrue(allowedStates.has(step.state), `estado de etapa inesperado: "${step.state}"`);
+    });
+    assertEqual(data.journey.filter((step) => step.state === "awaiting_review").length, 1);
+    assertEqual(data.journey.filter((step) => step.state === "next_step").length, 1);
   });
 
   await runTest("nome do cliente/obra real não aparece na demonstração", () => {
