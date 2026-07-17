@@ -8,3 +8,4 @@ export * from "./physical-document-technical-problem";
 export * from "./signal-observation";
 export * from "./page-location";
 export * from "./structure-reconstruction";
+export * from "./tabular-region-detection";
