@@ -32,6 +32,36 @@ const FORBIDDEN_ADAPTER_IMPORT_SEGMENTS = [
 
 const FORBIDDEN_ADAPTER_SPECIFIER_KEYWORDS = ["apps/web", "@bba/web", "@supabase/supabase-js"] as const;
 
+/**
+ * Exceção nomeada e restrita, adicionada na auditoria do PR #69 (Sprint
+ * 21.4A.2.f.1). O portão de compatibilidade exata do reconstrutor
+ * estrutural (`domain/budget-document-location/structure-reconstruction/structure-reconstruction-source-contracts.ts`)
+ * precisa comparar `adapterVersion`/`underlyingLibraryVersion` por
+ * igualdade literal contra a identidade do único adaptador físico hoje
+ * suportado — nunca aceitar um adaptador ou biblioteca diferentes apenas
+ * porque o fingerprint geométrico foi recalculado corretamente (a
+ * justificativa "coberto indiretamente pelo fingerprint" foi
+ * explicitamente rejeitada nesta auditoria).
+ *
+ * Essa comparação exige que os dois literais de identidade — que, por
+ * serem a identidade que o próprio adaptador se atribuiu, contêm a
+ * substring "pdfjs" como parte do seu **valor**, nunca como uma
+ * importação — apareçam em um único arquivo de domínio. O arquivo:
+ *
+ * - NÃO importa `pdfjs-dist` nem qualquer caminho de `infrastructure/`
+ *   (a checagem "budget-document-location does not depend on the pdfjs
+ *   adapter", abaixo, continua verificando isso, sem exceção, inclusive
+ *   para este arquivo);
+ * - apenas declara dois valores literais (`SUPPORTED_PHYSICAL_ADAPTER_VERSION`,
+ *   `SUPPORTED_PHYSICAL_UNDERLYING_LIBRARY_VERSION`) comparados por
+ *   igualdade exata contra o resultado já recebido.
+ *
+ * Esta exceção nunca relaxa nenhuma outra checagem deste arquivo, nem se
+ * aplica a nenhum outro arquivo ou padrão.
+ */
+const PDFJS_KEYWORD_SCAN_KNOWN_EXCEPTION_REPO_RELATIVE_SUFFIX =
+  "domain/budget-document-location/structure-reconstruction/structure-reconstruction-source-contracts.ts";
+
 interface ImportRef {
   readonly specifier: string;
   readonly line: number;
@@ -54,7 +84,7 @@ runTest("only the authorized pdfjs adapter directory imports pdfjs-dist anywhere
 
   listAllPackageSourceFiles().forEach((file) => {
     const repoRelative = toRepoRelative(file);
-    if (repoRelative.startsWith(PDF_ADAPTER_REPO_RELATIVE_PREFIX)) {
+    if (repoRelative.startsWith(PDF_ADAPTER_REPO_RELATIVE_PREFIX) || repoRelative.endsWith(PDFJS_KEYWORD_SCAN_KNOWN_EXCEPTION_REPO_RELATIVE_SUFFIX)) {
       return;
     }
 
@@ -70,6 +100,18 @@ runTest("only the authorized pdfjs adapter directory imports pdfjs-dist anywhere
   });
 
   assertNoViolations(violations, "unauthorized pdfjs-dist reference");
+});
+
+runTest("the pdfjs keyword exception file exists, contains no pdfjs-dist import, and is a single deliberate exception", () => {
+  const exceptionFile = listAllPackageSourceFiles().find((file) => toRepoRelative(file).endsWith(PDFJS_KEYWORD_SCAN_KNOWN_EXCEPTION_REPO_RELATIVE_SUFFIX));
+  assertEqual(exceptionFile !== undefined, true, "expected the exempted file to exist and be scanned");
+
+  const imports = readImportsFromFile(exceptionFile!);
+  const importsPdfjs = imports.some((ref) => ref.specifier.toLowerCase().includes("pdfjs"));
+  assertEqual(importsPdfjs, false, "the exempted file must reference the pdfjs identity only as a data literal, never as an import");
+
+  const importsInfrastructure = imports.some((ref) => ref.specifier.toLowerCase().includes("infrastructure"));
+  assertEqual(importsInfrastructure, false, "the exempted file must not import the infrastructure/adapter layer");
 });
 
 runTest("the pdfjs adapter directory does in fact reference pdfjs-dist", () => {

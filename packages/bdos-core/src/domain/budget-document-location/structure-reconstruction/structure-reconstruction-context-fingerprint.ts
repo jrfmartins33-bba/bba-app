@@ -5,10 +5,12 @@ import { STRUCTURE_RECONSTRUCTION_CONTEXT_FINGERPRINT_VERSION } from "./budget-d
 
 /**
  * Entrada do fingerprint canônico de reconstrução estrutural (Sprint
- * 21.4A.2.f.1, §45). Resume, nunca substitui, as identidades individuais já
- * presentes em `PhysicalDocumentReadResult` e `BudgetDocumentPageLocationResult`.
- * Não exportado pelo barrel público — detalhe de implementação da fronteira
- * do contrato, análogo a `computeGeometryContextFingerprint`.
+ * 21.4A.2.f.1, §45; estendido na auditoria pós-PR #69, §6-§7). Resume,
+ * nunca substitui, as identidades individuais já presentes em
+ * `PhysicalDocumentReadResult` e `BudgetDocumentPageLocationResult` — todas
+ * elas também expostas individualmente em `BudgetDocumentStructureReconstructionResult`.
+ * Não exportado pelo barrel público — detalhe de implementação da
+ * fronteira do contrato, análogo a `computeGeometryContextFingerprint`.
  */
 export interface StructureReconstructionContextFingerprintInput {
   readonly sourceByteHash: string;
@@ -25,6 +27,8 @@ export interface StructureReconstructionContextFingerprintInput {
   readonly pageLocatorName: string;
   readonly pageLocatorVersion: string;
   readonly pageLocationDecisionRuleSetVersion: string;
+  readonly sourceObservationSchemaVersion: number | null;
+  readonly sourceObserverName: string | null;
   readonly pageLocationCatalogVersion: string | null;
   readonly pageLocationObserverVersion: string | null;
   readonly pageLocationObservationRuleSetVersion: string | null;
@@ -32,6 +36,7 @@ export interface StructureReconstructionContextFingerprintInput {
   readonly reconstructorVersion: string;
   readonly profileId: string;
   readonly profileVersion: number;
+  readonly geometryCanonicalizationVersion: string;
 }
 
 /** SHA-256, em hexadecimal, de um array JSON com ordem fixa — nunca concatenação ambígua, nunca UUID, nunca timestamp. Determinístico. */
@@ -54,6 +59,8 @@ export function computeStructureReconstructionContextFingerprint(
     input.pageLocatorName,
     input.pageLocatorVersion,
     input.pageLocationDecisionRuleSetVersion,
+    input.sourceObservationSchemaVersion,
+    input.sourceObserverName,
     input.pageLocationCatalogVersion,
     input.pageLocationObserverVersion,
     input.pageLocationObservationRuleSetVersion,
@@ -61,6 +68,7 @@ export function computeStructureReconstructionContextFingerprint(
     input.reconstructorVersion,
     input.profileId,
     input.profileVersion,
+    input.geometryCanonicalizationVersion,
   ];
 
   return createHash("sha256").update(JSON.stringify(canonicalRepresentation)).digest("hex");
@@ -74,6 +82,7 @@ export function buildStructureReconstructionContextFingerprintInput(
   reconstructorVersion: string,
   profileId: string,
   profileVersion: number,
+  geometryCanonicalizationVersion: string,
 ): StructureReconstructionContextFingerprintInput {
   return {
     sourceByteHash: physicalRead.sourceByteHash,
@@ -90,6 +99,8 @@ export function buildStructureReconstructionContextFingerprintInput(
     pageLocatorName: pageLocation.locatorName,
     pageLocatorVersion: pageLocation.locatorVersion,
     pageLocationDecisionRuleSetVersion: pageLocation.decisionRuleSetVersion,
+    sourceObservationSchemaVersion: pageLocation.sourceObservationSchemaVersion,
+    sourceObserverName: pageLocation.sourceObserverName,
     pageLocationCatalogVersion: pageLocation.sourceCatalogVersion,
     pageLocationObserverVersion: pageLocation.sourceObserverVersion,
     pageLocationObservationRuleSetVersion: pageLocation.sourceObservationRuleSetVersion,
@@ -97,5 +108,6 @@ export function buildStructureReconstructionContextFingerprintInput(
     reconstructorVersion,
     profileId,
     profileVersion,
+    geometryCanonicalizationVersion,
   };
 }

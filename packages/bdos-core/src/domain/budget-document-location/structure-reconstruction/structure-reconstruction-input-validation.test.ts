@@ -172,3 +172,134 @@ runTest("rejects a closing candidate that is not the last member of its group", 
   assertEqual(result.kind, "invalid");
   assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "candidate_group_contract_invalid"), true);
 });
+
+// --- independência da ordem do array (auditoria pós-PR #69, §4) -------------
+
+runTest("accepts a page whose text items are presented in a different array order, as long as indices and geometries are preserved", () => {
+  const naturalOrder = buildPhysicalDocumentReadResultWithGeometry("order-independence-fixture", [
+    {
+      widthPoints: 600,
+      heightPoints: 800,
+      items: [
+        { text: "1.1 Escavação manual", leftPoints: 50, topPoints: 50, rightPoints: 300, bottomPoints: 70, index: 0 },
+        { text: "BDI", leftPoints: 50, topPoints: 90, rightPoints: 90, bottomPoints: 110, index: 1 },
+      ],
+    },
+  ]);
+  const shuffledOrder = buildPhysicalDocumentReadResultWithGeometry("order-independence-fixture", [
+    {
+      widthPoints: 600,
+      heightPoints: 800,
+      items: [
+        { text: "BDI", leftPoints: 50, topPoints: 90, rightPoints: 90, bottomPoints: 110, index: 1 },
+        { text: "1.1 Escavação manual", leftPoints: 50, topPoints: 50, rightPoints: 300, bottomPoints: 70, index: 0 },
+      ],
+    },
+  ]);
+
+  const naturalObservation = observeDocumentSignals(naturalOrder);
+  const naturalPageLocation = locateBudgetDocumentPages(naturalObservation);
+  const shuffledObservation = observeDocumentSignals(shuffledOrder);
+  const shuffledPageLocation = locateBudgetDocumentPages(shuffledObservation);
+
+  assertEqual(validateStructureReconstructionInput({ physicalRead: naturalOrder, pageLocation: naturalPageLocation }).kind, "valid");
+  assertEqual(validateStructureReconstructionInput({ physicalRead: shuffledOrder, pageLocation: shuffledPageLocation }).kind, "valid");
+});
+
+runTest("rejects text item indices that are not integers, negative, duplicated, or fail to form a dense 0..N-1 set — regardless of array position", () => {
+  const input = buildValidInput();
+  const tamperedPages = input.physicalRead.pages.map((page, pageIndex) =>
+    pageIndex === 0 ? { ...page, textItems: page.textItems.map((item) => ({ ...item, index: item.index + 5 })) } : page,
+  );
+  const result = validateStructureReconstructionInput({ ...input, physicalRead: { ...input.physicalRead, pages: tamperedPages } });
+  assertEqual(result.kind, "invalid");
+  assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "physical_read_contract_invalid"), true);
+});
+
+// --- integridade completa de grupos candidatos e decisões (auditoria pós-PR #69, §5) ---
+
+runTest("rejects a candidate group whose sourceByteHash does not match the page location", () => {
+  const input = buildValidInput();
+  const group = input.pageLocation.candidateGroups[0];
+  const tamperedGroup = { ...group, sourceByteHash: "f".repeat(64) };
+  const result = validateStructureReconstructionInput({ ...input, pageLocation: { ...input.pageLocation, candidateGroups: [tamperedGroup] } });
+  assertEqual(result.kind, "invalid");
+  assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "candidate_group_contract_invalid"), true);
+});
+
+runTest("rejects a candidate group with a formationRuleId different from the approved contiguous-candidate-pages-v1", () => {
+  const input = buildValidInput();
+  const group = input.pageLocation.candidateGroups[0];
+  const tamperedGroup = { ...group, formationRuleId: "some-other-formation-rule-v1" as typeof group.formationRuleId };
+  const result = validateStructureReconstructionInput({ ...input, pageLocation: { ...input.pageLocation, candidateGroups: [tamperedGroup] } });
+  assertEqual(result.kind, "invalid");
+  assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "candidate_group_contract_invalid"), true);
+});
+
+runTest("rejects a candidate group with a formationRuleVersion different from the approved version", () => {
+  const input = buildValidInput();
+  const group = input.pageLocation.candidateGroups[0];
+  const tamperedGroup = { ...group, formationRuleVersion: 2 as typeof group.formationRuleVersion };
+  const result = validateStructureReconstructionInput({ ...input, pageLocation: { ...input.pageLocation, candidateGroups: [tamperedGroup] } });
+  assertEqual(result.kind, "invalid");
+  assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "candidate_group_contract_invalid"), true);
+});
+
+runTest("rejects a candidate group whose locatorVersion does not match the page location's own locatorVersion", () => {
+  const input = buildValidInput();
+  const group = input.pageLocation.candidateGroups[0];
+  const tamperedGroup = { ...group, locatorVersion: "budget-document-page-locator-v2" as typeof group.locatorVersion };
+  const result = validateStructureReconstructionInput({ ...input, pageLocation: { ...input.pageLocation, candidateGroups: [tamperedGroup] } });
+  assertEqual(result.kind, "invalid");
+  assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "candidate_group_contract_invalid"), true);
+});
+
+runTest("rejects a candidate group whose recomputed key does not match the received groupKey", () => {
+  const input = buildValidInput();
+  const group = input.pageLocation.candidateGroups[0];
+  const tamperedGroup = { ...group, groupKey: `${group.groupKey}-tampered` };
+  const result = validateStructureReconstructionInput({ ...input, pageLocation: { ...input.pageLocation, candidateGroups: [tamperedGroup] } });
+  assertEqual(result.kind, "invalid");
+  assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "candidate_group_contract_invalid"), true);
+});
+
+runTest("rejects a group member whose primaryRuleId does not match the corresponding page decision", () => {
+  const input = buildValidInput();
+  const group = input.pageLocation.candidateGroups[0];
+  const tamperedGroup = { ...group, members: [{ ...group.members[0], primaryRuleId: "a-different-rule-id" }] };
+  const result = validateStructureReconstructionInput({ ...input, pageLocation: { ...input.pageLocation, candidateGroups: [tamperedGroup] } });
+  assertEqual(result.kind, "invalid");
+  assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "candidate_group_contract_invalid"), true);
+});
+
+runTest("rejects a page location whose pageDecisions count does not match totalPageCount", () => {
+  const input = buildValidInput();
+  const tamperedDecisions = input.pageLocation.pageDecisions.slice(0, -1);
+  const result = validateStructureReconstructionInput({ ...input, pageLocation: { ...input.pageLocation, pageDecisions: tamperedDecisions } });
+  assertEqual(result.kind, "invalid");
+  assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "page_location_contract_invalid"), true);
+});
+
+runTest("rejects a page location with two page decisions claiming the same page number", () => {
+  const input = buildValidInput();
+  const tamperedDecisions = input.pageLocation.pageDecisions.map((decision, index) => (index === 1 ? { ...decision, pageNumber: input.pageLocation.pageDecisions[0].pageNumber } : decision));
+  const result = validateStructureReconstructionInput({ ...input, pageLocation: { ...input.pageLocation, pageDecisions: tamperedDecisions } });
+  assertEqual(result.kind, "invalid");
+  assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "page_location_contract_invalid"), true);
+});
+
+runTest("rejects a page decision whose sourceByteHash does not match the page location", () => {
+  const input = buildValidInput();
+  const tamperedDecisions = input.pageLocation.pageDecisions.map((decision, index) => (index === 0 ? { ...decision, sourceByteHash: "f".repeat(64) } : decision));
+  const result = validateStructureReconstructionInput({ ...input, pageLocation: { ...input.pageLocation, pageDecisions: tamperedDecisions } });
+  assertEqual(result.kind, "invalid");
+  assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "page_location_contract_invalid"), true);
+});
+
+runTest("rejects a page decision whose classification/candidateType coherence is broken (candidate without a candidateType)", () => {
+  const input = buildValidInput();
+  const tamperedDecisions = input.pageLocation.pageDecisions.map((decision) => (decision.classification === "candidate" ? { ...decision, candidateType: null } : decision));
+  const result = validateStructureReconstructionInput({ ...input, pageLocation: { ...input.pageLocation, pageDecisions: tamperedDecisions } });
+  assertEqual(result.kind, "invalid");
+  assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "page_location_contract_invalid"), true);
+});

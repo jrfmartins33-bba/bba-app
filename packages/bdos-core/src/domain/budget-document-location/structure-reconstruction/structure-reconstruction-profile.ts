@@ -1,4 +1,5 @@
 import type { BudgetDocumentStructureReconstructionProfile } from "./budget-document-structure-reconstruction.types";
+import { STRUCTURE_RECONSTRUCTION_OUTPUT_GEOMETRY_CANONICALIZATION_VERSION } from "./structure-reconstruction-output-geometry-canonicalization";
 
 /**
  * Perfil de reconstrução versionado e único (Sprint 21.4A.2.f.1). Todas as
@@ -24,4 +25,6 @@ export const BUDGET_DOCUMENT_STRUCTURE_RECONSTRUCTION_PROFILE_V1: BudgetDocument
 
   requireCompleteLineCompatibility: true,
   requireMutualBlockAdjacency: true,
+
+  geometryCanonicalizationVersion: STRUCTURE_RECONSTRUCTION_OUTPUT_GEOMETRY_CANONICALIZATION_VERSION,
 };

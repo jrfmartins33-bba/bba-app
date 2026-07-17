@@ -44,9 +44,16 @@ function buildEndToEndResult() {
   return { physicalRead, pageLocation, result: reconstructBudgetDocumentStructure({ physicalRead, pageLocation }) };
 }
 
-// --- full chain (§58) --------------------------------------------------------
+// --- pipeline geométrico sintético (ponte de teste, não PDF real) -----------
+// Esta seção NUNCA lê um PDF real nem usa `pdfjsPhysicalDocumentReader` — ela
+// usa `structure-reconstruction-test-bridge.ts` para produzir um
+// `PhysicalDocumentReadResult` já geometricamente posicionado. Útil para
+// testes de unidade e integração controlada do reconstrutor, mas nunca a
+// prova de que o adaptador real produz um contrato compatível (auditoria
+// pós-PR #69, §2). Essa prova vive em
+// `reconstruct-budget-document-structure.real-pdf-chain.test.ts`.
 
-runTest("full chain: PDF sintético -> physical read v2 -> signal observation -> page location -> structure reconstruction produces at least one candidate group with lines, segments and blocks", () => {
+runTest("synthetic geometry pipeline (bridge, not real PDF): produces at least one candidate group with lines, segments and blocks", () => {
   const { pageLocation, result } = buildEndToEndResult();
 
   assertEqual(pageLocation.candidateGroups.length > 0, true, "expected the synthetic fixture to produce at least one candidate group");
@@ -61,7 +68,7 @@ runTest("full chain: PDF sintético -> physical read v2 -> signal observation ->
   assertEqual(totalBlocks > 0, true, "expected at least one reconstructed block");
 });
 
-runTest("full chain: preserves source byte hash, physical/page-location versions and candidate group keys", () => {
+runTest("synthetic geometry pipeline: preserves source byte hash, physical/page-location versions and candidate group keys", () => {
   const { physicalRead, pageLocation, result } = buildEndToEndResult();
 
   assertEqual(result.sourceByteHash, physicalRead.sourceByteHash);
@@ -75,14 +82,14 @@ runTest("full chain: preserves source byte hash, physical/page-location versions
   });
 });
 
-runTest("full chain: a group with a closing candidate reports hasClosingPage true", () => {
+runTest("synthetic geometry pipeline: a group with a closing candidate reports hasClosingPage true", () => {
   const { result } = buildEndToEndResult();
   const closingGroup = result.groups.find((group) => group.candidateTypesPresent.includes("closing"));
   assertEqual(closingGroup !== undefined, true, "expected the fixture to produce a group with a closing candidate");
   assertEqual(closingGroup?.hasClosingPage, true);
 });
 
-runTest("full chain: never produces an economic-domain field key in the result shape", () => {
+runTest("synthetic geometry pipeline: never produces an economic-domain field key in the result shape", () => {
   const { result } = buildEndToEndResult();
   const serialized = JSON.stringify(result);
   // Field-key form only ("name":) — the limitations array legitimately
@@ -95,7 +102,7 @@ runTest("full chain: never produces an economic-domain field key in the result s
 
 // --- conservation (§21, applied end to end) ----------------------------------
 
-runTest("full chain: item conservation holds for every reconstructed page", () => {
+runTest("synthetic geometry pipeline: item conservation holds for every reconstructed page", () => {
   const { result } = buildEndToEndResult();
   result.groups.forEach((group) => {
     group.pages.forEach((page) => {
@@ -107,7 +114,8 @@ runTest("full chain: item conservation holds for every reconstructed page", () =
         m.unresolvedMissingGeometryCount +
         m.unresolvedInvalidGeometryCount +
         m.unresolvedUnsupportedOrientationCount +
-        m.unresolvedNormalizationFailedCount;
+        m.unresolvedNormalizationFailedCount +
+        m.unresolvedStructureReconstructionFailedCount;
       assertEqual(sum, m.totalSourceTextItemCount, `conservation invariant broken on page ${page.pageNumber}`);
       assertEqual(page.sourceItemOutcomes.length, m.totalSourceTextItemCount);
     });
@@ -116,14 +124,14 @@ runTest("full chain: item conservation holds for every reconstructed page", () =
 
 // --- determinism (§53, applied end to end) -----------------------------------
 
-runTest("full chain: identical input produces a JSON-equivalent result", () => {
+runTest("synthetic geometry pipeline: identical input produces a JSON-equivalent result", () => {
   const { physicalRead, pageLocation } = buildEndToEndResult();
   const first = reconstructBudgetDocumentStructure({ physicalRead, pageLocation });
   const second = reconstructBudgetDocumentStructure({ physicalRead, pageLocation });
   assertEqual(JSON.stringify(first), JSON.stringify(second));
 });
 
-runTest("full chain: reports the versioned, non-calibrated profile identity", () => {
+runTest("synthetic geometry pipeline: reports the versioned, non-calibrated profile identity", () => {
   const { result } = buildEndToEndResult();
   assertEqual(result.reconstructionProfileId, BUDGET_DOCUMENT_STRUCTURE_RECONSTRUCTION_PROFILE_V1.profileId);
   assertEqual(result.reconstructionProfileVersion, BUDGET_DOCUMENT_STRUCTURE_RECONSTRUCTION_PROFILE_V1.profileVersion);
@@ -262,4 +270,100 @@ runTest("cross invariants: no line, segment or block key is duplicated within a 
   });
   const allGroupKeys = result.groups.map((g) => g.groupReconstructionKey);
   assertEqual(new Set(allGroupKeys).size, allGroupKeys.length, "duplicate group reconstruction key");
+});
+
+// --- canonicalização da fronteira de saída (auditoria pós-PR #69, §7) -------
+
+runTest("a derived center coordinate that would carry a binary floating point artifact is canonicalized in the output", () => {
+  // left=0.1, right=0.2: individually clean, but (0.1 + 0.2) / 2 in IEEE754
+  // is 0.15000000000000002, not 0.15 — the exact artifact this fix targets.
+  const physicalRead = buildPhysicalDocumentReadResultWithGeometry("canonicalization-artifact-fixture", [
+    {
+      widthPoints: 600,
+      heightPoints: 800,
+      items: [
+        { text: "1.1 X", leftPoints: 0.1, topPoints: 0.1, rightPoints: 0.2, bottomPoints: 0.2 },
+        { text: "BDI", leftPoints: 50, topPoints: 90, rightPoints: 90, bottomPoints: 110 },
+      ],
+    },
+  ]);
+  const observation = observeDocumentSignals(physicalRead);
+  const pageLocation = locateBudgetDocumentPages(observation);
+  const result = reconstructBudgetDocumentStructure({ physicalRead, pageLocation });
+
+  const artifactLine = result.groups[0].pages[0].lines.find((line) => line.leftPoints === 0.1);
+  assertEqual(artifactLine !== undefined, true, "expected to find the reconstructed line for the artifact-prone item");
+  assertEqual(artifactLine?.centerXPoints, 0.15, "the raw IEEE754 artifact (0.15000000000000002) must be canonicalized away in the output");
+  assertEqual(artifactLine?.centerYPoints, 0.15);
+
+  // Every geometric field on every line/segment/block, across the whole
+  // result, must round-trip through six-decimal canonicalization exactly.
+  result.groups.forEach((group) =>
+    group.pages.forEach((page) => {
+      [...page.lines, ...page.segments, ...page.blocks].forEach((shape) => {
+        (["leftPoints", "topPoints", "rightPoints", "bottomPoints", "widthPoints", "heightPoints", "centerXPoints", "centerYPoints"] as const).forEach((field) => {
+          const value = shape[field];
+          const rounded = Math.round(value * 1e6) / 1e6;
+          assertEqual(value, rounded, `${field} on page ${page.pageNumber} is not canonicalized to six decimal places: ${value}`);
+        });
+      });
+      page.segments.forEach((segment) => {
+        segment.observedInternalGaps.forEach((gap) => {
+          assertEqual(gap, Math.round(gap * 1e6) / 1e6, `observedInternalGaps entry is not canonicalized: ${gap}`);
+        });
+      });
+    }),
+  );
+});
+
+// --- disposição correta em falha estrutural (auditoria pós-PR #69, §3) ------
+
+runTest("excluded_outside_page is only ever produced for items whose source geometry was genuinely outside the page — never as a structural-failure fallback", () => {
+  const { physicalRead, result } = buildEndToEndResult();
+  result.groups.forEach((group) => {
+    group.pages.forEach((page) => {
+      const physicalPage = physicalRead.pages.find((p) => p.pageNumber === page.pageNumber)!;
+      page.sourceItemOutcomes.forEach((outcome) => {
+        if (outcome.status !== "excluded_outside_page") {
+          return;
+        }
+        const sourceItem = physicalPage.textItems[outcome.sourceTextItemIndex];
+        assertEqual(sourceItem.placement.status, "placed");
+        assertEqual(
+          sourceItem.placement.status === "placed" ? sourceItem.placement.geometry.pageBoundsRelation : null,
+          "outside",
+          `item ${outcome.sourceTextItemIndex} was marked excluded_outside_page but its source geometry was not actually "outside"`,
+        );
+      });
+    });
+  });
+});
+
+// --- resultado expõe todas as identidades individuais (auditoria pós-PR #69, §6) ---
+
+runTest("the result exposes every individual source identity, not only the summarizing fingerprint", () => {
+  const { physicalRead, pageLocation, result } = buildEndToEndResult();
+  assertEqual(result.physicalAdapterVersion, physicalRead.adapterVersion);
+  assertEqual(result.physicalUnderlyingLibraryVersion, physicalRead.underlyingLibraryVersion);
+  assertEqual(result.physicalTextItemCoordinateSpaceVersion, physicalRead.textItemCoordinateSpaceVersion);
+  assertEqual(result.physicalTextItemGeometryProfileVersion, physicalRead.textItemGeometryProfileVersion);
+  assertEqual(result.physicalGeometryContextFingerprintVersion, physicalRead.geometryContextFingerprintVersion);
+  assertEqual(result.physicalGeometryContextFingerprint, physicalRead.geometryContextFingerprint);
+  assertEqual(result.pageLocationDecisionRuleSetVersion, pageLocation.decisionRuleSetVersion);
+  assertEqual(result.sourceObservationSchemaVersion, pageLocation.sourceObservationSchemaVersion);
+  assertEqual(result.sourceObserverName, pageLocation.sourceObserverName);
+  assertEqual(result.sourceObserverVersion, pageLocation.sourceObserverVersion);
+  assertEqual(result.sourceObservationRuleSetVersion, pageLocation.sourceObservationRuleSetVersion);
+  assertEqual(result.sourceCatalogVersion, pageLocation.sourceCatalogVersion);
+});
+
+runTest("a failed result still exposes every individual source identity, not just an empty fingerprint", () => {
+  const { physicalRead, pageLocation } = buildEndToEndResult();
+  const tamperedPhysicalRead = { ...physicalRead, geometryContextFingerprint: "0".repeat(64) };
+  const result = reconstructBudgetDocumentStructure({ physicalRead: tamperedPhysicalRead, pageLocation });
+  assertEqual(result.status, "failed");
+  assertEqual(result.physicalAdapterVersion, tamperedPhysicalRead.adapterVersion);
+  assertEqual(result.physicalUnderlyingLibraryVersion, tamperedPhysicalRead.underlyingLibraryVersion);
+  assertEqual(result.sourceObserverName, pageLocation.sourceObserverName);
+  assertEqual(result.pageLocationDecisionRuleSetVersion, pageLocation.decisionRuleSetVersion);
 });

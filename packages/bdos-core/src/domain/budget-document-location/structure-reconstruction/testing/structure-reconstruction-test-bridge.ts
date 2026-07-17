@@ -20,6 +20,7 @@ import { computeTextItemPlacementMetrics } from "../../physical-document-text-it
 import { computeGeometryContextFingerprint } from "../../physical-document-geometry-context-fingerprint";
 import { canonicalizeGeometryPoints } from "../../physical-document-text-item-geometry-canonicalization";
 import { deriveTextItemPageBoundsRelation } from "../../physical-document-text-item-page-bounds-relation";
+import { SUPPORTED_PHYSICAL_ADAPTER_VERSION, SUPPORTED_PHYSICAL_UNDERLYING_LIBRARY_VERSION } from "../structure-reconstruction-source-contracts";
 
 /**
  * Ponte exclusivamente de teste, local à Sprint 21.4A.2.f.1, entre
@@ -39,6 +40,15 @@ export interface SyntheticGeometryTextItem {
   readonly topPoints: number;
   readonly rightPoints: number;
   readonly bottomPoints: number;
+  /**
+   * Índice técnico explícito do item (Sprint 21.4A.2.f.1, auditoria pós-PR
+   * #69, §4). Omitido = a posição do item no array de `items`, o
+   * comportamento histórico. Fornecido explicitamente permite construir
+   * duas leituras físicas com os mesmos itens/índices em ordens de array
+   * diferentes, para provar que a reconstrução (e a validação de entrada)
+   * nunca dependem da ordem do array — apenas do próprio `index`.
+   */
+  readonly index?: number;
 }
 
 export interface SyntheticGeometryPage {
@@ -88,8 +98,8 @@ export function buildPhysicalDocumentReadResultWithGeometry(
 ): PhysicalDocumentReadResult {
   const pages: PhysicalDocumentPage[] = syntheticPages.map((syntheticPage, position) => {
     const pageNumber = position + 1;
-    const textItems: PhysicalDocumentTextItem[] = syntheticPage.items.map((item, index) => ({
-      index,
+    const textItems: PhysicalDocumentTextItem[] = syntheticPage.items.map((item, position) => ({
+      index: item.index ?? position,
       text: item.text,
       placement: {
         status: "placed",
@@ -115,8 +125,19 @@ export function buildPhysicalDocumentReadResultWithGeometry(
   });
 
   const sourceByteHash = createHash("sha256").update(sourceLabel).digest("hex");
-  const underlyingLibraryVersion = "structure-reconstruction-test-bridge-library-v1";
-  const adapterVersion = "structure-reconstruction-test-bridge-adapter-v1";
+  // Auditoria pós-PR #69: o portão de compatibilidade agora exige
+  // igualdade exata de adaptador/biblioteca concreta (não apenas do
+  // fingerprint recalculável). Esta ponte nunca lê um documento real nem
+  // carrega a biblioteca de extração — reutiliza as duas constantes
+  // nomeadas e exportadas por `structure-reconstruction-source-contracts.ts`
+  // (a única fonte de verdade dessas identidades no domínio) para poder
+  // exercitar o reconstrutor completo (linhas/segmentos/blocos) em testes
+  // de unidade e integração controlada, sem depender de extração real. A
+  // prova de que o adaptador real produz um resultado compatível vive em
+  // `reconstruct-budget-document-structure.real-pdf-chain.test.ts`, que usa
+  // bytes sintéticos e o leitor físico real de verdade — nunca esta ponte.
+  const underlyingLibraryVersion = SUPPORTED_PHYSICAL_UNDERLYING_LIBRARY_VERSION;
+  const adapterVersion = SUPPORTED_PHYSICAL_ADAPTER_VERSION;
 
   return {
     schemaVersion: PHYSICAL_DOCUMENT_READ_SCHEMA_VERSION,

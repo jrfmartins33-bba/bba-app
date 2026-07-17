@@ -27,6 +27,8 @@ const BASE_INPUT: StructureReconstructionContextFingerprintInput = {
   pageLocatorName: "budget-document-page-locator",
   pageLocatorVersion: "budget-document-page-locator-v1",
   pageLocationDecisionRuleSetVersion: "budget-document-page-location-rules-v1",
+  sourceObservationSchemaVersion: 1,
+  sourceObserverName: "document-signal-observer",
   pageLocationCatalogVersion: "budget-document-signal-catalog-v1",
   pageLocationObserverVersion: "document-signal-observer-v1",
   pageLocationObservationRuleSetVersion: "document-signal-observation-rules-v1",
@@ -34,6 +36,7 @@ const BASE_INPUT: StructureReconstructionContextFingerprintInput = {
   reconstructorVersion: "budget-document-structure-reconstructor-v1",
   profileId: "budget-document-structure-reconstruction-profile-v1",
   profileVersion: 1,
+  geometryCanonicalizationVersion: "structure-reconstruction-output-geometry-canonicalization-v1",
 };
 
 runTest("is a 64-character lowercase hex SHA-256 digest", () => {
@@ -71,14 +74,31 @@ runTest("changes when profileVersion changes", () => {
   assertEqual(other === computeStructureReconstructionContextFingerprint(BASE_INPUT), false);
 });
 
-runTest("accepts a null pageLocation observer/catalog version without throwing", () => {
+runTest("accepts a null pageLocation observer/catalog/schema version without throwing", () => {
   const fingerprint = computeStructureReconstructionContextFingerprint({
     ...BASE_INPUT,
     pageLocationCatalogVersion: null,
     pageLocationObserverVersion: null,
     pageLocationObservationRuleSetVersion: null,
+    sourceObservationSchemaVersion: null,
+    sourceObserverName: null,
   });
   assertEqual(fingerprint.length, 64);
+});
+
+runTest("changes when sourceObservationSchemaVersion changes", () => {
+  const other = computeStructureReconstructionContextFingerprint({ ...BASE_INPUT, sourceObservationSchemaVersion: 2 });
+  assertEqual(other === computeStructureReconstructionContextFingerprint(BASE_INPUT), false);
+});
+
+runTest("changes when sourceObserverName changes", () => {
+  const other = computeStructureReconstructionContextFingerprint({ ...BASE_INPUT, sourceObserverName: "a-different-observer" });
+  assertEqual(other === computeStructureReconstructionContextFingerprint(BASE_INPUT), false);
+});
+
+runTest("changes when geometryCanonicalizationVersion changes", () => {
+  const other = computeStructureReconstructionContextFingerprint({ ...BASE_INPUT, geometryCanonicalizationVersion: "structure-reconstruction-output-geometry-canonicalization-v2" });
+  assertEqual(other === computeStructureReconstructionContextFingerprint(BASE_INPUT), false);
 });
 
 runTest("uses an unambiguous delimited canonical representation, not naive concatenation", () => {

@@ -37,14 +37,18 @@ import {
   computePageReconstructionKey,
   computeSegmentKey,
 } from "./structure-reconstruction-keys";
+import { createStructureReconstructionTechnicalProblem } from "./structure-reconstruction-technical-problem";
+import { canonicalizeOutputGaps, canonicalizeOutputGeometryBounds } from "./structure-reconstruction-output-geometry-canonicalization";
 import type { SourceItemEligibility } from "./source-item-reconstruction-outcomes";
 import { classifySourceTextItem } from "./source-item-reconstruction-outcomes";
 import { PHYSICAL_LINE_FORMATION_RULE_ID, PHYSICAL_LINE_FORMATION_RULE_VERSION, reconstructPhysicalLines } from "./physical-line-reconstruction";
+import type { ReconstructedLineDraft } from "./physical-line-reconstruction";
 import {
   HORIZONTAL_SEGMENT_FORMATION_RULE_ID,
   HORIZONTAL_SEGMENT_FORMATION_RULE_VERSION,
   reconstructHorizontalSegments,
 } from "./horizontal-segment-reconstruction";
+import type { ReconstructedSegmentDraft } from "./horizontal-segment-reconstruction";
 import type { BlockReconstructionSegmentInput } from "./physical-text-block-reconstruction";
 import { PHYSICAL_BLOCK_FORMATION_RULE_ID, PHYSICAL_BLOCK_FORMATION_RULE_VERSION, reconstructPhysicalTextBlocks } from "./physical-text-block-reconstruction";
 
@@ -78,19 +82,114 @@ function assertUnreachableEligibility(value: never): never {
   throw new Error(`reconstructBudgetDocumentStructure: unhandled eligibility kind: ${JSON.stringify(value)}`);
 }
 
-function problem(
-  code: StructureReconstructionTechnicalProblem["code"],
-  phase: StructureReconstructionTechnicalProblem["phase"],
-  message: string,
-  groupKey: string | null = null,
-  pageNumber: number | null = null,
-  sourceTextItemIndex: number | null = null,
-): StructureReconstructionTechnicalProblem {
-  return { code, phase, groupKey, pageNumber, sourceTextItemIndex, message };
-}
-
 interface PageReconstructionOutcome {
   readonly page: ReconstructedBudgetDocumentPage;
+}
+
+/** Disposição final para os itens não elegíveis (mapeamento 1:1 direto, sem falha estrutural possível nestas variantes). */
+function nonEligibleOutcome(
+  eligibility: Exclude<SourceItemEligibility, { kind: "eligible" }>,
+): SourceTextItemReconstructionOutcome {
+  if (
+    eligibility.kind === "ignored_whitespace_only" ||
+    eligibility.kind === "excluded_outside_page" ||
+    eligibility.kind === "unresolved_source_geometry_missing" ||
+    eligibility.kind === "unresolved_source_geometry_invalid" ||
+    eligibility.kind === "unresolved_source_orientation_unsupported" ||
+    eligibility.kind === "unresolved_source_geometry_normalization_failed"
+  ) {
+    return { status: eligibility.kind, sourceTextItemIndex: eligibility.sourceTextItemIndex };
+  }
+  return assertUnreachableEligibility(eligibility);
+}
+
+/** Página sem nenhum item elegível: `not_reconstructable`, nunca uma falha estrutural (não há estrutura a reconstruir). */
+function buildNoEligibleItemsPage(
+  physicalPage: PhysicalDocumentPage,
+  candidateType: BudgetPageCandidateType,
+  sourceDecisionReasonCode: BudgetPageLocationReasonCode,
+  pageReconstructionKey: string,
+  groupKey: string,
+  eligibilities: ReadonlyArray<SourceItemEligibility>,
+): PageReconstructionOutcome {
+  const noText = physicalPage.textItems.length === 0 || physicalPage.extractionAvailability !== "text_available";
+  const technicalProblems = [
+    createStructureReconstructionTechnicalProblem(
+      noText ? "candidate_page_text_unavailable" : "candidate_page_has_no_eligible_items",
+      "candidate_page_processing",
+      groupKey,
+      physicalPage.pageNumber,
+    ),
+  ];
+  const outcomes: SourceTextItemReconstructionOutcome[] = eligibilities.map((e) => nonEligibleOutcome(e as Exclude<SourceItemEligibility, { kind: "eligible" }>));
+
+  return {
+    page: {
+      pageReconstructionKey,
+      pageNumber: physicalPage.pageNumber,
+      candidateType,
+      sourceDecisionReasonCode,
+      status: "not_reconstructable",
+      sourceItemOutcomes: outcomes,
+      lines: [],
+      segments: [],
+      blocks: [],
+      technicalProblems,
+      metrics: computePageMetrics(outcomes, 0, 0, 0),
+      profileId: PROFILE.profileId,
+      profileVersion: PROFILE.profileVersion,
+    },
+  };
+}
+
+/**
+ * Página cuja falha ocorreu na reconstrução de linha ou de segmento
+ * (auditoria pós-PR #69, §3): `not_reconstructable`, nenhuma estrutura
+ * parcial inconsistente, e todo item elegível recebe
+ * `unresolved_structure_reconstruction_failed` — nunca
+ * `excluded_outside_page`, que descreveria uma observação geométrica que
+ * nunca ocorreu.
+ */
+function buildStructureFailurePage(
+  physicalPage: PhysicalDocumentPage,
+  candidateType: BudgetPageCandidateType,
+  sourceDecisionReasonCode: BudgetPageLocationReasonCode,
+  pageReconstructionKey: string,
+  groupKey: string,
+  eligibilities: ReadonlyArray<SourceItemEligibility>,
+  failedPhase: "line_reconstruction" | "segment_reconstruction",
+): PageReconstructionOutcome {
+  const technicalProblems = [
+    createStructureReconstructionTechnicalProblem(
+      failedPhase === "line_reconstruction" ? "physical_line_reconstruction_failed" : "horizontal_segment_reconstruction_failed",
+      failedPhase,
+      groupKey,
+      physicalPage.pageNumber,
+    ),
+  ];
+  const outcomes: SourceTextItemReconstructionOutcome[] = eligibilities.map((eligibility) =>
+    eligibility.kind === "eligible"
+      ? { status: "unresolved_structure_reconstruction_failed", sourceTextItemIndex: eligibility.sourceTextItemIndex, failedPhase }
+      : nonEligibleOutcome(eligibility as Exclude<SourceItemEligibility, { kind: "eligible" }>),
+  );
+
+  return {
+    page: {
+      pageReconstructionKey,
+      pageNumber: physicalPage.pageNumber,
+      candidateType,
+      sourceDecisionReasonCode,
+      status: "not_reconstructable",
+      sourceItemOutcomes: outcomes,
+      lines: [],
+      segments: [],
+      blocks: [],
+      technicalProblems,
+      metrics: computePageMetrics(outcomes, 0, 0, 0),
+      profileId: PROFILE.profileId,
+      profileVersion: PROFILE.profileVersion,
+    },
+  };
 }
 
 function reconstructPage(
@@ -108,224 +207,176 @@ function reconstructPage(
     }
   });
 
-  const technicalProblems: StructureReconstructionTechnicalProblem[] = [];
   const eligibleItems = eligibilities.filter((e): e is Extract<SourceItemEligibility, { kind: "eligible" }> => e.kind === "eligible");
 
   if (eligibleItems.length === 0) {
-    const noText = physicalPage.textItems.length === 0 || physicalPage.extractionAvailability !== "text_available";
-    technicalProblems.push(
-      problem(
-        noText ? "candidate_page_text_unavailable" : "candidate_page_has_no_eligible_items",
-        "candidate_page_processing",
-        `Page ${physicalPage.pageNumber} has no geometrically eligible text items to reconstruct.`,
-        groupKey,
-        physicalPage.pageNumber,
-      ),
-    );
-
-    const outcomes: SourceTextItemReconstructionOutcome[] = eligibilities.map((e) => ({ status: e.kind, sourceTextItemIndex: e.sourceTextItemIndex }) as SourceTextItemReconstructionOutcome);
-
-    return {
-      page: {
-        pageReconstructionKey,
-        pageNumber: physicalPage.pageNumber,
-        candidateType,
-        sourceDecisionReasonCode,
-        status: "not_reconstructable",
-        sourceItemOutcomes: outcomes,
-        lines: [],
-        segments: [],
-        blocks: [],
-        technicalProblems,
-        metrics: computePageMetrics(outcomes, 0, 0, 0),
-        profileId: PROFILE.profileId,
-        profileVersion: PROFILE.profileVersion,
-      },
-    };
+    return buildNoEligibleItemsPage(physicalPage, candidateType, sourceDecisionReasonCode, pageReconstructionKey, groupKey, eligibilities);
   }
 
-  let lines: ReconstructedPhysicalLine[] = [];
-  let segments: ReconstructedHorizontalSegment[] = [];
-  let blocks: ReconstructedPhysicalTextBlock[] = [];
-  const lineKeyBySourceIndex = new Map<number, string>();
-  const segmentKeyBySourceIndex = new Map<number, string>();
-
+  // Fase 1: linhas. Falha aqui é fatal para a página inteira — nenhuma
+  // estrutura parcial, nenhum item elegível pode ser declarado "fora da
+  // página" por causa de uma falha de processamento (§3).
+  let lineDrafts: ReadonlyArray<ReconstructedLineDraft>;
   try {
-    const lineDrafts = reconstructPhysicalLines(
+    lineDrafts = reconstructPhysicalLines(
       eligibleItems.map((item) => ({ sourceTextItemIndex: item.sourceTextItemIndex, geometry: item.geometry })),
       PROFILE,
     );
+  } catch {
+    return buildStructureFailurePage(physicalPage, candidateType, sourceDecisionReasonCode, pageReconstructionKey, groupKey, eligibilities, "line_reconstruction");
+  }
 
-    const blockSegmentInputs: BlockReconstructionSegmentInput[] = [];
-    const lineSegmentKeys = new Map<string, string[]>();
+  // Fase 2: segmentos, por linha. Se qualquer linha falhar, a página
+  // inteira é `not_reconstructable` — nunca uma mistura de linhas com e
+  // sem segmentos (§3).
+  const segmentDraftsByLine = new Map<ReconstructedLineDraft, ReadonlyArray<ReconstructedSegmentDraft>>();
+  for (const draft of lineDrafts) {
+    try {
+      segmentDraftsByLine.set(draft, reconstructHorizontalSegments(draft.sourceTextItemIndices, geometryByIndex, PROFILE));
+    } catch {
+      return buildStructureFailurePage(physicalPage, candidateType, sourceDecisionReasonCode, pageReconstructionKey, groupKey, eligibilities, "segment_reconstruction");
+    }
+  }
 
-    lines = lineDrafts.map((draft) => {
-      const lineKey = computeLineKey(pageReconstructionKey, draft.sourceTextItemIndices);
-      draft.sourceTextItemIndices.forEach((index) => lineKeyBySourceIndex.set(index, lineKey));
+  // A partir daqui, linha e segmento tiveram sucesso: todo item elegível
+  // terá exatamente uma chave de linha e de segmento, por construção.
+  const lines: ReconstructedPhysicalLine[] = [];
+  const segments: ReconstructedHorizontalSegment[] = [];
+  const blockSegmentInputs: BlockReconstructionSegmentInput[] = [];
+  const lineKeyBySourceIndex = new Map<number, string>();
+  const segmentKeyBySourceIndex = new Map<number, string>();
 
-      let segmentDrafts;
-      try {
-        segmentDrafts = reconstructHorizontalSegments(draft.sourceTextItemIndices, geometryByIndex, PROFILE);
-      } catch {
-        throw new Error("segment_reconstruction_failed");
-      }
+  lineDrafts.forEach((draft) => {
+    const lineKey = computeLineKey(pageReconstructionKey, draft.sourceTextItemIndices);
+    draft.sourceTextItemIndices.forEach((index) => lineKeyBySourceIndex.set(index, lineKey));
 
-      const segmentKeys: string[] = [];
-      segmentDrafts.forEach((segmentDraft) => {
-        const segmentKey = computeSegmentKey(lineKey, segmentDraft.sourceTextItemIndices);
-        segmentKeys.push(segmentKey);
-        segmentDraft.sourceTextItemIndices.forEach((index) => segmentKeyBySourceIndex.set(index, segmentKey));
-        segments.push({
-          segmentKey,
-          lineKey,
-          pageNumber: physicalPage.pageNumber,
-          horizontalOrder: segmentDraft.horizontalOrder,
-          leftPoints: segmentDraft.leftPoints,
-          topPoints: segmentDraft.topPoints,
-          rightPoints: segmentDraft.rightPoints,
-          bottomPoints: segmentDraft.bottomPoints,
-          widthPoints: segmentDraft.widthPoints,
-          heightPoints: segmentDraft.heightPoints,
-          centerXPoints: segmentDraft.centerXPoints,
-          centerYPoints: segmentDraft.centerYPoints,
-          sourceTextItemIndices: segmentDraft.sourceTextItemIndices,
-          observedInternalGaps: segmentDraft.observedInternalGaps,
-          formationRuleId: HORIZONTAL_SEGMENT_FORMATION_RULE_ID,
-          formationRuleVersion: HORIZONTAL_SEGMENT_FORMATION_RULE_VERSION,
-          profileId: PROFILE.profileId,
-          profileVersion: PROFILE.profileVersion,
-        });
-        blockSegmentInputs.push({
-          segmentKey,
-          lineKey,
-          lineVerticalOrder: draft.verticalOrder,
-          lineHeightPoints: draft.heightPoints,
-          leftPoints: segmentDraft.leftPoints,
-          topPoints: segmentDraft.topPoints,
-          rightPoints: segmentDraft.rightPoints,
-          bottomPoints: segmentDraft.bottomPoints,
-          widthPoints: segmentDraft.widthPoints,
-          heightPoints: segmentDraft.heightPoints,
-          centerXPoints: segmentDraft.centerXPoints,
-          centerYPoints: segmentDraft.centerYPoints,
-        });
-      });
-      lineSegmentKeys.set(lineKey, segmentKeys);
+    const segmentDrafts = segmentDraftsByLine.get(draft)!;
+    const segmentKeys: string[] = [];
 
-      return {
+    segmentDrafts.forEach((segmentDraft) => {
+      const segmentKey = computeSegmentKey(lineKey, segmentDraft.sourceTextItemIndices);
+      segmentKeys.push(segmentKey);
+      segmentDraft.sourceTextItemIndices.forEach((index) => segmentKeyBySourceIndex.set(index, segmentKey));
+
+      const canonicalSegmentBounds = canonicalizeOutputGeometryBounds(segmentDraft);
+      segments.push({
+        segmentKey,
         lineKey,
         pageNumber: physicalPage.pageNumber,
-        verticalOrder: draft.verticalOrder,
-        leftPoints: draft.leftPoints,
-        topPoints: draft.topPoints,
-        rightPoints: draft.rightPoints,
-        bottomPoints: draft.bottomPoints,
-        widthPoints: draft.widthPoints,
-        heightPoints: draft.heightPoints,
-        centerXPoints: draft.centerXPoints,
-        centerYPoints: draft.centerYPoints,
-        seedSourceTextItemIndex: draft.seedSourceTextItemIndex,
-        sourceTextItemIndices: draft.sourceTextItemIndices,
-        segmentKeys,
-        formationRuleId: PHYSICAL_LINE_FORMATION_RULE_ID,
-        formationRuleVersion: PHYSICAL_LINE_FORMATION_RULE_VERSION,
+        horizontalOrder: segmentDraft.horizontalOrder,
+        leftPoints: canonicalSegmentBounds.leftPoints,
+        topPoints: canonicalSegmentBounds.topPoints,
+        rightPoints: canonicalSegmentBounds.rightPoints,
+        bottomPoints: canonicalSegmentBounds.bottomPoints,
+        widthPoints: canonicalSegmentBounds.widthPoints,
+        heightPoints: canonicalSegmentBounds.heightPoints,
+        centerXPoints: canonicalSegmentBounds.centerXPoints,
+        centerYPoints: canonicalSegmentBounds.centerYPoints,
+        sourceTextItemIndices: segmentDraft.sourceTextItemIndices,
+        observedInternalGaps: canonicalizeOutputGaps(segmentDraft.observedInternalGaps),
+        formationRuleId: HORIZONTAL_SEGMENT_FORMATION_RULE_ID,
+        formationRuleVersion: HORIZONTAL_SEGMENT_FORMATION_RULE_VERSION,
         profileId: PROFILE.profileId,
         profileVersion: PROFILE.profileVersion,
-      };
+      });
+      blockSegmentInputs.push({
+        segmentKey,
+        lineKey,
+        lineVerticalOrder: draft.verticalOrder,
+        lineHeightPoints: draft.heightPoints,
+        leftPoints: segmentDraft.leftPoints,
+        topPoints: segmentDraft.topPoints,
+        rightPoints: segmentDraft.rightPoints,
+        bottomPoints: segmentDraft.bottomPoints,
+        widthPoints: segmentDraft.widthPoints,
+        heightPoints: segmentDraft.heightPoints,
+        centerXPoints: segmentDraft.centerXPoints,
+        centerYPoints: segmentDraft.centerYPoints,
+      });
     });
 
-    try {
-      const blockDrafts = reconstructPhysicalTextBlocks(blockSegmentInputs, PROFILE);
-      blocks = blockDrafts.map((draft) => ({
+    const canonicalLineBounds = canonicalizeOutputGeometryBounds(draft);
+    lines.push({
+      lineKey,
+      pageNumber: physicalPage.pageNumber,
+      verticalOrder: draft.verticalOrder,
+      leftPoints: canonicalLineBounds.leftPoints,
+      topPoints: canonicalLineBounds.topPoints,
+      rightPoints: canonicalLineBounds.rightPoints,
+      bottomPoints: canonicalLineBounds.bottomPoints,
+      widthPoints: canonicalLineBounds.widthPoints,
+      heightPoints: canonicalLineBounds.heightPoints,
+      centerXPoints: canonicalLineBounds.centerXPoints,
+      centerYPoints: canonicalLineBounds.centerYPoints,
+      seedSourceTextItemIndex: draft.seedSourceTextItemIndex,
+      sourceTextItemIndices: draft.sourceTextItemIndices,
+      segmentKeys,
+      formationRuleId: PHYSICAL_LINE_FORMATION_RULE_ID,
+      formationRuleVersion: PHYSICAL_LINE_FORMATION_RULE_VERSION,
+      profileId: PROFILE.profileId,
+      profileVersion: PROFILE.profileVersion,
+    });
+  });
+
+  // Fase 3: blocos. Falha aqui nunca é fatal — linhas e segmentos já
+  // reconstruídos permanecem, itens permanecem `placed`, blocos ficam
+  // vazios, página `reconstructed_with_problems` (§3).
+  const technicalProblems: StructureReconstructionTechnicalProblem[] = [];
+  let blocks: ReconstructedPhysicalTextBlock[] = [];
+  try {
+    const blockDrafts = reconstructPhysicalTextBlocks(blockSegmentInputs, PROFILE);
+    blocks = blockDrafts.map((draft) => {
+      const canonicalBlockBounds = canonicalizeOutputGeometryBounds(draft);
+      return {
         blockKey: computeBlockKey(pageReconstructionKey, draft.segmentKeys),
         pageNumber: physicalPage.pageNumber,
         order: draft.order,
         lineKeys: draft.lineKeys,
         segmentKeys: draft.segmentKeys,
-        leftPoints: draft.leftPoints,
-        topPoints: draft.topPoints,
-        rightPoints: draft.rightPoints,
-        bottomPoints: draft.bottomPoints,
-        widthPoints: draft.widthPoints,
-        heightPoints: draft.heightPoints,
-        centerXPoints: draft.centerXPoints,
-        centerYPoints: draft.centerYPoints,
+        leftPoints: canonicalBlockBounds.leftPoints,
+        topPoints: canonicalBlockBounds.topPoints,
+        rightPoints: canonicalBlockBounds.rightPoints,
+        bottomPoints: canonicalBlockBounds.bottomPoints,
+        widthPoints: canonicalBlockBounds.widthPoints,
+        heightPoints: canonicalBlockBounds.heightPoints,
+        centerXPoints: canonicalBlockBounds.centerXPoints,
+        centerYPoints: canonicalBlockBounds.centerYPoints,
         formationRuleId: PHYSICAL_BLOCK_FORMATION_RULE_ID,
         formationRuleVersion: PHYSICAL_BLOCK_FORMATION_RULE_VERSION,
         profileId: PROFILE.profileId,
         profileVersion: PROFILE.profileVersion,
-      }));
-    } catch {
-      technicalProblems.push(
-        problem(
-          "physical_block_reconstruction_failed",
-          "block_reconstruction",
-          `Block reconstruction failed on page ${physicalPage.pageNumber}.`,
-          groupKey,
-          physicalPage.pageNumber,
-        ),
-      );
-    }
+      };
+    });
   } catch {
-    technicalProblems.push(
-      problem(
-        "physical_line_reconstruction_failed",
-        "line_reconstruction",
-        `Line or segment reconstruction failed on page ${physicalPage.pageNumber}.`,
-        groupKey,
-        physicalPage.pageNumber,
-      ),
-    );
-    lines = [];
-    segments = [];
+    technicalProblems.push(createStructureReconstructionTechnicalProblem("physical_block_reconstruction_failed", "block_reconstruction", groupKey, physicalPage.pageNumber));
     blocks = [];
   }
 
   const outcomes: SourceTextItemReconstructionOutcome[] = eligibilities.map((eligibility) => {
     if (eligibility.kind === "eligible") {
-      const lineKey = lineKeyBySourceIndex.get(eligibility.sourceTextItemIndex);
-      const segmentKey = segmentKeyBySourceIndex.get(eligibility.sourceTextItemIndex);
-      if (lineKey === undefined || segmentKey === undefined) {
-        return { status: "excluded_outside_page", sourceTextItemIndex: eligibility.sourceTextItemIndex };
-      }
+      const lineKey = lineKeyBySourceIndex.get(eligibility.sourceTextItemIndex)!;
+      const segmentKey = segmentKeyBySourceIndex.get(eligibility.sourceTextItemIndex)!;
       return { status: "placed", sourceTextItemIndex: eligibility.sourceTextItemIndex, lineKey, segmentKey };
     }
-    if (
-      eligibility.kind === "ignored_whitespace_only" ||
-      eligibility.kind === "excluded_outside_page" ||
-      eligibility.kind === "unresolved_source_geometry_missing" ||
-      eligibility.kind === "unresolved_source_geometry_invalid" ||
-      eligibility.kind === "unresolved_source_orientation_unsupported" ||
-      eligibility.kind === "unresolved_source_geometry_normalization_failed"
-    ) {
-      return { status: eligibility.kind, sourceTextItemIndex: eligibility.sourceTextItemIndex };
-    }
-    return assertUnreachableEligibility(eligibility);
+    return nonEligibleOutcome(eligibility as Exclude<SourceItemEligibility, { kind: "eligible" }>);
   });
 
   const hasUnresolved = eligibilities.some((e) => e.kind.startsWith("unresolved_"));
   const hasOutside = eligibilities.some((e) => e.kind === "excluded_outside_page");
   const hasPartiallyOutside = eligibleItems.some((e) => e.geometry.pageBoundsRelation === "partially_outside");
-  const hasLineOrBlockFailure = technicalProblems.length > 0;
+  const hasBlockFailure = technicalProblems.length > 0;
 
   if (hasUnresolved) {
-    technicalProblems.push(
-      problem("candidate_page_contains_unresolved_items", "candidate_page_processing", `Page ${physicalPage.pageNumber} contains unresolved text items.`, groupKey, physicalPage.pageNumber),
-    );
+    technicalProblems.push(createStructureReconstructionTechnicalProblem("candidate_page_contains_unresolved_items", "candidate_page_processing", groupKey, physicalPage.pageNumber));
   }
   if (hasOutside) {
-    technicalProblems.push(
-      problem("candidate_page_contains_outside_items", "candidate_page_processing", `Page ${physicalPage.pageNumber} contains items entirely outside the page.`, groupKey, physicalPage.pageNumber),
-    );
+    technicalProblems.push(createStructureReconstructionTechnicalProblem("candidate_page_contains_outside_items", "candidate_page_processing", groupKey, physicalPage.pageNumber));
   }
   if (hasPartiallyOutside) {
-    technicalProblems.push(
-      problem("candidate_page_contains_partially_outside_items", "candidate_page_processing", `Page ${physicalPage.pageNumber} contains items partially outside the page.`, groupKey, physicalPage.pageNumber),
-    );
+    technicalProblems.push(createStructureReconstructionTechnicalProblem("candidate_page_contains_partially_outside_items", "candidate_page_processing", groupKey, physicalPage.pageNumber));
   }
 
-  const status: ReconstructedPageStatus =
-    hasUnresolved || hasOutside || hasPartiallyOutside || hasLineOrBlockFailure ? "reconstructed_with_problems" : "reconstructed";
+  const status: ReconstructedPageStatus = hasUnresolved || hasOutside || hasPartiallyOutside || hasBlockFailure ? "reconstructed_with_problems" : "reconstructed";
 
   return {
     page: {
@@ -360,6 +411,7 @@ function computePageMetrics(
     unresolvedInvalidGeometry: 0,
     unresolvedUnsupportedOrientation: 0,
     unresolvedNormalizationFailed: 0,
+    unresolvedStructureReconstructionFailed: 0,
   };
   outcomes.forEach((outcome) => {
     switch (outcome.status) {
@@ -384,6 +436,9 @@ function computePageMetrics(
       case "unresolved_source_geometry_normalization_failed":
         counters.unresolvedNormalizationFailed += 1;
         break;
+      case "unresolved_structure_reconstruction_failed":
+        counters.unresolvedStructureReconstructionFailed += 1;
+        break;
     }
   });
   return {
@@ -395,6 +450,7 @@ function computePageMetrics(
     unresolvedInvalidGeometryCount: counters.unresolvedInvalidGeometry,
     unresolvedUnsupportedOrientationCount: counters.unresolvedUnsupportedOrientation,
     unresolvedNormalizationFailedCount: counters.unresolvedNormalizationFailed,
+    unresolvedStructureReconstructionFailedCount: counters.unresolvedStructureReconstructionFailed,
     lineCount,
     segmentCount,
     blockCount,
@@ -467,15 +523,12 @@ function computeGlobalMetrics(groups: ReadonlyArray<ReconstructedBudgetDocumentG
   };
 }
 
-function failedResult(
-  sourceByteHash: string,
-  physicalReadSchemaVersion: number,
-  physicalReaderName: string,
-  physicalReaderVersion: string,
-  pageLocationSchemaVersion: number,
-  pageLocatorName: string,
-  pageLocatorVersion: string,
+function buildResult(
+  physicalRead: BudgetDocumentStructureReconstructionInput["physicalRead"],
+  pageLocation: BudgetDocumentStructureReconstructionInput["pageLocation"],
   reconstructionContextFingerprint: string,
+  status: StructureReconstructionStatus,
+  groups: ReadonlyArray<ReconstructedBudgetDocumentGroup>,
   technicalProblems: ReadonlyArray<StructureReconstructionTechnicalProblem>,
 ): BudgetDocumentStructureReconstructionResult {
   return {
@@ -486,17 +539,29 @@ function failedResult(
     reconstructionProfileVersion: PROFILE.profileVersion,
     reconstructionContextFingerprintVersion: STRUCTURE_RECONSTRUCTION_CONTEXT_FINGERPRINT_VERSION,
     reconstructionContextFingerprint,
-    sourceByteHash,
-    physicalReadSchemaVersion,
-    physicalReaderName,
-    physicalReaderVersion,
-    pageLocationSchemaVersion,
-    pageLocatorName,
-    pageLocatorVersion,
-    status: "failed",
-    groups: [],
+    sourceByteHash: physicalRead.sourceByteHash,
+    physicalReadSchemaVersion: physicalRead.schemaVersion,
+    physicalReaderName: physicalRead.readerName,
+    physicalReaderVersion: physicalRead.readerVersion,
+    physicalAdapterVersion: physicalRead.adapterVersion,
+    physicalUnderlyingLibraryVersion: physicalRead.underlyingLibraryVersion,
+    physicalTextItemCoordinateSpaceVersion: physicalRead.textItemCoordinateSpaceVersion,
+    physicalTextItemGeometryProfileVersion: physicalRead.textItemGeometryProfileVersion,
+    physicalGeometryContextFingerprintVersion: physicalRead.geometryContextFingerprintVersion,
+    physicalGeometryContextFingerprint: physicalRead.geometryContextFingerprint,
+    pageLocationSchemaVersion: pageLocation.schemaVersion,
+    pageLocatorName: pageLocation.locatorName,
+    pageLocatorVersion: pageLocation.locatorVersion,
+    pageLocationDecisionRuleSetVersion: pageLocation.decisionRuleSetVersion,
+    sourceObservationSchemaVersion: pageLocation.sourceObservationSchemaVersion,
+    sourceObserverName: pageLocation.sourceObserverName,
+    sourceObserverVersion: pageLocation.sourceObserverVersion,
+    sourceObservationRuleSetVersion: pageLocation.sourceObservationRuleSetVersion,
+    sourceCatalogVersion: pageLocation.sourceCatalogVersion,
+    status,
+    groups,
     technicalProblems,
-    metrics: computeGlobalMetrics([]),
+    metrics: computeGlobalMetrics(groups),
     limitations: LIMITATIONS,
   };
 }
@@ -520,22 +585,13 @@ export function reconstructBudgetDocumentStructure(
     BUDGET_DOCUMENT_STRUCTURE_RECONSTRUCTOR_VERSION,
     PROFILE.profileId,
     PROFILE.profileVersion,
+    PROFILE.geometryCanonicalizationVersion,
   );
   const reconstructionContextFingerprint = computeStructureReconstructionContextFingerprint(fingerprintInput);
 
   const validation = validateStructureReconstructionInput(input);
   if (validation.kind !== "valid") {
-    return failedResult(
-      physicalRead.sourceByteHash,
-      physicalRead.schemaVersion,
-      physicalRead.readerName,
-      physicalRead.readerVersion,
-      pageLocation.schemaVersion,
-      pageLocation.locatorName,
-      pageLocation.locatorVersion,
-      reconstructionContextFingerprint,
-      validation.problems,
-    );
+    return buildResult(physicalRead, pageLocation, reconstructionContextFingerprint, "failed", [], validation.problems);
   }
 
   try {
@@ -547,39 +603,10 @@ export function reconstructBudgetDocumentStructure(
     );
 
     const status: StructureReconstructionStatus = groups.every((g) => g.status === "reconstructed") ? "completed" : "completed_with_problems";
-
-    return {
-      schemaVersion: BUDGET_DOCUMENT_STRUCTURE_RECONSTRUCTION_SCHEMA_VERSION,
-      reconstructorName: BUDGET_DOCUMENT_STRUCTURE_RECONSTRUCTOR_NAME,
-      reconstructorVersion: BUDGET_DOCUMENT_STRUCTURE_RECONSTRUCTOR_VERSION,
-      reconstructionProfileId: PROFILE.profileId,
-      reconstructionProfileVersion: PROFILE.profileVersion,
-      reconstructionContextFingerprintVersion: STRUCTURE_RECONSTRUCTION_CONTEXT_FINGERPRINT_VERSION,
-      reconstructionContextFingerprint,
-      sourceByteHash: physicalRead.sourceByteHash,
-      physicalReadSchemaVersion: physicalRead.schemaVersion,
-      physicalReaderName: physicalRead.readerName,
-      physicalReaderVersion: physicalRead.readerVersion,
-      pageLocationSchemaVersion: pageLocation.schemaVersion,
-      pageLocatorName: pageLocation.locatorName,
-      pageLocatorVersion: pageLocation.locatorVersion,
-      status,
-      groups,
-      technicalProblems: [],
-      metrics: computeGlobalMetrics(groups),
-      limitations: LIMITATIONS,
-    };
+    return buildResult(physicalRead, pageLocation, reconstructionContextFingerprint, status, groups, []);
   } catch {
-    return failedResult(
-      physicalRead.sourceByteHash,
-      physicalRead.schemaVersion,
-      physicalRead.readerName,
-      physicalRead.readerVersion,
-      pageLocation.schemaVersion,
-      pageLocation.locatorName,
-      pageLocation.locatorVersion,
-      reconstructionContextFingerprint,
-      [problem("structure_reconstruction_failed", "candidate_group_processing", "Structure reconstruction failed unexpectedly.")],
-    );
+    return buildResult(physicalRead, pageLocation, reconstructionContextFingerprint, "failed", [], [
+      createStructureReconstructionTechnicalProblem("structure_reconstruction_failed", "candidate_group_processing"),
+    ]);
   }
 }

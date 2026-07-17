@@ -35,6 +35,29 @@ const FORBIDDEN_KEYWORDS = [
 
 const FORBIDDEN_SPECIFIER_KEYWORDS = ["apps/web", "@bba/web"] as const;
 
+/**
+ * Exceção nomeada e restrita, adicionada na auditoria do PR #69 (Sprint
+ * 21.4A.2.f.1). O portão de compatibilidade exata do reconstrutor
+ * estrutural precisa comparar `adapterVersion`/`underlyingLibraryVersion`
+ * por igualdade literal contra a identidade do único adaptador físico hoje
+ * suportado — não apenas confiar no fingerprint geométrico recalculável
+ * (ver `structure-reconstruction-source-contracts.ts`). Isso exige que o
+ * literal apareça como **dado**, nunca como um `import`, em exatamente um
+ * arquivo de produção do domínio.
+ *
+ * Esta exceção NUNCA relaxa a checagem de import (a outra checagem deste
+ * arquivo, `readImportsFromFile`, continua proibindo qualquer `import ...
+ * from "pdfjs-dist"` em todo o domínio, inclusive neste mesmo arquivo) —
+ * apenas restringe, por caminho de arquivo exato e por palavra-chave
+ * exata, o escaneamento textual grosseiro de string usado por esta
+ * checagem específica. Qualquer outro arquivo, e qualquer outra
+ * palavra-chave proibida (Supabase, OCR, IA, outros parsers de PDF),
+ * permanece integralmente bloqueado.
+ */
+const KEYWORD_SCAN_KNOWN_EXCEPTIONS: ReadonlyArray<{ readonly fileSuffix: string; readonly keyword: string }> = [
+  { fileSuffix: "structure-reconstruction/structure-reconstruction-source-contracts.ts", keyword: "pdfjs" },
+];
+
 const DOMAINS_THAT_MUST_NOT_IMPORT_BUDGET_DOCUMENT_LOCATION = [
   join(PACKAGE_SRC_ROOT, "domain", "document-processing"),
   join(PACKAGE_SRC_ROOT, "services", "document-processing"),
@@ -109,15 +132,33 @@ runTest("budget-document-location introduces no PDF parser, OCR, AI or Supabase 
 
   listBudgetDocumentLocationSourceFiles().forEach((file) => {
     const content = readFileSync(file, "utf8").toLowerCase();
+    const normalizedFile = toRepoRelative(file).split("\\").join("/");
 
     FORBIDDEN_KEYWORDS.forEach((keyword) => {
-      if (content.includes(keyword)) {
+      const isKnownException = KEYWORD_SCAN_KNOWN_EXCEPTIONS.some(
+        (exception) => exception.keyword === keyword && normalizedFile.endsWith(exception.fileSuffix),
+      );
+      if (content.includes(keyword) && !isKnownException) {
         violations.push({ file: toRepoRelative(file), line: 1, specifier: keyword, reason: "forbidden parser/OCR/AI/Supabase keyword in budget-document-location source" });
       }
     });
   });
 
   assertNoViolations(violations, "budget-document-location parser/OCR/AI/Supabase dependency");
+});
+
+runTest("the pdfjs keyword exception is narrow: no other forbidden keyword is exempted anywhere, and the exempted file still forbids every other keyword", () => {
+  const exceptionFile = listBudgetDocumentLocationSourceFiles().find((file) =>
+    KEYWORD_SCAN_KNOWN_EXCEPTIONS.some((exception) => toRepoRelative(file).split("\\").join("/").endsWith(exception.fileSuffix)),
+  );
+  assertEqual(exceptionFile !== undefined, true, "expected the exempted file to exist and be scanned");
+
+  const content = readFileSync(exceptionFile!, "utf8").toLowerCase();
+  const otherForbiddenKeywords = FORBIDDEN_KEYWORDS.filter((keyword) => keyword !== "pdfjs");
+  const leaked = otherForbiddenKeywords.filter((keyword) => content.includes(keyword));
+  assertEqual(leaked.length, 0, `the exempted file must not contain any other forbidden keyword: ${leaked.join(", ")}`);
+
+  assertEqual(KEYWORD_SCAN_KNOWN_EXCEPTIONS.length, 1, "the exception list must remain a single, deliberate entry — grow it only with equal justification");
 });
 
 runTest("document-processing, document-reconstruction, budget-version and procurement-engineering do not depend on budget-document-location", () => {

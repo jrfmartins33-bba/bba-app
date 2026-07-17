@@ -60,6 +60,19 @@ export type SourceTextItemReconstructionOutcome =
   | {
       readonly status: "unresolved_source_geometry_normalization_failed";
       readonly sourceTextItemIndex: number;
+    }
+  | {
+      /**
+       * Falha técnica na própria reconstrução estrutural (linha ou
+       * segmento) — nunca confundida com `excluded_outside_page`, que
+       * descreve uma observação geométrica real, não uma falha de
+       * processamento (auditoria pós-PR #69, §3). Um item que estava
+       * dentro (ou parcialmente dentro) da página nunca é declarado "fora
+       * da página" apenas porque uma função estrutural falhou.
+       */
+      readonly status: "unresolved_structure_reconstruction_failed";
+      readonly sourceTextItemIndex: number;
+      readonly failedPhase: "line_reconstruction" | "segment_reconstruction";
     };
 
 // --- perfil de reconstrução versionado (§18) --------------------------------
@@ -85,6 +98,9 @@ export interface BudgetDocumentStructureReconstructionProfile {
 
   readonly requireCompleteLineCompatibility: true;
   readonly requireMutualBlockAdjacency: true;
+
+  /** Identidade versionada da política de canonicalização aplicada à fronteira de saída (auditoria pós-PR #69, §7) — nunca às comparações internas. */
+  readonly geometryCanonicalizationVersion: string;
 }
 
 // --- faixa física de linha (§24-29) -----------------------------------------
@@ -244,6 +260,8 @@ export interface PageStructureReconstructionMetrics {
   readonly unresolvedInvalidGeometryCount: number;
   readonly unresolvedUnsupportedOrientationCount: number;
   readonly unresolvedNormalizationFailedCount: number;
+  /** Itens elegíveis não colocados por falha técnica de reconstrução de linha ou segmento (nunca por observação geométrica real). */
+  readonly unresolvedStructureReconstructionFailedCount: number;
   readonly lineCount: number;
   readonly segmentCount: number;
   readonly blockCount: number;
@@ -319,9 +337,27 @@ export interface BudgetDocumentStructureReconstructionResult {
   readonly physicalReadSchemaVersion: number;
   readonly physicalReaderName: string;
   readonly physicalReaderVersion: string;
+  /**
+   * Identidades individuais da leitura física e da localização, além do
+   * fingerprint que as resume (auditoria pós-PR #69, §6). O fingerprint
+   * nunca substitui estes campos — cada um permanece auditável
+   * isoladamente, inclusive quando `status` é `failed`.
+   */
+  readonly physicalAdapterVersion: PhysicalDocumentReadResult["adapterVersion"];
+  readonly physicalUnderlyingLibraryVersion: PhysicalDocumentReadResult["underlyingLibraryVersion"];
+  readonly physicalTextItemCoordinateSpaceVersion: PhysicalDocumentReadResult["textItemCoordinateSpaceVersion"];
+  readonly physicalTextItemGeometryProfileVersion: PhysicalDocumentReadResult["textItemGeometryProfileVersion"];
+  readonly physicalGeometryContextFingerprintVersion: PhysicalDocumentReadResult["geometryContextFingerprintVersion"];
+  readonly physicalGeometryContextFingerprint: PhysicalDocumentReadResult["geometryContextFingerprint"];
   readonly pageLocationSchemaVersion: number;
   readonly pageLocatorName: string;
   readonly pageLocatorVersion: string;
+  readonly pageLocationDecisionRuleSetVersion: BudgetDocumentPageLocationResult["decisionRuleSetVersion"];
+  readonly sourceObservationSchemaVersion: BudgetDocumentPageLocationResult["sourceObservationSchemaVersion"];
+  readonly sourceObserverName: BudgetDocumentPageLocationResult["sourceObserverName"];
+  readonly sourceObserverVersion: BudgetDocumentPageLocationResult["sourceObserverVersion"];
+  readonly sourceObservationRuleSetVersion: BudgetDocumentPageLocationResult["sourceObservationRuleSetVersion"];
+  readonly sourceCatalogVersion: BudgetDocumentPageLocationResult["sourceCatalogVersion"];
   readonly status: StructureReconstructionStatus;
   readonly groups: ReadonlyArray<ReconstructedBudgetDocumentGroup>;
   readonly technicalProblems: ReadonlyArray<StructureReconstructionTechnicalProblem>;

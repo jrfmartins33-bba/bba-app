@@ -17,8 +17,8 @@ const VALID_PHYSICAL_READ: PhysicalDocumentReadResult = {
   schemaVersion: 2,
   readerName: "physical-document-reader",
   readerVersion: "physical-document-reader-v2",
-  adapterVersion: "any-adapter-v9",
-  underlyingLibraryVersion: "any-library@1.0.0",
+  adapterVersion: "pdfjs-physical-document-reader-adapter-v2",
+  underlyingLibraryVersion: "pdfjs-dist@6.1.200",
   sourceByteHash: "a".repeat(64),
   totalPageCount: 1,
   pages: [],
@@ -66,6 +66,18 @@ runTest("rejects an unknown physical reader version", () => {
   assertEqual(findCompatiblePhysicalReadContract({ ...VALID_PHYSICAL_READ, readerVersion: "physical-document-reader-v3" as typeof VALID_PHYSICAL_READ.readerVersion }), null);
 });
 
+runTest("rejects a different adapter version, even when every other field matches", () => {
+  assertEqual(findCompatiblePhysicalReadContract({ ...VALID_PHYSICAL_READ, adapterVersion: "any-adapter-v9" }), null);
+});
+
+runTest("rejects a different underlying library version, even when every other field matches (never accepted merely because a fingerprint could be recalculated)", () => {
+  assertEqual(findCompatiblePhysicalReadContract({ ...VALID_PHYSICAL_READ, underlyingLibraryVersion: "any-library@1.0.0" }), null);
+});
+
+runTest("rejects a null underlying library version", () => {
+  assertEqual(findCompatiblePhysicalReadContract({ ...VALID_PHYSICAL_READ, underlyingLibraryVersion: null }), null);
+});
+
 runTest("rejects an unknown coordinate space version", () => {
   assertEqual(
     findCompatiblePhysicalReadContract({ ...VALID_PHYSICAL_READ, textItemCoordinateSpaceVersion: "physical-document-text-item-coordinate-space-v2" as typeof VALID_PHYSICAL_READ.textItemCoordinateSpaceVersion }),
@@ -97,9 +109,28 @@ runTest("rejects an unknown page location schema version", () => {
 
 runTest("rejects an unknown decision rule set version", () => {
   assertEqual(
-    findCompatiblePageLocationContract({ ...VALID_PAGE_LOCATION, decisionRuleSetVersion: "budget-document-page-location-rules-v2" as typeof VALID_PAGE_LOCATION.decisionRuleSetVersion }),
+    findCompatiblePageLocationContract({
+      ...VALID_PAGE_LOCATION,
+      decisionRuleSetVersion: "budget-document-page-location-rules-v2" as typeof VALID_PAGE_LOCATION.decisionRuleSetVersion,
+    }),
     null,
   );
+});
+
+runTest("rejects a different source observation schema version", () => {
+  assertEqual(findCompatiblePageLocationContract({ ...VALID_PAGE_LOCATION, sourceObservationSchemaVersion: 2 }), null);
+});
+
+runTest("rejects a null source observation schema version", () => {
+  assertEqual(findCompatiblePageLocationContract({ ...VALID_PAGE_LOCATION, sourceObservationSchemaVersion: null }), null);
+});
+
+runTest("rejects a different observer name, even when the observer version matches", () => {
+  assertEqual(findCompatiblePageLocationContract({ ...VALID_PAGE_LOCATION, sourceObserverName: "a-different-observer" }), null);
+});
+
+runTest("rejects a null observer name", () => {
+  assertEqual(findCompatiblePageLocationContract({ ...VALID_PAGE_LOCATION, sourceObserverName: null }), null);
 });
 
 runTest("rejects an unknown observer version even when the locator version matches", () => {

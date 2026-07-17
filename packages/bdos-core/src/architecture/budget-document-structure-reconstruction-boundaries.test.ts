@@ -21,6 +21,17 @@
  *    de conteúdo (§56);
  * 5. a ponte de teste geométrica local nunca é exportada pelo barrel do
  *    domínio nem pelo barrel de `structure-reconstruction/`.
+ *
+ * Auditoria pós-PR #69 (§1, §3, §6, §7, §8): mensagens técnicas
+ * centralizadas em português (`structure-reconstruction-technical-problem.ts`)
+ * e a canonicalização da fronteira de saída
+ * (`structure-reconstruction-output-geometry-canonicalization.ts`) também
+ * permanecem internas, nunca exportadas pelo barrel público. A exceção
+ * nomeada e restrita ao literal "pdfjs" em
+ * `structure-reconstruction-source-contracts.ts` (necessária para o portão
+ * de compatibilidade comparar `adapterVersion`/`underlyingLibraryVersion`
+ * por igualdade exata) vive em
+ * `budget-document-location-boundaries.test.ts`, não neste arquivo.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -43,6 +54,8 @@ const INTERNAL_MODULE_NAMES = [
   "horizontal-segment-reconstruction",
   "physical-text-block-reconstruction",
   "structure-reconstruction-test-bridge",
+  "structure-reconstruction-technical-problem",
+  "structure-reconstruction-output-geometry-canonicalization",
 ] as const;
 
 const FORBIDDEN_VOCABULARY = [
