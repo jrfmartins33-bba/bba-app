@@ -148,5 +148,8 @@ runTest("a manufactured concurrent claim (two candidates sharing a segment, inje
       assertEqual(d.conflictingCandidateHypothesisKeys.length >= 1, true);
     }
   });
-  assertEqual(region.technicalProblems.some((p) => p.code === "physical_column_hypothesis_overlap_detected"), true);
+  // Ambiguidade estrutural legítima é integralmente auditada pela disposição e pelo status — nunca um
+  // problema técnico (auditoria pós-revisão, §4).
+  assertEqual(region.technicalProblems.length, 0);
+  assertEqual(region.status, "hypotheses_reconstructed_with_ambiguity");
 });

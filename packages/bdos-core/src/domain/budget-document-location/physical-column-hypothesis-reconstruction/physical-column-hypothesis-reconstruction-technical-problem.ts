@@ -20,9 +20,9 @@ const PHYSICAL_COLUMN_HYPOTHESIS_RECONSTRUCTION_PROBLEM_MESSAGE_BY_CODE: Readonl
   source_structure_reconstruction_contract_invalid: "O contrato de reconstrução estrutural recebido é estruturalmente inválido.",
   source_tabular_region_detection_contract_invalid: "O contrato de detecção de regiões recebido é estruturalmente inválido ou inconsistente com a reconstrução estrutural recebida.",
   source_reference_invalid: "Uma região, linha ou segmento referenciado pela detecção de regiões não existe na reconstrução estrutural recebida.",
+  source_candidate_page_not_detectable: "A página de origem não produziu estrutura regional processável para esta etapa.",
   physical_vertical_band_construction_failed: "Falha técnica inesperada ao construir faixas verticais físicas desta região.",
   physical_column_hypothesis_formation_failed: "Falha técnica inesperada ao formar hipóteses de coluna física desta região.",
-  physical_column_hypothesis_overlap_detected: "Duas ou mais candidatas a hipótese de coluna física concorreram pelo mesmo segmento ou apresentaram sobreposição horizontal, sem desempate estrutural inequívoco.",
   physical_column_hypothesis_conservation_failed: "A conservação de segmentos físicos desta região não pôde ser confirmada após a formação de hipóteses.",
   physical_column_hypothesis_reconstruction_failed: "Falha técnica inesperada e não classificada durante a reconstrução de hipóteses de coluna física.",
 };

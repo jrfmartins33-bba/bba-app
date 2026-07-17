@@ -39,9 +39,9 @@ runTest("all eleven codes from the Sprint's restricted catalog are present, exac
     "source_structure_reconstruction_contract_invalid",
     "source_tabular_region_detection_contract_invalid",
     "source_reference_invalid",
+    "source_candidate_page_not_detectable",
     "physical_vertical_band_construction_failed",
     "physical_column_hypothesis_formation_failed",
-    "physical_column_hypothesis_overlap_detected",
     "physical_column_hypothesis_conservation_failed",
     "physical_column_hypothesis_reconstruction_failed",
   ];

@@ -77,7 +77,7 @@ const LIMITATIONS: ReadonlyArray<PhysicalColumnHypothesisReconstructionLimitatio
   "no_budget_line_created",
   "no_budget_version_created",
   "no_numeric_fusion_tolerance_applied",
-  "orphan_segments_never_absorbed_by_contention_or_proximity",
+  "orphan_segments_never_absorbed_by_containment_or_proximity",
   "unresolved_structures_remain_explicit",
   "real_document_out_of_scope",
   "no_commercial_readiness_claim",
@@ -212,7 +212,7 @@ function reconstructRegion(
 
   let bands: ReadonlyArray<PhysicalVerticalBandDraft>;
   try {
-    bands = dependencies.constructBands(pageAlignments, regionLineKeySet, segmentGeometryByKey);
+    bands = dependencies.constructBands(pageAlignments, regionLineKeySet, segmentGeometryByKey, PROFILE);
   } catch {
     return buildFailedRegion(regionProcessedKey, region.regionKey, region.pageNumber, groupKey, regionSegments, "band_construction", "physical_vertical_band_construction_failed");
   }
@@ -231,7 +231,6 @@ function reconstructRegion(
 
   const confirmed = candidatesWithKeys.filter((entry) => !entry.candidate.conflicted);
   const conflicting = candidatesWithKeys.filter((entry) => entry.candidate.conflicted);
-  const hasOverlapConflict = conflicting.length > 0;
 
   const hypotheses = confirmed.map((entry, index) => buildHypothesis(entry.hypothesisKey, region.pageNumber, index + 1, entry.candidate));
 
@@ -259,12 +258,11 @@ function reconstructRegion(
     return { status: "not_in_physical_column_hypothesis", segmentKey, lineKey };
   });
 
+  // Ambiguidade estrutural (segmentos concorrentes/sobrepostos) é integralmente auditada pela
+  // disposição `unresolved_physical_column_hypothesis_ambiguity` e pelo status
+  // `hypotheses_reconstructed_with_ambiguity` — nunca um problema técnico (auditoria pós-revisão, §4).
+  // `technicalProblems` fica restrito a falhas técnicas inesperadas desta região.
   const technicalProblems: PhysicalColumnHypothesisReconstructionTechnicalProblem[] = [];
-  if (hasOverlapConflict) {
-    technicalProblems.push(
-      createPhysicalColumnHypothesisReconstructionTechnicalProblem("physical_column_hypothesis_overlap_detected", "hypothesis_formation", groupKey, region.pageNumber, region.regionKey),
-    );
-  }
 
   const metrics = computeRegionMetrics(dispositions, hypotheses.length);
   const conservationHolds = metrics.includedSegmentCount + metrics.notIncludedSegmentCount + metrics.ambiguousSegmentCount + metrics.detectionFailedSegmentCount === metrics.totalSegmentCount;
@@ -339,13 +337,15 @@ function reconstructPage(
   const pageProcessedKey = computePageProcessedKey(groupProcessedKey, detectionPage.pageNumber);
 
   if (detectionPage.status === "not_detectable") {
+    // Um estado legítimo de página upstream (a f.2a não pôde detectar regiões nesta página) nunca
+    // torna o contrato de origem inválido — auditoria pós-revisão, §3.
     return {
       pageProcessedKey,
       pageNumber: detectionPage.pageNumber,
       status: "page_not_processable",
       regions: [],
       technicalProblems: [
-        createPhysicalColumnHypothesisReconstructionTechnicalProblem("source_tabular_region_detection_contract_invalid", "candidate_page_processing", groupKey, detectionPage.pageNumber),
+        createPhysicalColumnHypothesisReconstructionTechnicalProblem("source_candidate_page_not_detectable", "candidate_page_processing", groupKey, detectionPage.pageNumber),
       ],
       metrics: computePageMetrics([]),
     };

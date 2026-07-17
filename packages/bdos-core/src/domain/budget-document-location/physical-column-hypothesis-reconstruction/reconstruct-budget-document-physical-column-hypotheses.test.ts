@@ -213,7 +213,92 @@ runTest("individual source identities from both consumed contracts are preserved
 runTest("the result declares the required limitations, including no numeric fusion tolerance and orphan segments never absorbed", () => {
   const input = buildPhysicalColumnHypothesisReconstructionFixture("limitations", [page(twoColumnRows(4))]);
   const result = reconstructBudgetDocumentPhysicalColumnHypotheses(input);
-  ["physical_column_hypothesis_is_not_a_confirmed_column", "no_numeric_fusion_tolerance_applied", "orphan_segments_never_absorbed_by_contention_or_proximity", "no_commercial_readiness_claim", "real_document_out_of_scope"].forEach(
+  ["physical_column_hypothesis_is_not_a_confirmed_column", "no_numeric_fusion_tolerance_applied", "orphan_segments_never_absorbed_by_containment_or_proximity", "no_commercial_readiness_claim", "real_document_out_of_scope"].forEach(
     (code) => assertEqual(result.limitations.includes(code as (typeof result.limitations)[number]), true, `missing limitation ${code}`),
   );
+});
+
+// --- auditoria pós-revisão, §3: página not_detectable é um estado legítimo, nunca um contrato inválido ---
+
+runTest("a not_detectable page from the f.2a detection (a legitimate upstream state) becomes page_not_processable with source_candidate_page_not_detectable — never source_tabular_region_detection_contract_invalid, never failed", () => {
+  const input = buildPhysicalColumnHypothesisReconstructionFixture("not-detectable-page", [page(twoColumnRows(4))]);
+  const tamperedGroups = input.tabularRegionDetection.groups.map((group) => ({
+    ...group,
+    pages: group.pages.map((detectionPage) => ({ ...detectionPage, status: "not_detectable" as const })),
+  }));
+  const tamperedInput = { ...input, tabularRegionDetection: { ...input.tabularRegionDetection, groups: tamperedGroups } };
+
+  const result = reconstructBudgetDocumentPhysicalColumnHypotheses(tamperedInput);
+
+  assertEqual(result.status, "completed_with_problems");
+  assertEqual(result.status !== "failed", true);
+
+  const group = result.groups[0];
+  const resultPage = group.pages[0];
+  assertEqual(resultPage.status, "page_not_processable");
+  assertEqual(resultPage.regions.length, 0);
+  assertEqual(resultPage.technicalProblems.length, 1);
+  assertEqual(resultPage.technicalProblems[0].code, "source_candidate_page_not_detectable");
+  assertEqual(resultPage.technicalProblems.every((p) => (p.code as string) !== "source_tabular_region_detection_contract_invalid"), true);
+});
+
+// --- auditoria pós-revisão, §2: prova integrada do cenário real da arquitetura (alinhamento além da região) ---
+
+runTest("an alignment sustained across lines before, inside and after the region is correctly projected: both the region-spanning and the region-only alignments produce valid hypotheses, no external segment leaks in, conservation and determinism hold", () => {
+  const items: SyntheticGeometryTextItem[] = [];
+  // Six rows. Column A has a fixed left edge (100) but a varying width on every row (l1..l6) — its
+  // left_edge alone recurs across all six lines, but that single alignment is not sufficient on its
+  // own (minimumRecurrentAlignmentCount = 2) to form a region by itself; it legitimately extends
+  // before, inside and after whatever region eventually forms. Column B (left=300, fixed width) only
+  // has a physical segment on rows 3-5 (l3..l5, 0-indexed 2-4) — it never exists on rows 1,2,6 at all,
+  // and being fixed-width it independently sustains three alignment types (left/right/center) exactly
+  // on those three lines, which is what actually anchors the region there.
+  for (let row = 0; row < 6; row += 1) {
+    const top = 700 - row * ROW_STEP;
+    items.push({ text: `colA-${row}`, leftPoints: 100, topPoints: top, rightPoints: 160 + row * 20, bottomPoints: top + ROW_HEIGHT, index: row });
+  }
+  [2, 3, 4].forEach((row, position) => {
+    const top = 700 - row * ROW_STEP;
+    items.push({ text: `colB-${row}`, leftPoints: 300, topPoints: top, rightPoints: 360, bottomPoints: top + ROW_HEIGHT, index: 6 + position });
+  });
+
+  const input = buildPhysicalColumnHypothesisReconstructionFixture("integrated-projection", [page(items)]);
+
+  // Confirm, from the real f.2a chain, that the architectural scenario actually arose: alignment A
+  // (column A) sustains more lines than the region f.2a formed, alignment B (column B) sustains
+  // exactly the region's lines, and the region itself has exactly 3 lines.
+  const detectionPage = input.tabularRegionDetection.groups[0].pages[0];
+  assertEqual(detectionPage.regions.length, 1, "expected exactly one region to form from the shared A+B window");
+  const region = detectionPage.regions[0];
+  assertEqual(region.lineKeys.length, 3, "expected the region to be exactly the three lines where both A and B recur");
+  const alignmentA = detectionPage.alignments.find((a) => a.lineKeys.length === 6);
+  const alignmentB = detectionPage.alignments.find((a) => a.lineKeys.length === 3);
+  assertEqual(alignmentA !== undefined, true, "expected column A's alignment to span all six physical lines");
+  assertEqual(alignmentB !== undefined, true, "expected column B's alignment to span exactly the region's three lines");
+  assertEqual(region.supportingAlignmentKeys.includes(alignmentA!.alignmentKey), true, "the region-spanning alignment must still be preserved as region evidence");
+  assertEqual(region.supportingAlignmentKeys.includes(alignmentB!.alignmentKey), true);
+
+  const result = reconstructBudgetDocumentPhysicalColumnHypotheses(input);
+  assertEqual(result.status, "completed");
+  const resultRegion = result.groups[0].pages[0].regions[0];
+  assertEqual(resultRegion.status, "hypotheses_reconstructed");
+  assertEqual(resultRegion.hypotheses.length, 2, "expected two physical column hypotheses: the projected column A, and column B");
+
+  const hypothesisA = resultRegion.hypotheses.find((h) => h.contributingAlignmentKeys.includes(alignmentA!.alignmentKey));
+  const hypothesisB = resultRegion.hypotheses.find((h) => h.contributingAlignmentKeys.includes(alignmentB!.alignmentKey));
+  assertEqual(hypothesisA !== undefined, true, "evidence from the region-spanning alignment A is preserved in a hypothesis");
+  assertEqual(hypothesisB !== undefined, true, "evidence from the region-only alignment B is preserved in a hypothesis");
+  assertEqual(hypothesisA!.lineKeys.length, 3, "hypothesis A only carries the three in-region lines — never the three external lines of the source alignment");
+  assertEqual(hypothesisB!.lineKeys.length, 3);
+  assertEqual(JSON.stringify([...hypothesisA!.lineKeys].sort()), JSON.stringify([...hypothesisB!.lineKeys].sort()), "both hypotheses cover exactly the region's line set");
+
+  // No external segment (column A's rows 1, 2 and 6) is ever assigned to the region.
+  assertEqual(resultRegion.metrics.totalSegmentCount, 6, "exactly six segments belong to the region's three lines (column A + column B per line)");
+  assertEqual(resultRegion.metrics.includedSegmentCount, 6);
+  assertEqual(resultRegion.metrics.notIncludedSegmentCount, 0);
+  assertEqual(resultRegion.metrics.ambiguousSegmentCount, 0);
+  assertEqual(resultRegion.metrics.detectionFailedSegmentCount, 0);
+
+  const second = reconstructBudgetDocumentPhysicalColumnHypotheses(input);
+  assertEqual(JSON.stringify(result), JSON.stringify(second), "determinism holds across two independent reconstructions");
 });

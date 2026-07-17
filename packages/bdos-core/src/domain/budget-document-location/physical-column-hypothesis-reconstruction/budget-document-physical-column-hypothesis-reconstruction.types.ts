@@ -111,6 +111,22 @@ export interface BudgetDocumentPhysicalColumnHypothesisReconstructionProfile {
   readonly requireExactSignatureEquality: true;
   readonly forbidPhysicalColumnHypothesisOverlap: true;
 
+  /**
+   * Sustentação mínima, em pares `(lineKey, segmentKey)`, que a projeção
+   * regional de um alinhamento precisa conservar para formar uma faixa
+   * (auditoria pós-revisão da Sprint 21.4A.2.f.2b, §1). `RecurrentVerticalAlignment`
+   * é observado no nível da página inteira pela f.2a; ao projetar um
+   * alinhamento para dentro de uma região (mantendo apenas os pares cuja
+   * linha pertence à região), a sustentação pode cair abaixo do mínimo já
+   * exigido pela f.2a para o alinhamento como um todo. Este valor nunca é
+   * uma nova tolerância calibrada — é herdado, em tempo de execução, do
+   * mesmo mínimo já aprovado no perfil v1 da f.2a
+   * (`minimumLinesSustainingAlignment`), garantindo que a projeção nunca
+   * transforme um alinhamento recorrente em evidência de apenas uma ou
+   * duas linhas.
+   */
+  readonly minimumLinesSustainingProjectedAlignment: number;
+
   /** Ordem canônica fixa entre tipos de alinhamento — apenas para ordenação/serialização determinística, nunca para escolher hipótese vencedora ou atribuir maior valor probatório (§12). */
   readonly alignmentTypePriorityOrder: ReadonlyArray<RecurrentVerticalAlignmentType>;
 
@@ -127,9 +143,9 @@ export type PhysicalColumnHypothesisReconstructionTechnicalProblemCode =
   | "source_structure_reconstruction_contract_invalid"
   | "source_tabular_region_detection_contract_invalid"
   | "source_reference_invalid"
+  | "source_candidate_page_not_detectable"
   | "physical_vertical_band_construction_failed"
   | "physical_column_hypothesis_formation_failed"
-  | "physical_column_hypothesis_overlap_detected"
   | "physical_column_hypothesis_conservation_failed"
   | "physical_column_hypothesis_reconstruction_failed";
 
@@ -173,7 +189,7 @@ export type PhysicalColumnHypothesisReconstructionLimitationCode =
   | "no_budget_line_created"
   | "no_budget_version_created"
   | "no_numeric_fusion_tolerance_applied"
-  | "orphan_segments_never_absorbed_by_contention_or_proximity"
+  | "orphan_segments_never_absorbed_by_containment_or_proximity"
   | "unresolved_structures_remain_explicit"
   | "real_document_out_of_scope"
   | "no_commercial_readiness_claim";

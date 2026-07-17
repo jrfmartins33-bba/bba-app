@@ -106,7 +106,7 @@ async function main(): Promise<void> {
     // never-recurring segment on that line, correctly preserved as an orphan (never absorbed, never discarded).
     assertEqual(region.metrics.totalSegmentCount, 9);
     assertEqual(region.metrics.includedSegmentCount, 8, "the eight table-column segments are included in the two hypotheses");
-    assertEqual(region.metrics.notIncludedSegmentCount, 1, "the BDI segment is preserved as an orphan, never absorbed by proximity or contention");
+    assertEqual(region.metrics.notIncludedSegmentCount, 1, "the BDI segment is preserved as an orphan, never absorbed by proximity or containment");
     assertEqual(region.metrics.ambiguousSegmentCount, 0);
     assertEqual(region.metrics.detectionFailedSegmentCount, 0);
     assertEqual(region.metrics.hypothesisCount, 2);

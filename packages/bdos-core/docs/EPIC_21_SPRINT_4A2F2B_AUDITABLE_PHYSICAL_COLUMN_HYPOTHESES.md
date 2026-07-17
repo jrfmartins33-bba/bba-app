@@ -35,7 +35,9 @@ Esta Sprint evita repetir a ambiguidade: suas próprias chaves são nomeadas `gr
 
 ## 6. Faixa Vertical Física (interna)
 
-`physical-vertical-band-construction.ts`. Tipo exclusivamente interno, nunca exportado pelo barrel público. Nasce de exatamente um `RecurrentVerticalAlignment` da f.2a cujas `lineKeys` pertencem inteiramente à região sendo processada — alinhamentos parcialmente contidos são rejeitados (nunca vazam linhas de outra região). Os limites são a união real (`min`/`max`) dos bounds completos dos segmentos que já sustentam aquele alinhamento, reaproveitados de `structureReconstruction` — nunca posição sintética, nunca absorção de segmentos órfãos.
+`physical-vertical-band-construction.ts`. Tipo exclusivamente interno, nunca exportado pelo barrel público. `RecurrentVerticalAlignment` é observado pela f.2a no nível da **página inteira**, nunca por região — um alinhamento sustentador de uma região pode legitimamente conter linhas adicionais fora dela (antes, depois, ou intercaladas com outras regiões da mesma página). Por isso, a construção da faixa é uma **projeção regional** (auditoria pós-revisão, §1), não um filtro de contenção total: para cada alinhamento, combina posicionalmente `lineKeys` e `segmentKeys` e retém apenas os pares cuja linha pertence à região, preservando a ordem vertical original — nunca reordena por chave lexicográfica, nunca perde a associação posicional entre linha e segmento, nunca inclui na faixa qualquer linha ou segmento externo à região. Isto **não é reclustering**: o `alignmentKey` original permanece como evidência-semente única, e a projeção nunca reagrupa segmentos que a f.2a não já havia agrupado.
+
+A projeção só forma faixa quando conserva, no mínimo, `profile.minimumLinesSustainingProjectedAlignment` pares — herdado em tempo de execução de `BUDGET_DOCUMENT_TABULAR_REGION_DETECTION_PROFILE_V1.minimumLinesSustainingAlignment` (perfil v1 da f.2a, nunca um valor novo). Quando a projeção não conserva sustentação suficiente, o alinhamento é legitimamente ignorado para aquela região — **ausência de faixa nunca é falha técnica**. Os limites da faixa são a união real (`min`/`max`) dos bounds completos apenas dos segmentos projetados (nunca dos segmentos externos à região) — nunca posição sintética, nunca absorção de segmentos órfãos.
 
 ## 7. Hipótese de Coluna Física (pública)
 
@@ -45,9 +47,11 @@ Esta Sprint evita repetir a ambiguidade: suas próprias chaves são nomeadas `gr
 
 Candidatas de assinatura diferente são marcadas conflitantes quando: (a) compartilham ao menos um segmento; ou (b) seus envelopes apresentam sobreposição horizontal estritamente positiva (limites apenas encostados nunca contam como sobreposição). Nenhuma candidata conflitante se torna hipótese válida — a invalidação é da candidata inteira, nunca apenas do trecho literalmente disputado. Segmentos afetados recebem `unresolved_physical_column_hypothesis_ambiguity` com `conflictingCandidateHypothesisKeys` — as chaves determinísticas de todas as candidatas conflitantes, computadas mesmo para candidatas rejeitadas (nunca aparecem em `hypotheses[]`, mas permanecem auditáveis).
 
+**Ambiguidade nunca é problema técnico** (auditoria pós-revisão, §4): um conflito geométrico legítimo (segmento compartilhado ou sobreposição de envelope) já está integralmente auditado pela disposição `unresolved_physical_column_hypothesis_ambiguity` e pelo status `hypotheses_reconstructed_with_ambiguity` — `technicalProblems` permanece vazio nesse caso; página/grupo/global podem ficar `with_problems`, mas nunca `failed` só por isso. `technicalProblems` fica restrito a falhas técnicas inesperadas (exceção durante construção de faixa ou formação de hipótese) — o código `physical_column_hypothesis_overlap_detected` foi removido do catálogo por não representar uma falha, apenas duplicar informação já auditada pela disposição.
+
 ## 9. Segmentos órfãos
 
-Segmentos das linhas incluídas na região que não participam de nenhum alinhamento recorrente qualificado: nunca absorvidos, nunca descartados, nunca tratados como erro ou célula vazia — recebem `not_in_physical_column_hypothesis`. Absorção por contenção, interseção ou proximidade está fora desta versão (limitação `orphan_segments_never_absorbed_by_contention_or_proximity`), dependente de evidência real futura.
+Segmentos das linhas incluídas na região que não participam de nenhum alinhamento recorrente qualificado: nunca absorvidos, nunca descartados, nunca tratados como erro ou célula vazia — recebem `not_in_physical_column_hypothesis`. Absorção por contenção, interseção ou proximidade está fora desta versão (limitação `orphan_segments_never_absorbed_by_containment_or_proximity`), dependente de evidência real futura.
 
 ## 10. Conservação por segmento
 
@@ -61,13 +65,17 @@ Duas camadas, mesmo padrão da f.2a: **identidade de reconstrução** (interna, 
 
 `BUDGET_DOCUMENT_PHYSICAL_COLUMN_HYPOTHESIS_RECONSTRUCTION_PROFILE_V1` (`profileId="budget-document-physical-column-hypothesis-reconstruction-profile-v1"`, `profileVersion=1`). Ao contrário das duas Sprints anteriores, **não declara nenhuma razão numérica de tolerância** — apenas identidades e invariantes fixas (`requireExactSignatureEquality: true`, `forbidPhysicalColumnHypothesisOverlap: true`, `alignmentTypePriorityOrder` — usada apenas para ordenação/serialização determinística, nunca para escolher hipótese vencedora, resolver sobreposição ou atribuir maior valor probatório a um tipo).
 
+`minimumLinesSustainingProjectedAlignment` (auditoria pós-revisão, §1): o único valor numérico do perfil, e não é uma tolerância nova — é lido em tempo de execução de `BUDGET_DOCUMENT_TABULAR_REGION_DETECTION_PROFILE_V1.minimumLinesSustainingAlignment` (perfil v1 já aprovado da f.2a, importado por caminho relativo direto, nunca pelo barrel). Garante que a projeção regional de um alinhamento (§6) nunca vire evidência de menos linhas do que a f.2a já exige para o alinhamento como um todo.
+
 ## 13. Estados
 
 Região: `hypotheses_reconstructed | hypotheses_reconstructed_with_ambiguity | no_physical_column_hypothesis | region_not_processable`. `no_physical_column_hypothesis` = processamento concluído, nenhuma hipótese e nenhuma ambiguidade (distinto de falha). Página/grupo: agregação `every`/`no`/`mixed` sobre suas regiões/páginas, mesmo padrão das Sprints anteriores. Global: `completed | completed_with_problems | failed` — `failed` apenas para incompatibilidade de contrato/linhagem pré-processamento ou exceção inesperada.
 
 ## 14. Problemas técnicos
 
-Catálogo central em português (`physical-column-hypothesis-reconstruction-technical-problem.ts`, não exportado pelo barrel), 11 códigos: `source_contract_version_unsupported`, `source_lineage_mismatch`, `source_fingerprint_invalid`, `source_structure_reconstruction_contract_invalid`, `source_tabular_region_detection_contract_invalid`, `source_reference_invalid`, `physical_vertical_band_construction_failed`, `physical_column_hypothesis_formation_failed`, `physical_column_hypothesis_overlap_detected`, `physical_column_hypothesis_conservation_failed`, `physical_column_hypothesis_reconstruction_failed`.
+Catálogo central em português (`physical-column-hypothesis-reconstruction-technical-problem.ts`, não exportado pelo barrel), 11 códigos: `source_contract_version_unsupported`, `source_lineage_mismatch`, `source_fingerprint_invalid`, `source_structure_reconstruction_contract_invalid`, `source_tabular_region_detection_contract_invalid`, `source_reference_invalid`, `source_candidate_page_not_detectable`, `physical_vertical_band_construction_failed`, `physical_column_hypothesis_formation_failed`, `physical_column_hypothesis_conservation_failed`, `physical_column_hypothesis_reconstruction_failed`.
+
+`source_candidate_page_not_detectable` (auditoria pós-revisão, §3): quando `detectionPage.status === "not_detectable"` (a f.2a não pôde detectar regiões nesta página — um estado legítimo, nunca um contrato inválido), a página da f.2b vira `page_not_processable` com este código — nunca `source_tabular_region_detection_contract_invalid`, que fica restrito a inconsistências estruturais reais do contrato.
 
 ## 15. Determinismo e imutabilidade
 
@@ -75,12 +83,26 @@ Mesma entrada, perfil e versões produzem resultado JSON-equivalente. Independê
 
 ## 16. Testes
 
-Matriz cobrindo positivos (hipótese sustentada por `left_edge`/`right_edge`/`horizontal_center` isoladamente, consolidação de três tipos com assinatura idêntica, duas colunas com os mesmos `lineKeys` mas `segmentKeys` diferentes permanecendo separadas, coluna presente em apenas parte das linhas sem inventar célula, segmento órfão preservado, duas regiões independentes), determinismo/permutação, conservação, adversariais (assinaturas parcialmente sobrepostas, segmento compartilhado entre concorrentes, sobreposição de envelope, limites apenas encostados nunca contam), falha controlada (construção de faixa, formação de hipótese, ambiguidade manufaturada via injeção de dependência) e cadeia real com PDF sintético (`infrastructure/budget-document-location/pdfjs/reconstruct-budget-document-physical-column-hypotheses.real-pdf-chain.test.ts`) — prova positiva: um grupo, uma página `hypotheses_reconstructed`, uma região com duas hipóteses de quatro linhas cada, oito segmentos de tabela incluídos, um segmento órfão (o item "BDI" necessário para classificação real) preservado como não incluído, zero ambiguidade, zero problemas técnicos.
+Matriz cobrindo positivos (hipótese sustentada por `left_edge`/`right_edge`/`horizontal_center` isoladamente, consolidação de três tipos com assinatura idêntica, duas colunas com os mesmos `lineKeys` mas `segmentKeys` diferentes permanecendo separadas, coluna presente em apenas parte das linhas sem inventar célula, segmento órfão preservado, duas regiões independentes), limites exatos da projeção regional (2/3/4 linhas retidas — abaixo, exatamente no mínimo, acima), determinismo/permutação, conservação, adversariais (assinaturas parcialmente sobrepostas, segmento compartilhado entre concorrentes, sobreposição de envelope, limites apenas encostados nunca contam), falha controlada (construção de faixa, formação de hipótese, ambiguidade manufaturada via injeção de dependência), referências de região incompletas (`supportingAlignmentKey` inexistente, duplicada, alinhamento que não contém todas as linhas da região, disposição de linha incoerente) e cadeia real com PDF sintético (`infrastructure/budget-document-location/pdfjs/reconstruct-budget-document-physical-column-hypotheses.real-pdf-chain.test.ts`) — prova positiva: um grupo, uma página `hypotheses_reconstructed`, uma região com duas hipóteses de quatro linhas cada, oito segmentos de tabela incluídos, um segmento órfão (o item "BDI" necessário para classificação real) preservado como não incluído, zero ambiguidade, zero problemas técnicos.
+
+**Prova integrada do cenário arquitetural real** (auditoria pós-revisão, §2): teste de pipeline com bytes sintéticos e componentes reais em que uma coluna A recorre (só pela borda esquerda) em seis linhas físicas — antes, dentro e depois de qualquer região — e uma coluna B (largura fixa, três tipos de alinhamento) recorre apenas nas três linhas internas. A f.2a forma uma região de exatamente três linhas usando ambos os alinhamentos como suporte; a f.2b projeta o alinhamento de A para dentro da região (retendo apenas as três linhas internas, nunca as três externas) e produz duas hipóteses válidas — uma para A, uma para B —, ambas as evidências preservadas (`contributingAlignmentKeys` aponta para os dois `alignmentKey` originais), nenhum segmento externo atribuído à região (seis segmentos no total, todos incluídos), conservação e determinismo confirmados em duas execuções independentes.
 
 ## 17. Correções documentais realizadas nesta Sprint
 
 - `EPIC_21_SPRINT_4A2F2A_AUDITABLE_TABULAR_REGION_DETECTION.md`, §22: removida a afirmação desatualizada de que a continuidade depende de novo recebimento de documentos reais — o Epic 21 já possui e utiliza documentos reais; apenas a f.2a, especificamente, não os acessou.
 - `budget-document-tabular-region-detection.types.ts`: comentários de `groupReconstructionKey`/`pageReconstructionKey` corrigidos para esclarecer que são chaves processadas da própria f.2a, nunca referências literais à reconstrução de origem (§4 acima). Nenhum campo renomeado, nenhum comportamento alterado.
+
+## 17.1 Correções da auditoria pós-revisão (commit corretivo)
+
+Sete correções obrigatórias, todas na mesma branch, antes da abertura do PR:
+
+1. **Projeção regional dos alinhamentos** (§6): a rejeição por contenção total foi substituída pela projeção regional — a causa raiz de uma subdetecção indevida (um alinhamento legitimamente mais extenso que a região era descartado por inteiro). `minimumLinesSustainingProjectedAlignment` adicionado ao perfil, herdado do mínimo já aprovado da f.2a, nunca uma nova tolerância. O identificador do algoritmo mudou de `physical-vertical-band-single-alignment-envelope-v1` para `physical-vertical-band-regional-alignment-projection-v1` — uma mudança de comportamento merece uma identidade própria, nunca reaproveitar silenciosamente a mesma identidade para uma regra diferente.
+2. **Prova integrada do cenário real** (§16): novo teste de pipeline com componentes reais, alinhamento excedendo a região.
+3. **Página `not_detectable`**: novo código `source_candidate_page_not_detectable`, nunca mais `source_tabular_region_detection_contract_invalid` para um estado legítimo de página (§14).
+4. **Ambiguidade separada de problema técnico**: `physical_column_hypothesis_overlap_detected` removido do catálogo — a ambiguidade já é integralmente auditada pela disposição e pelo status (§8).
+5. **Validação completa das referências de região**: `supportingAlignmentKeys` agora verificadas quanto a existência, unicidade, e a relação correta `region.lineKeys ⊆ supportingAlignment.lineKeys` (nunca igualdade exata); disposição de cada linha da região verificada contra o próprio `regionKey`.
+6. **Correção terminológica**: `orphan_segments_never_absorbed_by_contention_or_proximity` → `orphan_segments_never_absorbed_by_containment_or_proximity` — "containment" é o conceito de contenção geométrica pretendido; nenhuma ocorrência de "contention" com esse sentido permanece no módulo.
+7. Esta seção e as correções de §6, §8, §12, §14, §19, §20 documentam a mudança.
 
 ## 18. Guards
 
@@ -88,11 +110,11 @@ Matriz cobrindo positivos (hipótese sustentada por `left_edge`/`right_edge`/`ho
 
 ## 19. Limitações
 
-`physical_column_hypothesis_is_not_a_confirmed_column`, `physical_column_hypothesis_is_not_a_cell`, `no_header_identified`, `no_footer_identified`, `no_cross_page_continuity_evaluated`, `no_textual_semantics_applied`, `no_service_code_read`, `no_description_interpreted`, `no_unit_read`, `no_quantity_read`, `no_price_read`, `no_total_read`, `no_economic_bdi_interpreted`, `no_budget_line_created`, `no_budget_version_created`, `no_numeric_fusion_tolerance_applied`, `orphan_segments_never_absorbed_by_contention_or_proximity`, `unresolved_structures_remain_explicit`, `real_document_out_of_scope`, `no_commercial_readiness_claim`.
+`physical_column_hypothesis_is_not_a_confirmed_column`, `physical_column_hypothesis_is_not_a_cell`, `no_header_identified`, `no_footer_identified`, `no_cross_page_continuity_evaluated`, `no_textual_semantics_applied`, `no_service_code_read`, `no_description_interpreted`, `no_unit_read`, `no_quantity_read`, `no_price_read`, `no_total_read`, `no_economic_bdi_interpreted`, `no_budget_line_created`, `no_budget_version_created`, `no_numeric_fusion_tolerance_applied`, `orphan_segments_never_absorbed_by_containment_or_proximity`, `unresolved_structures_remain_explicit`, `real_document_out_of_scope`, `no_commercial_readiness_claim`.
 
 ## 20. Fora do escopo
 
-Coluna econômica confirmada; célula; cabeçalho; rodapé; continuidade entre páginas; código de serviço; descrição; unidade; quantidade; preço; total; BDI econômico; grupo econômico; Versão do Orçamento; tolerância numérica de fusão (decisão vinculante desta versão); absorção de segmento órfão por contenção/proximidade; persistência; Supabase; storage; API; UI; IA; OCR; score; confiança; documento real.
+Coluna econômica confirmada; célula; cabeçalho; rodapé; continuidade entre páginas; código de serviço; descrição; unidade; quantidade; preço; total; BDI econômico; grupo econômico; Versão do Orçamento; tolerância numérica de fusão (decisão vinculante desta versão); absorção de segmento órfão por contenção geométrica/proximidade; persistência; Supabase; storage; API; UI; IA; OCR; score; confiança; documento real.
 
 ## 21. Próxima etapa recomendada
 

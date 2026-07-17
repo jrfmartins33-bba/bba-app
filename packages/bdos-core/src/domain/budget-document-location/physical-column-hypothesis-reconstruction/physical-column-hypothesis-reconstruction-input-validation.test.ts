@@ -114,3 +114,96 @@ runTest("a region referencing a lineKey absent from the structureReconstruction 
   assertEqual(result.kind, "invalid");
   if (result.kind === "invalid") assertEqual(result.problems.some((p) => p.code === "source_reference_invalid"), true);
 });
+
+// --- auditoria pós-revisão, §5: validação completa das referências de região -------------------------
+
+runTest("a region referencing a nonexistent supportingAlignmentKey is rejected", () => {
+  const input = buildValid();
+  const tamperedGroups = input.tabularRegionDetection.groups.map((group) => ({
+    ...group,
+    pages: group.pages.map((page) => ({
+      ...page,
+      regions: page.regions.map((region, index) => (index === 0 ? { ...region, supportingAlignmentKeys: [...region.supportingAlignmentKeys, "nonexistent-alignment-key"] } : region)),
+    })),
+  }));
+  const tampered = { ...input, tabularRegionDetection: { ...input.tabularRegionDetection, groups: tamperedGroups } };
+  const result = validatePhysicalColumnHypothesisReconstructionInput(tampered);
+  assertEqual(result.kind, "invalid");
+  if (result.kind === "invalid") assertEqual(result.problems.some((p) => p.code === "source_reference_invalid"), true);
+});
+
+runTest("a region with a duplicated supportingAlignmentKey is rejected", () => {
+  const input = buildValid();
+  const tamperedGroups = input.tabularRegionDetection.groups.map((group) => ({
+    ...group,
+    pages: group.pages.map((page) => ({
+      ...page,
+      regions: page.regions.map((region, index) =>
+        index === 0 && region.supportingAlignmentKeys.length > 0 ? { ...region, supportingAlignmentKeys: [region.supportingAlignmentKeys[0], region.supportingAlignmentKeys[0]] } : region,
+      ),
+    })),
+  }));
+  const tampered = { ...input, tabularRegionDetection: { ...input.tabularRegionDetection, groups: tamperedGroups } };
+  const result = validatePhysicalColumnHypothesisReconstructionInput(tampered);
+  assertEqual(result.kind, "invalid");
+  if (result.kind === "invalid") assertEqual(result.problems.some((p) => p.code === "source_tabular_region_detection_contract_invalid"), true);
+});
+
+runTest("a supporting alignment that does not contain all of the region's lines is rejected", () => {
+  const input = buildValid();
+  const tamperedGroups = input.tabularRegionDetection.groups.map((group) => ({
+    ...group,
+    pages: group.pages.map((page) => ({
+      ...page,
+      alignments: page.alignments.map((alignment, index) =>
+        index === 0 ? { ...alignment, lineKeys: alignment.lineKeys.slice(1), segmentKeys: alignment.segmentKeys.slice(1) } : alignment,
+      ),
+    })),
+  }));
+  const tampered = { ...input, tabularRegionDetection: { ...input.tabularRegionDetection, groups: tamperedGroups } };
+  const result = validatePhysicalColumnHypothesisReconstructionInput(tampered);
+  assertEqual(result.kind, "invalid");
+  if (result.kind === "invalid") assertEqual(result.problems.some((p) => p.code === "source_reference_invalid"), true);
+});
+
+runTest("a supporting alignment with legitimate additional lines beyond the region is accepted — region.lineKeys is a subset, never required to equal the alignment's lineKeys exactly", () => {
+  // Real geometry (mirrors the Sprint's own integrated-projection scenario): column A recurs across
+  // all six physical lines, but the region f.2a forms only covers three of them (where column B also
+  // recurs) — column A's real alignment genuinely has more lines than the region it supports.
+  const items: SyntheticGeometryTextItem[] = [];
+  for (let row = 0; row < 6; row += 1) {
+    const top = 700 - row * ROW_STEP;
+    items.push({ text: `colA-${row}`, leftPoints: 100, topPoints: top, rightPoints: 160 + row * 20, bottomPoints: top + ROW_HEIGHT, index: row });
+  }
+  [2, 3, 4].forEach((row, position) => {
+    const top = 700 - row * ROW_STEP;
+    items.push({ text: `colB-${row}`, leftPoints: 300, topPoints: top, rightPoints: 360, bottomPoints: top + ROW_HEIGHT, index: 6 + position });
+  });
+  const input = buildPhysicalColumnHypothesisReconstructionFixture("subset-alignment", [{ widthPoints: 612, heightPoints: 792, items }]);
+
+  const region = input.tabularRegionDetection.groups[0].pages[0].regions[0];
+  const page = input.tabularRegionDetection.groups[0].pages[0];
+  const spanningAlignment = page.alignments.find((a) => a.lineKeys.length > region.lineKeys.length);
+  assertEqual(spanningAlignment !== undefined, true, "test setup: expected column A's alignment to span more lines than the region");
+  assertEqual(region.supportingAlignmentKeys.includes(spanningAlignment!.alignmentKey), true, "test setup: expected the spanning alignment to be region evidence");
+
+  const result = validatePhysicalColumnHypothesisReconstructionInput(input);
+  assertEqual(result.kind, "valid", "an alignment with extra lines outside the region must never be rejected — only missing region lines are invalid");
+});
+
+runTest("a region line whose disposition does not point back to that region's own key is rejected", () => {
+  const input = buildValid();
+  const tamperedGroups = input.tabularRegionDetection.groups.map((group) => ({
+    ...group,
+    pages: group.pages.map((page) => ({
+      ...page,
+      lineDispositions: page.lineDispositions.map((disposition) =>
+        disposition.status === "included_in_candidate_region" ? { ...disposition, regionKey: "a-different-region-key" } : disposition,
+      ),
+    })),
+  }));
+  const tampered = { ...input, tabularRegionDetection: { ...input.tabularRegionDetection, groups: tamperedGroups } };
+  const result = validatePhysicalColumnHypothesisReconstructionInput(tampered);
+  assertEqual(result.kind, "invalid");
+  if (result.kind === "invalid") assertEqual(result.problems.some((p) => p.code === "source_reference_invalid"), true);
+});

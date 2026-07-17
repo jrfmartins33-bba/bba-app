@@ -120,6 +120,9 @@ function validateCrossReferences(input: BudgetDocumentPhysicalColumnHypothesisRe
         });
       });
 
+      const alignmentByKey = new Map(detectionPage.alignments.map((alignment) => [alignment.alignmentKey, alignment]));
+      const dispositionByLineKey = new Map(detectionPage.lineDispositions.map((disposition) => [disposition.lineKey, disposition]));
+
       detectionPage.regions.forEach((region) => {
         const linesResolve = region.lineKeys.every((lineKey) => lineByKey.has(lineKey));
         if (!linesResolve || region.lineKeys.length === 0) {
@@ -132,7 +135,75 @@ function validateCrossReferences(input: BudgetDocumentPhysicalColumnHypothesisRe
               region.regionKey,
             ),
           );
+          return;
         }
+
+        // Cada `supportingAlignmentKey` deve existir, ser única, e o alinhamento sustentador deve conter
+        // *todas* as linhas da região — mas pode legitimamente conter linhas adicionais fora dela
+        // (`RecurrentVerticalAlignment` é observado no nível da página inteira, nunca por região). A
+        // relação correta é `region.lineKeys ⊆ supportingAlignment.lineKeys`, nunca igualdade exata
+        // (auditoria pós-revisão, §5).
+        const uniqueSupportingKeys = new Set(region.supportingAlignmentKeys);
+        if (uniqueSupportingKeys.size !== region.supportingAlignmentKeys.length) {
+          problems.push(
+            createPhysicalColumnHypothesisReconstructionTechnicalProblem(
+              "source_tabular_region_detection_contract_invalid",
+              "source_validation",
+              detectionGroup.sourceCandidateGroupKey,
+              detectionPage.pageNumber,
+              region.regionKey,
+            ),
+          );
+        }
+
+        region.supportingAlignmentKeys.forEach((alignmentKey) => {
+          const alignment = alignmentByKey.get(alignmentKey);
+          if (alignment === undefined) {
+            problems.push(
+              createPhysicalColumnHypothesisReconstructionTechnicalProblem(
+                "source_reference_invalid",
+                "source_validation",
+                detectionGroup.sourceCandidateGroupKey,
+                detectionPage.pageNumber,
+                region.regionKey,
+              ),
+            );
+            return;
+          }
+          const alignmentLineKeySet = new Set(alignment.lineKeys);
+          const regionIsSubsetOfAlignment = region.lineKeys.every((lineKey) => alignmentLineKeySet.has(lineKey));
+          if (!regionIsSubsetOfAlignment) {
+            problems.push(
+              createPhysicalColumnHypothesisReconstructionTechnicalProblem(
+                "source_reference_invalid",
+                "source_validation",
+                detectionGroup.sourceCandidateGroupKey,
+                detectionPage.pageNumber,
+                region.regionKey,
+              ),
+            );
+          }
+        });
+
+        // Cada linha da região deve ter disposição `included_in_candidate_region` apontando exatamente
+        // para a própria região — nenhuma interpretação econômica envolvida, apenas coerência estrutural
+        // do contrato recebido (auditoria pós-revisão, §5).
+        region.lineKeys.forEach((lineKey) => {
+          const disposition = dispositionByLineKey.get(lineKey);
+          const coherent = disposition !== undefined && disposition.status === "included_in_candidate_region" && disposition.regionKey === region.regionKey;
+          if (!coherent) {
+            problems.push(
+              createPhysicalColumnHypothesisReconstructionTechnicalProblem(
+                "source_reference_invalid",
+                "source_validation",
+                detectionGroup.sourceCandidateGroupKey,
+                detectionPage.pageNumber,
+                region.regionKey,
+                lineKey,
+              ),
+            );
+          }
+        });
       });
     });
   });

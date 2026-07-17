@@ -32,7 +32,7 @@ const BASE: PhysicalColumnHypothesisReconstructionIdentityFingerprintInput = {
   reconstructorVersion: "budget-document-physical-column-hypothesis-reconstructor-v1",
   profileId: "budget-document-physical-column-hypothesis-reconstruction-profile-v1",
   profileVersion: 1,
-  bandConstructionRuleId: "physical-vertical-band-single-alignment-envelope-v1",
+  bandConstructionRuleId: "physical-vertical-band-regional-alignment-projection-v1",
   bandConstructionRuleVersion: 1,
   hypothesisFormationRuleId: "physical-column-hypothesis-exact-signature-consolidation-v1",
   hypothesisFormationRuleVersion: 1,
