@@ -245,7 +245,15 @@ export interface GlobalTabularRegionDetectionMetrics {
 // --- página processada (§14) --------------------------------------------------
 
 export interface TabularRegionDetectionPage {
-  /** Referência à página reconstruída de origem — nunca copiada. */
+  /**
+   * Chave própria desta etapa (semeada pela identidade de detecção da
+   * f.2a, `computePageProcessedKey`) — **nunca** uma cópia ou referência
+   * literal à `pageReconstructionKey` da página reconstruída de origem
+   * (Sprint 21.4A.2.f.1), que é um valor diferente. O identificador
+   * literalmente estável através de f.1 e f.2a para casar esta página com
+   * a página reconstruída correspondente é `pageNumber` (auditoria
+   * arquitetural da Sprint 21.4A.2.f.2b, §3).
+   */
   readonly pageReconstructionKey: string;
   readonly pageNumber: number;
   readonly status: TabularRegionDetectionPageStatus;
@@ -261,7 +269,15 @@ export interface TabularRegionDetectionPage {
 // --- grupo processado (§14) ---------------------------------------------------
 
 export interface TabularRegionDetectionGroup {
-  /** Referência ao grupo reconstruído de origem — nunca copiado. */
+  /**
+   * Chave própria desta etapa (semeada pela identidade de detecção da
+   * f.2a, `computeGroupProcessedKey`) — **nunca** uma cópia ou referência
+   * literal à `groupReconstructionKey` do grupo reconstruído de origem
+   * (Sprint 21.4A.2.f.1), que é um valor diferente. O identificador
+   * literalmente estável desde a localização de páginas, através de f.1 e
+   * f.2a, é `sourceCandidateGroupKey` (auditoria arquitetural da Sprint
+   * 21.4A.2.f.2b, §3).
+   */
   readonly groupReconstructionKey: string;
   readonly sourceCandidateGroupKey: string;
   readonly status: TabularRegionDetectionGroupStatus;
