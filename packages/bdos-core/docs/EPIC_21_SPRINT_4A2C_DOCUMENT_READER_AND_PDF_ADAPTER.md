@@ -2,6 +2,8 @@
 
 **Status: concluída.** Cria a fronteira entre os bytes de um PDF e as observações físicas de suas páginas: contrato puro no domínio `budget-document-location` e adaptador concreto baseado em `pdfjs-dist`, fisicamente isolado sob `infrastructure/`. Não localiza páginas orçamentárias, não aplica o catálogo de sinais da Sprint 21.4A.2.b, não decide nada. Próximo incremento: mecanismo de associação entre observações físicas e catálogo (fora do escopo desta Sprint).
 
+> **Nota de linhagem (Sprint 21.4A.2.f.0).** O contrato descrito abaixo é o **schema v1** ( `PHYSICAL_DOCUMENT_READ_SCHEMA_VERSION = 1`, `PhysicalDocumentTextItem = { index, text }` sem geometria). A Sprint 21.4A.2.f.0 evoluiu este contrato para o **schema v2**, adicionando geometria de layout normalizada por item textual (`placement`), métricas de disposição por página e um fingerprint de contexto geométrico — preservando a semântica de todo campo v1. Este documento permanece como registro histórico do v1 e não foi reescrito; ver `EPIC_21_SPRINT_4A2F0_NORMALIZED_TEXT_ITEM_GEOMETRY.md` para o contrato atual.
+
 ## 1. Objetivo
 
 Responder apenas "o que foi fisicamente observado em cada página do documento?" — nunca "quais páginas contêm o orçamento?". Entregar: contrato de leitura física; porta `PhysicalDocumentReader`; adaptador `pdfjs-dist`; resultado determinístico, versionado e auditável; testes sintéticos; guard arquitetural; documentação.

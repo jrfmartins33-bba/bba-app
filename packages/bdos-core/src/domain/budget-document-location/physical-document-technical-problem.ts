@@ -21,6 +21,8 @@ const TECHNICAL_PROBLEM_MESSAGE_BY_CODE: Readonly<Record<PhysicalDocumentTechnic
   page_geometry_unavailable: "A geometria física da página não pôde ser obtida.",
   page_text_extraction_failed: "Falha técnica ao extrair o conteúdo textual da página.",
   page_processing_failed: "Falha técnica não classificada ao processar a página.",
+  page_text_item_geometry_normalization_failed:
+    "Falha técnica inesperada ao normalizar a geometria de um ou mais itens textuais da página.",
 };
 
 /**

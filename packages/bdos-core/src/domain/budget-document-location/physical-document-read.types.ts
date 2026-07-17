@@ -1,18 +1,57 @@
 /**
- * Contrato puro da leitura física de um documento PDF (Sprint 21.4A.2.c).
+ * Contrato puro da leitura física de um documento PDF (Sprint 21.4A.2.c,
+ * evoluído para schema v2 pela Sprint 21.4A.2.f.0 — geometria normalizada
+ * por item textual).
  *
  * Responde apenas: "o que foi fisicamente observado em cada página do
- * documento?" — nunca "quais páginas contêm o orçamento?". Este arquivo
- * não importa nenhuma biblioteca concreta de extração de PDF; a
- * fronteira pública é `Uint8Array` de entrada e este contrato de saída.
- * Ver `packages/bdos-core/docs/EPIC_21_SPRINT_4A2C_DOCUMENT_READER_AND_PDF_ADAPTER.md`.
+ * documento, e onde cada item textual foi fisicamente observado, em qual
+ * espaço de coordenadas?" — nunca "quais páginas contêm o orçamento?" nem
+ * "a qual linha, segmento, bloco, coluna ou célula esse texto pertence?".
+ * Este arquivo não importa nenhuma biblioteca concreta de extração de
+ * PDF; a fronteira pública é `Uint8Array` de entrada e este contrato de
+ * saída. Ver
+ * `packages/bdos-core/docs/EPIC_21_SPRINT_4A2C_DOCUMENT_READER_AND_PDF_ADAPTER.md`
+ * (contrato v1) e
+ * `packages/bdos-core/docs/EPIC_21_SPRINT_4A2F0_NORMALIZED_TEXT_ITEM_GEOMETRY.md`
+ * (evolução para v2).
  */
 
-export const PHYSICAL_DOCUMENT_READ_SCHEMA_VERSION = 1 as const;
+export const PHYSICAL_DOCUMENT_READ_SCHEMA_VERSION = 2 as const;
 
 export const PHYSICAL_DOCUMENT_READER_NAME = "physical-document-reader" as const;
 
-export const PHYSICAL_DOCUMENT_READER_VERSION = "physical-document-reader-v1" as const;
+export const PHYSICAL_DOCUMENT_READER_VERSION = "physical-document-reader-v2" as const;
+
+/**
+ * Identidade do espaço de coordenadas em que toda geometria de layout por
+ * item textual é expressa (Sprint 21.4A.2.f.0, seção 11): origem no canto
+ * superior esquerdo da página apresentada (após rotação), x crescente
+ * para a direita, y crescente para baixo, unidade em pontos no viewport
+ * com `scale = 1`, dimensões já refletindo a rotação efetiva. O domínio
+ * nunca conhece `PageViewport`, `TextItem`, `TextStyle` ou qualquer
+ * matriz concreta da biblioteca de extração — apenas estes valores já
+ * normalizados.
+ */
+export const PHYSICAL_DOCUMENT_TEXT_ITEM_COORDINATE_SPACE_VERSION =
+  "physical-document-text-item-coordinate-space-v1" as const;
+
+/**
+ * Identidade do algoritmo de derivação geométrica por item textual
+ * (composição afim viewport×item, métricas tipográficas de
+ * ascent/descent, canonicalização) — versionada separadamente do espaço
+ * de coordenadas, do leitor, do adaptador e da biblioteca concreta (Sprint
+ * 21.4A.2.f.0, seção 9).
+ */
+export const PHYSICAL_DOCUMENT_TEXT_ITEM_GEOMETRY_PROFILE_VERSION =
+  "physical-document-text-item-geometry-profile-v1" as const;
+
+/**
+ * Identidade do algoritmo de fingerprint do contexto geométrico de
+ * repetibilidade (Sprint 21.4A.2.f.0, seção 19) — versionada
+ * separadamente de tudo o que ela resume.
+ */
+export const PHYSICAL_DOCUMENT_GEOMETRY_CONTEXT_FINGERPRINT_VERSION =
+  "physical-document-geometry-context-fingerprint-v1" as const;
 
 /**
  * Porta de leitura física de documento. Um adaptador concreto (o baseado
@@ -86,7 +125,17 @@ export type PhysicalDocumentTechnicalProblemCode =
   | "page_load_failed"
   | "page_geometry_unavailable"
   | "page_text_extraction_failed"
-  | "page_processing_failed";
+  | "page_processing_failed"
+  /**
+   * Falha inesperada (não uma limitação previsível como orientação não
+   * suportada ou geometria ausente/inválida) durante a normalização
+   * geométrica de um ou mais itens textuais da página. No máximo um
+   * problema deste código por página, mesmo que vários itens tenham
+   * falhado (Sprint 21.4A.2.f.0, seção 30) — os itens afetados
+   * individualmente carregam `unresolved_normalization_failed` em seu
+   * próprio `placement`, sem duplicar este problema agregado por item.
+   */
+  | "page_text_item_geometry_normalization_failed";
 
 /**
  * Representação técnica normalizada de um problema — nunca a mensagem
@@ -103,6 +152,98 @@ export interface PhysicalDocumentTechnicalProblem {
 }
 
 /**
+ * Relação objetiva entre os limites de layout de um item textual
+ * `placed` e o retângulo da página apresentada (`[0, 0, widthPoints,
+ * heightPoints]` no mesmo espaço de coordenadas). Nunca decide
+ * relevância, visibilidade econômica ou candidatura — apenas descreve a
+ * observação física (Sprint 21.4A.2.f.0, seção 25). Nenhum `clamp` é
+ * aplicado: um item fora da página permanece `placed`.
+ *
+ * - `inside`: todos os quatro limites estão dentro do retângulo da página.
+ * - `partially_outside`: existe interseção com a página, mas parte dos
+ *   limites está fora.
+ * - `outside`: não existe interseção com o retângulo da página.
+ */
+export type PhysicalDocumentTextItemPageBoundsRelation = "inside" | "partially_outside" | "outside";
+
+/**
+ * Bounding box axis-aligned de **layout textual** de um item posicionado,
+ * no espaço de coordenadas `PHYSICAL_DOCUMENT_TEXT_ITEM_COORDINATE_SPACE_VERSION`.
+ * "Layout", não "glyph"/"pixel": os limites derivam da matriz de
+ * transformação do item composta com o viewport, do avanço horizontal
+ * (`TextItem.width`) e das métricas tipográficas de ascent/descent —
+ * nunca do contorno visual exato dos caracteres (Sprint 21.4A.2.f.0,
+ * seção 12 e 21).
+ *
+ * Todo valor em pontos é canonicalizado (seis casas decimais,
+ * arredondamento simétrico — ver
+ * `physical-document-text-item-geometry-canonicalization.ts`, não
+ * exportado pelo barrel público). `widthPoints`/`heightPoints`/
+ * `centerXPoints`/`centerYPoints` são derivados dos limites já
+ * canonicalizados e re-canonicalizados.
+ */
+export interface PhysicalDocumentTextItemLayoutGeometry {
+  readonly leftPoints: number;
+  readonly topPoints: number;
+  readonly rightPoints: number;
+  readonly bottomPoints: number;
+  readonly widthPoints: number;
+  readonly heightPoints: number;
+  readonly centerXPoints: number;
+  readonly centerYPoints: number;
+  readonly pageBoundsRelation: PhysicalDocumentTextItemPageBoundsRelation;
+  readonly coordinateSpaceVersion: typeof PHYSICAL_DOCUMENT_TEXT_ITEM_COORDINATE_SPACE_VERSION;
+  readonly geometryProfileVersion: typeof PHYSICAL_DOCUMENT_TEXT_ITEM_GEOMETRY_PROFILE_VERSION;
+}
+
+/**
+ * Código técnico estável por item textual não resolvido
+ * geometricamente — mesma disciplina de `PhysicalDocumentTechnicalProblemCode`:
+ * nunca deriva de mensagem, exceção ou stack trace da biblioteca concreta.
+ *
+ * - `text_item_geometry_missing`: dado necessário ausente (viewport
+ *   indisponível, `transform` ausente, estilo tipográfico ausente).
+ * - `text_item_geometry_invalid`: dado presente, mas geometricamente
+ *   incoerente (não finito, negativo onde não permitido, incoerência após
+ *   quantização).
+ * - `text_item_orientation_unsupported`: orientação/matriz do item fora do
+ *   subconjunto comprovado nesta versão (texto vertical/`ttb`, `rtl` não
+ *   comprovado, matriz inclinada ou cisalhada).
+ * - `text_item_geometry_normalization_failed`: exceção inesperada isolada
+ *   durante a normalização deste item específico.
+ */
+export type PhysicalDocumentTextItemGeometryProblemCode =
+  | "text_item_geometry_missing"
+  | "text_item_geometry_invalid"
+  | "text_item_orientation_unsupported"
+  | "text_item_geometry_normalization_failed";
+
+/**
+ * Disposição de um item textual: ou foi posicionado (`placed`, com
+ * geometria de layout completa e `reasonCode: null`), ou não foi
+ * resolvido geometricamente (um dos quatro estados previsíveis, com
+ * `geometry: null` e o código correspondente). União discriminada —
+ * nunca campos opcionais soltos (`x?`, `y?`, `width?`) que permitiriam
+ * estado ambíguo entre "ausente" e "não resolvido" (Sprint 21.4A.2.f.0,
+ * seção 13).
+ */
+export type PhysicalDocumentTextItemPlacement =
+  | {
+      readonly status: "placed";
+      readonly geometry: PhysicalDocumentTextItemLayoutGeometry;
+      readonly reasonCode: null;
+    }
+  | {
+      readonly status:
+        | "unresolved_missing_geometry"
+        | "unresolved_invalid_geometry"
+        | "unresolved_unsupported_orientation"
+        | "unresolved_normalization_failed";
+      readonly geometry: null;
+      readonly reasonCode: PhysicalDocumentTextItemGeometryProblemCode;
+    };
+
+/**
  * Um item textual extraído, na ordem estável fornecida pelo processo de
  * extração adotado. `index` começa em 0, é determinístico e permanece
  * estável entre duas leituras dos mesmos bytes com a mesma versão do
@@ -112,10 +253,17 @@ export interface PhysicalDocumentTechnicalProblem {
  * esquerda-direita ou cima-baixo, e não representa linhas, colunas ou
  * células de uma tabela. Nenhuma reordenação por coordenada, proximidade,
  * alinhamento, posição ou tamanho de fonte é aplicada nesta Sprint.
+ *
+ * `placement` descreve onde (e se) o item foi fisicamente observado
+ * geometricamente — nunca a qual linha, segmento, bloco, coluna ou célula
+ * ele pertence (Sprint 21.4A.2.f.0, seção 4). Todo item admitido (que
+ * possui `str` na extração concreta) é preservado; nenhum desaparece após
+ * a admissão, mesmo quando `placement.status` não é `placed`.
  */
 export interface PhysicalDocumentTextItem {
   readonly index: number;
   readonly text: string;
+  readonly placement: PhysicalDocumentTextItemPlacement;
 }
 
 /**
@@ -129,6 +277,25 @@ export interface PhysicalDocumentPageMetrics {
   readonly nonEmptyCharacterCount: number;
   readonly replacementCharacterCount: number;
   readonly unexpectedControlCharacterCount: number;
+}
+
+/**
+ * Contagens objetivas da disposição geométrica dos itens textuais
+ * admitidos de uma página (Sprint 21.4A.2.f.0, seção 17). A invariante
+ * testada é: `totalAdmittedTextItemCount === placedTextItemCount +
+ * unresolvedMissingGeometryCount + unresolvedInvalidGeometryCount +
+ * unresolvedUnsupportedOrientationCount + unresolvedNormalizationFailedCount`.
+ * `totalAdmittedTextItemCount` é sempre igual a `metrics.textItemCount`
+ * (mesma população de itens, duas visões diferentes — textual e
+ * geométrica).
+ */
+export interface PhysicalDocumentTextItemPlacementMetrics {
+  readonly totalAdmittedTextItemCount: number;
+  readonly placedTextItemCount: number;
+  readonly unresolvedMissingGeometryCount: number;
+  readonly unresolvedInvalidGeometryCount: number;
+  readonly unresolvedUnsupportedOrientationCount: number;
+  readonly unresolvedNormalizationFailedCount: number;
 }
 
 /**
@@ -151,6 +318,8 @@ export interface PhysicalDocumentPage {
   /** Texto normalizado da página. Ver `physical-document-text-normalization.ts` para a regra exata. */
   readonly normalizedText: string;
   readonly metrics: PhysicalDocumentPageMetrics;
+  /** Disposição geométrica dos itens textuais desta página (Sprint 21.4A.2.f.0). */
+  readonly textItemPlacementMetrics: PhysicalDocumentTextItemPlacementMetrics;
   readonly extractionAvailability: PhysicalDocumentTextExtractionAvailability;
   /** Problemas técnicos desta página especificamente (nível `page`, `pageNumber` igual a esta página). */
   readonly technicalProblems: ReadonlyArray<PhysicalDocumentTechnicalProblem>;
@@ -172,9 +341,22 @@ export interface PhysicalDocumentReadResult {
   /**
    * Metadado técnico de proveniência da biblioteca concreta de extração
    * de PDF usada pelo adaptador (nome e versão resolvida), sem acoplar o
-   * nome deste campo a uma biblioteca específica — apenas um identificador
-   * auxiliar, não um critério de decisão nem parte da chave de
-   * repetibilidade funcional.
+   * nome deste campo a uma biblioteca específica.
+   *
+   * Histórico (schema v1, Sprint 21.4A.2.c): este campo era documentado
+   * como "não um critério de decisão nem parte da chave de repetibilidade
+   * funcional" — verdadeiro no v1, onde o contrato preservava apenas
+   * texto e índice, indiferentes à implementação concreta da biblioteca.
+   *
+   * A partir do schema v2 (Sprint 21.4A.2.f.0), a geometria de layout por
+   * item textual e as métricas tipográficas (ascent/descent) dependem
+   * materialmente da implementação concreta da biblioteca — por isso a
+   * versão da biblioteca concreta passa a participar obrigatoriamente do
+   * contexto de repetibilidade geométrica (`geometryContextFingerprint`)
+   * e a biblioteca concreta de extração de PDF usada pelo adaptador passa
+   * a ser fixada em versão exata (sem faixa/`^`) no manifesto de
+   * dependências do pacote. Este campo continua sendo o único
+   * identificador — nunca substituído pelo fingerprint.
    */
   readonly underlyingLibraryVersion: string | null;
   /** SHA-256, em hexadecimal, dos bytes originais recebidos, sem qualquer alteração, normalização ou reserialização. */
@@ -185,4 +367,18 @@ export interface PhysicalDocumentReadResult {
   readonly status: PhysicalDocumentReadStatus;
   /** Problemas técnicos de nível `document` (não específicos de uma página). */
   readonly technicalProblems: ReadonlyArray<PhysicalDocumentTechnicalProblem>;
+  /** Espaço de coordenadas usado por toda geometria de layout por item textual deste resultado. */
+  readonly textItemCoordinateSpaceVersion: typeof PHYSICAL_DOCUMENT_TEXT_ITEM_COORDINATE_SPACE_VERSION;
+  /** Algoritmo de derivação geométrica usado por toda geometria de layout por item textual deste resultado. */
+  readonly textItemGeometryProfileVersion: typeof PHYSICAL_DOCUMENT_TEXT_ITEM_GEOMETRY_PROFILE_VERSION;
+  readonly geometryContextFingerprintVersion: typeof PHYSICAL_DOCUMENT_GEOMETRY_CONTEXT_FINGERPRINT_VERSION;
+  /**
+   * SHA-256, em hexadecimal, do contexto técnico de repetibilidade
+   * geométrica (bytes, schema, leitor, adaptador, biblioteca concreta,
+   * espaço de coordenadas, perfil geométrico, canonicalização — ver
+   * `physical-document-geometry-context-fingerprint.ts`). Presente mesmo
+   * quando `status` for `failed`, pois identifica o contrato técnico
+   * utilizado independentemente do sucesso da leitura.
+   */
+  readonly geometryContextFingerprint: string;
 }

@@ -5,12 +5,16 @@ import { pdfjsPhysicalDocumentReader } from "../infrastructure/budget-document-l
 import { buildSyntheticPdfBytes } from "../infrastructure/budget-document-location/pdfjs/testing/synthetic-pdf-bytes";
 
 /**
- * Proteção explícita (Sprint 21.4A.2.c, seção 30): o contrato de leitura
- * física nunca deve conter campo ou decisão equivalente a candidatura,
- * ambiguidade, descarte, orçamento encontrado, continuidade, fechamento,
- * confiança, score, limiar ou classificação. Duas verificações
- * independentes: (1) os nomes de campo declarados no contrato de tipos
- * puro; (2) as chaves de um resultado real produzido pelo adaptador.
+ * Proteção explícita (Sprint 21.4A.2.c, seção 30, estendida pela Sprint
+ * 21.4A.2.f.0, seção 40): o contrato de leitura física nunca deve conter
+ * campo ou decisão equivalente a candidatura, ambiguidade, descarte,
+ * orçamento encontrado, continuidade, fechamento, confiança, score,
+ * limiar ou classificação — e, a partir da geometria por item textual, também
+ * nunca linha, segmento, bloco, tabela, coluna, célula ou ordem humana de
+ * leitura (reconstrução estrutural, reservada para a Sprint 21.4A.2.f.1).
+ * Duas verificações independentes: (1) os nomes de campo declarados no
+ * contrato de tipos puro; (2) as chaves de um resultado real produzido
+ * pelo adaptador.
  */
 
 const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -50,6 +54,24 @@ const FORBIDDEN_FIELD_SUBSTRINGS = [
   "classification",
   "classificacao",
   "classificação",
+  // Sprint 21.4A.2.f.0, seção 40: vocabulário de reconstrução estrutural,
+  // fora de escopo até a Sprint 21.4A.2.f.1.
+  "line",
+  "linha",
+  "segment",
+  "segmento",
+  "block",
+  "bloco",
+  "table",
+  "tabela",
+  "column",
+  "coluna",
+  "cell",
+  "célula",
+  "celula",
+  "readingorder",
+  "ordemdeleitura",
+  "humanreadingorder",
 ] as const;
 
 async function main(): Promise<void> {
