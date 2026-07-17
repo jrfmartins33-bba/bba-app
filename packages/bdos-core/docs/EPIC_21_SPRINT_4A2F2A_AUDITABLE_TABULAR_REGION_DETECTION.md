@@ -133,4 +133,4 @@ Todos os valores do perfil (§7) são decisões de engenharia geométrica, nunca
 
 ## 22. Próxima etapa recomendada
 
-Reconstrução auditável de faixas verticais e hipóteses de colunas físicas — nunca colunas econômicas. Documento real permanece condicionado ao recebimento de tender documents reais pelo usuário (ver `epic21_cost_engineering_audit_closed` em memória).
+Reconstrução auditável de faixas verticais e hipóteses de colunas físicas — nunca colunas econômicas (implementada na Sprint 21.4A.2.f.2b). Documento real: o Epic 21 já possui e utiliza documentos reais — a próxima etapa não depende de novo recebimento pelo usuário. Esta Sprint (f.2a), especificamente, não acessou nenhum documento real; toda calibração de parâmetros permanece pendente até o momento em que documentos reais forem efetivamente utilizados por uma Sprint autorizada a fazê-lo (correção documental registrada na auditoria arquitetural da Sprint 21.4A.2.f.2b).
