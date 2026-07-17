@@ -1,13 +1,47 @@
 import { BUDGET_DOCUMENT_SIGNAL_CATALOG } from "../budget-document-signal-catalog";
 import { normalizePageText } from "../physical-document-text-normalization";
 import { computePageTextMetrics } from "../physical-document-page-metrics";
+import { computeTextItemPlacementMetrics } from "../physical-document-text-item-placement-metrics";
+import { computeGeometryContextFingerprint } from "../physical-document-geometry-context-fingerprint";
 import { derivePageOrientation } from "../physical-document-page-orientation";
 import {
+  PHYSICAL_DOCUMENT_GEOMETRY_CONTEXT_FINGERPRINT_VERSION,
   PHYSICAL_DOCUMENT_READ_SCHEMA_VERSION,
   PHYSICAL_DOCUMENT_READER_NAME,
   PHYSICAL_DOCUMENT_READER_VERSION,
+  PHYSICAL_DOCUMENT_TEXT_ITEM_COORDINATE_SPACE_VERSION,
+  PHYSICAL_DOCUMENT_TEXT_ITEM_GEOMETRY_PROFILE_VERSION,
 } from "../physical-document-read.types";
-import type { PhysicalDocumentPage, PhysicalDocumentReadResult, PhysicalDocumentTextExtractionAvailability } from "../physical-document-read.types";
+import type {
+  PhysicalDocumentPage,
+  PhysicalDocumentReadResult,
+  PhysicalDocumentTextExtractionAvailability,
+  PhysicalDocumentTextItem,
+} from "../physical-document-read.types";
+
+const NO_GEOMETRY_PLACEMENT: PhysicalDocumentTextItem["placement"] = {
+  status: "unresolved_missing_geometry",
+  geometry: null,
+  reasonCode: "text_item_geometry_missing",
+};
+
+function geometryContextFields(adapterVersion: string, underlyingLibraryVersion: string | null, sourceByteHash: string) {
+  return {
+    textItemCoordinateSpaceVersion: PHYSICAL_DOCUMENT_TEXT_ITEM_COORDINATE_SPACE_VERSION,
+    textItemGeometryProfileVersion: PHYSICAL_DOCUMENT_TEXT_ITEM_GEOMETRY_PROFILE_VERSION,
+    geometryContextFingerprintVersion: PHYSICAL_DOCUMENT_GEOMETRY_CONTEXT_FINGERPRINT_VERSION,
+    geometryContextFingerprint: computeGeometryContextFingerprint({
+      sourceByteHash,
+      physicalReadSchemaVersion: PHYSICAL_DOCUMENT_READ_SCHEMA_VERSION,
+      readerName: PHYSICAL_DOCUMENT_READER_NAME,
+      readerVersion: PHYSICAL_DOCUMENT_READER_VERSION,
+      adapterVersion,
+      underlyingLibraryVersion,
+      coordinateSpaceVersion: PHYSICAL_DOCUMENT_TEXT_ITEM_COORDINATE_SPACE_VERSION,
+      geometryProfileVersion: PHYSICAL_DOCUMENT_TEXT_ITEM_GEOMETRY_PROFILE_VERSION,
+    }),
+  };
+}
 import { evaluateAdjacentPhase, evaluateLocalPhase, observeDocumentSignals } from "./signal-observation";
 import {
   DOCUMENT_SIGNAL_OBSERVER_NAME,
@@ -53,7 +87,8 @@ function buildPage(overrides: {
 }): PhysicalDocumentPage {
   const itemTexts = overrides.itemTexts ?? [];
   const extractionAvailability = overrides.extractionAvailability ?? (itemTexts.length > 0 ? "text_available" : "no_extractable_text");
-  const textItems = extractionAvailability === "text_available" ? itemTexts.map((text, index) => ({ index, text })) : [];
+  const textItems: PhysicalDocumentTextItem[] =
+    extractionAvailability === "text_available" ? itemTexts.map((text, index) => ({ index, text, placement: NO_GEOMETRY_PLACEMENT })) : [];
   const rawTexts = textItems.map((item) => item.text);
   const widthPoints = overrides.widthPoints ?? 612;
   const heightPoints = overrides.heightPoints ?? 792;
@@ -67,23 +102,27 @@ function buildPage(overrides: {
     textItems,
     normalizedText: normalizePageText(rawTexts),
     metrics: computePageTextMetrics(rawTexts),
+    textItemPlacementMetrics: computeTextItemPlacementMetrics(textItems),
     extractionAvailability,
     technicalProblems: [],
   };
 }
 
 function buildReadResult(pages: ReadonlyArray<PhysicalDocumentPage>, hash = "hand-built-hash"): PhysicalDocumentReadResult {
+  const adapterVersion = "hand-built-adapter";
+  const underlyingLibraryVersion = "hand-built-library@1.0.0";
   return {
     schemaVersion: PHYSICAL_DOCUMENT_READ_SCHEMA_VERSION,
     readerName: PHYSICAL_DOCUMENT_READER_NAME,
     readerVersion: PHYSICAL_DOCUMENT_READER_VERSION,
-    adapterVersion: "hand-built-adapter",
-    underlyingLibraryVersion: "hand-built-library@1.0.0",
+    adapterVersion,
+    underlyingLibraryVersion,
     sourceByteHash: hash,
     totalPageCount: pages.length,
     pages,
     status: "completed",
     technicalProblems: [],
+    ...geometryContextFields(adapterVersion, underlyingLibraryVersion, hash),
   };
 }
 
@@ -342,6 +381,7 @@ runTest("a failed source read produces a failed observation with zero pages", ()
     pages: [],
     status: "failed",
     technicalProblems: [],
+    ...geometryContextFields("hand-built-adapter", null, "failed-hash"),
   };
   const result = observeDocumentSignals(failedRead);
   assertEqual(result.status, "failed");

@@ -7,14 +7,77 @@
  * `packages/bdos-core/docs/EPIC_21_SPRINT_4A2C_DOCUMENT_READER_AND_PDF_ADAPTER.md`).
  */
 
-export interface SyntheticPdfPageSpec {
-  /** Texto a desenhar via operador `Tj`. `null` produz uma página com stream de conteúdo vazio (sem texto extraível). */
-  readonly text: string | null;
-  /** Valor de `/Rotate` da página, em graus. Omitido = sem entrada `/Rotate` no dicionário da página. */
-  readonly rotateDegrees?: number;
+/**
+ * Uma única sequência de texto posicionada explicitamente via `Tm`
+ * absoluto (não `Td` relativo), para permitir múltiplos itens textuais
+ * independentes na mesma página (Sprint 21.4A.2.f.0) sem acumular
+ * deslocamentos entre eles.
+ */
+export interface SyntheticPdfTextRunSpec {
+  readonly text: string;
+  /** Tamanho de fonte em pontos. Padrão: 24. */
+  readonly fontSize?: number;
+  /** Posição x da origem do baseline. Padrão: 72. */
+  readonly x?: number;
+  /** Posição y da origem do baseline. Padrão: 700. */
+  readonly y?: number;
 }
 
-const encoder = new TextEncoder();
+export interface SyntheticPdfPageSpec {
+  /** Texto a desenhar via operador `Tj`. `null`/omitido produz uma página com stream de conteúdo vazio (sem texto extraível), a menos que `items` seja fornecido. Ignorado quando `items` é fornecido. */
+  readonly text?: string | null;
+  /** Valor de `/Rotate` da página, em graus. Omitido = sem entrada `/Rotate` no dicionário da página. */
+  readonly rotateDegrees?: number;
+  /** `/MediaBox` da página. Padrão: `[0, 0, 612, 792]`. Permite testar um `viewBox` deslocado (origem != 0). */
+  readonly mediaBox?: readonly [number, number, number, number];
+  /** Valor de `/UserUnit` da página. Omitido = sem entrada `/UserUnit` (equivalente a 1). */
+  readonly userUnit?: number;
+  /** Vários itens textuais independentes, cada um posicionado via `Tm` absoluto. Quando fornecido, substitui inteiramente `text`. */
+  readonly items?: ReadonlyArray<SyntheticPdfTextRunSpec>;
+}
+
+/**
+ * Codifica como Latin-1 (um byte por code point 0-255), não UTF-8: os
+ * literais de string do PDF são interpretados byte a byte pela
+ * `/Encoding /WinAnsiEncoding` do dicionário de fonte (ver
+ * `FONT_DICTIONARY_BODY` abaixo), cujo intervalo 0xA0-0xFF coincide com
+ * Latin-1/ISO-8859-1 — suficiente para os acentos do português (á, ç, ã,
+ * ê, õ) e o traço "—" (0x97, também presente no CP1252/WinAnsi).
+ * Codepoints acima de 255 (ex.: CJK) não são representáveis por esta
+ * fonte Type1 padrão não incorporada e ficam fora do escopo deste helper.
+ */
+function encodeLatin1(text: string): Uint8Array {
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) {
+    const codePoint = text.charCodeAt(i);
+    if (codePoint > 0xff) {
+      throw new Error(
+        `synthetic-pdf-bytes: code point U+${codePoint.toString(16).toUpperCase()} at index ${i} is outside Latin-1 (0-255) and cannot be represented by the non-embedded WinAnsiEncoding Helvetica font this helper uses.`,
+      );
+    }
+    bytes[i] = codePoint;
+  }
+  return bytes;
+}
+
+function buildContentStream(spec: SyntheticPdfPageSpec): string {
+  if (spec.items !== undefined) {
+    return spec.items
+      .map((run) => {
+        const fontSize = run.fontSize ?? 24;
+        const x = run.x ?? 72;
+        const y = run.y ?? 700;
+        // `Tf` alone carries the font size scale; `Tm` here is identity
+        // scale plus translation only — using the font size in Tm's
+        // diagonal *too* would multiply the two (fontSize squared), which
+        // is legitimate PDF but not this helper's intent.
+        return `BT /F1 ${fontSize} Tf 1 0 0 1 ${x} ${y} Tm (${escapePdfLiteralString(run.text)}) Tj ET`;
+      })
+      .join(" ");
+  }
+
+  return spec.text === null || spec.text === undefined ? "" : `BT /F1 24 Tf 72 700 Td (${escapePdfLiteralString(spec.text)}) Tj ET`;
+}
 
 /**
  * Monta um PDF mínimo válido com uma página por item de `pages`, todas
@@ -43,16 +106,17 @@ export function buildSyntheticPdfBytes(pages: ReadonlyArray<SyntheticPdfPageSpec
 
   pages.forEach((spec, i) => {
     const rotateEntry = spec.rotateDegrees !== undefined ? ` /Rotate ${spec.rotateDegrees}` : "";
+    const box = spec.mediaBox ?? [0, 0, 612, 792];
+    const userUnitEntry = spec.userUnit !== undefined ? ` /UserUnit ${spec.userUnit}` : "";
     builder.writeObject(
       pageObjectNumbers[i],
-      `<< /Type /Page /Parent ${pagesObjectNumber} 0 R /MediaBox [0 0 612 792]${rotateEntry} /Resources << /Font << /F1 ${fontObjectNumber} 0 R >> >> /Contents ${contentObjectNumbers[i]} 0 R >>`,
+      `<< /Type /Page /Parent ${pagesObjectNumber} 0 R /MediaBox [${box.join(" ")}]${rotateEntry}${userUnitEntry} /Resources << /Font << /F1 ${fontObjectNumber} 0 R >> >> /Contents ${contentObjectNumbers[i]} 0 R >>`,
     );
 
-    const stream = spec.text === null ? "" : `BT /F1 24 Tf 72 700 Td (${escapePdfLiteralString(spec.text)}) Tj ET`;
-    builder.writeStreamObject(contentObjectNumbers[i], stream);
+    builder.writeStreamObject(contentObjectNumbers[i], buildContentStream(spec));
   });
 
-  builder.writeObject(fontObjectNumber, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  builder.writeObject(fontObjectNumber, FONT_DICTIONARY_BODY);
 
   return builder.finish(catalogObjectNumber);
 }
@@ -92,11 +156,14 @@ export function buildSyntheticPdfBytesWithBrokenPage(totalPages: number, brokenP
     builder.writeStreamObject(contentObjectNumbers[i], stream);
   }
 
-  builder.writeObject(fontObjectNumber, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  builder.writeObject(fontObjectNumber, FONT_DICTIONARY_BODY);
 
   const brokenObjectNumber = pageObjectNumbers[brokenPageIndex - 1];
   return builder.finish(catalogObjectNumber, [{ objectNumber: brokenObjectNumber, corruptOffset: true }]);
 }
+
+/** `/Encoding /WinAnsiEncoding` makes the font's upper byte range (used by `encodeLatin1`) resolve to the expected accented-Latin Unicode code points during text extraction. */
+const FONT_DICTIONARY_BODY = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
 
 function escapePdfLiteralString(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
@@ -165,12 +232,12 @@ class PdfObjectBuilder {
   }
 
   private push(text: string): void {
-    const bytes = encoder.encode(text);
+    const bytes = encodeLatin1(text);
     this.chunks.push(bytes);
     this.offset += bytes.length;
   }
 }
 
 function byteLength(text: string): number {
-  return encoder.encode(text).length;
+  return encodeLatin1(text).length;
 }

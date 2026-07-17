@@ -17,10 +17,14 @@ const TECHNICAL_PROBLEM_MESSAGE_BY_CODE: Readonly<Record<PhysicalDocumentTechnic
   document_invalid_structure: "A estrutura do documento não pôde ser reconhecida como um PDF válido.",
   document_protected: "O documento está protegido e não pôde ser aberto sem credencial.",
   document_open_failed: "Falha técnica não classificada ao abrir o documento.",
+  document_underlying_library_version_mismatch:
+    "A biblioteca concreta de extração carregada em tempo de execução não corresponde à versão fixada; a leitura foi interrompida.",
   page_load_failed: "A página não pôde ser carregada a partir da estrutura do documento.",
   page_geometry_unavailable: "A geometria física da página não pôde ser obtida.",
   page_text_extraction_failed: "Falha técnica ao extrair o conteúdo textual da página.",
   page_processing_failed: "Falha técnica não classificada ao processar a página.",
+  page_text_item_geometry_normalization_failed:
+    "Falha técnica inesperada ao normalizar a geometria de um ou mais itens textuais da página.",
 };
 
 /**
@@ -40,4 +44,18 @@ export function createTechnicalProblem(
     pageNumber,
     message: TECHNICAL_PROBLEM_MESSAGE_BY_CODE[code],
   };
+}
+
+/**
+ * Todos os códigos técnicos válidos, derivados de
+ * `TECHNICAL_PROBLEM_MESSAGE_BY_CODE` — a única fonte de verdade (o
+ * `Record<PhysicalDocumentTechnicalProblemCode, string>` já obriga o
+ * `tsc` a rejeitar um código ausente ou a mais). Existe para que
+ * consumidores (e testes, como o guard de códigos controlados do
+ * adaptador) nunca precisem manter uma segunda lista que possa divergir
+ * silenciosamente da união de tipos (Sprint 21.4A.2.f.0, auditoria pós-PR
+ * #68).
+ */
+export function getKnownTechnicalProblemCodes(): ReadonlyArray<PhysicalDocumentTechnicalProblemCode> {
+  return Object.keys(TECHNICAL_PROBLEM_MESSAGE_BY_CODE) as PhysicalDocumentTechnicalProblemCode[];
 }

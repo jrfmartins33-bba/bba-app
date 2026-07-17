@@ -1,14 +1,20 @@
 import { computePageTextMetrics } from "../../physical-document-page-metrics";
+import { computeTextItemPlacementMetrics } from "../../physical-document-text-item-placement-metrics";
+import { computeGeometryContextFingerprint } from "../../physical-document-geometry-context-fingerprint";
 import { derivePageOrientation } from "../../physical-document-page-orientation";
 import type {
   PhysicalDocumentPage,
   PhysicalDocumentReadResult,
   PhysicalDocumentTextExtractionAvailability,
+  PhysicalDocumentTextItem,
 } from "../../physical-document-read.types";
 import {
+  PHYSICAL_DOCUMENT_GEOMETRY_CONTEXT_FINGERPRINT_VERSION,
   PHYSICAL_DOCUMENT_READ_SCHEMA_VERSION,
   PHYSICAL_DOCUMENT_READER_NAME,
   PHYSICAL_DOCUMENT_READER_VERSION,
+  PHYSICAL_DOCUMENT_TEXT_ITEM_COORDINATE_SPACE_VERSION,
+  PHYSICAL_DOCUMENT_TEXT_ITEM_GEOMETRY_PROFILE_VERSION,
 } from "../../physical-document-read.types";
 import { normalizePageText } from "../../physical-document-text-normalization";
 import { observeDocumentSignals } from "../../signal-observation/signal-observation";
@@ -18,6 +24,17 @@ import type {
 } from "../../signal-observation/signal-observation.types";
 
 export const TEST_SOURCE_HASH = "a".repeat(64);
+
+/**
+ * Nenhum destes testes exercita a extração PDF real: os itens desta
+ * fixture nunca tiveram geometria, mesmo antes da Sprint 21.4A.2.f.0 —
+ * `unresolved_missing_geometry` reflete isso com exatidão.
+ */
+const NO_GEOMETRY_PLACEMENT: PhysicalDocumentTextItem["placement"] = {
+  status: "unresolved_missing_geometry",
+  geometry: null,
+  reasonCode: "text_item_geometry_missing",
+};
 
 export interface PageLocationTestPageSpec {
   readonly texts?: ReadonlyArray<string>;
@@ -37,7 +54,8 @@ export const SIGNAL_TEXT = {
 function buildPage(spec: PageLocationTestPageSpec, pageNumber: number): PhysicalDocumentPage {
   const texts = spec.texts ?? [SIGNAL_TEXT.ordinary];
   const extractionAvailability = spec.extractionAvailability ?? "text_available";
-  const textItems = extractionAvailability === "text_available" ? texts.map((text, index) => ({ index, text })) : [];
+  const textItems: PhysicalDocumentTextItem[] =
+    extractionAvailability === "text_available" ? texts.map((text, index) => ({ index, text, placement: NO_GEOMETRY_PLACEMENT })) : [];
   const sourceTexts = textItems.map((item) => item.text);
   const widthPoints = spec.widthPoints === undefined ? 612 : spec.widthPoints;
   const heightPoints = spec.heightPoints === undefined ? 792 : spec.heightPoints;
@@ -50,6 +68,7 @@ function buildPage(spec: PageLocationTestPageSpec, pageNumber: number): Physical
     textItems,
     normalizedText: normalizePageText(sourceTexts),
     metrics: computePageTextMetrics(sourceTexts),
+    textItemPlacementMetrics: computeTextItemPlacementMetrics(textItems),
     extractionAvailability,
     technicalProblems:
       extractionAvailability === "extraction_failed"
@@ -71,17 +90,32 @@ export function buildObservation(
 ): DocumentSignalObservationResult {
   const pages = specs.map((spec, index) => buildPage(spec, index + 1));
   const hasPageFailure = pages.some((page) => page.technicalProblems.length > 0);
+  const adapterVersion = "page-location-test-adapter-v1";
+  const underlyingLibraryVersion = "synthetic-library-v1";
   const readResult: PhysicalDocumentReadResult = {
     schemaVersion: PHYSICAL_DOCUMENT_READ_SCHEMA_VERSION,
     readerName: PHYSICAL_DOCUMENT_READER_NAME,
     readerVersion: PHYSICAL_DOCUMENT_READER_VERSION,
-    adapterVersion: "page-location-test-adapter-v1",
-    underlyingLibraryVersion: "synthetic-library-v1",
+    adapterVersion,
+    underlyingLibraryVersion,
     sourceByteHash,
     totalPageCount: pages.length,
     pages,
     status: hasPageFailure ? "completed_with_page_failures" : "completed",
     technicalProblems: [],
+    textItemCoordinateSpaceVersion: PHYSICAL_DOCUMENT_TEXT_ITEM_COORDINATE_SPACE_VERSION,
+    textItemGeometryProfileVersion: PHYSICAL_DOCUMENT_TEXT_ITEM_GEOMETRY_PROFILE_VERSION,
+    geometryContextFingerprintVersion: PHYSICAL_DOCUMENT_GEOMETRY_CONTEXT_FINGERPRINT_VERSION,
+    geometryContextFingerprint: computeGeometryContextFingerprint({
+      sourceByteHash,
+      physicalReadSchemaVersion: PHYSICAL_DOCUMENT_READ_SCHEMA_VERSION,
+      readerName: PHYSICAL_DOCUMENT_READER_NAME,
+      readerVersion: PHYSICAL_DOCUMENT_READER_VERSION,
+      adapterVersion,
+      underlyingLibraryVersion,
+      coordinateSpaceVersion: PHYSICAL_DOCUMENT_TEXT_ITEM_COORDINATE_SPACE_VERSION,
+      geometryProfileVersion: PHYSICAL_DOCUMENT_TEXT_ITEM_GEOMETRY_PROFILE_VERSION,
+    }),
   };
   return observeDocumentSignals(readResult);
 }

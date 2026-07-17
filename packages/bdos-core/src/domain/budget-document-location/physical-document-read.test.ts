@@ -1,7 +1,10 @@
 import {
+  PHYSICAL_DOCUMENT_GEOMETRY_CONTEXT_FINGERPRINT_VERSION,
   PHYSICAL_DOCUMENT_READ_SCHEMA_VERSION,
   PHYSICAL_DOCUMENT_READER_NAME,
   PHYSICAL_DOCUMENT_READER_VERSION,
+  PHYSICAL_DOCUMENT_TEXT_ITEM_COORDINATE_SPACE_VERSION,
+  PHYSICAL_DOCUMENT_TEXT_ITEM_GEOMETRY_PROFILE_VERSION,
   computePageTextMetrics,
   createTechnicalProblem,
   derivePageOrientation,
@@ -19,10 +22,16 @@ function assertEqual<T>(actual: T, expected: T, message?: string): void {
   }
 }
 
-runTest("schema version, reader name and reader version are present and stable", () => {
-  assertEqual(PHYSICAL_DOCUMENT_READ_SCHEMA_VERSION, 1);
+runTest("schema version, reader name and reader version are present and stable at v2", () => {
+  assertEqual(PHYSICAL_DOCUMENT_READ_SCHEMA_VERSION, 2);
   assertEqual(PHYSICAL_DOCUMENT_READER_NAME, "physical-document-reader");
-  assertEqual(PHYSICAL_DOCUMENT_READER_VERSION, "physical-document-reader-v1");
+  assertEqual(PHYSICAL_DOCUMENT_READER_VERSION, "physical-document-reader-v2");
+});
+
+runTest("text item coordinate space, geometry profile and fingerprint versions are present and stable", () => {
+  assertEqual(PHYSICAL_DOCUMENT_TEXT_ITEM_COORDINATE_SPACE_VERSION, "physical-document-text-item-coordinate-space-v1");
+  assertEqual(PHYSICAL_DOCUMENT_TEXT_ITEM_GEOMETRY_PROFILE_VERSION, "physical-document-text-item-geometry-profile-v1");
+  assertEqual(PHYSICAL_DOCUMENT_GEOMETRY_CONTEXT_FINGERPRINT_VERSION, "physical-document-geometry-context-fingerprint-v1");
 });
 
 // --- derivePageOrientation ---------------------------------------------
