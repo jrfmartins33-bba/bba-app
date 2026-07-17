@@ -3674,12 +3674,6 @@ button {
   color: var(--text-primary);
 }
 
-.budget-summary-strip__meta {
-  color: var(--text-muted);
-  font-size: 12px;
-  margin: 0;
-}
-
 .budget-indicator-card {
   justify-content: center;
 }
@@ -3756,38 +3750,6 @@ button {
   color: var(--text-primary);
 }
 
-.budget-comparison__legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.budget-comparison__legend li {
-  align-items: center;
-  color: var(--text-secondary);
-  display: inline-flex;
-  font-size: 12px;
-  gap: 6px;
-}
-
-.budget-comparison__legend-swatch {
-  border-radius: 3px;
-  display: inline-block;
-  height: 10px;
-  width: 10px;
-}
-
-.budget-comparison__legend-swatch--official {
-  background: var(--bba-gold);
-}
-
-.budget-comparison__legend-swatch--proposal {
-  background: var(--status-green);
-}
-
 /* Faixa compacta 11 → 25 → 300, imediatamente acima da Planilha
    orçamentária -- nunca um card, só uma tira de contexto. */
 .budget-hierarchy-strip {
@@ -3813,12 +3775,18 @@ button {
 }
 
 /* Planilha orçamentária -- elemento principal da experiência. */
+.budget-worksheet__sample-size {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  margin: 2px 0 10px;
+}
+
 .budget-worksheet__warning {
   border-left: 2px solid var(--status-amber);
   color: var(--status-amber);
   font-size: 12.5px;
   font-weight: 600;
-  margin: 4px 0 16px;
+  margin: 0 0 16px;
   padding-left: 10px;
 }
 
@@ -3831,38 +3799,47 @@ button {
   border: 1px solid var(--app-border);
   border-radius: 10px;
   padding: 10px 14px;
+  transition: border-color var(--fast) var(--ease);
 }
 
 .budget-worksheet-group[open] {
+  background: rgba(185, 149, 79, 0.04);
   border-color: var(--bba-gold-dim);
 }
 
 .budget-worksheet-group__summary {
   align-items: center;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   gap: 10px;
   list-style: none;
-  padding: 4px 0;
+  margin: -4px -6px;
+  padding: 8px 6px;
+  transition: background var(--fast) var(--ease);
 }
 
 .budget-worksheet-group__summary::-webkit-details-marker {
   display: none;
 }
 
-.budget-worksheet-group__summary:focus-visible {
-  outline: 2px solid var(--bba-gold);
-  outline-offset: 3px;
+.budget-worksheet-group__summary:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 
-.budget-worksheet-group__summary::after {
-  color: var(--text-muted);
-  content: "▾";
+.budget-worksheet-group__summary:focus-visible {
+  outline: 2px solid var(--bba-gold);
+  outline-offset: 2px;
+}
+
+.budget-worksheet-group__chevron {
+  color: var(--bba-gold-soft);
+  flex-shrink: 0;
   margin-left: auto;
   transition: transform var(--fast) var(--ease);
 }
 
-.budget-worksheet-group[open] .budget-worksheet-group__summary::after {
+.budget-worksheet-group[open] .budget-worksheet-group__chevron {
   transform: rotate(180deg);
 }
 
@@ -3887,10 +3864,16 @@ button {
   font-size: 12px;
 }
 
+/* Grade fixa -- o mesmo <colgroup> (ver BudgetWorksheetColgroup no
+   componente) mantém Quantidade/Preço unitário/Total alinhados entre os
+   três grupos; sem `table-layout: fixed`, cada <table> recalcularia a
+   largura das colunas a partir do próprio conteúdo, e as três tabelas
+   dos três grupos divergiriam entre si. */
 .budget-worksheet-table {
   border-collapse: collapse;
   font-variant-numeric: tabular-nums;
   margin-top: 10px;
+  table-layout: fixed;
   width: 100%;
 }
 
@@ -3916,22 +3899,35 @@ button {
   border-bottom: none;
 }
 
-.budget-worksheet-table__numeric {
-  text-align: right;
+.budget-worksheet-table__description {
+  overflow-wrap: anywhere;
 }
 
-.budget-worksheet-group__subtotal {
+.budget-worksheet-table__unit {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.budget-worksheet-table__numeric {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.budget-worksheet-table__subtotal-row td {
+  border-bottom: none;
   border-top: 1px solid var(--app-divider);
   color: var(--text-secondary);
   font-size: 12.5px;
-  margin: 8px 0 0;
-  padding-top: 8px;
+  padding-top: 10px;
+}
+
+.budget-worksheet-table__subtotal-label {
   text-align: right;
 }
 
-.budget-worksheet-group__subtotal strong {
+.budget-worksheet-table__subtotal-row .budget-worksheet-table__numeric {
   color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
+  font-weight: 700;
 }
 
 /* Etapas do orçamento -- grade de 5 colunas no desktop (nunca lista
@@ -4021,12 +4017,37 @@ button {
   color: var(--text-secondary);
 }
 
+/* Cards de ação (Revisar o orçamento / Comparar a proposta): o botão
+   fica no rodapé -- `.workspace-card` já é uma coluna flex esticada à
+   altura da linha da grade, então `margin-top: auto` no rodapé empurra
+   o botão para baixo sem precisar de padding vazio. */
+.budget-action-card__footer {
+  margin-top: auto;
+  padding-top: 10px;
+}
+
+/* Próximo passo -- faixa horizontal compacta no desktop (título+texto à
+   esquerda, botões à direita, alinhamento vertical central), em vez do
+   bloco de largura total cuja única ação real era voltar à planilha. */
+.budget-next-decision__row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  justify-content: space-between;
+}
+
+.budget-next-decision__text {
+  flex: 1 1 320px;
+  margin: 0;
+}
+
 .budget-next-decision__actions,
 .budget-empty-state__actions {
   display: flex;
   flex-wrap: wrap;
+  flex-shrink: 0;
   gap: 10px;
-  margin-top: 4px;
 }
 
 /* Epic 21, Sprint 21.4B.2 — regra responsiva específica da comparação
@@ -4067,35 +4088,44 @@ button {
     transform: rotate(90deg);
   }
 
+  .budget-next-decision__row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .budget-next-decision__actions {
     flex-direction: column;
   }
 
-  .budget-next-decision__actions .bba-button {
+  .budget-next-decision__actions .bba-button,
+  .budget-empty-state__actions .bba-button {
     width: 100%;
   }
 
   /* Planilha: a mesma <table>/<td> vira layout de cartão -- nenhum dado
-     duplicado em outro markup, só CSS reorganizando o que já existe. */
+     duplicado em outro markup, só CSS reorganizando o que já existe.
+     `table-layout`/`<colgroup>` são ignorados automaticamente pelo
+     navegador assim que a tabela deixa de ser `display: table`. */
   .budget-worksheet-table thead {
     display: none;
   }
 
   .budget-worksheet-table,
   .budget-worksheet-table tbody,
+  .budget-worksheet-table tfoot,
   .budget-worksheet-table tr {
     display: block;
     width: 100%;
   }
 
-  .budget-worksheet-table tr {
+  .budget-worksheet-table tbody tr {
     border: 1px solid var(--app-border);
     border-radius: 8px;
     margin-bottom: 8px;
     padding: 4px 10px;
   }
 
-  .budget-worksheet-table tr:last-child {
+  .budget-worksheet-table tbody tr:last-child {
     margin-bottom: 0;
   }
 
@@ -4109,7 +4139,7 @@ button {
     text-align: right;
   }
 
-  .budget-worksheet-table tr td:last-child {
+  .budget-worksheet-table tbody tr td:last-child {
     border-bottom: none;
   }
 
@@ -4118,6 +4148,33 @@ button {
     content: attr(data-label);
     font-weight: 600;
     text-align: left;
+  }
+
+  /* Subtotal: faixa compacta de resumo, visualmente distinta dos
+     cartões de item -- não é mais um item, então não leva a mesma
+     borda/padding de cartão nem o prefixo data-label. Seletor composto
+     (`.budget-worksheet-table .budget-worksheet-table__subtotal-row`)
+     de propósito: precisa de mais especificidade que
+     `.budget-worksheet-table tr`, que já define `display: block` para
+     toda linha da tabela. */
+  .budget-worksheet-table .budget-worksheet-table__subtotal-row {
+    align-items: baseline;
+    background: rgba(185, 149, 79, 0.06);
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    margin: 4px 0 10px;
+    padding: 8px 10px;
+  }
+
+  .budget-worksheet-table .budget-worksheet-table__subtotal-row td {
+    border-bottom: none;
+    display: block;
+    padding: 0;
+  }
+
+  .budget-worksheet-table .budget-worksheet-table__subtotal-row td::before {
+    content: none;
   }
 
   /* Etapas: empilha verticalmente, sem conector horizontal, cada etapa
@@ -4150,8 +4207,10 @@ button {
   }
 }
 
-/* Âncora de "Explorar orçamento" -- impede que o título da Planilha
-   fique colado à borda superior da viewport ao rolar até ela. */
-#planilha-orcamentaria {
+/* Âncoras de "Abrir planilha"/"Ver comparação"/"Revisar planilha" --
+   impede que o título da seção fique colado à borda superior da
+   viewport ao rolar até ela. */
+#planilha-orcamentaria,
+#comparacao {
   scroll-margin-top: 24px;
 }

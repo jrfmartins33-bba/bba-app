@@ -74,8 +74,8 @@ export const BUDGET_WORKSHEET_SAMPLE: BudgetWorksheetSample = {
       code: "1",
       label: "Serviços preliminares",
       items: [
-        item("1.1", "Mobilização de equipe", "vb", "1", 1_500_000, "R$ 15.000,00", 1_500_000, "R$ 15.000,00"),
-        item("1.2", "Instalação do canteiro", "vb", "1", 2_800_000, "R$ 28.000,00", 2_800_000, "R$ 28.000,00")
+        item("1.1", "Mobilização de equipe", "verba", "1", 1_500_000, "R$ 15.000,00", 1_500_000, "R$ 15.000,00"),
+        item("1.2", "Instalação do canteiro", "verba", "1", 2_800_000, "R$ 28.000,00", 2_800_000, "R$ 28.000,00")
       ],
       subtotalCents: 4_300_000,
       subtotalDisplay: "R$ 43.000,00"

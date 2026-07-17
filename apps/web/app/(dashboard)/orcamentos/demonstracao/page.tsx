@@ -11,9 +11,10 @@ import { BudgetActionCards } from "@/components/budget/budget-action-cards";
 import { BudgetNextDecisionSection } from "@/components/budget/budget-next-decision-section";
 
 /**
- * Epic 21, Sprint 21.4B.2 — primeira experiência visual e demonstrável
- * da área de Orçamento. Server Component fino: nenhum fetch, nenhuma
- * lógica de decisão aqui — toda a apresentação lê diretamente de
+ * Epic 21, Sprint 21.4B.2 (original) + 21.4B.3 (acabamento comercial) —
+ * primeira experiência visual e demonstrável da área de Orçamento.
+ * Server Component fino: nenhum fetch, nenhuma lógica de decisão aqui —
+ * toda a apresentação lê diretamente de
  * `BUDGET_DEMONSTRATION_DATA`/`BUDGET_WORKSHEET_SAMPLE` (fontes de
  * demonstração isoladas), exatamente como entregues.
  *
@@ -22,7 +23,8 @@ import { BudgetNextDecisionSection } from "@/components/budget/budget-next-decis
  * trazendo a Planilha orçamentária para antes da comparação e das
  * etapas, logo após o contexto compacto):
  * cabeçalho → resumo compacto → 3 indicadores → faixa 11→25→300 →
- * Planilha orçamentária → comparação → etapas → ações → próxima decisão.
+ * Planilha orçamentária (`#planilha-orcamentaria`) → comparação
+ * (`#comparacao`) → etapas → ações → próximo passo.
  */
 export default function OrcamentosDemonstracaoPage() {
   const data = BUDGET_DEMONSTRATION_DATA;
