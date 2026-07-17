@@ -46,6 +46,26 @@ const FOUR_ROW_TABULAR_PDF_BYTES = buildSyntheticPdfBytes([
   },
 ]);
 
+/**
+ * Mesmas quatro linhas tabulares, com um item "BDI" adicional posicionado
+ * na mesma linha física da primeira fileira (mesmo `y`, `x` muito à
+ * direita da segunda coluna) — nunca uma quinta linha própria. Necessário
+ * porque `structural-service-item-identification` sozinho produz
+ * `classification: "ambiguous"` no localizador real (nenhum grupo
+ * candidato é formado): o par de sinais positivos exigido por
+ * `candidate-service-item-and-bdi-v1` (item de serviço + menção a BDI) só
+ * se completa com este segundo sinal textual. Verificado empiricamente
+ * (§ prova positiva abaixo) que este item extra vira um terceiro segmento
+ * da primeira linha, nunca um alinhamento recorrente próprio (aparece em
+ * uma única linha) e nunca altera a contagem de quatro linhas físicas da
+ * página.
+ */
+const FOUR_ROW_TABULAR_PDF_WITH_BDI_BYTES = buildSyntheticPdfBytes([
+  {
+    items: [...[0, 1, 2, 3].flatMap((row) => twoColumnRow(row, 700)), { text: "BDI", x: 500, y: 700, fontSize: ROW_HEIGHT }],
+  },
+]);
+
 async function runRealPdfChain(bytes: Uint8Array): Promise<{
   physicalRead: Awaited<ReturnType<typeof pdfjsPhysicalDocumentReader.read>>;
   detection: BudgetDocumentTabularRegionDetectionResult;
@@ -86,6 +106,48 @@ async function main(): Promise<void> {
     const second = await runRealPdfChain(secondBytesCopy);
 
     assertEqual(JSON.stringify(first.detection), JSON.stringify(second.detection));
+  });
+
+  await runTest("real PDF chain: a genuine tabular block (service item + BDI signal, real candidate classification) is positively detected as one candidate region with four included lines and at least two recurring alignments", async () => {
+    const { detection } = await runRealPdfChain(FOUR_ROW_TABULAR_PDF_WITH_BDI_BYTES.slice());
+
+    assertEqual(detection.status, "completed", `expected a clean completion, got ${detection.status}. technicalProblems: ${JSON.stringify(detection.technicalProblems)}`);
+    assertEqual(detection.technicalProblems.length, 0);
+
+    assertEqual(detection.groups.length, 1, "expected exactly one candidate group from the real page locator (service item + BDI signal)");
+    const group = detection.groups[0];
+    assertEqual(group.status, "detected");
+    assertEqual(group.technicalProblems.length, 0);
+    assertEqual(group.pages.length, 1, "expected exactly one page in the group");
+
+    const page = group.pages[0];
+    assertEqual(page.status, "detected");
+    assertEqual(page.technicalProblems.length, 0);
+
+    assertEqual(page.regions.length, 1, "expected exactly one candidate region");
+    const region = page.regions[0];
+    assertEqual(region.lineKeys.length, 4, "expected exactly four physical lines belonging to the region");
+    assertEqual(region.supportingAlignmentKeys.length >= 2, true, `expected at least two recurring alignments sustaining the region, got ${region.supportingAlignmentKeys.length}`);
+    assertEqual(page.alignments.length >= 2, true, `expected at least two recurring alignments observed on the page, got ${page.alignments.length}`);
+
+    assertEqual(page.lineDispositions.length, 4, "expected exactly four physical lines on this page");
+    assertEqual(
+      page.lineDispositions.every((disposition) => disposition.status === "included_in_candidate_region"),
+      true,
+      `expected every physical line to be included in the candidate region, got ${JSON.stringify(page.lineDispositions)}`,
+    );
+    assertEqual(
+      page.lineDispositions.every((disposition) => disposition.status !== "included_in_candidate_region" || disposition.regionKey === region.regionKey),
+      true,
+      "every included line must reference the one confirmed region",
+    );
+
+    assertEqual(page.metrics.totalLineCount, 4);
+    assertEqual(page.metrics.includedInCandidateRegionLineCount, 4);
+    assertEqual(page.metrics.notInTabularRegionLineCount, 0);
+    assertEqual(page.metrics.unresolvedAmbiguityLineCount, 0);
+    assertEqual(page.metrics.unresolvedDetectionFailedLineCount, 0);
+    assertEqual(page.metrics.regionCount, 1);
   });
 }
 
