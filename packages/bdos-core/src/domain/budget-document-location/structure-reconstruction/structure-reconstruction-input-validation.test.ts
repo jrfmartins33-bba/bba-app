@@ -38,6 +38,28 @@ function buildValidInput(): BudgetDocumentStructureReconstructionInput {
   return { physicalRead, pageLocation };
 }
 
+/** Two-page candidate group (direct + closing, same page geometry for the stable-geometry signal), so group-coverage tests can remove one member page from a multi-page group. */
+function buildValidTwoPageGroupInput(): BudgetDocumentStructureReconstructionInput {
+  const physicalRead = buildPhysicalDocumentReadResultWithGeometry("input-validation-two-page-group-fixture", [
+    {
+      widthPoints: 600,
+      heightPoints: 800,
+      items: [
+        { text: "1.1 Escavação manual", leftPoints: 50, topPoints: 50, rightPoints: 300, bottomPoints: 70 },
+        { text: "BDI", leftPoints: 50, topPoints: 90, rightPoints: 90, bottomPoints: 110 },
+      ],
+    },
+    {
+      widthPoints: 600,
+      heightPoints: 800,
+      items: [{ text: "Total Geral: 1000", leftPoints: 50, topPoints: 50, rightPoints: 250, bottomPoints: 70 }],
+    },
+  ]);
+  const observation = observeDocumentSignals(physicalRead);
+  const pageLocation = locateBudgetDocumentPages(observation);
+  return { physicalRead, pageLocation };
+}
+
 function firstProblemCode(result: ReturnType<typeof validateStructureReconstructionInput>): string | null {
   return result.kind === "invalid" ? result.problems[0].code : null;
 }
@@ -302,4 +324,55 @@ runTest("rejects a page decision whose classification/candidateType coherence is
   const result = validateStructureReconstructionInput({ ...input, pageLocation: { ...input.pageLocation, pageDecisions: tamperedDecisions } });
   assertEqual(result.kind, "invalid");
   assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "page_location_contract_invalid"), true);
+});
+
+// --- cobertura total das páginas candidatas (auditoria pós-PR #69, seguimento §1) ---
+
+runTest("rejects a candidate decision with candidateGroups entirely emptied out (whole group removed)", () => {
+  const input = buildValidInput();
+  assertEqual(input.pageLocation.candidateGroups.length > 0, true, "fixture must genuinely have at least one candidate group to make this test meaningful");
+  const result = validateStructureReconstructionInput({ ...input, pageLocation: { ...input.pageLocation, candidateGroups: [] } });
+  assertEqual(result.kind, "invalid");
+  assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "candidate_group_contract_invalid"), true);
+});
+
+runTest("rejects a candidate page silently dropped from a multi-page group (partial omission)", () => {
+  const input = buildValidTwoPageGroupInput();
+  const group = input.pageLocation.candidateGroups[0];
+  assertEqual(group.pageNumbers.length, 2, "fixture must genuinely produce a two-page candidate group to make this test meaningful");
+
+  // Drop the second (closing) page from the group's pageNumbers/members while its
+  // page decision remains classified "candidate" and untouched elsewhere.
+  const tamperedGroup = {
+    ...group,
+    endPageNumber: group.pageNumbers[0],
+    pageNumbers: [group.pageNumbers[0]],
+    members: [group.members[0]],
+  };
+  const result = validateStructureReconstructionInput({ ...input, pageLocation: { ...input.pageLocation, candidateGroups: [tamperedGroup] } });
+  assertEqual(result.kind, "invalid");
+  assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "candidate_group_contract_invalid"), true);
+});
+
+runTest("rejects candidate groups covering only part of the candidate decisions, even when every remaining group is internally well-formed", () => {
+  const input = buildValidTwoPageGroupInput();
+  // Two independent single-page groups instead of the correct single two-page
+  // group would still leave both pages covered — instead, keep only the
+  // first page's group and drop the second's page number/member entirely,
+  // simulating a group covering only part of the candidate decisions.
+  const group = input.pageLocation.candidateGroups[0];
+  const firstPageOnlyGroup = {
+    ...group,
+    endPageNumber: group.pageNumbers[0],
+    pageNumbers: [group.pageNumbers[0]],
+    members: [group.members[0]],
+  };
+  const result = validateStructureReconstructionInput({ ...input, pageLocation: { ...input.pageLocation, candidateGroups: [firstPageOnlyGroup] } });
+  assertEqual(result.kind, "invalid");
+  assertEqual(result.kind === "invalid" && result.problems.some((p) => p.code === "candidate_group_contract_invalid"), true);
+});
+
+runTest("accepts a genuinely complete two-page candidate group (coverage check does not false-positive)", () => {
+  const input = buildValidTwoPageGroupInput();
+  assertEqual(validateStructureReconstructionInput(input).kind, "valid");
 });

@@ -54,6 +54,29 @@ import { PHYSICAL_BLOCK_FORMATION_RULE_ID, PHYSICAL_BLOCK_FORMATION_RULE_VERSION
 
 const PROFILE = BUDGET_DOCUMENT_STRUCTURE_RECONSTRUCTION_PROFILE_V1;
 
+/**
+ * Seam de injeção interno (auditoria pós-PR #69, §5) — exclusivamente para
+ * testes exercitarem, uma fase por vez, a falha de linha, de segmento ou
+ * de bloco de forma controlada e direta, sem depender de um caminho
+ * natural (e hoje inexistente) para as funções puras reais lançarem uma
+ * exceção. Nunca parte da API pública: não exportado por nenhum barrel
+ * (`structure-reconstruction/index.ts` nem `domain/budget-document-location/index.ts`),
+ * e `reconstructBudgetDocumentStructure` — a única função pública — não
+ * aceita nenhum parâmetro de dependências; um consumidor de produção não
+ * tem como escolher um algoritmo alternativo.
+ */
+export interface StructureReconstructionDependencies {
+  readonly reconstructLines: typeof reconstructPhysicalLines;
+  readonly reconstructSegments: typeof reconstructHorizontalSegments;
+  readonly reconstructBlocks: typeof reconstructPhysicalTextBlocks;
+}
+
+const DEFAULT_STRUCTURE_RECONSTRUCTION_DEPENDENCIES: StructureReconstructionDependencies = {
+  reconstructLines: reconstructPhysicalLines,
+  reconstructSegments: reconstructHorizontalSegments,
+  reconstructBlocks: reconstructPhysicalTextBlocks,
+};
+
 const LIMITATIONS: ReadonlyArray<StructureReconstructionLimitationCode> = [
   "physical_line_is_not_a_budget_line",
   "horizontal_segment_is_not_a_column",
@@ -80,6 +103,35 @@ const LIMITATIONS: ReadonlyArray<StructureReconstructionLimitationCode> = [
 
 function assertUnreachableEligibility(value: never): never {
   throw new Error(`reconstructBudgetDocumentStructure: unhandled eligibility kind: ${JSON.stringify(value)}`);
+}
+
+/**
+ * Guarda de exaustividade (auditoria pós-PR #69, §4): se uma variante
+ * futura for adicionada a `SourceTextItemReconstructionOutcome` sem que
+ * `computePageMetrics` seja atualizado, `outcome` deixa de ser estreitado
+ * para `never` aqui e a chamada vira erro de compilação — a variante nova
+ * nunca desaparece silenciosamente da contagem. A mensagem bruta nunca é
+ * exposta ao contrato público: este caminho representa erro de
+ * programação e é sempre convertido no problema técnico global controlado
+ * (`structure_reconstruction_failed`) pelo `catch` externo de
+ * `reconstructBudgetDocumentStructure`.
+ */
+function assertUnreachableOutcome(value: never): never {
+  throw new Error(`Disposição de reconstrução não tratada: ${JSON.stringify(value)}`);
+}
+
+/**
+ * Ordem canônica das disposições de origem (auditoria pós-PR #69,
+ * seguimento §2): por `sourceTextItemIndex`, nunca pela posição do item no
+ * array de entrada. `PhysicalDocumentTextItem.index` é único e denso por
+ * página (validado em `structure-reconstruction-input-validation.ts`), o
+ * que torna esta ordenação total e determinística — a mesma página com os
+ * mesmos itens apresentados em ordem de array diferente produz
+ * `sourceItemOutcomes` idêntico. Nunca reordena, renumera ou altera os
+ * próprios índices.
+ */
+function sortOutcomesByIndex(outcomes: ReadonlyArray<SourceTextItemReconstructionOutcome>): ReadonlyArray<SourceTextItemReconstructionOutcome> {
+  return [...outcomes].sort((left, right) => left.sourceTextItemIndex - right.sourceTextItemIndex);
 }
 
 interface PageReconstructionOutcome {
@@ -121,7 +173,7 @@ function buildNoEligibleItemsPage(
       physicalPage.pageNumber,
     ),
   ];
-  const outcomes: SourceTextItemReconstructionOutcome[] = eligibilities.map((e) => nonEligibleOutcome(e as Exclude<SourceItemEligibility, { kind: "eligible" }>));
+  const outcomes = sortOutcomesByIndex(eligibilities.map((e) => nonEligibleOutcome(e as Exclude<SourceItemEligibility, { kind: "eligible" }>)));
 
   return {
     page: {
@@ -167,10 +219,12 @@ function buildStructureFailurePage(
       physicalPage.pageNumber,
     ),
   ];
-  const outcomes: SourceTextItemReconstructionOutcome[] = eligibilities.map((eligibility) =>
-    eligibility.kind === "eligible"
-      ? { status: "unresolved_structure_reconstruction_failed", sourceTextItemIndex: eligibility.sourceTextItemIndex, failedPhase }
-      : nonEligibleOutcome(eligibility as Exclude<SourceItemEligibility, { kind: "eligible" }>),
+  const outcomes = sortOutcomesByIndex(
+    eligibilities.map((eligibility) =>
+      eligibility.kind === "eligible"
+        ? { status: "unresolved_structure_reconstruction_failed" as const, sourceTextItemIndex: eligibility.sourceTextItemIndex, failedPhase }
+        : nonEligibleOutcome(eligibility as Exclude<SourceItemEligibility, { kind: "eligible" }>),
+    ),
   );
 
   return {
@@ -198,6 +252,7 @@ function reconstructPage(
   sourceDecisionReasonCode: BudgetPageLocationReasonCode,
   pageReconstructionKey: string,
   groupKey: string,
+  dependencies: StructureReconstructionDependencies,
 ): PageReconstructionOutcome {
   const eligibilities: SourceItemEligibility[] = physicalPage.textItems.map(classifySourceTextItem);
   const geometryByIndex = new Map<number, PhysicalDocumentTextItemLayoutGeometry>();
@@ -218,7 +273,7 @@ function reconstructPage(
   // página" por causa de uma falha de processamento (§3).
   let lineDrafts: ReadonlyArray<ReconstructedLineDraft>;
   try {
-    lineDrafts = reconstructPhysicalLines(
+    lineDrafts = dependencies.reconstructLines(
       eligibleItems.map((item) => ({ sourceTextItemIndex: item.sourceTextItemIndex, geometry: item.geometry })),
       PROFILE,
     );
@@ -232,7 +287,7 @@ function reconstructPage(
   const segmentDraftsByLine = new Map<ReconstructedLineDraft, ReadonlyArray<ReconstructedSegmentDraft>>();
   for (const draft of lineDrafts) {
     try {
-      segmentDraftsByLine.set(draft, reconstructHorizontalSegments(draft.sourceTextItemIndices, geometryByIndex, PROFILE));
+      segmentDraftsByLine.set(draft, dependencies.reconstructSegments(draft.sourceTextItemIndices, geometryByIndex, PROFILE));
     } catch {
       return buildStructureFailurePage(physicalPage, candidateType, sourceDecisionReasonCode, pageReconstructionKey, groupKey, eligibilities, "segment_reconstruction");
     }
@@ -324,7 +379,7 @@ function reconstructPage(
   const technicalProblems: StructureReconstructionTechnicalProblem[] = [];
   let blocks: ReconstructedPhysicalTextBlock[] = [];
   try {
-    const blockDrafts = reconstructPhysicalTextBlocks(blockSegmentInputs, PROFILE);
+    const blockDrafts = dependencies.reconstructBlocks(blockSegmentInputs, PROFILE);
     blocks = blockDrafts.map((draft) => {
       const canonicalBlockBounds = canonicalizeOutputGeometryBounds(draft);
       return {
@@ -352,14 +407,16 @@ function reconstructPage(
     blocks = [];
   }
 
-  const outcomes: SourceTextItemReconstructionOutcome[] = eligibilities.map((eligibility) => {
-    if (eligibility.kind === "eligible") {
-      const lineKey = lineKeyBySourceIndex.get(eligibility.sourceTextItemIndex)!;
-      const segmentKey = segmentKeyBySourceIndex.get(eligibility.sourceTextItemIndex)!;
-      return { status: "placed", sourceTextItemIndex: eligibility.sourceTextItemIndex, lineKey, segmentKey };
-    }
-    return nonEligibleOutcome(eligibility as Exclude<SourceItemEligibility, { kind: "eligible" }>);
-  });
+  const outcomes = sortOutcomesByIndex(
+    eligibilities.map((eligibility) => {
+      if (eligibility.kind === "eligible") {
+        const lineKey = lineKeyBySourceIndex.get(eligibility.sourceTextItemIndex)!;
+        const segmentKey = segmentKeyBySourceIndex.get(eligibility.sourceTextItemIndex)!;
+        return { status: "placed" as const, sourceTextItemIndex: eligibility.sourceTextItemIndex, lineKey, segmentKey };
+      }
+      return nonEligibleOutcome(eligibility as Exclude<SourceItemEligibility, { kind: "eligible" }>);
+    }),
+  );
 
   const hasUnresolved = eligibilities.some((e) => e.kind.startsWith("unresolved_"));
   const hasOutside = eligibilities.some((e) => e.kind === "excluded_outside_page");
@@ -439,6 +496,8 @@ function computePageMetrics(
       case "unresolved_structure_reconstruction_failed":
         counters.unresolvedStructureReconstructionFailed += 1;
         break;
+      default:
+        return assertUnreachableOutcome(outcome);
     }
   });
   return {
@@ -484,6 +543,7 @@ function reconstructGroup(
   physicalPagesByNumber: ReadonlyMap<number, PhysicalDocumentPage>,
   reasonCodeByPageNumber: ReadonlyMap<number, BudgetPageLocationReasonCode>,
   reconstructionContextFingerprint: string,
+  dependencies: StructureReconstructionDependencies,
 ): ReconstructedBudgetDocumentGroup {
   const groupReconstructionKey = computeGroupReconstructionKey(reconstructionContextFingerprint, sourceGroup.groupKey);
 
@@ -491,7 +551,7 @@ function reconstructGroup(
     const physicalPage = physicalPagesByNumber.get(member.pageNumber)!;
     const reasonCode = reasonCodeByPageNumber.get(member.pageNumber)!;
     const pageReconstructionKey = computePageReconstructionKey(groupReconstructionKey, member.pageNumber);
-    return reconstructPage(physicalPage, member.candidateType, reasonCode, pageReconstructionKey, sourceGroup.groupKey).page;
+    return reconstructPage(physicalPage, member.candidateType, reasonCode, pageReconstructionKey, sourceGroup.groupKey, dependencies).page;
   });
 
   return {
@@ -571,10 +631,27 @@ function buildResult(
  * grupos candidatos já localizados — nunca reclassifica páginas, recalcula
  * sinais, recalcula grupos ou interpreta significado econômico (Sprint
  * 21.4A.2.f.1). Determinístico: mesma entrada e mesmas versões produzem
- * resultado JSON-equivalente.
+ * resultado JSON-equivalente. Sempre usa as três funções puras reais de
+ * reconstrução de linha/segmento/bloco — esta é a única função pública, e
+ * ela não aceita nenhum parâmetro de dependências (auditoria pós-PR #69, §5).
  */
 export function reconstructBudgetDocumentStructure(
   input: BudgetDocumentStructureReconstructionInput,
+): BudgetDocumentStructureReconstructionResult {
+  return reconstructBudgetDocumentStructureWithDependencies(input, DEFAULT_STRUCTURE_RECONSTRUCTION_DEPENDENCIES);
+}
+
+/**
+ * Mesma reconstrução, com as funções de linha/segmento/bloco injetáveis —
+ * exclusivamente para testes provarem o comportamento de cada fase de
+ * falha estrutural de forma direta e controlada (auditoria pós-PR #69,
+ * §5). Não exportada por nenhum barrel público; produção nunca a chama —
+ * apenas `reconstructBudgetDocumentStructure`, que sempre fornece as
+ * dependências reais.
+ */
+export function reconstructBudgetDocumentStructureWithDependencies(
+  input: BudgetDocumentStructureReconstructionInput,
+  dependencies: StructureReconstructionDependencies,
 ): BudgetDocumentStructureReconstructionResult {
   const { physicalRead, pageLocation } = input;
 
@@ -599,7 +676,7 @@ export function reconstructBudgetDocumentStructure(
     const reasonCodeByPageNumber = new Map(pageLocation.pageDecisions.map((decision) => [decision.pageNumber, decision.reasonCode]));
 
     const groups = pageLocation.candidateGroups.map((sourceGroup) =>
-      reconstructGroup(sourceGroup, physicalPagesByNumber, reasonCodeByPageNumber, reconstructionContextFingerprint),
+      reconstructGroup(sourceGroup, physicalPagesByNumber, reasonCodeByPageNumber, reconstructionContextFingerprint, dependencies),
     );
 
     const status: StructureReconstructionStatus = groups.every((g) => g.status === "reconstructed") ? "completed" : "completed_with_problems";

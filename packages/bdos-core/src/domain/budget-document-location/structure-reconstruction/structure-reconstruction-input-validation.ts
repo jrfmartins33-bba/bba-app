@@ -197,6 +197,27 @@ function validateCandidateGroups(
     });
   });
 
+  /**
+   * Cobertura total (auditoria pós-PR #69, §1): todo `pageNumber` cuja
+   * decisão é `classification === "candidate"` precisa aparecer em
+   * exatamente um grupo — nunca menos (grupo inteiro removido, página
+   * candidata retirada de um grupo, grupos cobrindo só parte das decisões
+   * candidatas), nunca mais (já impedido acima, cada página em no máximo
+   * um grupo). Nunca recria o grupo ausente nem inclui a página
+   * automaticamente — apenas rejeita.
+   */
+  const candidateDecisionPageNumbers = [...decisionsByPage.values()]
+    .filter((decision) => decision.classification === "candidate")
+    .map((decision) => decision.pageNumber)
+    .sort((a, b) => a - b);
+  const groupedCandidatePageNumbers = [...pagesSeenInAnyGroup].sort((a, b) => a - b);
+  const coverageMatches =
+    candidateDecisionPageNumbers.length === groupedCandidatePageNumbers.length &&
+    candidateDecisionPageNumbers.every((pageNumber, index) => pageNumber === groupedCandidatePageNumbers[index]);
+  if (!coverageMatches) {
+    problems.push(createStructureReconstructionTechnicalProblem("candidate_group_contract_invalid", "source_validation"));
+  }
+
   return problems;
 }
 

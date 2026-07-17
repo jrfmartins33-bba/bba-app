@@ -38,19 +38,57 @@ interface GeometryBounds {
   readonly centerYPoints: number;
 }
 
-/** Canonicaliza os oito campos geométricos comuns a linhas, segmentos e blocos, preservando os demais campos do objeto. */
+/**
+ * Confirma, após a canonicalização, que os oito campos permanecem
+ * coerentes entre si (auditoria pós-PR #69, §3): canonicalizar cada campo
+ * de forma independente pode produzir um contrato internamente
+ * incoerente (ex.: `leftPoints=0`, `rightPoints=0.000001`,
+ * `widthPoints=0`) quando os limites e a dimensão bruta caem em lados
+ * diferentes da fronteira de arredondamento. Nunca esperado de disparar —
+ * `canonicalizeOutputGeometryBounds` deriva largura/altura/centros dos
+ * próprios limites já canonicalizados, o que torna estas igualdades
+ * verdadeiras por construção — mas mantido como guarda de integridade
+ * interna, nunca exposto ao contrato público.
+ */
+function assertCoherentCanonicalBounds(bounds: GeometryBounds): void {
+  const { leftPoints, topPoints, rightPoints, bottomPoints, widthPoints, heightPoints, centerXPoints, centerYPoints } = bounds;
+  const coherent =
+    leftPoints <= rightPoints &&
+    topPoints <= bottomPoints &&
+    widthPoints >= 0 &&
+    heightPoints >= 0 &&
+    widthPoints === canonicalizeStructureReconstructionOutputGeometry(rightPoints - leftPoints) &&
+    heightPoints === canonicalizeStructureReconstructionOutputGeometry(bottomPoints - topPoints) &&
+    centerXPoints === canonicalizeStructureReconstructionOutputGeometry((leftPoints + rightPoints) / 2) &&
+    centerYPoints === canonicalizeStructureReconstructionOutputGeometry((topPoints + bottomPoints) / 2);
+  if (!coherent) {
+    throw new Error("canonicalizeOutputGeometryBounds: canonicalized geometry is internally incoherent (programming error, never expected from valid input).");
+  }
+}
+
+/**
+ * Canonicaliza os oito campos geométricos comuns a linhas, segmentos e
+ * blocos, preservando os demais campos do objeto. Canonicaliza primeiro
+ * apenas os quatro limites (`leftPoints`/`topPoints`/`rightPoints`/`bottomPoints`)
+ * e deriva largura, altura e centros **dos limites já canonicalizados** —
+ * nunca canonicaliza a largura/altura/centro bruta do rascunho de forma
+ * independente, o que poderia produzir um contrato internamente
+ * incoerente na fronteira de arredondamento (auditoria pós-PR #69, §3).
+ */
 export function canonicalizeOutputGeometryBounds<T extends GeometryBounds>(bounds: T): T {
-  return {
-    ...bounds,
-    leftPoints: canonicalizeStructureReconstructionOutputGeometry(bounds.leftPoints),
-    topPoints: canonicalizeStructureReconstructionOutputGeometry(bounds.topPoints),
-    rightPoints: canonicalizeStructureReconstructionOutputGeometry(bounds.rightPoints),
-    bottomPoints: canonicalizeStructureReconstructionOutputGeometry(bounds.bottomPoints),
-    widthPoints: canonicalizeStructureReconstructionOutputGeometry(bounds.widthPoints),
-    heightPoints: canonicalizeStructureReconstructionOutputGeometry(bounds.heightPoints),
-    centerXPoints: canonicalizeStructureReconstructionOutputGeometry(bounds.centerXPoints),
-    centerYPoints: canonicalizeStructureReconstructionOutputGeometry(bounds.centerYPoints),
-  };
+  const leftPoints = canonicalizeStructureReconstructionOutputGeometry(bounds.leftPoints);
+  const topPoints = canonicalizeStructureReconstructionOutputGeometry(bounds.topPoints);
+  const rightPoints = canonicalizeStructureReconstructionOutputGeometry(bounds.rightPoints);
+  const bottomPoints = canonicalizeStructureReconstructionOutputGeometry(bounds.bottomPoints);
+  const widthPoints = canonicalizeStructureReconstructionOutputGeometry(rightPoints - leftPoints);
+  const heightPoints = canonicalizeStructureReconstructionOutputGeometry(bottomPoints - topPoints);
+  const centerXPoints = canonicalizeStructureReconstructionOutputGeometry((leftPoints + rightPoints) / 2);
+  const centerYPoints = canonicalizeStructureReconstructionOutputGeometry((topPoints + bottomPoints) / 2);
+
+  const canonicalBounds = { leftPoints, topPoints, rightPoints, bottomPoints, widthPoints, heightPoints, centerXPoints, centerYPoints };
+  assertCoherentCanonicalBounds(canonicalBounds);
+
+  return { ...bounds, ...canonicalBounds };
 }
 
 /** Canonicaliza um array de lacunas normalizadas exportadas (`ReconstructedHorizontalSegment.observedInternalGaps`). */

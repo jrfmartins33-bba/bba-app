@@ -32,6 +32,16 @@
  * de compatibilidade comparar `adapterVersion`/`underlyingLibraryVersion`
  * por igualdade exata) vive em
  * `budget-document-location-boundaries.test.ts`, não neste arquivo.
+ *
+ * Auditoria pós-PR #69 (seguimento, §5): o seam de injeção de dependências
+ * (`StructureReconstructionDependencies`, `reconstructBudgetDocumentStructureWithDependencies`)
+ * vive no mesmo arquivo que a função pública (`reconstruct-budget-document-structure.ts`,
+ * já listado no barrel para exportar `reconstructBudgetDocumentStructure`)
+ * — por isso a checagem de nome de módulo genérica não se aplica; este
+ * guard confirma, por nome de identificador exato, que nenhum barrel
+ * público (nem o de `structure-reconstruction/`, nem o do domínio)
+ * reexporta o seam. `reconstructBudgetDocumentStructure`, a única função
+ * pública, nunca aceita um parâmetro de dependências.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -139,6 +149,34 @@ runTest("the structure-reconstruction barrel never exports an internal comparato
 runTest("the domain's public barrel never re-exports the structure-reconstruction test bridge", () => {
   const content = readFileSync(DOMAIN_BARREL_FILE, "utf8");
   assertEqual(content.includes("structure-reconstruction-test-bridge"), false, "domain barrel must not export the geometric test bridge");
+});
+
+runTest("the dependency-injection failure-testing seam is never exported by any public barrel", () => {
+  const violations: Violation[] = [];
+  const forbiddenIdentifiers = ["StructureReconstructionDependencies", "reconstructBudgetDocumentStructureWithDependencies"];
+
+  [BARREL_FILE, DOMAIN_BARREL_FILE].forEach((barrelFile) => {
+    const content = readFileSync(barrelFile, "utf8");
+    forbiddenIdentifiers.forEach((identifier) => {
+      if (content.includes(identifier)) {
+        violations.push({ file: barrelFile, reason: `must not export the internal failure-injection seam identifier "${identifier}"` });
+      }
+    });
+  });
+
+  assertNoViolations(violations, "a public barrel exports the internal dependency-injection seam");
+});
+
+runTest("the public reconstructBudgetDocumentStructure function accepts exactly one parameter — production consumers cannot supply alternative dependencies", () => {
+  const content = readFileSync(join(STRUCTURE_RECONSTRUCTION_DIR, "reconstruct-budget-document-structure.ts"), "utf8");
+  const match = content.match(/export function reconstructBudgetDocumentStructure\(\s*([^)]*)\)/);
+  assertEqual(match !== null, true, "expected to find the public reconstructBudgetDocumentStructure function signature");
+  const parameterList = match![1];
+  const parameterCount = parameterList
+    .split(",")
+    .map((parameter) => parameter.trim())
+    .filter((parameter) => parameter.length > 0).length;
+  assertEqual(parameterCount, 1, `expected exactly one parameter, found signature: (${parameterList})`);
 });
 
 runTest("no production file references economic-domain, score/confidence/ranking, or place-name vocabulary forbidden in this Sprint", () => {

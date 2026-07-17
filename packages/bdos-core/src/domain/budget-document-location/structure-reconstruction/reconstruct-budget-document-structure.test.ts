@@ -4,6 +4,7 @@ import { buildPhysicalDocumentReadResultWithGeometry } from "./testing/structure
 import type { SyntheticGeometryPage } from "./testing/structure-reconstruction-test-bridge";
 import { reconstructBudgetDocumentStructure } from "./reconstruct-budget-document-structure";
 import { BUDGET_DOCUMENT_STRUCTURE_RECONSTRUCTION_PROFILE_V1 } from "./structure-reconstruction-profile";
+import type { SourceTextItemReconstructionOutcome } from "./budget-document-structure-reconstruction.types";
 
 function runTest(name: string, testCase: () => void): void {
   testCase();
@@ -120,6 +121,28 @@ runTest("synthetic geometry pipeline: item conservation holds for every reconstr
       assertEqual(page.sourceItemOutcomes.length, m.totalSourceTextItemCount);
     });
   });
+});
+
+// --- exaustividade tipológica das métricas por disposição (auditoria pós-PR #69, §4) ---
+
+runTest("every SourceTextItemReconstructionOutcome status is accounted for at the type level — a new variant must update this map or fail to compile", () => {
+  // A `Record` requires every key of the union to be present (TypeScript
+  // rejects both a missing key and an extra one). If a future status is
+  // added to `SourceTextItemReconstructionOutcome` without adding it here,
+  // this file stops compiling — the same guarantee that makes
+  // `computePageMetrics`'s internal `default: return assertUnreachableOutcome(outcome)`
+  // a compile error instead of a silently-uncounted variant.
+  const exhaustiveOutcomeStatusCheck: Record<SourceTextItemReconstructionOutcome["status"], true> = {
+    placed: true,
+    ignored_whitespace_only: true,
+    excluded_outside_page: true,
+    unresolved_source_geometry_missing: true,
+    unresolved_source_geometry_invalid: true,
+    unresolved_source_orientation_unsupported: true,
+    unresolved_source_geometry_normalization_failed: true,
+    unresolved_structure_reconstruction_failed: true,
+  };
+  assertEqual(Object.keys(exhaustiveOutcomeStatusCheck).length, 8);
 });
 
 // --- determinism (§53, applied end to end) -----------------------------------
@@ -295,6 +318,22 @@ runTest("a derived center coordinate that would carry a binary floating point ar
   assertEqual(artifactLine !== undefined, true, "expected to find the reconstructed line for the artifact-prone item");
   assertEqual(artifactLine?.centerXPoints, 0.15, "the raw IEEE754 artifact (0.15000000000000002) must be canonicalized away in the output");
   assertEqual(artifactLine?.centerYPoints, 0.15);
+  assertEqual(artifactLine?.widthPoints, 0.1, "width must be derived from the canonicalized left/right, not independently re-canonicalized");
+  assertEqual(artifactLine?.heightPoints, 0.1);
+
+  // The single artifact-prone item forms its own line, segment and block —
+  // the same coherence must hold for all three shapes, not only the line.
+  const artifactSegment = result.groups[0].pages[0].segments.find((segment) => segment.leftPoints === 0.1);
+  assertEqual(artifactSegment !== undefined, true, "expected to find the reconstructed segment for the artifact-prone item");
+  assertEqual(artifactSegment?.centerXPoints, 0.15);
+  assertEqual(artifactSegment?.centerYPoints, 0.15);
+  assertEqual(artifactSegment?.widthPoints, 0.1);
+
+  const artifactBlock = result.groups[0].pages[0].blocks.find((block) => block.leftPoints === 0.1);
+  assertEqual(artifactBlock !== undefined, true, "expected to find the reconstructed block for the artifact-prone item");
+  assertEqual(artifactBlock?.centerXPoints, 0.15);
+  assertEqual(artifactBlock?.centerYPoints, 0.15);
+  assertEqual(artifactBlock?.widthPoints, 0.1);
 
   // Every geometric field on every line/segment/block, across the whole
   // result, must round-trip through six-decimal canonicalization exactly.
@@ -366,4 +405,68 @@ runTest("a failed result still exposes every individual source identity, not jus
   assertEqual(result.physicalUnderlyingLibraryVersion, tamperedPhysicalRead.underlyingLibraryVersion);
   assertEqual(result.sourceObserverName, pageLocation.sourceObserverName);
   assertEqual(result.pageLocationDecisionRuleSetVersion, pageLocation.decisionRuleSetVersion);
+});
+
+// --- independência integral da ordem dos itens (auditoria pós-PR #69, seguimento §2) ---
+
+runTest("the entire reconstructed result — including sourceItemOutcomes order — is JSON-equivalent for a permuted item array with the same indices and geometries", () => {
+  const SAME_LABEL = "order-independence-full-result-fixture";
+
+  const naturalOrderPages: ReadonlyArray<SyntheticGeometryPage> = [
+    {
+      widthPoints: PAGE_WIDTH,
+      heightPoints: PAGE_HEIGHT,
+      items: [
+        { text: "1.1 Escavação manual", leftPoints: 50, topPoints: 50, rightPoints: 300, bottomPoints: 70, index: 0 },
+        { text: "BDI", leftPoints: 50, topPoints: 90, rightPoints: 90, bottomPoints: 110, index: 1 },
+        { text: "15%", leftPoints: 110, topPoints: 90, rightPoints: 150, bottomPoints: 110, index: 2 },
+        { text: "1.2 Concreto armado", leftPoints: 50, topPoints: 130, rightPoints: 320, bottomPoints: 150, index: 3 },
+      ],
+    },
+    {
+      widthPoints: PAGE_WIDTH,
+      heightPoints: PAGE_HEIGHT,
+      items: [{ text: "Total Geral: 1000", leftPoints: 50, topPoints: 50, rightPoints: 250, bottomPoints: 70, index: 0 }],
+    },
+  ];
+
+  // Same items, same explicit indices, same geometries — only the array
+  // position (never the index or the geometry) is permuted.
+  const shuffledOrderPages: ReadonlyArray<SyntheticGeometryPage> = [
+    {
+      widthPoints: PAGE_WIDTH,
+      heightPoints: PAGE_HEIGHT,
+      items: [
+        { text: "1.2 Concreto armado", leftPoints: 50, topPoints: 130, rightPoints: 320, bottomPoints: 150, index: 3 },
+        { text: "BDI", leftPoints: 50, topPoints: 90, rightPoints: 90, bottomPoints: 110, index: 1 },
+        { text: "1.1 Escavação manual", leftPoints: 50, topPoints: 50, rightPoints: 300, bottomPoints: 70, index: 0 },
+        { text: "15%", leftPoints: 110, topPoints: 90, rightPoints: 150, bottomPoints: 110, index: 2 },
+      ],
+    },
+    {
+      widthPoints: PAGE_WIDTH,
+      heightPoints: PAGE_HEIGHT,
+      items: [{ text: "Total Geral: 1000", leftPoints: 50, topPoints: 50, rightPoints: 250, bottomPoints: 70, index: 0 }],
+    },
+  ];
+
+  const naturalPhysicalRead = buildPhysicalDocumentReadResultWithGeometry(SAME_LABEL, naturalOrderPages);
+  const shuffledPhysicalRead = buildPhysicalDocumentReadResultWithGeometry(SAME_LABEL, shuffledOrderPages);
+  assertEqual(naturalPhysicalRead.sourceByteHash, shuffledPhysicalRead.sourceByteHash, "test setup: both fixtures must share the same source identity for this to be a fair comparison");
+
+  const naturalResult = reconstructBudgetDocumentStructure({
+    physicalRead: naturalPhysicalRead,
+    pageLocation: locateBudgetDocumentPages(observeDocumentSignals(naturalPhysicalRead)),
+  });
+  const shuffledResult = reconstructBudgetDocumentStructure({
+    physicalRead: shuffledPhysicalRead,
+    pageLocation: locateBudgetDocumentPages(observeDocumentSignals(shuffledPhysicalRead)),
+  });
+
+  // Sanity: prove the fixture actually produced real structure, so this
+  // isn't a vacuous "two empty results are equal" pass.
+  assertEqual(naturalResult.groups.length > 0, true);
+  assertEqual(naturalResult.groups.reduce((sum, g) => sum + g.metrics.lineCount, 0) > 0, true);
+
+  assertEqual(JSON.stringify(naturalResult), JSON.stringify(shuffledResult));
 });
