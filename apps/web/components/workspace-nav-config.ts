@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Map,
   Ruler,
+  Wallet,
   Wrench,
   type LucideIcon
 } from "lucide-react";
@@ -71,6 +72,7 @@ export const WORKSPACE_NAV_CONFIG: ReadonlyArray<WorkspaceNavConfig> = [
       { label: "Geo Studio", icon: Map, href: "/geoespacial" },
       { label: "Studio de Evidências", icon: FolderSearch, href: "/evidencias" },
       { label: "Medições", icon: Ruler, href: "/medicoes" },
+      { label: "Orçamento", icon: Wallet, href: "/orcamentos" },
       { label: "Documentos", icon: FileStack },
       { label: "Aprovações", icon: ClipboardCheck },
       { label: "Exportações", icon: FileDown },

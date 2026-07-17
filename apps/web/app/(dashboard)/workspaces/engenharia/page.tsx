@@ -14,6 +14,7 @@ import {
   Map,
   Ruler,
   Sparkles,
+  Wallet,
   Waves,
   Wrench,
   type LucideIcon
@@ -29,6 +30,7 @@ interface CapabilityCard {
   status: CapabilityStatus;
   icon: LucideIcon;
   href?: string;
+  actionLabel?: string;
 }
 
 /**
@@ -92,6 +94,15 @@ const CAPABILITIES: CapabilityCard[] = [
     status: "Pronto",
     icon: Ruler,
     href: "/medicoes"
+  },
+  {
+    id: "orcamento",
+    title: "Orçamento",
+    description: "Organize valores do edital, compare propostas e prepare decisões comerciais.",
+    status: "Em desenvolvimento",
+    icon: Wallet,
+    href: "/orcamentos",
+    actionLabel: "Abrir Orçamento"
   },
   {
     id: "documentos",
@@ -259,7 +270,7 @@ export default function EngenhariaWorkspacePage() {
               <p className="workspace-card__description">{capability.description}</p>
               {capability.href ? (
                 <Link className="bba-button bba-button--secondary bba-button--sm" href={capability.href}>
-                  Abrir
+                  {capability.actionLabel ?? "Abrir"}
                 </Link>
               ) : null}
             </Card>
