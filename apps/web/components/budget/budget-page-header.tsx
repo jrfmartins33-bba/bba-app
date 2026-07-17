@@ -19,8 +19,8 @@ export function BudgetPageHeader({ isDemonstration }: { readonly isDemonstration
         <p>Entenda o valor do edital, compare a proposta e acompanhe como o orçamento está organizado.</p>
         {isDemonstration ? (
           <p className="budget-demo-note">
-            Estes dados demonstram como o BDOS apresentará e apoiará a análise do orçamento. Nenhuma
-            versão definitiva será criada sem revisão e confirmação.
+            Estes dados demonstram como esta área apresentará e apoiará a análise do orçamento.
+            Nenhuma versão definitiva será criada sem revisão e confirmação.
           </p>
         ) : null}
       </div>

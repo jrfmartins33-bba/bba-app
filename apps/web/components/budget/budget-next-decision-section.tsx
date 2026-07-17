@@ -10,7 +10,7 @@ export function BudgetNextDecisionSection() {
   return (
     <Card className="span-12 workspace-card workspace-card--highlight" title="Próxima decisão">
       <p className="workspace-card__description">
-        Explore a comparação e entenda como o BDOS organiza o orçamento antes da criação da versão
+        Explore a comparação e entenda como o orçamento é organizado antes da criação da versão
         definitiva.
       </p>
       <div className="budget-next-decision__actions">

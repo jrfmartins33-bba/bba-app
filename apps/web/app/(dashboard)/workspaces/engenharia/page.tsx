@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { Card } from "@bba/ui";
 
-type CapabilityStatus = "Pronto" | "Em desenvolvimento" | "Em breve";
+type CapabilityStatus = "Pronto" | "Em desenvolvimento" | "Em breve" | "Demonstração disponível";
 
 interface CapabilityCard {
   id: string;
@@ -98,11 +98,12 @@ const CAPABILITIES: CapabilityCard[] = [
   {
     id: "orcamento",
     title: "Orçamento",
-    description: "Organize valores do edital, compare propostas e prepare decisões comerciais.",
-    status: "Em desenvolvimento",
+    description:
+      "Veja como o orçamento oficial é apresentado, a proposta é comparada e os itens são organizados para decisão.",
+    status: "Demonstração disponível",
     icon: Wallet,
-    href: "/orcamentos",
-    actionLabel: "Abrir Orçamento"
+    href: "/orcamentos/demonstracao",
+    actionLabel: "Ver demonstração"
   },
   {
     id: "documentos",
@@ -146,7 +147,12 @@ const CAPABILITIES: CapabilityCard[] = [
 const CAPABILITY_BADGE_CLASS: Record<CapabilityStatus, string> = {
   Pronto: "status-badge status-badge--completed",
   "Em desenvolvimento": "status-badge status-badge--active",
-  "Em breve": "status-badge status-badge--pending"
+  "Em breve": "status-badge status-badge--pending",
+  // Mesmo tom neutro/dourado já usado em "Exemplo demonstrativo" (mais abaixo
+  // nesta página) — sinaliza que existe algo para ver agora, sem soar como
+  // funcionalidade definitiva (nunca "Pronto"/verde, nunca "Em
+  // desenvolvimento"/dourado ativo).
+  "Demonstração disponível": "status-badge status-badge--pending"
 };
 
 const NEXT_STEPS = [

@@ -28,7 +28,7 @@ export function BudgetStructureSection({ data }: { readonly data: BudgetDemonstr
       </div>
 
       <p className="workspace-card__description">
-        O BDOS mantém a hierarquia do orçamento para que cada item continue ligado ao seu grupo, à sua
+        A hierarquia do orçamento é mantida para que cada item continue ligado ao seu grupo, à sua
         origem e às decisões tomadas sobre ele.
       </p>
 

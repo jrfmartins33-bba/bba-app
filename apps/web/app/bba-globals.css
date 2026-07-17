@@ -3998,3 +3998,56 @@ button {
   gap: 10px;
   margin-top: 4px;
 }
+
+/* Epic 21, Sprint 21.4B.2 — regra responsiva específica da comparação
+   (não depende só da grade genérica de section-grid/span-*): em telas
+   estreitas, rótulo e valor ficam na mesma linha, a barra ocupa uma
+   linha inteira própria, e nenhum valor monetário é cortado. */
+@media (max-width: 600px) {
+  .budget-comparison__row {
+    grid-template-areas:
+      "label value"
+      "bar bar";
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 8px;
+  }
+
+  .budget-comparison__row-label {
+    grid-area: label;
+  }
+
+  .budget-comparison__row-value {
+    grid-area: value;
+    overflow-wrap: anywhere;
+    text-align: right;
+  }
+
+  .budget-comparison__bar-track {
+    grid-area: bar;
+    width: 100%;
+  }
+
+  .budget-structure-diagram {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .budget-structure-diagram__arrow {
+    margin-left: 14px;
+    transform: rotate(90deg);
+  }
+
+  .budget-next-decision__actions {
+    flex-direction: column;
+  }
+
+  .budget-next-decision__actions .bba-button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .budget-comparison__bar {
+    animation: none;
+  }
+}
