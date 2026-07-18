@@ -3898,12 +3898,14 @@ button {
   overflow-wrap: anywhere;
 }
 
-.budget-worksheet-table__unit {
+.budget-worksheet-table th.budget-worksheet-table__unit,
+.budget-worksheet-table td.budget-worksheet-table__unit {
   text-align: center;
   white-space: nowrap;
 }
 
-.budget-worksheet-table__numeric {
+.budget-worksheet-table th.budget-worksheet-table__numeric,
+.budget-worksheet-table td.budget-worksheet-table__numeric {
   text-align: right;
   white-space: nowrap;
 }
