@@ -4090,6 +4090,11 @@ button {
     align-items: stretch;
   }
 
+  .budget-next-decision__text {
+  flex: 0 1 auto;
+  width: 100%;
+}
+
   .budget-next-decision__actions {
     flex-direction: column;
   }
