@@ -14,13 +14,14 @@ import {
   Map,
   Ruler,
   Sparkles,
+  Wallet,
   Waves,
   Wrench,
   type LucideIcon
 } from "lucide-react";
 import { Card } from "@bba/ui";
 
-type CapabilityStatus = "Pronto" | "Em desenvolvimento" | "Em breve";
+type CapabilityStatus = "Pronto" | "Em desenvolvimento" | "Em breve" | "Demonstração disponível";
 
 interface CapabilityCard {
   id: string;
@@ -29,6 +30,7 @@ interface CapabilityCard {
   status: CapabilityStatus;
   icon: LucideIcon;
   href?: string;
+  actionLabel?: string;
 }
 
 /**
@@ -94,6 +96,15 @@ const CAPABILITIES: CapabilityCard[] = [
     href: "/medicoes"
   },
   {
+    id: "orcamento",
+    title: "Orçamento",
+    description: "Veja o orçamento oficial, a proposta e como os itens são organizados para análise.",
+    status: "Demonstração disponível",
+    icon: Wallet,
+    href: "/orcamentos/demonstracao",
+    actionLabel: "Ver orçamento"
+  },
+  {
     id: "documentos",
     title: "Documentos",
     description: "Reconstrução de boletins, relatórios e documentos técnicos para revisão.",
@@ -135,7 +146,12 @@ const CAPABILITIES: CapabilityCard[] = [
 const CAPABILITY_BADGE_CLASS: Record<CapabilityStatus, string> = {
   Pronto: "status-badge status-badge--completed",
   "Em desenvolvimento": "status-badge status-badge--active",
-  "Em breve": "status-badge status-badge--pending"
+  "Em breve": "status-badge status-badge--pending",
+  // Mesmo tom neutro/dourado já usado em "Exemplo demonstrativo" (mais abaixo
+  // nesta página) — sinaliza que existe algo para ver agora, sem soar como
+  // funcionalidade definitiva (nunca "Pronto"/verde, nunca "Em
+  // desenvolvimento"/dourado ativo).
+  "Demonstração disponível": "status-badge status-badge--pending"
 };
 
 const NEXT_STEPS = [
@@ -259,7 +275,7 @@ export default function EngenhariaWorkspacePage() {
               <p className="workspace-card__description">{capability.description}</p>
               {capability.href ? (
                 <Link className="bba-button bba-button--secondary bba-button--sm" href={capability.href}>
-                  Abrir
+                  {capability.actionLabel ?? "Abrir"}
                 </Link>
               ) : null}
             </Card>

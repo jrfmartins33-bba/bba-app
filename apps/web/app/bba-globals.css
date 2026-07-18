@@ -3638,3 +3638,585 @@ button {
   letter-spacing: 0.02em;
   padding: 3px 8px;
 }
+
+/* Epic 21, Sprint 21.4B.2 — Orçamento (planilha orçamentária e
+   composição visual profissional). Mesma linguagem visual do Decision
+   Hero de Medições (measurement-decision-hero, acima): tokens do tema
+   escuro navy/gold já herdados via
+   `.bba-main__content--standard .bba-card`. */
+
+.budget-demo-note {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 10px 0 0;
+  max-width: 640px;
+}
+
+/* Resumo compacto entre o cabeçalho e os indicadores -- nunca um card
+   grande (substitui o antigo "Conclusão Executiva"): no máximo duas
+   linhas, sem min-height, sem painel interno. */
+.budget-summary-strip {
+  border-bottom: 1px solid var(--app-divider);
+  display: grid;
+  gap: 4px;
+  padding: 0 2px 16px;
+}
+
+.budget-summary-strip__headline {
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.budget-summary-strip__headline strong {
+  color: var(--text-primary);
+}
+
+.budget-indicator-card {
+  justify-content: center;
+}
+
+.budget-comparison {
+  display: grid;
+  gap: 16px;
+}
+
+.budget-comparison__row {
+  align-items: center;
+  display: grid;
+  gap: 6px 14px;
+  grid-template-columns: 132px minmax(0, 1fr) auto;
+}
+
+.budget-comparison__row-label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.budget-comparison__row-value {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.budget-comparison__bar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  height: 16px;
+  overflow: hidden;
+}
+
+.budget-comparison__bar {
+  animation: budget-bar-grow var(--medium) var(--ease) both;
+  border-radius: inherit;
+  height: 100%;
+  transform-origin: left;
+}
+
+.budget-comparison__bar--official {
+  background: var(--bba-gold);
+}
+
+.budget-comparison__bar--proposal {
+  background: var(--status-green);
+}
+
+@keyframes budget-bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.budget-comparison__summary {
+  border-top: 1px solid var(--app-divider);
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 8px 24px;
+  padding-top: 12px;
+}
+
+.budget-comparison__summary strong {
+  color: var(--text-primary);
+}
+
+/* Faixa compacta 11 → 25 → 300, imediatamente acima da Planilha
+   orçamentária -- nunca um card, só uma tira de contexto. */
+.budget-hierarchy-strip {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0 2px 4px;
+}
+
+.budget-hierarchy-strip__node {
+  background: rgba(185, 149, 79, 0.12);
+  border: 1px solid var(--bba-gold-dim);
+  border-radius: 999px;
+  color: var(--bba-gold-soft);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 14px;
+}
+
+.budget-hierarchy-strip__arrow {
+  color: var(--text-muted);
+}
+
+/* Planilha orçamentária -- elemento principal da experiência. */
+.budget-worksheet__sample-size {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  margin: 2px 0 10px;
+}
+
+.budget-worksheet__warning {
+  border-left: 2px solid var(--status-amber);
+  color: var(--status-amber);
+  font-size: 12.5px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  padding-left: 10px;
+}
+
+/* Epic 21, Sprint 21.4B.4 — a linha de cabeçalho de cada grupo agora
+   vive DENTRO da única tabela da planilha (`<th colSpan={6}
+   scope="rowgroup">`), não mais num `<details>` embrulhando uma
+   `<table>` própria -- é essa mudança estrutural (uma tabela só, um só
+   <colgroup>) que torna o desalinhamento de coluna entre grupos
+   estruturalmente impossível, não apenas "improvável". */
+.budget-worksheet-table__group-header-row th {
+  background: rgba(185, 149, 79, 0.05);
+  border-bottom: 1px solid var(--app-border);
+  border-top: 2px solid var(--app-divider);
+  padding: 0;
+}
+
+.budget-worksheet-group__summary {
+  align-items: center;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 10px;
+  padding: 10px 10px;
+  text-align: left;
+  transition: background var(--fast) var(--ease);
+  width: 100%;
+}
+
+.budget-worksheet-group__summary:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.budget-worksheet-group__summary:focus-visible {
+  outline: 2px solid var(--bba-gold);
+  outline-offset: -2px;
+}
+
+.budget-worksheet-group__chevron {
+  color: var(--bba-gold-soft);
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: transform var(--fast) var(--ease);
+}
+
+.budget-worksheet-group__chevron--open {
+  transform: rotate(180deg);
+}
+
+.budget-worksheet-group__code {
+  background: rgba(185, 149, 79, 0.12);
+  border-radius: 6px;
+  color: var(--bba-gold-soft);
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+}
+
+.budget-worksheet-group__label {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.budget-worksheet-group__count {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* Grade fixa -- o mesmo <colgroup> (ver BudgetWorksheetColgroup no
+   componente) mantém Quantidade/Preço unitário/Total alinhados entre os
+   três grupos; sem `table-layout: fixed`, cada <table> recalcularia a
+   largura das colunas a partir do próprio conteúdo, e as três tabelas
+   dos três grupos divergiriam entre si. */
+.budget-worksheet-table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  margin-top: 10px;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.budget-worksheet-table th {
+  border-bottom: 1px solid var(--app-border);
+  color: var(--text-secondary-strong);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 8px 10px;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.budget-worksheet-table td {
+  border-bottom: 1px solid var(--app-divider);
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.budget-worksheet-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.budget-worksheet-table__description {
+  overflow-wrap: anywhere;
+}
+
+.budget-worksheet-table th.budget-worksheet-table__unit,
+.budget-worksheet-table td.budget-worksheet-table__unit {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.budget-worksheet-table th.budget-worksheet-table__numeric,
+.budget-worksheet-table td.budget-worksheet-table__numeric {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.budget-worksheet-table__subtotal-row td {
+  border-bottom: none;
+  border-top: 1px solid var(--app-divider);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  padding-top: 10px;
+}
+
+.budget-worksheet-table__subtotal-label {
+  text-align: right;
+}
+
+.budget-worksheet-table__subtotal-row .budget-worksheet-table__numeric {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+/* Etapas do orçamento -- grade de 5 colunas no desktop (nunca lista
+   vertical de linhas largas: era essa a origem do grande espaço vazio
+   à direita). Altura alvo ~150–220px incluindo o título do Card. */
+.budget-journey {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 10px 0 0;
+  position: relative;
+}
+
+.budget-journey::before {
+  background: var(--app-divider);
+  content: "";
+  height: 2px;
+  left: 8%;
+  position: absolute;
+  right: 8%;
+  top: 24px;
+}
+
+.budget-journey__step {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 4px;
+  position: relative;
+  text-align: center;
+}
+
+.budget-journey__index {
+  align-items: center;
+  background: var(--app-sidebar);
+  border: 2px solid var(--app-divider);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.budget-journey__label {
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.budget-journey__state {
+  align-items: center;
+  color: var(--text-secondary);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 4px;
+  justify-content: center;
+}
+
+.budget-journey__step--available .budget-journey__index {
+  background: var(--status-green-bg);
+  border-color: var(--status-green);
+  color: var(--status-green);
+}
+
+.budget-journey__step--available .budget-journey__state {
+  color: var(--status-green);
+}
+
+.budget-journey__step--awaiting_review .budget-journey__index {
+  background: var(--status-amber-bg);
+  border-color: var(--status-amber);
+  color: var(--status-amber);
+}
+
+.budget-journey__step--awaiting_review .budget-journey__state {
+  color: var(--status-amber);
+}
+
+.budget-journey__step--next_step .budget-journey__label {
+  color: var(--text-secondary);
+}
+
+/* Cards de ação (Revisar o orçamento / Comparar a proposta): o botão
+   fica no rodapé -- `.workspace-card` já é uma coluna flex esticada à
+   altura da linha da grade, então `margin-top: auto` no rodapé empurra
+   o botão para baixo sem precisar de padding vazio. */
+.budget-action-card__footer {
+  margin-top: auto;
+  padding-top: 10px;
+}
+
+/* Próximo passo -- faixa horizontal compacta no desktop (título+texto à
+   esquerda, botões à direita, alinhamento vertical central), em vez do
+   bloco de largura total cuja única ação real era voltar à planilha. */
+.budget-next-decision__row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  justify-content: space-between;
+}
+
+.budget-next-decision__text {
+  flex: 1 1 320px;
+  margin: 0;
+}
+
+.budget-next-decision__actions,
+.budget-empty-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  gap: 10px;
+}
+
+/* Epic 21, Sprint 21.4B.2 — regra responsiva específica da comparação
+   (não depende só da grade genérica de section-grid/span-*): em telas
+   estreitas, rótulo e valor ficam na mesma linha, a barra ocupa uma
+   linha inteira própria, e nenhum valor monetário é cortado. */
+@media (max-width: 600px) {
+  .budget-comparison__row {
+    grid-template-areas:
+      "label value"
+      "bar bar";
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 8px;
+  }
+
+  .budget-comparison__row-label {
+    grid-area: label;
+  }
+
+  .budget-comparison__row-value {
+    grid-area: value;
+    overflow-wrap: anywhere;
+    text-align: right;
+  }
+
+  .budget-comparison__bar-track {
+    grid-area: bar;
+    width: 100%;
+  }
+
+  .budget-hierarchy-strip {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .budget-hierarchy-strip__arrow {
+    margin-left: 14px;
+    transform: rotate(90deg);
+  }
+
+  .budget-next-decision__row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .budget-next-decision__text {
+  flex: 0 1 auto;
+  width: 100%;
+}
+
+  .budget-next-decision__actions {
+    flex-direction: column;
+  }
+
+  .budget-next-decision__actions .bba-button,
+  .budget-empty-state__actions .bba-button {
+    width: 100%;
+  }
+
+  /* Planilha: a mesma <table>/<td> vira layout de cartão -- nenhum dado
+     duplicado em outro markup, só CSS reorganizando o que já existe.
+     `table-layout`/`<colgroup>` são ignorados automaticamente pelo
+     navegador assim que a tabela deixa de ser `display: table`. */
+  .budget-worksheet-table thead {
+    display: none;
+  }
+
+  .budget-worksheet-table,
+  .budget-worksheet-table tbody,
+  .budget-worksheet-table tr {
+    display: block;
+    width: 100%;
+  }
+
+  .budget-worksheet-table__group-header-row th {
+    display: block;
+    width: 100%;
+  }
+
+  .budget-worksheet-table tbody tr:not(.budget-worksheet-table__group-header-row) {
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    padding: 4px 10px;
+  }
+
+  .budget-worksheet-table tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .budget-worksheet-table td {
+    align-items: baseline;
+    border-bottom: 1px solid var(--app-divider);
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 6px 0;
+    text-align: right;
+  }
+
+  .budget-worksheet-table tbody tr td:last-child {
+    border-bottom: none;
+  }
+
+  .budget-worksheet-table td::before {
+    color: var(--text-secondary);
+    content: attr(data-label);
+    font-weight: 600;
+    text-align: left;
+  }
+
+  /* Subtotal: faixa compacta de resumo, visualmente distinta dos
+     cartões de item -- não é mais um item, então não leva a mesma
+     borda/padding de cartão nem o prefixo data-label. Seletor composto
+     (`.budget-worksheet-table .budget-worksheet-table__subtotal-row`)
+     de propósito: precisa de mais especificidade que
+     `.budget-worksheet-table tr`, que já define `display: block` para
+     toda linha da tabela. */
+  .budget-worksheet-table .budget-worksheet-table__subtotal-row {
+    align-items: baseline;
+    background: rgba(185, 149, 79, 0.06);
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    margin: 4px 0 10px;
+    padding: 8px 10px;
+  }
+
+  .budget-worksheet-table .budget-worksheet-table__subtotal-row td {
+    border-bottom: none;
+    display: block;
+    padding: 0;
+  }
+
+  .budget-worksheet-table .budget-worksheet-table__subtotal-row td::before {
+    content: none;
+  }
+
+  /* Etapas: empilha verticalmente, sem conector horizontal, cada etapa
+     numa linha compacta em vez de uma coluna centralizada. */
+  .budget-journey {
+    gap: 8px;
+    grid-template-columns: 1fr;
+  }
+
+  .budget-journey::before {
+    display: none;
+  }
+
+  .budget-journey__step {
+    align-items: center;
+    flex-direction: row;
+    gap: 10px;
+    padding: 4px 0;
+    text-align: left;
+  }
+
+  .budget-journey__label {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .budget-comparison__bar {
+    animation: none;
+  }
+}
+
+/* Âncoras de "Abrir planilha"/"Ver comparação"/"Revisar planilha" --
+   impede que o título da seção fique colado à borda superior da
+   viewport ao rolar até ela. */
+#planilha-orcamentaria,
+#comparacao {
+  scroll-margin-top: 24px;
+}

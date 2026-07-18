@@ -31,6 +31,7 @@ import {
   FlaskConical,
 } from 'lucide-react'
 import { WORKSPACE_NAV_CONFIG, type WorkspaceNavConfig } from './workspace-nav-config'
+import { isWorkspaceSubNavItemActive } from './workspace-subnav-active'
 
 interface SidebarProps {
   userName?: string
@@ -309,7 +310,7 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
                       )
                     }
 
-                    const itemActive = pathname === item.href
+                    const itemActive = isWorkspaceSubNavItemActive(pathname, item.href)
 
                     return (
                       <Link
