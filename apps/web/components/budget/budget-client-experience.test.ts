@@ -148,11 +148,20 @@ async function main(): Promise<void> {
     assertTrue(worksheet.includes('id="planilha-orcamentaria"'), "âncora real da planilha");
   });
 
-  await runTest("1, 2 e 3. mesmo <colgroup> em toda tabela, seis colunas, table-layout: fixed", () => {
+  await runTest("estrutura: uma ÚNICA <table> para toda a planilha (nunca uma tabela por grupo)", () => {
+    const worksheet = stripComments(sourceOf("budget-worksheet-section.tsx"));
+    const tableOpenTags = worksheet.match(/<table\b/g) ?? [];
+    assertTrue(
+      tableOpenTags.length === 1,
+      "deve existir exatamente uma <table> -- desalinhamento entre grupos vinha de cada grupo ter sua própria tabela, um contexto de layout independente do navegador"
+    );
+    assertTrue(worksheet.includes("<BudgetWorksheetColgroup />"), "o único <colgroup> deve viver dentro da <table> única, uma vez só");
+    assertTrue((worksheet.match(/<tbody/g) ?? []).length >= 2, "cada grupo contribui com seu próprio <tbody> dentro da mesma tabela");
+  });
+
+  await runTest("1, 2 e 3. colgroup único, seis colunas, table-layout: fixed", () => {
     const worksheet = sourceOf("budget-worksheet-section.tsx");
-    assertTrue(worksheet.includes("function BudgetWorksheetColgroup"), "colgroup deve vir de uma única função, nunca copiado por arquivo");
-    const colgroupMatches = worksheet.match(/<BudgetWorksheetColgroup \/>/g) ?? [];
-    assertTrue(colgroupMatches.length === 1, "colgroup deve ser referenciado uma única vez na função de tabela, reaproveitada por grupo");
+    assertTrue(worksheet.includes("function BudgetWorksheetColgroup"), "colgroup deve vir de uma única função");
     const widths = [...worksheet.matchAll(/<col style=\{\{ width: "(\d+)%" \}\} \/>/g)].map((match) => Number(match[1]));
     assertEqual(widths, [9, 33, 10, 12, 18, 18]);
     assertEqual(
@@ -193,17 +202,16 @@ async function main(): Promise<void> {
     );
   });
 
-  await runTest("7, 8 e 9. subtotal em <tfoot>, alinhado à sexta coluna, com versão móvel", () => {
+  await runTest("7, 8 e 9. subtotal é a última linha do <tbody> do grupo, alinhado à sexta coluna, com versão móvel", () => {
     const worksheet = sourceOf("budget-worksheet-section.tsx");
-    assertTrue(worksheet.includes("<tfoot>"), "subtotal deve estar em <tfoot>, não em parágrafo externo");
     assertTrue(worksheet.includes("Subtotal do exemplo"), "rótulo exato preservado, nunca apenas 'Subtotal'");
     assertTrue(!worksheet.includes(">Subtotal<"), "não deve usar apenas 'Subtotal' isolado");
     assertTrue(/colSpan=\{5\}[\s\S]{0,40}Subtotal do exemplo/.test(worksheet), "rótulo deve ocupar as cinco primeiras colunas");
     assertTrue(
       /<td className="budget-worksheet-table__numeric">\{group\.subtotalDisplay\}<\/td>/.test(worksheet),
-      "valor do subtotal deve ocupar a sexta coluna, alinhado como Total"
+      "valor do subtotal deve ocupar a sexta coluna, alinhado como Total -- mesma coluna física da tabela única, não apenas a mesma classe CSS"
     );
-    assertTrue(mobileCss.includes("budget-worksheet-table__subtotal-row"), "versão móvel do <tfoot> deve existir");
+    assertTrue(mobileCss.includes("budget-worksheet-table__subtotal-row"), "versão móvel do subtotal deve existir");
   });
 
   await runTest("não existe mais subtotal externo desalinhado (parágrafo fora da tabela)", () => {
@@ -240,17 +248,19 @@ async function main(): Promise<void> {
     });
   });
 
-  await runTest("15. primeiro grupo começa aberto, os demais recolhidos (controlado por React)", () => {
+  await runTest("15. primeiro grupo começa aberto, os demais recolhidos (controlado por React, item rows só existem no DOM quando abertos)", () => {
     const worksheet = sourceOf("budget-worksheet-section.tsx");
     assertTrue(worksheet.includes("defaultOpen={index === 0}"), "só o primeiro grupo (index 0) começa aberto");
     assertTrue(worksheet.includes("useState(defaultOpen)"), "estado de abertura controlado por React, não recomputado a cada render");
-    assertTrue(worksheet.includes("onToggle=") && worksheet.includes("open={open}"), "details deve ser controlado (nunca perde o estado do usuário em re-render)");
+    assertTrue(worksheet.includes("{open ? (") || /\{open\s*\?/.test(worksheet), "linhas do grupo só renderizam quando aberto");
   });
 
-  await runTest("16. chevron real (ChevronDown), decorativo, com foco visível e rotação ao abrir", () => {
+  await runTest("16. chevron real (ChevronDown), decorativo, botão acessível (aria-expanded/aria-controls) com foco visível e rotação ao abrir", () => {
     const worksheet = sourceOf("budget-worksheet-section.tsx");
     assertTrue(worksheet.includes('import { ChevronDown } from "lucide-react"'), "deve usar o ícone real ChevronDown");
-    assertTrue(/<ChevronDown\s[^>]*aria-hidden="true"[^>]*className="budget-worksheet-group__chevron"/.test(worksheet), "chevron deve ser decorativo (aria-hidden)");
+    assertTrue(/<ChevronDown\s[\s\S]{0,80}aria-hidden="true"/.test(worksheet), "chevron deve ser decorativo (aria-hidden)");
+    assertTrue(worksheet.includes("aria-expanded={open}") && worksheet.includes("aria-controls={contentId}"), "botão deve expor estado de expansão de forma acessível");
+    assertTrue(/<button[\s\S]{0,20}aria-controls/.test(worksheet), "cabeçalho do grupo deve ser um <button> real, focável e operável por teclado por padrão");
     assertTrue(
       /\.budget-worksheet-group__summary:focus-visible\s*\{/.test(strippedBudgetCss),
       "foco de teclado do cabeçalho do grupo deve ficar visível"
@@ -260,7 +270,7 @@ async function main(): Promise<void> {
       "estado de hover do cabeçalho do grupo deve existir"
     );
     assertTrue(
-      /\.budget-worksheet-group\[open\] \.budget-worksheet-group__chevron\s*\{[^}]*rotate\(180deg\)/.test(strippedBudgetCss),
+      /\.budget-worksheet-group__chevron--open\s*\{[^}]*rotate\(180deg\)/.test(strippedBudgetCss),
       "chevron deve rotacionar quando o grupo estiver aberto"
     );
   });

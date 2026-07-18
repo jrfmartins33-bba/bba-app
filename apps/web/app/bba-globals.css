@@ -3790,37 +3790,32 @@ button {
   padding-left: 10px;
 }
 
-.budget-worksheet__groups {
-  display: grid;
-  gap: 10px;
-}
-
-.budget-worksheet-group {
-  border: 1px solid var(--app-border);
-  border-radius: 10px;
-  padding: 10px 14px;
-  transition: border-color var(--fast) var(--ease);
-}
-
-.budget-worksheet-group[open] {
-  background: rgba(185, 149, 79, 0.04);
-  border-color: var(--bba-gold-dim);
+/* Epic 21, Sprint 21.4B.4 — a linha de cabeçalho de cada grupo agora
+   vive DENTRO da única tabela da planilha (`<th colSpan={6}
+   scope="rowgroup">`), não mais num `<details>` embrulhando uma
+   `<table>` própria -- é essa mudança estrutural (uma tabela só, um só
+   <colgroup>) que torna o desalinhamento de coluna entre grupos
+   estruturalmente impossível, não apenas "improvável". */
+.budget-worksheet-table__group-header-row th {
+  background: rgba(185, 149, 79, 0.05);
+  border-bottom: 1px solid var(--app-border);
+  border-top: 2px solid var(--app-divider);
+  padding: 0;
 }
 
 .budget-worksheet-group__summary {
   align-items: center;
-  border-radius: 8px;
+  background: none;
+  border: none;
+  color: inherit;
   cursor: pointer;
   display: flex;
+  font: inherit;
   gap: 10px;
-  list-style: none;
-  margin: -4px -6px;
-  padding: 8px 6px;
+  padding: 10px 10px;
+  text-align: left;
   transition: background var(--fast) var(--ease);
-}
-
-.budget-worksheet-group__summary::-webkit-details-marker {
-  display: none;
+  width: 100%;
 }
 
 .budget-worksheet-group__summary:hover {
@@ -3829,7 +3824,7 @@ button {
 
 .budget-worksheet-group__summary:focus-visible {
   outline: 2px solid var(--bba-gold);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 .budget-worksheet-group__chevron {
@@ -3839,7 +3834,7 @@ button {
   transition: transform var(--fast) var(--ease);
 }
 
-.budget-worksheet-group[open] .budget-worksheet-group__chevron {
+.budget-worksheet-group__chevron--open {
   transform: rotate(180deg);
 }
 
@@ -4112,13 +4107,17 @@ button {
 
   .budget-worksheet-table,
   .budget-worksheet-table tbody,
-  .budget-worksheet-table tfoot,
   .budget-worksheet-table tr {
     display: block;
     width: 100%;
   }
 
-  .budget-worksheet-table tbody tr {
+  .budget-worksheet-table__group-header-row th {
+    display: block;
+    width: 100%;
+  }
+
+  .budget-worksheet-table tbody tr:not(.budget-worksheet-table__group-header-row) {
     border: 1px solid var(--app-border);
     border-radius: 8px;
     margin-bottom: 8px;
