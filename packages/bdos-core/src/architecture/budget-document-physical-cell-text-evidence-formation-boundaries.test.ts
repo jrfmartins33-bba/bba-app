@@ -153,10 +153,12 @@ runTest("internal helpers, classifiers, resolvers and the dependency seam are no
   const indexPath = join(MODULE_DIR, "index.ts");
   const content = readFileSync(indexPath, "utf8");
   const forbiddenExports = [
-    "classifyCell", "classifySegmentOutcome", "classifyItemDisposition", "resolveTextItemOccurrence", "resolveSegmentReference",
+    "classifyCell", "classifySegmentOutcome", "classifyItemDisposition", "resolveTextItemOccurrence", "resolveSegmentReference", "cellStatusFor",
     "formRegionCellTextEvidences", "runConservationGates", "getDefaultPhysicalCellTextEvidenceFormationDependencies",
     "formBudgetDocumentPhysicalCellTextEvidenceWithDependencies", "validateCellHypothesisConservation", "validateSegmentOutcomeConservation",
     "validateTextItemOccurrenceConservation", "validateFragmentDispositionConservation", "validateMetricCategoryConservation",
+    "isPhysicalReadFingerprintValid", "isStructureReconstructionFingerprintValid", "isPhysicalCellHypothesisFormationFingerprintValid",
+    "recomputePhysicalCellHypothesisFormationIdentityFingerprint",
     "normalizePhysicalCellTextItem", "PROFILE",
   ];
   const violations = forbiddenExports.filter((name) => content.includes(name));

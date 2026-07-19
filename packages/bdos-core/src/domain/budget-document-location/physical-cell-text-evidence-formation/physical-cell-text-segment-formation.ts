@@ -44,7 +44,7 @@ function resolveSegmentReference(
   return { kind: "pending", segmentKey, lineKey: segment.lineKey, segment };
 }
 
-function cellStatusFor(segmentOutcomes: ReadonlyArray<PhysicalCellTextSegmentOutcome>): PhysicalCellTextEvidence["status"] {
+export function cellStatusFor(segmentOutcomes: ReadonlyArray<PhysicalCellTextSegmentOutcome>): PhysicalCellTextEvidence["status"] {
   const allResolved = segmentOutcomes.every((outcome) => outcome.status === "resolved");
   const dispositions = segmentOutcomes.flatMap((outcome) => (outcome.status === "resolved" ? outcome.itemDispositions : []));
   const anyIncluded = dispositions.some((disposition) => disposition.status === "included_in_text_fragment");

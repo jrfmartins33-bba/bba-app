@@ -1,12 +1,22 @@
 import type { GlobalPhysicalCellTextEvidenceFormationMetrics, GroupPhysicalCellTextEvidenceFormationMetrics, PagePhysicalCellTextEvidenceFormationMetrics, PhysicalCellTextEvidence, PhysicalCellTextEvidenceFormationGroup, PhysicalCellTextEvidenceFormationPage, PhysicalCellTextEvidenceFormationRegion, PhysicalCellTextItemDisposition, PhysicalCellTextSegmentOutcome, RegionPhysicalCellTextEvidenceFormationMetrics } from "./budget-document-physical-cell-text-evidence-formation.types";
+import { cellStatusFor } from "./physical-cell-text-segment-formation";
 
 export type CellCategory = "formed" | "partiallyFormed" | "failed";
 export type SegmentCategory = "resolved" | "referenceInvalid" | "incompatible" | "formationFailed";
 export type ItemCategory = "included" | "invalidReference" | "duplicateReference" | "segmentMismatch" | "formationFailed";
 
+/**
+ * Classifica pelo status rederivado a partir de segmentOutcomes/disposições
+ * reais (via cellStatusFor, a mesma regra usada na formação) — nunca
+ * confiando diretamente em evidence.status. Isso garante que as métricas
+ * nunca fecham em torno de um status publicado incorretamente; a Seção
+ * "Portão 1" da conservação audita separadamente se o campo publicado bate
+ * com esta reclassificação.
+ */
 export function classifyCell(evidence: PhysicalCellTextEvidence): CellCategory {
-  if (evidence.status === "formed") return "formed";
-  if (evidence.status === "partially_formed") return "partiallyFormed";
+  const recomputed = cellStatusFor(evidence.segmentOutcomes);
+  if (recomputed === "formed") return "formed";
+  if (recomputed === "partially_formed") return "partiallyFormed";
   return "failed";
 }
 

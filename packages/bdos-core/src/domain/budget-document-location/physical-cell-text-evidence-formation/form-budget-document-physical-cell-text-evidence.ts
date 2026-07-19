@@ -16,13 +16,13 @@ export type TextEvidenceConservationFailure = "cell_hypothesis" | "segment_outco
 
 function runConservationGates(
   region: PhysicalCellHypothesisFormationRegion,
-  cellTextEvidences: ReturnType<typeof formRegionCellTextEvidences>["cellTextEvidences"],
   structurePage: ValidatedRegionSources["structurePage"],
   physicalPage: PhysicalDocumentPage,
+  cellTextEvidences: ReturnType<typeof formRegionCellTextEvidences>["cellTextEvidences"],
 ): TextEvidenceConservationFailure {
   if (!validateCellHypothesisConservation(region, cellTextEvidences)) return "cell_hypothesis";
-  if (!validateSegmentOutcomeConservation(region, cellTextEvidences)) return "segment_outcome";
-  if (!validateTextItemOccurrenceConservation(structurePage, cellTextEvidences)) return "text_item_occurrence";
+  if (!validateSegmentOutcomeConservation(region, structurePage, cellTextEvidences)) return "segment_outcome";
+  if (!validateTextItemOccurrenceConservation(region, structurePage, physicalPage, cellTextEvidences)) return "text_item_occurrence";
   if (!validateFragmentDispositionConservation(cellTextEvidences, physicalPage)) return "fragment_disposition";
   return null;
 }
@@ -59,12 +59,33 @@ function emptyRegion(region: PhysicalCellHypothesisFormationRegion, regionProces
   };
 }
 
-function formationFailedRegion(region: PhysicalCellHypothesisFormationRegion, regionProcessedKey: string, groupProcessedKey: string): PhysicalCellTextEvidenceFormationRegion {
-  const technicalProblem = problem("cell_text_evidence_formation_failed", "fragment_assembly", { groupKey: groupProcessedKey, pageNumber: region.pageNumber, regionKey: region.sourceRegionKey });
+/**
+ * Substituto auditável para uma falha inesperada localizada (fragmento
+ * ausente do resultado real ou página física ausente, defensivo e
+ * provadamente inalcançável dado o novo portão global de contrato físico):
+ * preserva toda PhysicalCellHypothesis e todo segmentKey, cada um com o
+ * estado técnico público correspondente — nunca esvazia cellTextEvidences,
+ * o que quebraria a própria conservação (sourceCellHypothesisCount ===
+ * formed + partiallyFormed + failed).
+ */
+function buildFormationFailedSubstitute(region: PhysicalCellHypothesisFormationRegion, failedPhase: "text_item_resolution" | "fragment_assembly"): ReturnType<typeof formRegionCellTextEvidences> {
+  const cellTextEvidences: ReturnType<typeof formRegionCellTextEvidences>["cellTextEvidences"] = region.cellHypotheses.map((cell) => ({
+    status: "unresolved_technical_failure",
+    cellHypothesisKey: cell.cellHypothesisKey,
+    gridIntersectionKey: cell.gridIntersectionKey,
+    segmentOutcomes: cell.segmentKeys.map((segmentKey) => ({ status: "unresolved_segment_formation_failed", segmentKey, failedPhase })),
+  }));
+  return { cellTextEvidences, technicalProblems: [] };
+}
+
+/** Placeholder seguro para os portões 3/4 quando a página física está genuinamente ausente (caminho defensivo, inalcançável em prática): o substituto nunca tem segmentOutcome "resolved", então os portões que dependem de texto passam vacuamente. */
+function emptyPlaceholderPhysicalPage(pageNumber: number): PhysicalDocumentPage {
   return {
-    regionProcessedKey, sourceRegionKey: region.sourceRegionKey, pageNumber: region.pageNumber,
-    sourcePhysicalCellHypothesisFormationRegionStatus: region.status, status: "formed_with_problems",
-    cellTextEvidences: [], technicalProblems: [technicalProblem], metrics: computeRegionMetrics(region.cellHypotheses.length, [], 1),
+    pageNumber, widthPoints: null, heightPoints: null, rotationDegrees: null, orientation: "indeterminate",
+    textItems: [], normalizedText: "",
+    metrics: { textItemCount: 0, nonEmptyCharacterCount: 0, replacementCharacterCount: 0, unexpectedControlCharacterCount: 0 },
+    textItemPlacementMetrics: { totalAdmittedTextItemCount: 0, placedTextItemCount: 0, unresolvedMissingGeometryCount: 0, unresolvedInvalidGeometryCount: 0, unresolvedUnsupportedOrientationCount: 0, unresolvedNormalizationFailedCount: 0 },
+    extractionAvailability: "no_extractable_text", technicalProblems: [],
   };
 }
 
@@ -76,32 +97,41 @@ function processRegion(
   dependencies: PhysicalCellTextEvidenceFormationDependencies,
 ): PhysicalCellTextEvidenceFormationRegion {
   const region = source.cellFormationRegion;
-  if (region.status === "region_not_processable" || region.status === "no_physical_grid") return emptyRegion(region, regionProcessedKey, "region_not_processable");
-  if (region.cellHypotheses.length === 0) return emptyRegion(region, regionProcessedKey, "no_cell_hypotheses");
+  if (region.status === "region_not_processable") return emptyRegion(region, regionProcessedKey, "region_not_processable");
+  if (region.status === "no_physical_grid" || region.cellHypotheses.length === 0) return emptyRegion(region, regionProcessedKey, "no_cell_hypotheses");
 
-  const physicalPage = physicalPageByNumber.get(region.pageNumber);
-  if (!physicalPage) {
-    const technicalProblem = problem("source_physical_read_contract_invalid", "candidate_region_processing", { groupKey: groupProcessedKey, pageNumber: region.pageNumber, regionKey: region.sourceRegionKey });
-    return { regionProcessedKey, sourceRegionKey: region.sourceRegionKey, pageNumber: region.pageNumber, sourcePhysicalCellHypothesisFormationRegionStatus: region.status, status: "formed_with_problems", cellTextEvidences: [], technicalProblems: [technicalProblem], metrics: computeRegionMetrics(region.cellHypotheses.length, [], 1) };
-  }
-
+  const resolvedPhysicalPage = physicalPageByNumber.get(region.pageNumber);
+  let physicalPage: PhysicalDocumentPage;
   let formed: ReturnType<typeof formRegionCellTextEvidences>;
-  try {
-    formed = dependencies.formRegionCellTextEvidences(region, source.structurePage, physicalPage, { groupKey: groupProcessedKey, regionKey: region.sourceRegionKey });
-  } catch {
-    return formationFailedRegion(region, regionProcessedKey, groupProcessedKey);
+  let substituteProblem: PhysicalCellTextEvidenceFormationTechnicalProblem | null = null;
+
+  if (!resolvedPhysicalPage) {
+    // Defensivo, provadamente inalcançável: a validação global já exige que
+    // toda região com cellHypotheses > 0 tenha página física correspondente.
+    physicalPage = emptyPlaceholderPhysicalPage(region.pageNumber);
+    substituteProblem = problem("source_physical_read_contract_invalid", "candidate_region_processing", { groupKey: groupProcessedKey, pageNumber: region.pageNumber, regionKey: region.sourceRegionKey });
+    formed = buildFormationFailedSubstitute(region, "text_item_resolution");
+  } else {
+    physicalPage = resolvedPhysicalPage;
+    try {
+      formed = dependencies.formRegionCellTextEvidences(region, source.structurePage, physicalPage, { groupKey: groupProcessedKey, regionKey: region.sourceRegionKey });
+    } catch {
+      substituteProblem = problem("cell_text_evidence_formation_failed", "fragment_assembly", { groupKey: groupProcessedKey, pageNumber: region.pageNumber, regionKey: region.sourceRegionKey });
+      formed = buildFormationFailedSubstitute(region, "fragment_assembly");
+    }
   }
 
   let conservationFailure: TextEvidenceConservationFailure;
   try {
-    conservationFailure = dependencies.runConservationGates(region, formed.cellTextEvidences, source.structurePage, physicalPage);
+    conservationFailure = dependencies.runConservationGates(region, source.structurePage, physicalPage, formed.cellTextEvidences);
   } catch {
     conservationFailure = "fragment_disposition";
   }
 
+  const problemsFromFormation = substituteProblem ? [substituteProblem, ...formed.technicalProblems] : formed.technicalProblems;
   const problemsWithConservation = conservationFailure
-    ? [...formed.technicalProblems, problem(CONSERVATION_FAILURE_CODE[conservationFailure], "conservation_validation", { groupKey: groupProcessedKey, pageNumber: region.pageNumber, regionKey: region.sourceRegionKey })]
-    : formed.technicalProblems;
+    ? [...problemsFromFormation, problem(CONSERVATION_FAILURE_CODE[conservationFailure], "conservation_validation", { groupKey: groupProcessedKey, pageNumber: region.pageNumber, regionKey: region.sourceRegionKey })]
+    : problemsFromFormation;
 
   const metrics = computeRegionMetrics(region.cellHypotheses.length, formed.cellTextEvidences, problemsWithConservation.length);
   const metricConservationFailed = !conservationFailure && !validateMetricCategoryConservation(region.cellHypotheses.length, formed.cellTextEvidences, metrics);
@@ -110,7 +140,7 @@ function processRegion(
     : problemsWithConservation;
   const finalMetrics = metricConservationFailed ? computeRegionMetrics(region.cellHypotheses.length, formed.cellTextEvidences, finalProblems.length) : metrics;
 
-  const hasProblem = conservationFailure !== null || metricConservationFailed;
+  const hasProblem = substituteProblem !== null || conservationFailure !== null || metricConservationFailed;
   const status: PhysicalCellTextEvidenceFormationRegionStatus = hasProblem || formed.cellTextEvidences.some((entry) => entry.status !== "formed") ? "formed_with_problems" : "formed";
 
   return { regionProcessedKey, sourceRegionKey: region.sourceRegionKey, pageNumber: region.pageNumber, sourcePhysicalCellHypothesisFormationRegionStatus: region.status, status, cellTextEvidences: formed.cellTextEvidences, technicalProblems: finalProblems, metrics: finalMetrics };

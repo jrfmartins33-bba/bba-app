@@ -1,5 +1,5 @@
 import type { SyntheticGeometryPage, SyntheticGeometryTextItem } from "./testing/physical-cell-text-evidence-formation-test-bridge";
-import { buildPhysicalCellTextEvidenceFormationFixture } from "./testing/physical-cell-text-evidence-formation-test-bridge";
+import { buildPhysicalCellTextEvidenceFormationFixture, resignPhysicalCellHypothesisFormationResult } from "./testing/physical-cell-text-evidence-formation-test-bridge";
 import { validatePhysicalCellTextEvidenceFormationInput } from "./physical-cell-text-evidence-formation-input-validation";
 import type { BudgetDocumentPhysicalCellTextEvidenceFormationInput } from "./budget-document-physical-cell-text-evidence-formation.types";
 
@@ -63,14 +63,17 @@ function fixture(): BudgetDocumentPhysicalCellTextEvidenceFormationInput {
   console.log("ok - a divergent sourceByteHash between contracts is rejected globally");
 }
 
-// --- cada campo físico achatado divergente (linhagem direta, nunca fingerprint) --
+// --- cada campo achatado de physicalRead em structureReconstruction, individualmente --
 {
   const physicalFieldChecks: ReadonlyArray<[string, (s: ReturnType<typeof fixture>["structureReconstruction"]) => ReturnType<typeof fixture>["structureReconstruction"]]> = [
+    ["physicalReadSchemaVersion", (s) => ({ ...s, physicalReadSchemaVersion: 999 })],
     ["physicalReaderName", (s) => ({ ...s, physicalReaderName: "divergent-reader" })],
     ["physicalReaderVersion", (s) => ({ ...s, physicalReaderVersion: "divergent-version" })],
     ["physicalAdapterVersion", (s) => ({ ...s, physicalAdapterVersion: "divergent-adapter" })],
+    ["physicalUnderlyingLibraryVersion", (s) => ({ ...s, physicalUnderlyingLibraryVersion: "divergent-library" })],
     ["physicalTextItemCoordinateSpaceVersion", (s) => ({ ...s, physicalTextItemCoordinateSpaceVersion: "divergent-coordinate-space" as never })],
     ["physicalTextItemGeometryProfileVersion", (s) => ({ ...s, physicalTextItemGeometryProfileVersion: "divergent-geometry-profile" as never })],
+    ["physicalGeometryContextFingerprintVersion", (s) => ({ ...s, physicalGeometryContextFingerprintVersion: "divergent-fingerprint-version" as never })],
     ["physicalGeometryContextFingerprint", (s) => ({ ...s, physicalGeometryContextFingerprint: "divergent-fingerprint" })],
   ];
   for (const [label, corrupt] of physicalFieldChecks) {
@@ -79,12 +82,18 @@ function fixture(): BudgetDocumentPhysicalCellTextEvidenceFormationInput {
     const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
     if (result.kind !== "invalid" || result.problems[0]?.code !== "source_lineage_mismatch") throw new Error(`divergent ${label} was not rejected as source_lineage_mismatch`);
   }
-  console.log("ok - each flattened physicalRead identity field on structureReconstruction is validated by direct equality, never by fingerprint alone");
+  console.log("ok - every flattened physicalRead identity field on structureReconstruction is validated individually by direct equality, never by fingerprint alone");
 }
+
+// --- cada campo achatado de structureReconstruction em physicalCellHypothesisFormation, individualmente --
 {
   const structureFieldChecks: ReadonlyArray<[string, (c: ReturnType<typeof fixture>["physicalCellHypothesisFormation"]) => ReturnType<typeof fixture>["physicalCellHypothesisFormation"]]> = [
+    ["sourceStructureReconstructionSchemaVersion", (c) => ({ ...c, sourceStructureReconstructionSchemaVersion: 999 })],
     ["sourceStructureReconstructorName", (c) => ({ ...c, sourceStructureReconstructorName: "divergent-reconstructor" })],
+    ["sourceStructureReconstructorVersion", (c) => ({ ...c, sourceStructureReconstructorVersion: "divergent-version" })],
     ["sourceStructureReconstructionProfileId", (c) => ({ ...c, sourceStructureReconstructionProfileId: "divergent-profile" })],
+    ["sourceStructureReconstructionProfileVersion", (c) => ({ ...c, sourceStructureReconstructionProfileVersion: 999 })],
+    ["sourceStructureReconstructionContextFingerprintVersion", (c) => ({ ...c, sourceStructureReconstructionContextFingerprintVersion: "divergent-fingerprint-version" })],
     ["sourceStructureReconstructionContextFingerprint", (c) => ({ ...c, sourceStructureReconstructionContextFingerprint: "divergent-fingerprint" })],
   ];
   for (const [label, corrupt] of structureFieldChecks) {
@@ -93,62 +102,119 @@ function fixture(): BudgetDocumentPhysicalCellTextEvidenceFormationInput {
     const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
     if (result.kind !== "invalid" || result.problems[0]?.code !== "source_lineage_mismatch") throw new Error(`divergent ${label} was not rejected as source_lineage_mismatch`);
   }
-  console.log("ok - each flattened structureReconstruction identity field on physicalCellHypothesisFormation is validated by direct equality");
+  console.log("ok - every flattened structureReconstruction identity field on physicalCellHypothesisFormation is validated individually by direct equality");
 }
 
-// --- referência de grupo/página/região sem contexto estrutural confiável -----
+// --- fingerprints upstream: cada um recalculado e validado de forma independente --
+// Nota: physicalRead.geometryContextFingerprint também é copiado em
+// structureReconstruction.physicalGeometryContextFingerprint (verificado por
+// igualdade direta de linhagem). Adulterar apenas um dos dois seria
+// capturado por essa igualdade antes de alcançar o portão de fingerprint —
+// por isso ambas as cópias são adulteradas para o mesmo valor inválido,
+// isolando exatamente o portão de fingerprint.
 {
   const input = fixture();
-  const corrupted = {
-    ...input,
-    physicalCellHypothesisFormation: {
-      ...input.physicalCellHypothesisFormation,
-      groups: input.physicalCellHypothesisFormation.groups.map((group) => ({ ...group, sourceCandidateGroupKey: "ghost-group" })),
-    },
-  };
+  const tampered = "0".repeat(64);
+  const corrupted = { ...input, physicalRead: { ...input.physicalRead, geometryContextFingerprint: tampered }, structureReconstruction: { ...input.structureReconstruction, physicalGeometryContextFingerprint: tampered } };
   const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
-  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_group_reference_invalid") throw new Error("a group without structural correspondence was not rejected");
-  console.log("ok - a group with no corresponding structureReconstruction group is rejected globally");
+  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_fingerprint_invalid") throw new Error("a tampered physicalRead.geometryContextFingerprint was not rejected as source_fingerprint_invalid");
+  console.log("ok - physicalRead.geometryContextFingerprint is recomputed and validated independently");
 }
 {
   const input = fixture();
-  const corrupted = {
-    ...input,
-    physicalCellHypothesisFormation: {
-      ...input.physicalCellHypothesisFormation,
-      groups: input.physicalCellHypothesisFormation.groups.map((group) => ({
-        ...group,
-        pages: group.pages.map((page) => ({ ...page, pageNumber: 9999 })),
-      })),
-    },
-  };
+  const tampered = "0".repeat(64);
+  const corrupted = { ...input, structureReconstruction: { ...input.structureReconstruction, reconstructionContextFingerprint: tampered }, physicalCellHypothesisFormation: { ...input.physicalCellHypothesisFormation, sourceStructureReconstructionContextFingerprint: tampered } };
   const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
-  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_page_reference_invalid") throw new Error("a page without structural correspondence was not rejected");
-  console.log("ok - a page with no corresponding structureReconstruction page is rejected globally");
+  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_fingerprint_invalid") throw new Error("a tampered structureReconstruction.reconstructionContextFingerprint was not rejected as source_fingerprint_invalid");
+  console.log("ok - structureReconstruction.reconstructionContextFingerprint is recomputed and validated independently, using the real f.1 formula");
+}
+{
+  const input = fixture();
+  const corrupted = { ...input, physicalCellHypothesisFormation: { ...input.physicalCellHypothesisFormation, formationContextFingerprint: "0".repeat(64) } };
+  const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
+  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_fingerprint_invalid") throw new Error("a tampered physicalCellHypothesisFormation.formationContextFingerprint was not rejected as source_fingerprint_invalid");
+  console.log("ok - physicalCellHypothesisFormation.formationContextFingerprint is recomputed and validated independently, using the real f.2c formula reconstructed from its own flattened fields");
+}
+
+// --- cobertura integral de grupos: ausente, extra e duplicado -----------------
+{
+  const input = fixture();
+  const group = input.physicalCellHypothesisFormation.groups[0];
+  const groups = [group, { ...group, groupProcessedKey: "extra-group-processed", sourceCandidateGroupKey: "extra-group" }];
+  const corrupted = { ...input, physicalCellHypothesisFormation: resignPhysicalCellHypothesisFormationResult(input.physicalCellHypothesisFormation, { groups }) };
+  const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
+  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_group_reference_invalid") throw new Error("an extra f.2c group with no structural counterpart was not rejected globally");
+  console.log("ok - an f.2c group with no corresponding structural group (extra group) is rejected globally");
+}
+{
+  const input = fixture();
+  const structureGroup = input.structureReconstruction.groups[0];
+  const structureReconstruction = { ...input.structureReconstruction, groups: [...input.structureReconstruction.groups, { ...structureGroup, groupReconstructionKey: "extra-structure-group", sourceCandidateGroupKey: "extra-structural-group" }] };
+  const corrupted = { ...input, structureReconstruction };
+  const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
+  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_group_reference_invalid") throw new Error("a structural group with no f.2c counterpart (missing group) was not rejected globally");
+  console.log("ok - a structural group with no f.2c counterpart (a group silently disappearing) is rejected globally");
+}
+{
+  const input = fixture();
+  const group = input.physicalCellHypothesisFormation.groups[0];
+  const groups = [group, { ...group }];
+  const corrupted = { ...input, physicalCellHypothesisFormation: resignPhysicalCellHypothesisFormationResult(input.physicalCellHypothesisFormation, { groups }) };
+  const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
+  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_group_reference_invalid") throw new Error("a duplicated sourceCandidateGroupKey was not rejected globally");
+  console.log("ok - a duplicated sourceCandidateGroupKey in f.2c's own groups is rejected globally");
+}
+
+// --- cobertura integral de páginas: ausente, extra e duplicada ----------------
+{
+  const input = fixture();
+  const group = input.physicalCellHypothesisFormation.groups[0];
+  const columnPage = group.pages[0];
+  const groups = [{ ...group, pages: [columnPage, { ...columnPage, pageProcessedKey: "extra-page-processed", pageNumber: columnPage.pageNumber + 1000 }] }];
+  const corrupted = { ...input, physicalCellHypothesisFormation: resignPhysicalCellHypothesisFormationResult(input.physicalCellHypothesisFormation, { groups }) };
+  const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
+  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_page_reference_invalid") throw new Error("an extra f.2c page with no structural counterpart was not rejected globally");
+  console.log("ok - an f.2c page with no corresponding structural page (extra page) is rejected globally");
+}
+{
+  const input = fixture();
+  const structureGroup = input.structureReconstruction.groups[0];
+  const structurePage = structureGroup.pages[0];
+  const structureReconstruction = { ...input.structureReconstruction, groups: [{ ...structureGroup, pages: [structurePage, { ...structurePage, pageReconstructionKey: "extra-structure-page", pageNumber: structurePage.pageNumber + 1000 }] }] };
+  const corrupted = { ...input, structureReconstruction };
+  const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
+  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_page_reference_invalid") throw new Error("a structural page with no f.2c counterpart (missing page) was not rejected globally");
+  console.log("ok - a structural page with no f.2c counterpart (a page silently disappearing) is rejected globally");
+}
+{
+  const input = fixture();
+  const group = input.physicalCellHypothesisFormation.groups[0];
+  const columnPage = group.pages[0];
+  const groups = [{ ...group, pages: [columnPage, { ...columnPage }] }];
+  const corrupted = { ...input, physicalCellHypothesisFormation: resignPhysicalCellHypothesisFormationResult(input.physicalCellHypothesisFormation, { groups }) };
+  const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
+  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_page_reference_invalid") throw new Error("a duplicated pageNumber was not rejected globally");
+  console.log("ok - a duplicated pageNumber in f.2c's own group is rejected globally");
 }
 
 // --- gridIntersectionKey sem interseção correspondente ------------------------
 {
   const input = fixture();
-  const corrupted = {
-    ...input,
-    physicalCellHypothesisFormation: {
-      ...input.physicalCellHypothesisFormation,
-      groups: input.physicalCellHypothesisFormation.groups.map((group) => ({
-        ...group,
-        pages: group.pages.map((page) => ({
-          ...page,
-          regions: page.regions.map((region) => ({
-            ...region,
-            cellHypotheses: region.cellHypotheses.map((cell, index) => (index === 0 ? { ...cell, gridIntersectionKey: "ghost-intersection" } : cell)),
-          })),
-        })),
+  const group = input.physicalCellHypothesisFormation.groups[0];
+  const groups = [{
+    ...group,
+    pages: group.pages.map((columnPage) => ({
+      ...columnPage,
+      regions: columnPage.regions.map((region) => ({
+        ...region,
+        cellHypotheses: region.cellHypotheses.map((cell, index) => (index === 0 ? { ...cell, gridIntersectionKey: "ghost-intersection" } : cell)),
       })),
-    },
-  };
+    })),
+  }];
+  const corrupted = { ...input, physicalCellHypothesisFormation: resignPhysicalCellHypothesisFormationResult(input.physicalCellHypothesisFormation, { groups }) };
   const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
   if (result.kind !== "invalid" || result.problems[0]?.code !== "source_grid_intersection_reference_invalid") throw new Error("a cell hypothesis without a corresponding intersection was not rejected globally");
   console.log("ok - a PhysicalCellHypothesis without a corresponding intersection is rejected globally, not treated as a local defect");
 }
 
-console.log("ok - physical-cell-text-evidence-formation-input-validation covers contracts, status, lineage and structural cross-references");
+console.log("ok - physical-cell-text-evidence-formation-input-validation covers contracts, status, lineage, fingerprints and full group/page coverage");

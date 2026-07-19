@@ -1,7 +1,9 @@
+import type { PhysicalDocumentReadResult } from "../physical-document-read.types";
 import type { ReconstructedBudgetDocumentGroup, ReconstructedBudgetDocumentPage } from "../structure-reconstruction/budget-document-structure-reconstruction.types";
 import type { PhysicalCellHypothesisFormationGroup, PhysicalCellHypothesisFormationPage, PhysicalCellHypothesisFormationRegion } from "../physical-cell-hypothesis-formation/budget-document-physical-cell-hypothesis-formation.types";
 import type { BudgetDocumentPhysicalCellTextEvidenceFormationInput, PhysicalCellTextEvidenceFormationTechnicalProblem } from "./budget-document-physical-cell-text-evidence-formation.types";
 import { isSupportedPhysicalCellHypothesisFormationContract, isSupportedPhysicalReadContract, isSupportedStructureReconstructionContract } from "./physical-cell-text-evidence-formation-source-contracts";
+import { isPhysicalCellHypothesisFormationFingerprintValid, isPhysicalReadFingerprintValid, isStructureReconstructionFingerprintValid } from "./physical-cell-text-evidence-formation-upstream-fingerprint-validation";
 import { problem } from "./physical-cell-text-evidence-formation-technical-problem";
 
 export interface ValidatedRegionSources {
@@ -40,7 +42,8 @@ function sameStructureReconstructionLineage(input: BudgetDocumentPhysicalCellTex
 
 function samePhysicalReadLineage(input: BudgetDocumentPhysicalCellTextEvidenceFormationInput): boolean {
   const { physicalRead: p, structureReconstruction: s } = input;
-  return s.physicalReaderName === p.readerName
+  return s.physicalReadSchemaVersion === p.schemaVersion
+    && s.physicalReaderName === p.readerName
     && s.physicalReaderVersion === p.readerVersion
     && s.physicalAdapterVersion === p.adapterVersion
     && s.physicalUnderlyingLibraryVersion === p.underlyingLibraryVersion
@@ -59,6 +62,29 @@ function everyCellHypothesisHasIntersection(region: PhysicalCellHypothesisFormat
   });
 }
 
+/**
+ * Confirma que o próprio `PhysicalDocumentReadResult` é internamente são
+ * antes de qualquer mapa ser construído sobre ele: número de páginas
+ * declarado bate com o array real, todo pageNumber é inteiro positivo e
+ * único, e todo índice de item textual é inteiro não negativo e único
+ * dentro da própria página — nunca sobrescrito silenciosamente por um mapa
+ * construído a partir de dados incoerentes.
+ */
+function isPhysicalReadStructurallySound(physicalRead: PhysicalDocumentReadResult): boolean {
+  if (physicalRead.pages.length !== physicalRead.totalPageCount) return false;
+  const seenPageNumbers = new Set<number>();
+  for (const page of physicalRead.pages) {
+    if (!Number.isInteger(page.pageNumber) || page.pageNumber < 1 || seenPageNumbers.has(page.pageNumber)) return false;
+    seenPageNumbers.add(page.pageNumber);
+    const seenIndices = new Set<number>();
+    for (const item of page.textItems) {
+      if (!Number.isInteger(item.index) || item.index < 0 || seenIndices.has(item.index)) return false;
+      seenIndices.add(item.index);
+    }
+  }
+  return true;
+}
+
 export function validatePhysicalCellTextEvidenceFormationInput(
   input: BudgetDocumentPhysicalCellTextEvidenceFormationInput,
 ): PhysicalCellTextEvidenceFormationInputValidationResult {
@@ -70,14 +96,24 @@ export function validatePhysicalCellTextEvidenceFormationInput(
   if (p.status === "failed") return invalid("source_physical_read_contract_invalid");
   if (s.status === "failed") return invalid("source_structure_reconstruction_contract_invalid");
   if (c.status === "failed") return invalid("source_physical_cell_hypothesis_formation_contract_invalid");
+  if (!isPhysicalReadStructurallySound(p)) return invalid("source_physical_read_contract_invalid");
 
   if (p.sourceByteHash !== s.sourceByteHash || p.sourceByteHash !== c.sourceByteHash) return invalid("source_lineage_mismatch");
   if (!samePhysicalReadLineage(input) || !sameStructureReconstructionLineage(input)) return invalid("source_lineage_mismatch");
 
+  if (!isPhysicalReadFingerprintValid(p)) return invalid("source_fingerprint_invalid");
+  if (!isStructureReconstructionFingerprintValid(s)) return invalid("source_fingerprint_invalid");
+  if (!isPhysicalCellHypothesisFormationFingerprintValid(c)) return invalid("source_fingerprint_invalid");
+
+  // Cobertura integral: mesma população de sourceCandidateGroupKey nos dois
+  // contratos — nunca apenas c ⊆ s. Um grupo estrutural sem contrapartida na
+  // f.2c (ou vice-versa) nunca pode desaparecer silenciosamente.
   const structureGroups = new Map(s.groups.map((group) => [group.sourceCandidateGroupKey, group]));
-  if (structureGroups.size !== s.groups.length || new Set(c.groups.map((group) => group.sourceCandidateGroupKey)).size !== c.groups.length) {
+  if (structureGroups.size !== s.groups.length || new Set(c.groups.map((group) => group.sourceCandidateGroupKey)).size !== c.groups.length || s.groups.length !== c.groups.length) {
     return invalid("source_group_reference_invalid");
   }
+
+  const physicalPageNumbers = new Set(p.pages.map((page) => page.pageNumber));
 
   const validatedGroups: ValidatedGroupSources[] = [];
   for (const cellFormationGroup of c.groups) {
@@ -85,7 +121,12 @@ export function validatePhysicalCellTextEvidenceFormationInput(
     if (!structureGroup) return invalid("source_group_reference_invalid", { groupKey: cellFormationGroup.groupProcessedKey });
 
     const structurePages = new Map(structureGroup.pages.map((page) => [page.pageNumber, page]));
-    if (structurePages.size !== structureGroup.pages.length || new Set(cellFormationGroup.pages.map((page) => page.pageNumber)).size !== cellFormationGroup.pages.length) {
+    const groupIsProcessable = cellFormationGroup.status !== "group_not_processable";
+    if (
+      structurePages.size !== structureGroup.pages.length
+      || new Set(cellFormationGroup.pages.map((page) => page.pageNumber)).size !== cellFormationGroup.pages.length
+      || (groupIsProcessable && cellFormationGroup.pages.length !== structureGroup.pages.length)
+    ) {
       return invalid("source_page_reference_invalid", { groupKey: cellFormationGroup.groupProcessedKey });
     }
 
@@ -108,6 +149,12 @@ export function validatePhysicalCellTextEvidenceFormationInput(
         }
         if (!everyCellHypothesisHasIntersection(cellFormationRegion)) {
           return invalid("source_grid_intersection_reference_invalid", { groupKey: cellFormationGroup.groupProcessedKey, pageNumber: cellFormationPage.pageNumber, regionKey: cellFormationRegion.sourceRegionKey });
+        }
+        // Ausência da página física correspondente é falha global de contrato,
+        // nunca um defeito localizado de região: sem ela não há como resolver
+        // nenhum item textual desta região com segurança.
+        if (cellFormationRegion.cellHypotheses.length > 0 && !physicalPageNumbers.has(cellFormationRegion.pageNumber)) {
+          return invalid("source_physical_read_contract_invalid", { groupKey: cellFormationGroup.groupProcessedKey, pageNumber: cellFormationPage.pageNumber, regionKey: cellFormationRegion.sourceRegionKey });
         }
         validatedRegions.push({ structurePage, cellFormationRegion });
       }
