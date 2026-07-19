@@ -1,0 +1,374 @@
+{
+  "status": "formed_with_ambiguities",
+  "intersections": [
+    {
+      "gridIntersectionKey": "ef1532889a51b89d92c4e822f58db636d7ffae088aefabde060999de0d08d2da",
+      "sourceLineKey": "line-1",
+      "sourcePhysicalColumnHypothesisKey": "column-1",
+      "sourceRegionKey": "golden-region",
+      "pageNumber": 1,
+      "rowOrder": 1,
+      "columnOrder": 1,
+      "gridBounds": {
+        "leftPoints": 0,
+        "topPoints": 0,
+        "rightPoints": 40,
+        "bottomPoints": 10,
+        "widthPoints": 40,
+        "heightPoints": 10,
+        "centerXPoints": 20,
+        "centerYPoints": 5
+      },
+      "gridFormationRuleId": "physical-grid-line-column-orthogonal-product-v1",
+      "gridFormationRuleVersion": 1,
+      "profileId": "budget-document-physical-cell-hypothesis-formation-profile-v1",
+      "profileVersion": 1,
+      "status": "cell_hypothesis_formed",
+      "cellHypothesisKey": "743acfb1f2f8d2d8ddc76c7dd85b44233412987b388fec03554b94a9a6a56391"
+    },
+    {
+      "gridIntersectionKey": "e1029d2cefd526ea829c96c800c6ebdb181a78fbf6a93b1df9014b52ce52a732",
+      "sourceLineKey": "line-1",
+      "sourcePhysicalColumnHypothesisKey": "column-2",
+      "sourceRegionKey": "golden-region",
+      "pageNumber": 1,
+      "rowOrder": 1,
+      "columnOrder": 2,
+      "gridBounds": {
+        "leftPoints": 60,
+        "topPoints": 0,
+        "rightPoints": 100,
+        "bottomPoints": 10,
+        "widthPoints": 40,
+        "heightPoints": 10,
+        "centerXPoints": 80,
+        "centerYPoints": 5
+      },
+      "gridFormationRuleId": "physical-grid-line-column-orthogonal-product-v1",
+      "gridFormationRuleVersion": 1,
+      "profileId": "budget-document-physical-cell-hypothesis-formation-profile-v1",
+      "profileVersion": 1,
+      "status": "empty"
+    },
+    {
+      "gridIntersectionKey": "39a5b5a8875512b6bdc660f6beafab7e412ce8dcd20fbf6d3b8e5dcc9e687e4d",
+      "sourceLineKey": "line-2",
+      "sourcePhysicalColumnHypothesisKey": "column-1",
+      "sourceRegionKey": "golden-region",
+      "pageNumber": 1,
+      "rowOrder": 2,
+      "columnOrder": 1,
+      "gridBounds": {
+        "leftPoints": 0,
+        "topPoints": 20,
+        "rightPoints": 40,
+        "bottomPoints": 30,
+        "widthPoints": 40,
+        "heightPoints": 10,
+        "centerXPoints": 20,
+        "centerYPoints": 25
+      },
+      "gridFormationRuleId": "physical-grid-line-column-orthogonal-product-v1",
+      "gridFormationRuleVersion": 1,
+      "profileId": "budget-document-physical-cell-hypothesis-formation-profile-v1",
+      "profileVersion": 1,
+      "status": "cell_hypothesis_formed",
+      "cellHypothesisKey": "c708ba9eea3e9d7c5869231f5ee4b827ed6626017ca833344020323ff113d7b1"
+    },
+    {
+      "gridIntersectionKey": "3d0322e406607a3452e034c666ba219ff594b79e5c5086971d87b4f2e4401d04",
+      "sourceLineKey": "line-2",
+      "sourcePhysicalColumnHypothesisKey": "column-2",
+      "sourceRegionKey": "golden-region",
+      "pageNumber": 1,
+      "rowOrder": 2,
+      "columnOrder": 2,
+      "gridBounds": {
+        "leftPoints": 60,
+        "topPoints": 20,
+        "rightPoints": 100,
+        "bottomPoints": 30,
+        "widthPoints": 40,
+        "heightPoints": 10,
+        "centerXPoints": 80,
+        "centerYPoints": 25
+      },
+      "gridFormationRuleId": "physical-grid-line-column-orthogonal-product-v1",
+      "gridFormationRuleVersion": 1,
+      "profileId": "budget-document-physical-cell-hypothesis-formation-profile-v1",
+      "profileVersion": 1,
+      "status": "unresolved_segment_association_ambiguity",
+      "ambiguityReason": "partial_segment_intersection",
+      "partiallyIntersectingSegmentKeys": [
+        "partial"
+      ]
+    },
+    {
+      "gridIntersectionKey": "c896f6d64594d29099f7e426faeae78e54cc7359278e8b0eb1a8906ae98cb45b",
+      "sourceLineKey": "line-3",
+      "sourcePhysicalColumnHypothesisKey": "column-1",
+      "sourceRegionKey": "golden-region",
+      "pageNumber": 1,
+      "rowOrder": 3,
+      "columnOrder": 1,
+      "gridBounds": {
+        "leftPoints": 0,
+        "topPoints": 40,
+        "rightPoints": 40,
+        "bottomPoints": 50,
+        "widthPoints": 40,
+        "heightPoints": 10,
+        "centerXPoints": 20,
+        "centerYPoints": 45
+      },
+      "gridFormationRuleId": "physical-grid-line-column-orthogonal-product-v1",
+      "gridFormationRuleVersion": 1,
+      "profileId": "budget-document-physical-cell-hypothesis-formation-profile-v1",
+      "profileVersion": 1,
+      "status": "cell_hypothesis_formed",
+      "cellHypothesisKey": "def2871d90d6ae744fed5fbda7d19a30c1e67e47f9414e3bcaf0bfd1edf1f127"
+    },
+    {
+      "gridIntersectionKey": "4b86490e9ff1dc4ffca47e6af53c4ade4405688cfedb315976b66bdfe456f8e2",
+      "sourceLineKey": "line-3",
+      "sourcePhysicalColumnHypothesisKey": "column-2",
+      "sourceRegionKey": "golden-region",
+      "pageNumber": 1,
+      "rowOrder": 3,
+      "columnOrder": 2,
+      "gridBounds": {
+        "leftPoints": 60,
+        "topPoints": 40,
+        "rightPoints": 100,
+        "bottomPoints": 50,
+        "widthPoints": 40,
+        "heightPoints": 10,
+        "centerXPoints": 80,
+        "centerYPoints": 45
+      },
+      "gridFormationRuleId": "physical-grid-line-column-orthogonal-product-v1",
+      "gridFormationRuleVersion": 1,
+      "profileId": "budget-document-physical-cell-hypothesis-formation-profile-v1",
+      "profileVersion": 1,
+      "status": "empty"
+    },
+    {
+      "gridIntersectionKey": "cd6e0e99d73f9c50a75fbb734649303dc5829c9ba6aa1e569e667a62ea2152e7",
+      "sourceLineKey": "line-4",
+      "sourcePhysicalColumnHypothesisKey": "column-1",
+      "sourceRegionKey": "golden-region",
+      "pageNumber": 1,
+      "rowOrder": 4,
+      "columnOrder": 1,
+      "gridBounds": {
+        "leftPoints": 0,
+        "topPoints": 60,
+        "rightPoints": 40,
+        "bottomPoints": 70,
+        "widthPoints": 40,
+        "heightPoints": 10,
+        "centerXPoints": 20,
+        "centerYPoints": 65
+      },
+      "gridFormationRuleId": "physical-grid-line-column-orthogonal-product-v1",
+      "gridFormationRuleVersion": 1,
+      "profileId": "budget-document-physical-cell-hypothesis-formation-profile-v1",
+      "profileVersion": 1,
+      "status": "empty"
+    },
+    {
+      "gridIntersectionKey": "dc29cf2a50e01fc42b4a3ef05bcd44f381e60ce5dec5e0e923bf8dbc0f6608b7",
+      "sourceLineKey": "line-4",
+      "sourcePhysicalColumnHypothesisKey": "column-2",
+      "sourceRegionKey": "golden-region",
+      "pageNumber": 1,
+      "rowOrder": 4,
+      "columnOrder": 2,
+      "gridBounds": {
+        "leftPoints": 60,
+        "topPoints": 60,
+        "rightPoints": 100,
+        "bottomPoints": 70,
+        "widthPoints": 40,
+        "heightPoints": 10,
+        "centerXPoints": 80,
+        "centerYPoints": 65
+      },
+      "gridFormationRuleId": "physical-grid-line-column-orthogonal-product-v1",
+      "gridFormationRuleVersion": 1,
+      "profileId": "budget-document-physical-cell-hypothesis-formation-profile-v1",
+      "profileVersion": 1,
+      "status": "cell_hypothesis_formed",
+      "cellHypothesisKey": "2ea3d96bdaf46f5b5c6fc849715dc27d5f72c4da40c647cf6d8655d363b29540"
+    }
+  ],
+  "cells": [
+    {
+      "cellHypothesisKey": "743acfb1f2f8d2d8ddc76c7dd85b44233412987b388fec03554b94a9a6a56391",
+      "gridIntersectionKey": "ef1532889a51b89d92c4e822f58db636d7ffae088aefabde060999de0d08d2da",
+      "observedContentBounds": {
+        "leftPoints": 5,
+        "topPoints": 0,
+        "rightPoints": 15,
+        "bottomPoints": 10,
+        "widthPoints": 10,
+        "heightPoints": 10,
+        "centerXPoints": 10,
+        "centerYPoints": 5
+      },
+      "segmentKeys": [
+        "simple"
+      ],
+      "cellFormationRuleId": "physical-cell-hypothesis-full-segment-containment-v1",
+      "cellFormationRuleVersion": 1,
+      "profileId": "budget-document-physical-cell-hypothesis-formation-profile-v1",
+      "profileVersion": 1
+    },
+    {
+      "cellHypothesisKey": "c708ba9eea3e9d7c5869231f5ee4b827ed6626017ca833344020323ff113d7b1",
+      "gridIntersectionKey": "39a5b5a8875512b6bdc660f6beafab7e412ce8dcd20fbf6d3b8e5dcc9e687e4d",
+      "observedContentBounds": {
+        "leftPoints": 5,
+        "topPoints": 20,
+        "rightPoints": 30,
+        "bottomPoints": 30,
+        "widthPoints": 25,
+        "heightPoints": 10,
+        "centerXPoints": 17.5,
+        "centerYPoints": 25
+      },
+      "segmentKeys": [
+        "multi-a",
+        "multi-b"
+      ],
+      "cellFormationRuleId": "physical-cell-hypothesis-full-segment-containment-v1",
+      "cellFormationRuleVersion": 1,
+      "profileId": "budget-document-physical-cell-hypothesis-formation-profile-v1",
+      "profileVersion": 1
+    },
+    {
+      "cellHypothesisKey": "def2871d90d6ae744fed5fbda7d19a30c1e67e47f9414e3bcaf0bfd1edf1f127",
+      "gridIntersectionKey": "c896f6d64594d29099f7e426faeae78e54cc7359278e8b0eb1a8906ae98cb45b",
+      "observedContentBounds": {
+        "leftPoints": 5,
+        "topPoints": 40,
+        "rightPoints": 15,
+        "bottomPoints": 50,
+        "widthPoints": 10,
+        "heightPoints": 10,
+        "centerXPoints": 10,
+        "centerYPoints": 45
+      },
+      "segmentKeys": [
+        "ordinary"
+      ],
+      "cellFormationRuleId": "physical-cell-hypothesis-full-segment-containment-v1",
+      "cellFormationRuleVersion": 1,
+      "profileId": "budget-document-physical-cell-hypothesis-formation-profile-v1",
+      "profileVersion": 1
+    },
+    {
+      "cellHypothesisKey": "2ea3d96bdaf46f5b5c6fc849715dc27d5f72c4da40c647cf6d8655d363b29540",
+      "gridIntersectionKey": "dc29cf2a50e01fc42b4a3ef05bcd44f381e60ce5dec5e0e923bf8dbc0f6608b7",
+      "observedContentBounds": {
+        "leftPoints": 65,
+        "topPoints": 60,
+        "rightPoints": 75,
+        "bottomPoints": 70,
+        "widthPoints": 10,
+        "heightPoints": 10,
+        "centerXPoints": 70,
+        "centerYPoints": 65
+      },
+      "segmentKeys": [
+        "last"
+      ],
+      "cellFormationRuleId": "physical-cell-hypothesis-full-segment-containment-v1",
+      "cellFormationRuleVersion": 1,
+      "profileId": "budget-document-physical-cell-hypothesis-formation-profile-v1",
+      "profileVersion": 1
+    }
+  ],
+  "dispositions": [
+    {
+      "status": "included_in_physical_cell_hypothesis",
+      "segmentKey": "simple",
+      "lineKey": "line-1",
+      "gridIntersectionKey": "ef1532889a51b89d92c4e822f58db636d7ffae088aefabde060999de0d08d2da",
+      "cellHypothesisKey": "743acfb1f2f8d2d8ddc76c7dd85b44233412987b388fec03554b94a9a6a56391"
+    },
+    {
+      "status": "included_in_physical_cell_hypothesis",
+      "segmentKey": "multi-a",
+      "lineKey": "line-2",
+      "gridIntersectionKey": "39a5b5a8875512b6bdc660f6beafab7e412ce8dcd20fbf6d3b8e5dcc9e687e4d",
+      "cellHypothesisKey": "c708ba9eea3e9d7c5869231f5ee4b827ed6626017ca833344020323ff113d7b1"
+    },
+    {
+      "status": "included_in_physical_cell_hypothesis",
+      "segmentKey": "multi-b",
+      "lineKey": "line-2",
+      "gridIntersectionKey": "39a5b5a8875512b6bdc660f6beafab7e412ce8dcd20fbf6d3b8e5dcc9e687e4d",
+      "cellHypothesisKey": "c708ba9eea3e9d7c5869231f5ee4b827ed6626017ca833344020323ff113d7b1"
+    },
+    {
+      "status": "unresolved_partial_grid_intersection",
+      "segmentKey": "partial",
+      "lineKey": "line-2",
+      "partiallyIntersectedGridIntersectionKeys": [
+        "3d0322e406607a3452e034c666ba219ff594b79e5c5086971d87b4f2e4401d04"
+      ]
+    },
+    {
+      "status": "unresolved_inherited_column_ambiguity",
+      "segmentKey": "inherited",
+      "lineKey": "line-3",
+      "conflictingCandidateHypothesisKeys": [
+        "candidate-a",
+        "candidate-b"
+      ]
+    },
+    {
+      "status": "included_in_physical_cell_hypothesis",
+      "segmentKey": "ordinary",
+      "lineKey": "line-3",
+      "gridIntersectionKey": "c896f6d64594d29099f7e426faeae78e54cc7359278e8b0eb1a8906ae98cb45b",
+      "cellHypothesisKey": "def2871d90d6ae744fed5fbda7d19a30c1e67e47f9414e3bcaf0bfd1edf1f127"
+    },
+    {
+      "status": "outside_all_physical_cell_hypotheses",
+      "segmentKey": "orphan",
+      "lineKey": "line-4"
+    },
+    {
+      "status": "included_in_physical_cell_hypothesis",
+      "segmentKey": "last",
+      "lineKey": "line-4",
+      "gridIntersectionKey": "dc29cf2a50e01fc42b4a3ef05bcd44f381e60ce5dec5e0e923bf8dbc0f6608b7",
+      "cellHypothesisKey": "2ea3d96bdaf46f5b5c6fc849715dc27d5f72c4da40c647cf6d8655d363b29540"
+    }
+  ],
+  "metrics": {
+    "sourceLineCount": 4,
+    "sourcePhysicalColumnHypothesisCount": 2,
+    "totalGridIntersectionCount": 8,
+    "cellHypothesisFormedIntersectionCount": 4,
+    "emptyGridIntersectionCount": 3,
+    "ambiguousGridIntersectionCount": 1,
+    "formationFailedGridIntersectionCount": 0,
+    "totalRegionSegmentCount": 8,
+    "includedSegmentCount": 5,
+    "outsideSegmentCount": 1,
+    "inheritedAmbiguousSegmentCount": 1,
+    "partialIntersectionSegmentCount": 1,
+    "multipleClaimSegmentCount": 0,
+    "sourceContractInconsistentSegmentCount": 0,
+    "upstreamRegionNotProcessableSegmentCount": 0,
+    "inheritedPhysicalColumnHypothesisFailureSegmentCount": 0,
+    "formationFailedSegmentCount": 0,
+    "cellHypothesisCount": 4,
+    "multiSegmentCellHypothesisCount": 1,
+    "technicalProblemCount": 0
+  },
+  "fingerprint": "2b706a84b381b41b7a12e7234a5913693f4f1efd08867edb2152b7aca03d649a"
+}

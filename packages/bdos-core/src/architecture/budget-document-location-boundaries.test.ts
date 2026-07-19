@@ -131,7 +131,10 @@ runTest("budget-document-location introduces no PDF parser, OCR, AI or Supabase 
   const violations: Violation[] = [];
 
   listBudgetDocumentLocationSourceFiles().forEach((file) => {
-    const content = readFileSync(file, "utf8").toLowerCase();
+    // Catálogos públicos de limitações podem declarar explicitamente a
+    // ausência da capacidade. Esse literal negativo não é dependência nem
+    // vocabulário operacional e deve ser removido antes da varredura.
+    const content = readFileSync(file, "utf8").toLowerCase().replaceAll("no_ai_or_ocr_applied", "");
     const normalizedFile = toRepoRelative(file).split("\\").join("/");
 
     FORBIDDEN_KEYWORDS.forEach((keyword) => {
