@@ -1,33 +1,44 @@
 # Epic 21 — Sprint 21.4A.2.f.2c — Formação Auditável da Malha Física e Hipóteses de Célula
 
-**Status: implementada.** Forma deterministicamente todas as posições elegíveis linha física × hipótese válida de coluna dentro de cada região e materializa uma hipótese física de célula somente quando há um ou mais segmentos integralmente contidos e não ambíguos.
+**Status: implementada com validação executável, isolamento regional e conservação.**
 
-## Contratos consumidos
+## Contrato e linhagem
 
-Consome conjuntamente `BudgetDocumentStructureReconstructionResult`, `BudgetDocumentTabularRegionDetectionResult` e `BudgetDocumentPhysicalColumnHypothesisReconstructionResult`. `ReconstructedPhysicalLine` é o eixo horizontal; `PhysicalColumnHypothesis` é o eixo vertical. Blocos não formam a malha.
+A operação pública recebe um único `BudgetDocumentPhysicalCellHypothesisFormationInput`, composto pelos resultados reais da reconstrução estrutural, detecção de regiões tabulares e reconstrução de hipóteses físicas de coluna. Versões, identidades achatadas, `sourceByteHash`, fingerprints e referências grupo–página–região–linha–segmento–hipótese são validados diretamente. Fingerprint não substitui igualdade de identidade nem integridade referencial. `TabularRegionCandidate.lineKeys` é a fonte de verdade das linhas participantes.
 
-## Geometria e evidência
+`ReconstructedPhysicalLine` é o eixo horizontal e `PhysicalColumnHypothesis` o eixo vertical. Blocos físicos não determinam a malha e não existe faixa horizontal física pública.
 
-`gridBounds` é o produto ortogonal entre os limites horizontais da coluna e os limites verticais da linha. `observedContentBounds` é a união dos segmentos observados. Os dois conceitos nunca são fundidos. Comparações usam exatamente os números recebidos dos contratos upstream; a saída é canonicalizada em seis casas decimais e validada novamente.
+## Fases e falhas
 
-## Interseções e células
+Validação de entrada, formação do produto cartesiano, associação de segmentos, formação de células, validação de contenção, conservação, métricas e canonicalização são fases separadas. Dependências internas permitem injetar falhas em testes sem ampliar a API pública.
 
-Toda região processável publica o produto cartesiano completo, inclusive posições vazias. `PhysicalGridIntersection` é uma união discriminada e a única fonte da verdade estrutural. `PhysicalCellHypothesis` guarda apenas sua chave, referência à interseção, envelope observado, segmentos e regra própria. Não existe célula vazia.
+Estados `group_not_processable`, `page_not_processable` e `region_not_processable` da f.2b são preservados. A disposição `unresolved_physical_column_hypothesis_detection_failed` invalida somente sua região e jamais é convertida em vazio ou segmento externo. Falha inesperada na formação da malha torna a região não processável e não publica produto parcial. Falhas posteriores materializam `FailedPhysicalGridIntersection` com a fase exata. Regiões independentes continuam sendo processadas; somente uma falha realmente global produz resultado global `failed`.
 
-## Ambiguidade, falha e conservação
+## Geometria, interseções e células
 
-Interseção parcial, disputa entre interseções e envelope observado externo permanecem explícitos. Ambiguidade herdada da f.2b é conservada somente na disposição do segmento; nenhuma coluna ou interseção artificial é criada. Falha técnica não é ausência e problemas existem somente no nível hierárquico onde surgiram.
+Cada região processável publica todo par elegível linha × hipótese de coluna, inclusive posições vazias. `gridBounds` é o produto ortogonal dos limites horizontais da coluna com os limites verticais da linha. A associação exige contenção integral exata, sem tolerância nova, corte, ajuste ou absorção. Contato apenas na borda não conta como interseção; sobreposição parcial permanece ambígua; um segmento contido por mais de uma interseção gera disputa explícita.
 
-Para regiões processáveis, `totalGridIntersectionCount = sourceLineCount × sourcePhysicalColumnHypothesisCount`. Separadamente, todo segmento da região recebe exatamente uma disposição final. Métricas são estruturais; não são score ou confiança.
+`PhysicalGridIntersection` é a única fonte da identidade estrutural. Quando há célula, a interseção guarda somente `cellHypothesisKey`. `PhysicalCellHypothesis` guarda sua chave, `gridIntersectionKey`, `observedContentBounds`, `segmentKeys` e a identidade da regra de célula. Linha, coluna, região, página, ordens e `gridBounds` são obtidos pela interseção. Não existe célula vazia.
 
-## Identidade e determinismo
+`observedContentBounds` é a união dos segmentos associados e deve ficar contido em `gridBounds`. Exceções permanecem ambíguas. Números são canonicalizados para seis casas decimais e a contenção é revalidada após a canonicalização.
 
-Chaves e fingerprints são SHA-256 de representações JSON canônicas, sem UUID, tempo ou aleatoriedade. O fingerprint final inclui linhagem, interseções, células, disposições, problemas, métricas e limitações. Permutar entradas não altera a saída física.
+## Conservação e métricas
 
-## Testes
+Há dois universos independentes e validados por portões executáveis:
 
-A capacidade possui testes focados de produto cartesiano, posições vazias, contrato mínimo, chaves, canonicalização, determinismo, guard arquitetural e cadeia completa iniciada em bytes de PDF sintético pelo leitor `pdfjs` real.
+- para cada região processável, `intersections = lines × columns`, com chaves únicas e uma variante final por posição;
+- cada segmento da região recebe exatamente uma disposição final, sem duplicação, omissão ou propriedade por mais de uma célula.
 
-## Limitações
+Referências interseção–célula são bidirecionalmente verificadas. Quebras emitem os problemas técnicos de conservação correspondentes. Métricas são contagens estruturais objetivas; não representam score, confiança ou prontidão comercial.
 
-Interseção não é célula confirmada; hipótese física de célula não é campo econômico; linha não é linha orçamentária; coluna não possui significado econômico; região não é tabela confirmada. Não há interpretação textual, código, descrição, unidade, quantidade, preço, total, BDI econômico, cabeçalho, rodapé, continuidade entre páginas, IA, OCR, persistência, API, UI, documento real ou prontidão comercial.
+## Determinismo e testes
+
+Chaves e fingerprints usam SHA-256 sobre JSON canônico, sem UUID, relógio ou aleatoriedade. O fingerprint final cobre linhagem, hierarquia, interseções, células, disposições, problemas, métricas e limitações. Mudanças apenas textuais não alteram o resultado físico.
+
+A suíte cobre contratos e versões incompatíveis, linhagem e referências inválidas, estados e falhas herdados, produto cartesiano e vazios, associação parcial/múltipla, falhas por fase, conservação, isolamento regional, canonicalização, determinismo, guard arquitetural recursivo e cadeia iniciada em PDF sintético pelo leitor real.
+
+O golden trace real usa quatro linhas. A f.2b exige que uma hipótese válida de coluna participe de pelo menos três linhas; com exatamente três linhas, toda coluna válida necessariamente ocupa as três, tornando impossível obter simultaneamente uma posição vazia legítima. Quatro linhas preservam o objetivo do trace sem fabricar um estado proibido pelo contrato upstream.
+
+## Declarações negativas
+
+Interseção não é célula confirmada; hipótese física de célula não é campo econômico; linha física não é linha orçamentária; hipótese de coluna não é coluna confirmada; região candidata não é tabela confirmada; vazio físico não significa dado econômico ausente. Não há leitura ou interpretação textual, código de serviço, descrição, unidade, quantidade, preço, total, BDI, cabeçalho, rodapé, continuidade entre páginas, IA, OCR, persistência, API, rota, UI, visualizador, documento real ou alegação de prontidão comercial.
