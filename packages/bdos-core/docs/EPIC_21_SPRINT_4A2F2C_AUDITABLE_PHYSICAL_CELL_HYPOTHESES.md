@@ -31,11 +31,34 @@ Há dois universos independentes e validados por portões executáveis:
 
 Referências segmento–disposição–célula–interseção são verificadas bidirecionalmente, inclusive pertencimento ao universo regional. Disposições ausentes não são filtradas: tornam-se falha controlada e quebram o portão de conservação. Quebras emitem os problemas técnicos de conservação correspondentes. Métricas são contagens estruturais objetivas; não representam score, confiança ou prontidão comercial.
 
+`RegionPhysicalCellHypothesisFormationMetrics` publica nove categorias de segmento, cada uma mutuamente exclusiva, e a equação de conservação:
+
+```
+totalRegionSegmentCount
+===
+includedSegmentCount
++ outsideSegmentCount
++ inheritedAmbiguousSegmentCount
++ partialIntersectionSegmentCount
++ multipleClaimSegmentCount
++ sourceContractInconsistentSegmentCount
++ upstreamRegionNotProcessableSegmentCount
++ inheritedPhysicalColumnHypothesisFailureSegmentCount
++ formationFailedSegmentCount
+```
+
+`upstreamRegionNotProcessableSegmentCount` e `inheritedPhysicalColumnHypothesisFailureSegmentCount` diferem de tudo o mais que a f.2c publica:
+
+- `upstreamRegionNotProcessableSegmentCount` conta segmentos de uma região cujo status upstream da f.2b já era `region_not_processable` (ou cujo grid não pôde ser formado) — a f.2c nunca processou esses segmentos, então eles nunca podem ser confundidos com `outsideSegmentCount`, que descreve um segmento fisicamente observado e realmente fora de toda célula por uma região que a f.2c processou de fato.
+- `inheritedPhysicalColumnHypothesisFailureSegmentCount` conta a disposição `unresolved_inherited_physical_column_hypothesis_failure`, herdada de uma falha técnica real da própria f.2b (`unresolved_physical_column_hypothesis_detection_failed`) — nunca uma falha produzida pela formação de célula da f.2c. `formationFailedSegmentCount` permanece exclusivo de `unresolved_cell_hypothesis_formation_failed`, a única categoria que representa falha da própria f.2c.
+
+Uma única função de classificação (`classifyPhysicalCellSegmentMetricCategory`, interna, não exportada pelo barrel) mapeia cada disposição para exatamente uma dessas nove categorias e é a fonte compartilhada tanto de `computeRegionMetrics` quanto do portão `validateSegmentMetricConservation`, de modo que as duas nunca podem divergir por construção. O portão recalcula as nove contagens a partir das disposições reais e as compara campo a campo com as métricas publicadas — nunca depende apenas de `dispositions.length === sourceSegmentKeys.length` — e rejeita com `physical_segment_conservation_failed` qualquer contagem ausente, duplicada, atribuída à categoria errada, total divergente da soma, ou disposição que o classificador não reconheça. As mesmas duas categorias são agregadas por soma, sem perda nem duplicação, em página, grupo e resultado global, nunca dentro de `ambiguousSegmentCount` ou `formationFailedSegmentCount`.
+
 ## Determinismo e testes
 
 Chaves e fingerprints usam SHA-256 sobre JSON canônico, sem UUID, relógio ou aleatoriedade. O fingerprint final cobre linhagem, hierarquia, interseções, células, disposições, problemas, métricas e limitações. Mudanças apenas textuais não alteram o resultado físico.
 
-A suíte cobre contratos e versões incompatíveis, igualdade direta de toda a linhagem, referências hipótese–disposição, estados e falhas herdados, produto cartesiano e vazios, associação parcial/múltipla, falhas por fase, conservação bidirecional, isolamento real entre duas regiões, canonicalização, determinismo, guard arquitetural recursivo e cadeia iniciada em PDF sintético pelo leitor real.
+A suíte cobre contratos e versões incompatíveis, igualdade direta de toda a linhagem, referências hipótese–disposição, estados e falhas herdados, produto cartesiano e vazios, associação parcial/múltipla, falhas por fase, conservação bidirecional, conservação das nove categorias métricas de segmento (incluindo rejeição adversarial de contagem ausente, duplicada, mal categorizada, com total divergente ou disposição não reconhecida), agregação hierárquica sem perda em página/grupo/global, isolamento real entre duas regiões, canonicalização, determinismo, guard arquitetural recursivo e cadeia iniciada em PDF sintético pelo leitor real.
 
 O golden trace real usa quatro linhas. A f.2b exige que uma hipótese válida de coluna participe de pelo menos três linhas; com exatamente três linhas, toda coluna válida necessariamente ocupa as três, tornando impossível obter simultaneamente uma posição vazia legítima. Quatro linhas preservam o objetivo do trace sem fabricar um estado proibido pelo contrato upstream.
 

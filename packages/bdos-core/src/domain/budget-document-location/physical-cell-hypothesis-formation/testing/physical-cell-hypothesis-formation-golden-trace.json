@@ -363,10 +363,12 @@
     "partialIntersectionSegmentCount": 1,
     "multipleClaimSegmentCount": 0,
     "sourceContractInconsistentSegmentCount": 0,
+    "upstreamRegionNotProcessableSegmentCount": 0,
+    "inheritedPhysicalColumnHypothesisFailureSegmentCount": 0,
     "formationFailedSegmentCount": 0,
     "cellHypothesisCount": 4,
     "multiSegmentCellHypothesisCount": 1,
     "technicalProblemCount": 0
   },
-  "fingerprint": "3f0fe8212b57dfe4273118bc687221b71d48bde60e0c23cd0554f2abd7d6de91"
+  "fingerprint": "2b706a84b381b41b7a12e7234a5913693f4f1efd08867edb2152b7aca03d649a"
 }

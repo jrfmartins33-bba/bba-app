@@ -25,7 +25,7 @@ import { associateSegmentsToPhysicalGrid } from "./physical-segment-grid-associa
 import type { PhysicalCellFormationResult } from "./physical-cell-hypothesis-formation";
 import { formPhysicalCellHypotheses } from "./physical-cell-hypothesis-formation";
 import type { ConservationFailure } from "./physical-cell-hypothesis-formation-conservation";
-import { validatePhysicalCellFormationConservation } from "./physical-cell-hypothesis-formation-conservation";
+import { validatePhysicalCellFormationConservation, validateSegmentMetricConservation } from "./physical-cell-hypothesis-formation-conservation";
 import { computeGlobalMetrics, computeGroupMetrics, computePageMetrics, computeRegionMetrics } from "./physical-cell-hypothesis-formation-metrics";
 
 export interface PhysicalCellFormationDependencies {
@@ -140,6 +140,10 @@ function processRegion(source: ValidatedRegionSources, regionProcessedKey: strin
   let conservation: ConservationFailure;
   try { conservation = dependencies.validateConservation(lines.length, columns.length, segments.map((entry) => entry.segmentKey), formed.intersections, formed.cells, formed.dispositions); }
   catch { conservation = "references"; }
+  if (!conservation) {
+    const candidateMetrics = computeRegionMetrics(formed.intersections, formed.cells, formed.dispositions, lines.length, columns.length, 0);
+    if (!validateSegmentMetricConservation(formed.dispositions, candidateMetrics)) conservation = "segments";
+  }
   if (conservation) {
     const code = conservation === "intersections" ? "physical_grid_intersection_conservation_failed" : conservation === "segments" ? "physical_segment_conservation_failed" : "physical_cell_hypothesis_containment_failed";
     const technicalProblem = problem(code, "conservation_validation", { pageNumber: source.columnRegion.pageNumber, regionKey: source.columnRegion.sourceRegionKey });

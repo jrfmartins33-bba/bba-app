@@ -1,6 +1,40 @@
-import type { PhysicalCellHypothesis, PhysicalCellHypothesisSegmentDisposition, PhysicalGridIntersection } from "./budget-document-physical-cell-hypothesis-formation.types";
+import type { PhysicalCellHypothesis, PhysicalCellHypothesisSegmentDisposition, PhysicalGridIntersection, RegionPhysicalCellHypothesisFormationMetrics } from "./budget-document-physical-cell-hypothesis-formation.types";
+import { classifyPhysicalCellSegmentMetricCategory, tallySegmentMetricCategories, type PhysicalCellSegmentMetricCategory } from "./physical-cell-hypothesis-formation-metrics";
 
 export type ConservationFailure = "intersections" | "segments" | "references" | null;
+
+const SEGMENT_METRIC_CATEGORY_FIELDS: Record<PhysicalCellSegmentMetricCategory, keyof RegionPhysicalCellHypothesisFormationMetrics> = {
+  included: "includedSegmentCount",
+  outside: "outsideSegmentCount",
+  inheritedAmbiguous: "inheritedAmbiguousSegmentCount",
+  partialIntersection: "partialIntersectionSegmentCount",
+  multipleClaim: "multipleClaimSegmentCount",
+  sourceContractInconsistent: "sourceContractInconsistentSegmentCount",
+  upstreamRegionNotProcessable: "upstreamRegionNotProcessableSegmentCount",
+  inheritedPhysicalColumnHypothesisFailure: "inheritedPhysicalColumnHypothesisFailureSegmentCount",
+  formationFailed: "formationFailedSegmentCount",
+};
+
+/**
+ * Prova que totalRegionSegmentCount é exatamente a soma das nove categorias
+ * públicas de segmento e que cada disposição foi contabilizada em exatamente
+ * uma delas — nunca omitida, duplicada ou classificada na categoria errada.
+ * Não confia apenas em dispositions.length: recalcula a contagem real de cada
+ * categoria a partir das próprias disposições (via a mesma fonte única de
+ * classificação usada por computeRegionMetrics) e compara campo a campo com
+ * as métricas publicadas.
+ */
+export function validateSegmentMetricConservation(dispositions: ReadonlyArray<PhysicalCellHypothesisSegmentDisposition>, metrics: RegionPhysicalCellHypothesisFormationMetrics): boolean {
+  if (metrics.totalRegionSegmentCount !== dispositions.length) return false;
+  if (dispositions.some((entry) => classifyPhysicalCellSegmentMetricCategory(entry) === null)) return false;
+  const counts = tallySegmentMetricCategories(dispositions);
+  const sumOfCategories = Object.values(counts).reduce((sum, value) => sum + value, 0);
+  if (metrics.totalRegionSegmentCount !== sumOfCategories) return false;
+  for (const category of Object.keys(counts) as ReadonlyArray<PhysicalCellSegmentMetricCategory>) {
+    if (metrics[SEGMENT_METRIC_CATEGORY_FIELDS[category]] !== counts[category]) return false;
+  }
+  return true;
+}
 
 export function validatePhysicalCellFormationConservation(
   sourceLineCount: number,
