@@ -19,9 +19,10 @@ function runConservationGates(
   structurePage: ValidatedRegionSources["structurePage"],
   physicalPage: PhysicalDocumentPage,
   cellTextEvidences: ReturnType<typeof formRegionCellTextEvidences>["cellTextEvidences"],
+  isWholeRegionFormationFailureSubstitute = false,
 ): TextEvidenceConservationFailure {
   if (!validateCellHypothesisConservation(region, cellTextEvidences)) return "cell_hypothesis";
-  if (!validateSegmentOutcomeConservation(region, structurePage, cellTextEvidences)) return "segment_outcome";
+  if (!validateSegmentOutcomeConservation(region, structurePage, cellTextEvidences, isWholeRegionFormationFailureSubstitute)) return "segment_outcome";
   if (!validateTextItemOccurrenceConservation(region, structurePage, physicalPage, cellTextEvidences)) return "text_item_occurrence";
   if (!validateFragmentDispositionConservation(cellTextEvidences, physicalPage)) return "fragment_disposition";
   return null;
@@ -121,9 +122,16 @@ function processRegion(
     }
   }
 
+  // `substituteProblem` só é definido nos dois ramos que constroem `formed`
+  // via `buildFormationFailedSubstitute` (página física ausente ou exceção
+  // capturada) — nunca inferido da forma de `formed.cellTextEvidences`, que
+  // seria ambígua com uma região de célula única cuja `failedPhase` foi
+  // adulterada. Esta é a única fonte confiável de que o substituto foi de
+  // fato usado.
+  const isWholeRegionFormationFailureSubstitute = substituteProblem !== null;
   let conservationFailure: TextEvidenceConservationFailure;
   try {
-    conservationFailure = dependencies.runConservationGates(region, source.structurePage, physicalPage, formed.cellTextEvidences);
+    conservationFailure = dependencies.runConservationGates(region, source.structurePage, physicalPage, formed.cellTextEvidences, isWholeRegionFormationFailureSubstitute);
   } catch {
     conservationFailure = "fragment_disposition";
   }

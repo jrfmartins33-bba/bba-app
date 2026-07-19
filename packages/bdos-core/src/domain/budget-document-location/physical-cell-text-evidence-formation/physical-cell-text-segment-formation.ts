@@ -5,9 +5,9 @@ import type { FailedPhysicalCellTextSegmentOutcome, InvalidPhysicalCellTextSegme
 import { buildSegmentOwnerByTextItemIndex, buildTextItemByIndex, conflictingReferencesFor, findRegionWideDuplicateOccurrences, resolveTextItemOccurrence, type CandidateTextItemOccurrence } from "./physical-cell-text-item-resolution";
 import { problem } from "./physical-cell-text-evidence-formation-technical-problem";
 
-type SegmentOutcomeFailure = InvalidPhysicalCellTextSegmentReference | InvalidPhysicalCellTextSegmentLineReference | PhysicalCellTextSegmentLineMismatch | PhysicalCellTextSegmentPageMismatch | PhysicalCellTextSegmentMultipleCellReference;
+export type SegmentOutcomeFailure = InvalidPhysicalCellTextSegmentReference | InvalidPhysicalCellTextSegmentLineReference | PhysicalCellTextSegmentLineMismatch | PhysicalCellTextSegmentPageMismatch | PhysicalCellTextSegmentMultipleCellReference;
 
-type SegmentOutcomeDraft =
+export type SegmentOutcomeDraft =
   | { readonly kind: "failure"; readonly outcome: SegmentOutcomeFailure }
   | { readonly kind: "pending"; readonly segmentKey: string; readonly lineKey: string; readonly segment: ReconstructedHorizontalSegment };
 
@@ -44,6 +44,76 @@ function resolveSegmentReference(
   return { kind: "pending", segmentKey, lineKey: segment.lineKey, segment };
 }
 
+export interface CellSegmentDraftState {
+  readonly cell: PhysicalCellHypothesis;
+  readonly drafts: ReadonlyArray<SegmentOutcomeDraft>;
+  readonly orderInvalid: boolean;
+}
+
+/**
+ * Fonte única da precedência objetiva de resolução de cada segmentKey de
+ * cada PhysicalCellHypothesis da região: ordem da célula inválida > segmento
+ * referenciado por múltiplas células > segmento inexistente > lineKey
+ * inexistente > line_mismatch > page_mismatch > pendente de resolução
+ * textual. Usada tanto pela formação real (`formRegionCellTextEvidences`)
+ * quanto pelo Portão 2 de conservação — nunca duas fórmulas divergentes.
+ * Nunca lê o resultado publicado; deriva sempre de `region`/`structurePage`.
+ */
+export function deriveRegionCellSegmentDrafts(
+  region: PhysicalCellHypothesisFormationRegion,
+  structurePage: ReconstructedBudgetDocumentPage,
+): ReadonlyArray<CellSegmentDraftState> {
+  const structureSegmentByKey = new Map(structurePage.segments.map((segment) => [segment.segmentKey, segment]));
+  const structureLineByKey = new Map(structurePage.lines.map((line) => [line.lineKey, line]));
+  const intersectionByKey = new Map(region.gridIntersections.map((entry) => [entry.gridIntersectionKey, entry]));
+  const segmentClaims = new Map<string, string[]>();
+  region.cellHypotheses.forEach((cell) => {
+    cell.segmentKeys.forEach((segmentKey) => {
+      const existing = segmentClaims.get(segmentKey);
+      if (existing) existing.push(cell.cellHypothesisKey);
+      else segmentClaims.set(segmentKey, [cell.cellHypothesisKey]);
+    });
+  });
+
+  return region.cellHypotheses.map((cell) => {
+    const intersection = intersectionByKey.get(cell.gridIntersectionKey)!;
+    const expectedLineKey = intersection.sourceLineKey;
+    const expectedPageNumber = region.pageNumber;
+    const drafts = cell.segmentKeys.map((segmentKey) =>
+      resolveSegmentReference(segmentKey, expectedLineKey, expectedPageNumber, segmentClaims.get(segmentKey) ?? [], structureSegmentByKey, structureLineByKey),
+    );
+
+    const pendingWithOrder = drafts
+      .map((draft, position) => ({ draft, position }))
+      .filter((entry): entry is { draft: Extract<SegmentOutcomeDraft, { kind: "pending" }>; position: number } => entry.draft.kind === "pending");
+    const orderInvalid = pendingWithOrder.some((entry, index) => index > 0 && entry.draft.segment.horizontalOrder <= pendingWithOrder[index - 1].draft.segment.horizontalOrder);
+
+    return { cell, drafts, orderInvalid };
+  });
+}
+
+/**
+ * População elegível de ocorrências textuais candidatas da região inteira:
+ * apenas segmentos de células com ordem válida e cujo draft seja "pending"
+ * (nunca de uma célula com ordem inválida, nem de um segmentKey já
+ * classificado como referência inválida/incompatível). Mesma função usada
+ * pela formação e pelo Portão 3 — garante que a população textual da
+ * conservação nunca seja mais ampla que a população real da formação.
+ */
+export function buildEligibleTextItemOccurrences(cellStates: ReadonlyArray<CellSegmentDraftState>): CandidateTextItemOccurrence[] {
+  const occurrences: CandidateTextItemOccurrence[] = [];
+  cellStates.forEach(({ cell, drafts, orderInvalid }) => {
+    if (orderInvalid) return;
+    drafts.forEach((draft) => {
+      if (draft.kind === "failure") return;
+      draft.segment.sourceTextItemIndices.forEach((textItemIndex, position) => {
+        occurrences.push({ cellHypothesisKey: cell.cellHypothesisKey, segmentKey: draft.segmentKey, sourceReferenceOrder: position + 1, textItemIndex });
+      });
+    });
+  });
+  return occurrences;
+}
+
 export function cellStatusFor(segmentOutcomes: ReadonlyArray<PhysicalCellTextSegmentOutcome>): PhysicalCellTextEvidence["status"] {
   const allResolved = segmentOutcomes.every((outcome) => outcome.status === "resolved");
   const dispositions = segmentOutcomes.flatMap((outcome) => (outcome.status === "resolved" ? outcome.itemDispositions : []));
@@ -60,21 +130,11 @@ export function formRegionCellTextEvidences(
   physicalPage: PhysicalDocumentPage,
   context: { readonly groupKey: string; readonly regionKey: string },
 ): { readonly cellTextEvidences: ReadonlyArray<PhysicalCellTextEvidence>; readonly technicalProblems: ReadonlyArray<PhysicalCellTextEvidenceFormationTechnicalProblem> } {
-  const structureSegmentByKey = new Map(structurePage.segments.map((segment) => [segment.segmentKey, segment]));
-  const structureLineByKey = new Map(structurePage.lines.map((line) => [line.lineKey, line]));
   const intersectionByKey = new Map(region.gridIntersections.map((entry) => [entry.gridIntersectionKey, entry]));
-  const segmentClaims = new Map<string, string[]>();
-  region.cellHypotheses.forEach((cell) => {
-    cell.segmentKeys.forEach((segmentKey) => {
-      const existing = segmentClaims.get(segmentKey);
-      if (existing) existing.push(cell.cellHypothesisKey);
-      else segmentClaims.set(segmentKey, [cell.cellHypothesisKey]);
-    });
-  });
-
   const textItemByIndex = buildTextItemByIndex(physicalPage);
   const segmentOwnerByTextItemIndex = buildSegmentOwnerByTextItemIndex(structurePage);
 
+  const draftStateByKey = new Map(deriveRegionCellSegmentDrafts(region, structurePage).map((state) => [state.cell.cellHypothesisKey, state]));
   const orderedCells = [...region.cellHypotheses].sort((a, b) => {
     const intersectionA = intersectionByKey.get(a.gridIntersectionKey);
     const intersectionB = intersectionByKey.get(b.gridIntersectionKey);
@@ -84,30 +144,9 @@ export function formRegionCellTextEvidences(
     const columnB = intersectionB && "columnOrder" in intersectionB ? intersectionB.columnOrder : 0;
     return rowA - rowB || columnA - columnB || a.cellHypothesisKey.localeCompare(b.cellHypothesisKey);
   });
+  const cellStates: CellSegmentDraftState[] = orderedCells.map((cell) => draftStateByKey.get(cell.cellHypothesisKey)!);
 
   const technicalProblems: PhysicalCellTextEvidenceFormationTechnicalProblem[] = [];
-  const allOccurrences: CandidateTextItemOccurrence[] = [];
-
-  interface CellState {
-    readonly cell: PhysicalCellHypothesis;
-    readonly drafts: ReadonlyArray<SegmentOutcomeDraft>;
-    readonly orderInvalid: boolean;
-  }
-  const cellStates: CellState[] = orderedCells.map((cell) => {
-    const intersection = intersectionByKey.get(cell.gridIntersectionKey)!;
-    const expectedLineKey = intersection.sourceLineKey;
-    const expectedPageNumber = region.pageNumber;
-    const drafts = cell.segmentKeys.map((segmentKey) =>
-      resolveSegmentReference(segmentKey, expectedLineKey, expectedPageNumber, segmentClaims.get(segmentKey) ?? [], structureSegmentByKey, structureLineByKey),
-    );
-
-    const pendingWithOrder = drafts
-      .map((draft, position) => ({ draft, position }))
-      .filter((entry): entry is { draft: Extract<SegmentOutcomeDraft, { kind: "pending" }>; position: number } => entry.draft.kind === "pending");
-    const orderInvalid = pendingWithOrder.some((entry, index) => index > 0 && entry.draft.segment.horizontalOrder <= pendingWithOrder[index - 1].draft.segment.horizontalOrder);
-
-    return { cell, drafts, orderInvalid };
-  });
 
   cellStates.forEach(({ cell, drafts, orderInvalid }) => {
     if (orderInvalid) {
@@ -117,14 +156,11 @@ export function formRegionCellTextEvidences(
     drafts.forEach((draft) => {
       if (draft.kind === "failure") {
         technicalProblems.push(problemForSegmentFailure(draft.outcome, { groupKey: context.groupKey, pageNumber: region.pageNumber, regionKey: context.regionKey, cellHypothesisKey: cell.cellHypothesisKey }));
-        return;
       }
-      draft.segment.sourceTextItemIndices.forEach((textItemIndex, position) => {
-        allOccurrences.push({ cellHypothesisKey: cell.cellHypothesisKey, segmentKey: draft.segmentKey, sourceReferenceOrder: position + 1, textItemIndex });
-      });
     });
   });
 
+  const allOccurrences = buildEligibleTextItemOccurrences(cellStates);
   const duplicateOccurrences = findRegionWideDuplicateOccurrences(allOccurrences);
   const allDuplicatesList = [...duplicateOccurrences];
   const occurrencesBySegment = new Map<string, CandidateTextItemOccurrence[]>();

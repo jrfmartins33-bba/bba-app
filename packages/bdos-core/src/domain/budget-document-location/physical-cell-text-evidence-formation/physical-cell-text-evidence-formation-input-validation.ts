@@ -64,25 +64,59 @@ function everyCellHypothesisHasIntersection(region: PhysicalCellHypothesisFormat
 
 /**
  * Confirma que o próprio `PhysicalDocumentReadResult` é internamente são
- * antes de qualquer mapa ser construído sobre ele: número de páginas
- * declarado bate com o array real, todo pageNumber é inteiro positivo e
- * único, e todo índice de item textual é inteiro não negativo e único
- * dentro da própria página — nunca sobrescrito silenciosamente por um mapa
- * construído a partir de dados incoerentes.
+ * antes de qualquer mapa ser construído sobre ele: `totalPageCount` é
+ * inteiro positivo e bate com o array real; todo `pageNumber` é inteiro
+ * positivo, único e dentro de `[1, totalPageCount]` — o que, combinado com
+ * a contagem exata de páginas, força a densidade `1..totalPageCount` sem
+ * checagem adicional (unicidade + intervalo + cardinalidade implicam
+ * bijeção); e todo índice de item textual é inteiro não negativo, único e
+ * estritamente menor que a quantidade de itens da própria página — o que,
+ * pela mesma lógica, força a densidade `0..N-1` daquela página, sem exigir
+ * que a posição no array coincida com `item.index`. Nunca sobrescrito
+ * silenciosamente por um mapa construído a partir de dados incoerentes.
  */
 function isPhysicalReadStructurallySound(physicalRead: PhysicalDocumentReadResult): boolean {
+  if (!Number.isInteger(physicalRead.totalPageCount) || physicalRead.totalPageCount <= 0) return false;
   if (physicalRead.pages.length !== physicalRead.totalPageCount) return false;
   const seenPageNumbers = new Set<number>();
   for (const page of physicalRead.pages) {
-    if (!Number.isInteger(page.pageNumber) || page.pageNumber < 1 || seenPageNumbers.has(page.pageNumber)) return false;
+    if (!Number.isInteger(page.pageNumber) || page.pageNumber < 1 || page.pageNumber > physicalRead.totalPageCount || seenPageNumbers.has(page.pageNumber)) return false;
     seenPageNumbers.add(page.pageNumber);
     const seenIndices = new Set<number>();
     for (const item of page.textItems) {
-      if (!Number.isInteger(item.index) || item.index < 0 || seenIndices.has(item.index)) return false;
+      if (!Number.isInteger(item.index) || item.index < 0 || item.index >= page.textItems.length || seenIndices.has(item.index)) return false;
       seenIndices.add(item.index);
     }
   }
   return true;
+}
+
+/**
+ * Confirma que o próprio `BudgetDocumentPhysicalCellHypothesisFormationResult`
+ * respeita a forma canônica que a f.2c sempre produz para cada estado
+ * hierárquico — nunca presumida, sempre verificada: `group_not_processable`
+ * implica `pages: []`; `page_not_processable` implica `regions: []`;
+ * `region_not_processable` e `no_physical_grid` implicam tanto
+ * `cellHypotheses: []` quanto `gridIntersections: []`; e
+ * `grid_without_cell_hypotheses` implica ao menos `cellHypotheses: []`
+ * (interseções vazias/ambíguas podem legitimamente existir). Uma forma
+ * incompatível nunca é um defeito local — é o próprio contrato da f.2c que
+ * está corrompido, e por isso falha globalmente.
+ */
+function isCanonicalPhysicalCellHypothesisFormationShape(c: BudgetDocumentPhysicalCellTextEvidenceFormationInput["physicalCellHypothesisFormation"]): boolean {
+  return c.groups.every((group) => {
+    if (group.status === "group_not_processable") return group.pages.length === 0;
+    return group.pages.every((page) => {
+      if (page.status === "page_not_processable") return page.regions.length === 0;
+      return page.regions.every((region) => {
+        if (region.status === "region_not_processable" || region.status === "no_physical_grid") {
+          return region.cellHypotheses.length === 0 && region.gridIntersections.length === 0;
+        }
+        if (region.status === "grid_without_cell_hypotheses") return region.cellHypotheses.length === 0;
+        return true;
+      });
+    });
+  });
 }
 
 export function validatePhysicalCellTextEvidenceFormationInput(
@@ -104,6 +138,8 @@ export function validatePhysicalCellTextEvidenceFormationInput(
   if (!isPhysicalReadFingerprintValid(p)) return invalid("source_fingerprint_invalid");
   if (!isStructureReconstructionFingerprintValid(s)) return invalid("source_fingerprint_invalid");
   if (!isPhysicalCellHypothesisFormationFingerprintValid(c)) return invalid("source_fingerprint_invalid");
+
+  if (!isCanonicalPhysicalCellHypothesisFormationShape(c)) return invalid("source_physical_cell_hypothesis_formation_contract_invalid");
 
   // Cobertura integral: mesma população de sourceCandidateGroupKey nos dois
   // contratos — nunca apenas c ⊆ s. Um grupo estrutural sem contrapartida na

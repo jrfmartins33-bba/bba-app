@@ -217,4 +217,89 @@ function fixture(): BudgetDocumentPhysicalCellTextEvidenceFormationInput {
   console.log("ok - a PhysicalCellHypothesis without a corresponding intersection is rejected globally, not treated as a local defect");
 }
 
-console.log("ok - physical-cell-text-evidence-formation-input-validation covers contracts, status, lineage, fingerprints and full group/page coverage");
+// --- contrato físico endurecido: totalPageCount, pageNumber, índices de itens --
+{
+  const cases: ReadonlyArray<[string, (p: ReturnType<typeof fixture>["physicalRead"]) => ReturnType<typeof fixture>["physicalRead"]]> = [
+    ["totalPageCount zero", (p) => ({ ...p, totalPageCount: 0, pages: [] })],
+    ["a page above totalPageCount", (p) => ({ ...p, pages: [{ ...p.pages[0], pageNumber: p.totalPageCount + 1 }] })],
+    ["page 1 missing (renumbered to 2)", (p) => ({ ...p, totalPageCount: 1, pages: [{ ...p.pages[0], pageNumber: 2 }] })],
+    ["pages 2 and 3 with totalPageCount 2", (p) => ({ ...p, totalPageCount: 2, pages: [{ ...p.pages[0], pageNumber: 2 }, { ...p.pages[0], pageNumber: 3 }] })],
+    ["a negative text item index", (p) => ({ ...p, pages: [{ ...p.pages[0], textItems: [{ ...p.pages[0].textItems[0], index: -1 }, ...p.pages[0].textItems.slice(1)] }] })],
+    ["a duplicated text item index", (p) => ({ ...p, pages: [{ ...p.pages[0], textItems: [p.pages[0].textItems[0], { ...p.pages[0].textItems[1], index: p.pages[0].textItems[0].index }, ...p.pages[0].textItems.slice(2)] }] })],
+    ["sparse text item indices", (p) => ({ ...p, pages: [{ ...p.pages[0], textItems: p.pages[0].textItems.map((item, index) => ({ ...item, index: index * 2 })) }] })],
+  ];
+  for (const [label, corrupt] of cases) {
+    const input = fixture();
+    const corrupted = { ...input, physicalRead: corrupt(input.physicalRead) };
+    const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
+    if (result.kind !== "invalid" || result.problems[0]?.code !== "source_physical_read_contract_invalid") throw new Error(`${label} was not rejected as source_physical_read_contract_invalid`);
+  }
+  console.log("ok - the physical contract's page/index structural soundness is fully verified: totalPageCount positivity, page range/density/uniqueness, and text item index range/density/uniqueness");
+}
+
+// --- permutação física de textItems no array continua válida ------------------
+{
+  const input = fixture();
+  const originalPage = input.physicalRead.pages[0];
+  const permutedPage = { ...originalPage, textItems: [...originalPage.textItems].reverse() };
+  const corrupted = { ...input, physicalRead: { ...input.physicalRead, pages: [permutedPage] } };
+  const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
+  if (result.kind !== "valid") throw new Error("reversing the physical array position of textItems, while keeping the same set of item.index values, must remain valid");
+  console.log("ok - the array position of textItems is irrelevant; only item.index is authoritative for density/uniqueness");
+}
+
+// --- forma canônica dos estados herdados da f.2c -------------------------------
+{
+  const input = fixture();
+  const group = input.physicalCellHypothesisFormation.groups[0];
+  const groups = [{ ...group, status: "group_not_processable" as const }];
+  const corrupted = { ...input, physicalCellHypothesisFormation: resignPhysicalCellHypothesisFormationResult(input.physicalCellHypothesisFormation, { groups }) };
+  const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
+  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_physical_cell_hypothesis_formation_contract_invalid") throw new Error("group_not_processable with non-empty pages was not rejected as a contract shape violation");
+  console.log("ok - a group_not_processable f.2c group with non-empty pages is rejected as a contract shape violation");
+}
+{
+  const input = fixture();
+  const group = input.physicalCellHypothesisFormation.groups[0];
+  const columnPage = group.pages[0];
+  const groups = [{ ...group, pages: [{ ...columnPage, status: "page_not_processable" as const }] }];
+  const corrupted = { ...input, physicalCellHypothesisFormation: resignPhysicalCellHypothesisFormationResult(input.physicalCellHypothesisFormation, { groups }) };
+  const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
+  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_physical_cell_hypothesis_formation_contract_invalid") throw new Error("page_not_processable with non-empty regions was not rejected as a contract shape violation");
+  console.log("ok - a page_not_processable f.2c page with non-empty regions is rejected as a contract shape violation");
+}
+{
+  const input = fixture();
+  const group = input.physicalCellHypothesisFormation.groups[0];
+  const columnPage = group.pages[0];
+  const region = columnPage.regions[0];
+  const groups = [{ ...group, pages: [{ ...columnPage, regions: [{ ...region, status: "region_not_processable" as const }] }] }];
+  const corrupted = { ...input, physicalCellHypothesisFormation: resignPhysicalCellHypothesisFormationResult(input.physicalCellHypothesisFormation, { groups }) };
+  const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
+  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_physical_cell_hypothesis_formation_contract_invalid") throw new Error("region_not_processable with non-empty cellHypotheses/gridIntersections was not rejected as a contract shape violation");
+  console.log("ok - a region_not_processable f.2c region with non-empty cellHypotheses/gridIntersections is rejected as a contract shape violation");
+}
+{
+  const input = fixture();
+  const group = input.physicalCellHypothesisFormation.groups[0];
+  const columnPage = group.pages[0];
+  const region = columnPage.regions[0];
+  const groups = [{ ...group, pages: [{ ...columnPage, regions: [{ ...region, status: "no_physical_grid" as const }] }] }];
+  const corrupted = { ...input, physicalCellHypothesisFormation: resignPhysicalCellHypothesisFormationResult(input.physicalCellHypothesisFormation, { groups }) };
+  const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
+  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_physical_cell_hypothesis_formation_contract_invalid") throw new Error("no_physical_grid with non-empty cellHypotheses/gridIntersections was not rejected as a contract shape violation");
+  console.log("ok - a no_physical_grid f.2c region with non-empty cellHypotheses/gridIntersections is rejected as a contract shape violation");
+}
+{
+  const input = fixture();
+  const group = input.physicalCellHypothesisFormation.groups[0];
+  const columnPage = group.pages[0];
+  const region = columnPage.regions[0];
+  const groups = [{ ...group, pages: [{ ...columnPage, regions: [{ ...region, status: "grid_without_cell_hypotheses" as const }] }] }];
+  const corrupted = { ...input, physicalCellHypothesisFormation: resignPhysicalCellHypothesisFormationResult(input.physicalCellHypothesisFormation, { groups }) };
+  const result = validatePhysicalCellTextEvidenceFormationInput(corrupted);
+  if (result.kind !== "invalid" || result.problems[0]?.code !== "source_physical_cell_hypothesis_formation_contract_invalid") throw new Error("grid_without_cell_hypotheses with non-empty cellHypotheses was not rejected as a contract shape violation");
+  console.log("ok - a grid_without_cell_hypotheses f.2c region with non-empty cellHypotheses is rejected as a contract shape violation");
+}
+
+console.log("ok - physical-cell-text-evidence-formation-input-validation covers contracts, status, lineage, fingerprints, full group/page coverage, the hardened physical contract, and canonical upstream shapes");

@@ -154,6 +154,7 @@ runTest("internal helpers, classifiers, resolvers and the dependency seam are no
   const content = readFileSync(indexPath, "utf8");
   const forbiddenExports = [
     "classifyCell", "classifySegmentOutcome", "classifyItemDisposition", "resolveTextItemOccurrence", "resolveSegmentReference", "cellStatusFor",
+    "deriveRegionCellSegmentDrafts", "buildEligibleTextItemOccurrences",
     "formRegionCellTextEvidences", "runConservationGates", "getDefaultPhysicalCellTextEvidenceFormationDependencies",
     "formBudgetDocumentPhysicalCellTextEvidenceWithDependencies", "validateCellHypothesisConservation", "validateSegmentOutcomeConservation",
     "validateTextItemOccurrenceConservation", "validateFragmentDispositionConservation", "validateMetricCategoryConservation",
