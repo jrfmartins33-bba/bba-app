@@ -1,0 +1,141 @@
+{
+  "cellTextEvidences": [
+    {
+      "status": "formed",
+      "cellHypothesisKey": "cell-simple",
+      "gridIntersectionKey": "gi-simple",
+      "segmentOutcomes": [
+        {
+          "status": "resolved",
+          "segmentKey": "seg-money",
+          "lineKey": "line-1",
+          "fragments": [
+            {
+              "sourceReferenceOrder": 1,
+              "textItemIndex": 0,
+              "originalText": "R$ 1.234,56",
+              "normalizedText": "R$ 1.234,56"
+            }
+          ],
+          "itemDispositions": [
+            {
+              "status": "included_in_text_fragment",
+              "segmentKey": "seg-money",
+              "sourceReferenceOrder": 1,
+              "textItemIndex": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "status": "formed",
+      "cellHypothesisKey": "cell-multi",
+      "gridIntersectionKey": "gi-multi",
+      "segmentOutcomes": [
+        {
+          "status": "resolved",
+          "segmentKey": "seg-two-items",
+          "lineKey": "line-2",
+          "fragments": [
+            {
+              "sourceReferenceOrder": 1,
+              "textItemIndex": 3,
+              "originalText": "Ração",
+              "normalizedText": "Ração"
+            },
+            {
+              "sourceReferenceOrder": 2,
+              "textItemIndex": 4,
+              "originalText": "A   B\t C",
+              "normalizedText": "A B C"
+            }
+          ],
+          "itemDispositions": [
+            {
+              "status": "included_in_text_fragment",
+              "segmentKey": "seg-two-items",
+              "sourceReferenceOrder": 1,
+              "textItemIndex": 3
+            },
+            {
+              "status": "included_in_text_fragment",
+              "segmentKey": "seg-two-items",
+              "sourceReferenceOrder": 2,
+              "textItemIndex": 4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "status": "formed",
+      "cellHypothesisKey": "cell-multiseg",
+      "gridIntersectionKey": "gi-multiseg",
+      "segmentOutcomes": [
+        {
+          "status": "resolved",
+          "segmentKey": "seg-percent",
+          "lineKey": "line-3",
+          "fragments": [
+            {
+              "sourceReferenceOrder": 1,
+              "textItemIndex": 1,
+              "originalText": "50%",
+              "normalizedText": "50%"
+            }
+          ],
+          "itemDispositions": [
+            {
+              "status": "included_in_text_fragment",
+              "segmentKey": "seg-percent",
+              "sourceReferenceOrder": 1,
+              "textItemIndex": 1
+            }
+          ]
+        },
+        {
+          "status": "resolved",
+          "segmentKey": "seg-pipe",
+          "lineKey": "line-3",
+          "fragments": [
+            {
+              "sourceReferenceOrder": 1,
+              "textItemIndex": 2,
+              "originalText": "Preço|Total",
+              "normalizedText": "Preço|Total"
+            }
+          ],
+          "itemDispositions": [
+            {
+              "status": "included_in_text_fragment",
+              "segmentKey": "seg-pipe",
+              "sourceReferenceOrder": 1,
+              "textItemIndex": 2
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "technicalProblems": [],
+  "metrics": {
+    "sourceCellHypothesisCount": 3,
+    "cellTextEvidenceFormedCount": 3,
+    "cellTextEvidencePartiallyFormedCount": 0,
+    "cellTextEvidenceFailedCount": 0,
+    "sourceSegmentReferenceCount": 4,
+    "segmentResolvedCount": 4,
+    "segmentReferenceInvalidCount": 0,
+    "segmentIncompatibleCount": 0,
+    "segmentFormationFailedCount": 0,
+    "totalEligibleTextItemReferenceCount": 5,
+    "includedTextItemReferenceCount": 5,
+    "invalidReferenceTextItemCount": 0,
+    "duplicateReferenceTextItemCount": 0,
+    "segmentMismatchTextItemCount": 0,
+    "formationFailedTextItemCount": 0,
+    "technicalProblemCount": 0
+  },
+  "fingerprint": "e2696289c24e88bbcfa3c8d97a351c2254afc8d861297315216415de5bd8d22c"
+}

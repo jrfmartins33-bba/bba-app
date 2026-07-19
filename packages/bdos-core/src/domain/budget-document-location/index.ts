@@ -11,3 +11,4 @@ export * from "./structure-reconstruction";
 export * from "./tabular-region-detection";
 export * from "./physical-column-hypothesis-reconstruction";
 export * from "./physical-cell-hypothesis-formation";
+export * from "./physical-cell-text-evidence-formation";
