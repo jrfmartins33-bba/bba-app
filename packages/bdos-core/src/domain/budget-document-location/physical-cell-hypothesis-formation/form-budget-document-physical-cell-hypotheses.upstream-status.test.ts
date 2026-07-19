@@ -12,6 +12,8 @@ function fixture() { const upstream = buildPhysicalColumnHypothesisReconstructio
   const changed = replaceAndResignColumnGroups(input, [{ ...group, status: "hypotheses_reconstructed_with_problems", pages: [{ ...columnPage, status: "hypotheses_reconstructed_with_problems", regions: [{ ...region, status: "region_not_processable" }] }] }]);
   const result = formBudgetDocumentPhysicalCellHypotheses(changed); const output = result.groups[0].pages[0].regions[0];
   if (output.status !== "region_not_processable" || output.gridIntersections.length !== 0 || output.cellHypotheses.length !== 0) throw new Error("region_not_processable was reprocessed");
+  if (output.segmentDispositions.some((entry) => entry.status === "outside_all_physical_cell_hypotheses" || entry.status === "unresolved_cell_hypothesis_formation_failed")) throw new Error("unprocessed region published a false physical observation");
+  if (!output.segmentDispositions.some((entry) => entry.status === "unresolved_upstream_region_not_processable")) throw new Error("upstream non-processability was not preserved");
   console.log("ok - upstream region_not_processable is preserved without grid formation");
 }
 {
@@ -31,8 +33,11 @@ function fixture() { const upstream = buildPhysicalColumnHypothesisReconstructio
 {
   const input = fixture(); const group = input.physicalColumnHypothesisReconstruction.groups[0]; const columnPage = group.pages[0]; const region = columnPage.regions[0]; const disposition = region.segmentDispositions[0];
   const failed = { status: "unresolved_physical_column_hypothesis_detection_failed" as const, segmentKey: disposition.segmentKey, lineKey: disposition.lineKey, failedPhase: "hypothesis_formation" as const };
-  const changed = replaceAndResignColumnGroups(input, [{ ...group, pages: [{ ...columnPage, regions: [{ ...region, segmentDispositions: [failed, ...region.segmentDispositions.slice(1)] }] }] }]);
+  const hypotheses = region.hypotheses.map((hypothesis) => { const position = hypothesis.segmentKeys.indexOf(disposition.segmentKey); return position < 0 ? hypothesis : { ...hypothesis, segmentKeys: hypothesis.segmentKeys.filter((_, index) => index !== position), lineKeys: hypothesis.lineKeys.filter((_, index) => index !== position) }; });
+  const changed = replaceAndResignColumnGroups(input, [{ ...group, pages: [{ ...columnPage, regions: [{ ...region, hypotheses, segmentDispositions: [failed, ...region.segmentDispositions.slice(1)] }] }] }]);
   const output = formBudgetDocumentPhysicalCellHypotheses(changed).groups[0].pages[0].regions[0];
   if (output.status !== "region_not_processable" || output.gridIntersections.length !== 0 || output.technicalProblems[0]?.code !== "source_physical_column_hypothesis_contract_invalid") throw new Error("detection_failed was hidden");
+  const inheritedFailure = output.segmentDispositions.find((entry) => entry.status === "unresolved_inherited_physical_column_hypothesis_failure");
+  if (!inheritedFailure || inheritedFailure.upstreamFailedPhase !== "hypothesis_formation" || inheritedFailure.upstreamDispositionStatus !== "unresolved_physical_column_hypothesis_detection_failed") throw new Error("upstream failure origin was not preserved");
   console.log("ok - upstream detection_failed invalidates only its region and is never hidden as outside");
 }

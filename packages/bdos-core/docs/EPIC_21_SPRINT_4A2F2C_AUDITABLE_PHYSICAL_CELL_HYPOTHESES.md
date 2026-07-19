@@ -12,7 +12,7 @@ A operação pública recebe um único `BudgetDocumentPhysicalCellHypothesisForm
 
 Validação de entrada, formação do produto cartesiano, associação de segmentos, formação de células, validação de contenção, conservação, métricas e canonicalização são fases separadas. Dependências internas permitem injetar falhas em testes sem ampliar a API pública.
 
-Estados `group_not_processable`, `page_not_processable` e `region_not_processable` da f.2b são preservados. A disposição `unresolved_physical_column_hypothesis_detection_failed` invalida somente sua região e jamais é convertida em vazio ou segmento externo. Falha inesperada na formação da malha torna a região não processável e não publica produto parcial. Falhas posteriores materializam `FailedPhysicalGridIntersection` com a fase exata. Regiões independentes continuam sendo processadas; somente uma falha realmente global produz resultado global `failed`.
+Estados `group_not_processable`, `page_not_processable` e `region_not_processable` da f.2b são preservados. Segmentos de uma região não processada recebem `unresolved_upstream_region_not_processable`, nunca uma observação física negativa. A disposição `unresolved_physical_column_hypothesis_detection_failed` é propagada como `unresolved_inherited_physical_column_hypothesis_failure`, preservando fase e status upstream; invalida somente sua região e jamais é convertida em vazio, segmento externo ou falha de associação da f.2c. Falha inesperada na formação da malha torna a região não processável e não publica produto parcial. Falhas posteriores materializam `FailedPhysicalGridIntersection` com a fase exata. Regiões independentes continuam sendo processadas; somente uma falha realmente global produz resultado global `failed`.
 
 ## Geometria, interseções e células
 
@@ -29,13 +29,13 @@ Há dois universos independentes e validados por portões executáveis:
 - para cada região processável, `intersections = lines × columns`, com chaves únicas e uma variante final por posição;
 - cada segmento da região recebe exatamente uma disposição final, sem duplicação, omissão ou propriedade por mais de uma célula.
 
-Referências interseção–célula são bidirecionalmente verificadas. Quebras emitem os problemas técnicos de conservação correspondentes. Métricas são contagens estruturais objetivas; não representam score, confiança ou prontidão comercial.
+Referências segmento–disposição–célula–interseção são verificadas bidirecionalmente, inclusive pertencimento ao universo regional. Disposições ausentes não são filtradas: tornam-se falha controlada e quebram o portão de conservação. Quebras emitem os problemas técnicos de conservação correspondentes. Métricas são contagens estruturais objetivas; não representam score, confiança ou prontidão comercial.
 
 ## Determinismo e testes
 
 Chaves e fingerprints usam SHA-256 sobre JSON canônico, sem UUID, relógio ou aleatoriedade. O fingerprint final cobre linhagem, hierarquia, interseções, células, disposições, problemas, métricas e limitações. Mudanças apenas textuais não alteram o resultado físico.
 
-A suíte cobre contratos e versões incompatíveis, linhagem e referências inválidas, estados e falhas herdados, produto cartesiano e vazios, associação parcial/múltipla, falhas por fase, conservação, isolamento regional, canonicalização, determinismo, guard arquitetural recursivo e cadeia iniciada em PDF sintético pelo leitor real.
+A suíte cobre contratos e versões incompatíveis, igualdade direta de toda a linhagem, referências hipótese–disposição, estados e falhas herdados, produto cartesiano e vazios, associação parcial/múltipla, falhas por fase, conservação bidirecional, isolamento real entre duas regiões, canonicalização, determinismo, guard arquitetural recursivo e cadeia iniciada em PDF sintético pelo leitor real.
 
 O golden trace real usa quatro linhas. A f.2b exige que uma hipótese válida de coluna participe de pelo menos três linhas; com exatamente três linhas, toda coluna válida necessariamente ocupa as três, tornando impossível obter simultaneamente uma posição vazia legítima. Quatro linhas preservam o objetivo do trace sem fabricar um estado proibido pelo contrato upstream.
 

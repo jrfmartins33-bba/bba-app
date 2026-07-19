@@ -55,6 +55,18 @@ function sameDetectionLineage(input: BudgetDocumentPhysicalCellHypothesisFormati
     && c.sourceTabularRegionDetectionContextFingerprint === t.detectionContextFingerprint;
 }
 
+function detectionDirectlyMatchesStructure(input: BudgetDocumentPhysicalCellHypothesisFormationInput): boolean {
+  const { structureReconstruction: s, tabularRegionDetection: t } = input;
+  return t.sourceByteHash === s.sourceByteHash
+    && t.sourceReconstructionSchemaVersion === s.schemaVersion
+    && t.sourceReconstructorName === s.reconstructorName
+    && t.sourceReconstructorVersion === s.reconstructorVersion
+    && t.sourceReconstructionProfileId === s.reconstructionProfileId
+    && t.sourceReconstructionProfileVersion === s.reconstructionProfileVersion
+    && t.sourceReconstructionContextFingerprintVersion === s.reconstructionContextFingerprintVersion
+    && t.sourceReconstructionContextFingerprint === s.reconstructionContextFingerprint;
+}
+
 function validateRegionReferences(
   structurePage: ReconstructedBudgetDocumentPage,
   detectionRegion: TabularRegionCandidate,
@@ -69,16 +81,29 @@ function validateRegionReferences(
   if (columnRegion.segmentDispositions.length !== regionSegmentKeys.length) return false;
   if (new Set(columnRegion.segmentDispositions.map((entry) => entry.segmentKey)).size !== columnRegion.segmentDispositions.length) return false;
   if (regionSegmentKeys.some((key) => !columnRegion.segmentDispositions.some((entry) => entry.segmentKey === key))) return false;
+  const dispositionBySegment = new Map(columnRegion.segmentDispositions.map((entry) => [entry.segmentKey, entry]));
+  const hypothesisByKey = new Map(columnRegion.hypotheses.map((entry) => [entry.hypothesisKey, entry]));
+  if (hypothesisByKey.size !== columnRegion.hypotheses.length) return false;
   for (const disposition of columnRegion.segmentDispositions) {
     const segment = structureSegmentByKey.get(disposition.segmentKey);
     if (!segment || segment.lineKey !== disposition.lineKey || !detectionLineSet.has(disposition.lineKey)) return false;
+    if (disposition.status === "included_in_physical_column_hypothesis") {
+      const hypothesis = hypothesisByKey.get(disposition.hypothesisKey);
+      if (!hypothesis) return false;
+      const position = hypothesis.segmentKeys.indexOf(disposition.segmentKey);
+      if (position < 0 || hypothesis.lineKeys[position] !== disposition.lineKey) return false;
+    }
   }
   for (const hypothesis of columnRegion.hypotheses) {
-    if (hypothesis.pageNumber !== structurePage.pageNumber || hypothesis.lineKeys.length !== hypothesis.segmentKeys.length) return false;
+    if (hypothesis.pageNumber !== structurePage.pageNumber || hypothesis.lineKeys.length !== hypothesis.segmentKeys.length
+      || new Set(hypothesis.lineKeys).size !== hypothesis.lineKeys.length || new Set(hypothesis.segmentKeys).size !== hypothesis.segmentKeys.length) return false;
     for (let index = 0; index < hypothesis.lineKeys.length; index += 1) {
       const lineKey = hypothesis.lineKeys[index];
-      const segment = structureSegmentByKey.get(hypothesis.segmentKeys[index]);
+      const segmentKey = hypothesis.segmentKeys[index];
+      const segment = structureSegmentByKey.get(segmentKey);
       if (!detectionLineSet.has(lineKey) || !segment || segment.lineKey !== lineKey) return false;
+      const disposition = dispositionBySegment.get(segmentKey);
+      if (!disposition || disposition.status !== "included_in_physical_column_hypothesis" || disposition.hypothesisKey !== hypothesis.hypothesisKey || disposition.lineKey !== lineKey) return false;
     }
   }
   return true;
@@ -90,7 +115,7 @@ export function validatePhysicalCellHypothesisFormationInput(input: BudgetDocume
   if (s.status === "failed") return invalid("source_structure_reconstruction_contract_invalid");
   if (t.status === "failed") return invalid("source_tabular_region_detection_contract_invalid");
   if (c.status === "failed") return invalid("source_physical_column_hypothesis_contract_invalid");
-  if (s.sourceByteHash !== t.sourceByteHash || s.sourceByteHash !== c.sourceByteHash || !sameStructureLineage(input) || !sameDetectionLineage(input)) return invalid("source_lineage_mismatch");
+  if (s.sourceByteHash !== t.sourceByteHash || s.sourceByteHash !== c.sourceByteHash || !detectionDirectlyMatchesStructure(input) || !sameStructureLineage(input) || !sameDetectionLineage(input)) return invalid("source_lineage_mismatch");
 
   const structureGroups = new Map(s.groups.map((group) => [group.sourceCandidateGroupKey, group]));
   const detectionGroups = new Map(t.groups.map((group) => [group.sourceCandidateGroupKey, group]));

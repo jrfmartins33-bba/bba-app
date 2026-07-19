@@ -67,22 +67,24 @@ export function getDefaultPhysicalCellFormationDependencies(): PhysicalCellForma
 }
 
 function coherentGeometry(value: { leftPoints: number; topPoints: number; rightPoints: number; bottomPoints: number; widthPoints: number; heightPoints: number; centerXPoints: number; centerYPoints: number }): boolean {
+  const expected = canonicalizePhysicalCellFormationBounds(createBounds(value.leftPoints, value.topPoints, value.rightPoints, value.bottomPoints));
   return [value.leftPoints, value.topPoints, value.rightPoints, value.bottomPoints, value.widthPoints, value.heightPoints, value.centerXPoints, value.centerYPoints].every(Number.isFinite)
     && value.rightPoints > value.leftPoints && value.bottomPoints > value.topPoints
-    && value.widthPoints === value.rightPoints - value.leftPoints && value.heightPoints === value.bottomPoints - value.topPoints
-    && value.centerXPoints === (value.leftPoints + value.rightPoints) / 2 && value.centerYPoints === (value.topPoints + value.bottomPoints) / 2;
+    && value.widthPoints === expected.widthPoints && value.heightPoints === expected.heightPoints
+    && value.centerXPoints === expected.centerXPoints && value.centerYPoints === expected.centerYPoints;
 }
 
-function mapUnprocessedDispositions(source: ReadonlyArray<PhysicalColumnHypothesisSegmentDisposition>): ReadonlyArray<PhysicalCellHypothesisSegmentDisposition> {
+function mapUnprocessedDispositions(source: ReadonlyArray<PhysicalColumnHypothesisSegmentDisposition>, sourceRegionStatus: ValidatedRegionSources["columnRegion"]["status"], regionWasProcessed: boolean): ReadonlyArray<PhysicalCellHypothesisSegmentDisposition> {
   return source.map((entry) => {
     if (entry.status === "unresolved_physical_column_hypothesis_ambiguity") return { status: "unresolved_inherited_column_ambiguity" as const, segmentKey: entry.segmentKey, lineKey: entry.lineKey, conflictingCandidateHypothesisKeys: entry.conflictingCandidateHypothesisKeys };
-    if (entry.status === "unresolved_physical_column_hypothesis_detection_failed") return { status: "unresolved_cell_hypothesis_formation_failed" as const, segmentKey: entry.segmentKey, lineKey: entry.lineKey, failedPhase: "segment_association" as const };
+    if (entry.status === "unresolved_physical_column_hypothesis_detection_failed") return { status: "unresolved_inherited_physical_column_hypothesis_failure" as const, segmentKey: entry.segmentKey, lineKey: entry.lineKey, upstreamFailedPhase: entry.failedPhase, upstreamDispositionStatus: entry.status };
+    if (!regionWasProcessed) return { status: "unresolved_upstream_region_not_processable" as const, segmentKey: entry.segmentKey, lineKey: entry.lineKey, sourcePhysicalColumnHypothesisRegionStatus: sourceRegionStatus, upstreamDispositionStatus: entry.status };
     return { status: "outside_all_physical_cell_hypotheses" as const, segmentKey: entry.segmentKey, lineKey: entry.lineKey };
   });
 }
 
 function emptyRegion(source: ValidatedRegionSources, regionProcessedKey: string, status: PhysicalCellHypothesisFormationRegion["status"], problems: ReadonlyArray<PhysicalCellHypothesisFormationTechnicalProblem> = []): PhysicalCellHypothesisFormationRegion {
-  const dispositions = mapUnprocessedDispositions(source.columnRegion.segmentDispositions);
+  const dispositions = mapUnprocessedDispositions(source.columnRegion.segmentDispositions, source.columnRegion.status, status === "no_physical_grid");
   return { regionProcessedKey, sourceRegionKey: source.columnRegion.sourceRegionKey, pageNumber: source.columnRegion.pageNumber, sourcePhysicalColumnHypothesisRegionStatus: source.columnRegion.status, status, gridIntersections: [], cellHypotheses: [], segmentDispositions: dispositions, technicalProblems: problems, metrics: computeRegionMetrics([], [], dispositions, source.detectionRegion.lineKeys.length, source.columnRegion.hypotheses.length, problems.length), profileId: PROFILE.profileId, profileVersion: PROFILE.profileVersion };
 }
 

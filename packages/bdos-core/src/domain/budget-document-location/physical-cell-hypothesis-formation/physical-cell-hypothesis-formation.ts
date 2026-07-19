@@ -63,5 +63,11 @@ export function formPhysicalCellHypotheses(
     intersections.push({ ...identity, status: "cell_hypothesis_formed", cellHypothesisKey });
     members.forEach((segment) => dispositions.set(segment.segmentKey, { status: "included_in_physical_cell_hypothesis", segmentKey: segment.segmentKey, lineKey: segment.lineKey, gridIntersectionKey: draft.gridIntersectionKey, cellHypothesisKey }));
   }
-  return { intersections, cells, dispositions: segments.map((segment) => dispositions.get(segment.segmentKey)!).filter(Boolean) };
+  const completeDispositions = segments.map((segment): PhysicalCellHypothesisSegmentDisposition => dispositions.get(segment.segmentKey) ?? {
+    status: "unresolved_cell_hypothesis_formation_failed",
+    segmentKey: segment.segmentKey,
+    lineKey: segment.lineKey,
+    failedPhase: "cell_hypothesis_formation",
+  });
+  return { intersections, cells, dispositions: completeDispositions };
 }

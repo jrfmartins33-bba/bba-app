@@ -17,6 +17,7 @@ export function validatePhysicalCellFormationConservation(
 
   if (dispositions.length !== sourceSegmentKeys.length || new Set(dispositions.map((entry) => entry.segmentKey)).size !== dispositions.length) return "segments";
   if (sourceSegmentKeys.some((key) => !dispositions.some((entry) => entry.segmentKey === key))) return "segments";
+  if (dispositions.some((entry) => entry.status === "unresolved_cell_hypothesis_formation_failed")) return "segments";
 
   if (new Set(cells.map((entry) => entry.cellHypothesisKey)).size !== cells.length) return "references";
   const intersectionByKey = new Map(intersections.map((entry) => [entry.gridIntersectionKey, entry]));
@@ -32,5 +33,26 @@ export function validatePhysicalCellFormationConservation(
   if (new Set(included.map((entry) => entry.segmentKey)).size !== included.length) return "segments";
   const cellSegmentKeys = cells.flatMap((entry) => entry.segmentKeys);
   if (new Set(cellSegmentKeys).size !== cellSegmentKeys.length) return "segments";
+  const sourceSegmentSet = new Set(sourceSegmentKeys);
+  const includedBySegment = new Map(included.map((entry) => [entry.segmentKey, entry]));
+  for (const cell of cells) {
+    const intersection = intersectionByKey.get(cell.gridIntersectionKey);
+    for (const segmentKey of cell.segmentKeys) {
+      const disposition = includedBySegment.get(segmentKey);
+      if (!sourceSegmentSet.has(segmentKey) || !disposition
+        || disposition.cellHypothesisKey !== cell.cellHypothesisKey
+        || disposition.gridIntersectionKey !== cell.gridIntersectionKey
+        || intersection?.status !== "cell_hypothesis_formed"
+        || intersection.cellHypothesisKey !== cell.cellHypothesisKey) return "segments";
+    }
+  }
+  for (const disposition of included) {
+    const cell = cellByKey.get(disposition.cellHypothesisKey);
+    const intersection = intersectionByKey.get(disposition.gridIntersectionKey);
+    if (!cell || !cell.segmentKeys.includes(disposition.segmentKey)
+      || cell.gridIntersectionKey !== disposition.gridIntersectionKey
+      || intersection?.status !== "cell_hypothesis_formed"
+      || intersection.cellHypothesisKey !== disposition.cellHypothesisKey) return "segments";
+  }
   return null;
 }
