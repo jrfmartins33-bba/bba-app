@@ -13,3 +13,4 @@ export * from "./physical-column-hypothesis-reconstruction";
 export * from "./physical-cell-hypothesis-formation";
 export * from "./physical-cell-text-evidence-formation";
 export * from "./page-local-neutral-structured-evidence-formation";
+export * from "./page-boundary-neutral-continuity-evaluation";
