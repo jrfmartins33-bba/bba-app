@@ -28,9 +28,9 @@ Nome genérico da fonte (nunca o caminho local) — ex.: "Anexo Técnico do Term
 
 SHA-256 **completo** (64 caracteres hexadecimais, `[0-9a-f]{64}`) — nunca truncado, nunca reconstruído de memória. Fingerprint truncado não é mais aceito quando a governança reivindicar evidência real.
 
-## 5b. Proveniência da expectativa (`expectationDefinedAt` / `expectationReference` / `executionReference`)
+## 5b. Proveniência da expectativa (`expectationDefinedAt` / `expectationReference` / `executionReference` / `executionObservedAt`)
 
-Obrigatória a partir do nível `comparada_formalmente_em_caso_real`. `expectationReference` deve apontar para um documento/commit/checkpoint GENUINAMENTE anterior à execução relatada em `executionReference` — nunca um relatório escrito depois, redescrevendo o que "deveria" ter acontecido. `expectationDefinedAt` é a data ISO dessa referência anterior, validada com round-trip (datas impossíveis como `2026-02-30` são rejeitadas). Se a proveniência anterior cobrir apenas um invariante QUALITATIVO (não uma predição numérica específica), declare essa distinção explicitamente — nunca apresentar uma caracterização obtida durante o diagnóstico como se estivesse congelada antes da execução.
+`executionObservedAt` (data ISO da execução/observação real) é sempre obrigatória quando há evidência real, independente do nível. `expectationDefinedAt`/`expectationReference` são obrigatórias a partir do nível `comparada_formalmente_em_caso_real`. `expectationReference` deve apontar para um documento/commit/checkpoint GENUINAMENTE anterior à execução — **verificado por inspeção direta do conteúdo citado, nunca presumido a partir do nome do arquivo ou da data do commit isoladamente** (uma rodada desta própria governança já cometeu esse erro: citou um commit como prova de um invariante que, inspecionado diretamente, dizia o oposto). O guard exige comparação cronológica ESTRITA: `expectationDefinedAt < executionObservedAt` — uma expectativa registrada no mesmo dia da execução não comprova, sozinha, que foi definida antes. Se a proveniência anterior cobrir apenas um invariante QUALITATIVO (não uma predição numérica específica), declare essa distinção explicitamente — nunca apresentar uma caracterização obtida durante o diagnóstico como se estivesse congelada antes da execução. Se não houver proveniência genuína e verificada, os campos ficam `null` e o nível reivindicado deve refletir honestamente essa ausência (tipicamente `exercitada_em_caso_real`).
 
 ## 6. Páginas ou intervalos
 
@@ -74,7 +74,7 @@ Liste cada `DownstreamGate` afetado por esta Sprint como `{ consumidor, consumer
 
 ## 14b. Estado estruturado de falhas (`failureAssessment`)
 
-`none_known` (só válido com resultado `aprovada`) | `confirmed` (exigido por `reprovada`, também válido em `inconclusiva`) | `not_assessable` (exigido por `nao_avaliada`, também válido em `inconclusiva`). Nunca usar a palavra "nenhuma" em `knownFailuresPt` como substituto deste campo estruturado — se não há falha confirmada, `knownFailuresPt` fica vazio e o estado é declarado apenas aqui.
+`none_known` (só válido com resultado `aprovada`) | `confirmed` (exigido por `reprovada`, também válido em `inconclusiva`) | `not_assessable` (exigido por `nao_avaliada`, também válido em `inconclusiva`). Nunca usar a palavra "nenhuma" em `knownFailuresPt` como substituto deste campo estruturado — se não há falha confirmada, `knownFailuresPt` fica vazio e o estado é declarado apenas aqui. No histórico, cada entrada registra `previousFailureAssessment`/`newFailureAssessment` (primeira entrada de um alvo: `previousFailureAssessment: null`); a última entrada deve igualar exatamente `failureAssessment`, `knownLimitationsPt` e `knownFailuresPt` do registro — comparação de conteúdo completo, nunca apenas "vazio vs. não vazio".
 
 ## 15. Arquivos de código de execução, arquitetura, testes e documentação alterados
 

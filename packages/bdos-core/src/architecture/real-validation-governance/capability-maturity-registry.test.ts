@@ -213,12 +213,25 @@ export function validateRegistry(registry: RealValidationTargetRegistry): Readon
 
     // --- proveniência da expectativa (nunca reconstruída de memória) ------
     const requiresExpectationProvenance = record.currentLevel === "comparada_formalmente_em_caso_real" || record.currentLevel === "submetida_a_teste_adversarial";
-    if (requiresExpectationProvenance && record.realEvidence !== null) {
-      const { expectationDefinedAt, expectationReference } = record.realEvidence;
-      if (expectationReference === null || expectationReference.trim().length === 0 || expectationDefinedAt === null || expectationDefinedAt.trim().length === 0) {
-        issues.push({ code: "missing_expectation_provenance", recordId: record.id, message: "nível exige expectationReference e expectationDefinedAt, comprovando proveniência anterior à execução" });
-      } else if (!isValidIsoDate(expectationDefinedAt)) {
-        issues.push({ code: "invalid_expectation_defined_at", recordId: record.id, message: `expectationDefinedAt não é uma data ISO válida: "${expectationDefinedAt}"` });
+    if (record.realEvidence !== null) {
+      const { expectationDefinedAt, expectationReference, executionObservedAt } = record.realEvidence;
+
+      if (!isValidIsoDate(executionObservedAt)) {
+        issues.push({ code: "invalid_execution_observed_at", recordId: record.id, message: `executionObservedAt não é uma data ISO válida: "${executionObservedAt}"` });
+      }
+
+      if (requiresExpectationProvenance) {
+        if (expectationReference === null || expectationReference.trim().length === 0 || expectationDefinedAt === null || expectationDefinedAt.trim().length === 0) {
+          issues.push({ code: "missing_expectation_provenance", recordId: record.id, message: "nível exige expectationReference e expectationDefinedAt, comprovando proveniência anterior à execução" });
+        } else if (!isValidIsoDate(expectationDefinedAt)) {
+          issues.push({ code: "invalid_expectation_defined_at", recordId: record.id, message: `expectationDefinedAt não é uma data ISO válida: "${expectationDefinedAt}"` });
+        } else if (isValidIsoDate(executionObservedAt) && !(expectationDefinedAt < executionObservedAt)) {
+          issues.push({
+            code: "expectation_not_before_execution",
+            recordId: record.id,
+            message: `expectationDefinedAt (${expectationDefinedAt}) deve ser estritamente anterior a executionObservedAt (${executionObservedAt}) — expectativa no mesmo dia da execução não comprova, sozinha, que foi definida antes`,
+          });
+        }
       }
     }
 
@@ -400,14 +413,20 @@ export function validateRegistry(registry: RealValidationTargetRegistry): Readon
         }
         seenEvaluationIds.add(entry.evaluationId);
 
-        if (index === 0 && (entry.previousLevel !== null || entry.previousResult !== null)) {
-          issues.push({ code: "history_first_entry_has_previous_state", recordId: record.id, message: `primeira entrada do histórico não pode ter previousLevel/previousResult preenchido: ${entry.evaluationId}` });
+        if (index === 0 && (entry.previousLevel !== null || entry.previousResult !== null || entry.previousFailureAssessment !== null)) {
+          issues.push({ code: "history_first_entry_has_previous_state", recordId: record.id, message: `primeira entrada do histórico não pode ter previousLevel/previousResult/previousFailureAssessment preenchido: ${entry.evaluationId}` });
         }
         if (entry.previousLevel !== null && !(REAL_VALIDATION_MATURITY_LEVELS as ReadonlyArray<string>).includes(entry.previousLevel)) {
           issues.push({ code: "history_previous_state_unrecognized", recordId: record.id, message: `previousLevel não reconhecido em ${entry.evaluationId}: ${entry.previousLevel}` });
         }
         if (entry.previousResult !== null && !(VALIDATION_RESULTS as ReadonlyArray<string>).includes(entry.previousResult)) {
           issues.push({ code: "history_previous_state_unrecognized", recordId: record.id, message: `previousResult não reconhecido em ${entry.evaluationId}: ${entry.previousResult}` });
+        }
+        if (entry.previousFailureAssessment !== null && !(FAILURE_ASSESSMENTS as ReadonlyArray<string>).includes(entry.previousFailureAssessment)) {
+          issues.push({ code: "history_previous_state_unrecognized", recordId: record.id, message: `previousFailureAssessment não reconhecido em ${entry.evaluationId}: ${entry.previousFailureAssessment}` });
+        }
+        if (!(FAILURE_ASSESSMENTS as ReadonlyArray<string>).includes(entry.newFailureAssessment)) {
+          issues.push({ code: "history_previous_state_unrecognized", recordId: record.id, message: `newFailureAssessment não reconhecido em ${entry.evaluationId}: ${entry.newFailureAssessment}` });
         }
 
         if (!isValidIsoDate(entry.date)) {
@@ -433,6 +452,13 @@ export function validateRegistry(registry: RealValidationTargetRegistry): Readon
               message: `encadeamento quebrado em ${entry.evaluationId}: previousLevel/Result (${entry.previousLevel}/${entry.previousResult}) != entrada anterior newLevel/Result (${previous.newLevel}/${previous.newResult})`,
             });
           }
+          if (entry.previousFailureAssessment !== previous.newFailureAssessment) {
+            issues.push({
+              code: "history_chain_broken",
+              recordId: record.id,
+              message: `encadeamento de failureAssessment quebrado em ${entry.evaluationId}: previousFailureAssessment (${entry.previousFailureAssessment}) != entrada anterior newFailureAssessment (${previous.newFailureAssessment})`,
+            });
+          }
         }
       });
 
@@ -453,11 +479,14 @@ export function validateRegistry(registry: RealValidationTargetRegistry): Readon
       if (lastEntry.inconclusiveCausePt !== record.inconclusiveCausePt) {
         issues.push({ code: "history_last_entry_mismatch", recordId: record.id, message: "inconclusiveCausePt da última entrada não corresponde ao registro" });
       }
-      if (record.knownLimitationsPt.length > 0 && lastEntry.limitationsPt.length === 0) {
-        issues.push({ code: "history_last_entry_mismatch", recordId: record.id, message: "registro declara limitações, mas a última entrada do histórico não registra nenhuma" });
+      if (lastEntry.newFailureAssessment !== record.failureAssessment) {
+        issues.push({ code: "history_last_entry_mismatch", recordId: record.id, message: `newFailureAssessment da última entrada (${lastEntry.newFailureAssessment}) não corresponde a failureAssessment do registro (${record.failureAssessment})` });
       }
-      if (record.knownFailuresPt.length > 0 && lastEntry.knownFailuresPt.length === 0) {
-        issues.push({ code: "history_last_entry_mismatch", recordId: record.id, message: "registro declara falhas conhecidas, mas a última entrada do histórico não registra nenhuma" });
+      if (JSON.stringify(lastEntry.limitationsPt) !== JSON.stringify(record.knownLimitationsPt)) {
+        issues.push({ code: "history_last_entry_mismatch", recordId: record.id, message: "limitationsPt da última entrada não corresponde exatamente a knownLimitationsPt do registro" });
+      }
+      if (JSON.stringify(lastEntry.knownFailuresPt) !== JSON.stringify(record.knownFailuresPt)) {
+        issues.push({ code: "history_last_entry_mismatch", recordId: record.id, message: "knownFailuresPt da última entrada não corresponde exatamente a knownFailuresPt do registro" });
       }
     }
   }
@@ -497,6 +526,8 @@ runTest("toda combinação (nível, resultado) não terminal-aprovada exige cond
 runTest("cenário ponta a ponta sempre declara dependências", () => assertEqual(issuesOfCode("end_to_end_scenario_missing_dependencies").length, 0));
 runTest("nível comparada_formalmente_em_caso_real/submetida_a_teste_adversarial sempre declara proveniência de expectativa", () => assertEqual(issuesOfCode("missing_expectation_provenance").length, 0, JSON.stringify(issuesOfCode("missing_expectation_provenance"))));
 runTest("expectationDefinedAt é sempre uma data ISO válida", () => assertEqual(issuesOfCode("invalid_expectation_defined_at").length, 0));
+runTest("executionObservedAt é sempre uma data ISO válida em toda evidência real", () => assertEqual(issuesOfCode("invalid_execution_observed_at").length, 0));
+runTest("expectationDefinedAt é sempre estritamente anterior a executionObservedAt quando a proveniência é exigida", () => assertEqual(issuesOfCode("expectation_not_before_execution").length, 0, JSON.stringify(issuesOfCode("expectation_not_before_execution"))));
 runTest("nenhuma auto-dependência", () => assertEqual(issuesOfCode("self_dependency").length, 0));
 runTest("nenhuma dependência inexistente", () => assertEqual(issuesOfCode("dangling_dependency").length, 0));
 runTest("nenhum ciclo de dependências", () => assertEqual(issuesOfCode("dependency_cycle").length, 0));
@@ -554,15 +585,18 @@ runTest("f.1: nível exercitada_em_caso_real, resultado não avaliada (nunca 'ap
   assertTrue(draftGate !== undefined && draftGate.status === "bloqueado", "portão de uso produtivo de f.1 deve estar bloqueado");
 });
 
-runTest("f.2a: nível submetida_a_teste_adversarial, resultado reprovada, com proveniência de expectativa e evidência adversarial", () => {
+runTest("f.2a: nível exercitada_em_caso_real (nunca comparada_formalmente/submetida_a_teste_adversarial sem proveniência genuína), resultado reprovada", () => {
   const f2a = REAL_VALIDATION_TARGET_REGISTRY.find((r) => r.id === "f2a-tabular-region-detection");
   assertTrue(f2a !== undefined, "registro de f.2a deve existir");
-  assertEqual(f2a!.currentLevel, "submetida_a_teste_adversarial");
+  assertEqual(f2a!.currentLevel, "exercitada_em_caso_real");
   assertEqual(f2a!.currentResult, "reprovada");
   assertEqual(f2a!.failureAssessment, "confirmed");
   assertTrue(f2a!.knownFailuresPt.length > 0, "f.2a deve ter falhas conhecidas");
-  assertTrue(f2a!.adversarialEvidence !== null, "f.2a deve ter evidência adversarial (Caso J/L7/L3)");
-  assertTrue(f2a!.realEvidence !== null && f2a!.realEvidence.expectationReference !== null && f2a!.realEvidence.expectationDefinedAt !== null, "f.2a deve declarar proveniência de expectativa anterior à execução");
+  assertTrue(f2a!.adversarialEvidence !== null, "f.2a deve reter evidência adversarial (Caso J/L7/L3) mesmo sem reivindicar o nível submetida_a_teste_adversarial");
+  assertTrue(
+    f2a!.realEvidence !== null && f2a!.realEvidence.expectationReference === null && f2a!.realEvidence.expectationDefinedAt === null,
+    "f.2a nunca deve reivindicar proveniência de expectativa anterior à execução — inspeção direta do commit 323de6bb confirmou que ele não registrava esse invariante",
+  );
 });
 
 runTest("caracterização econômica: nível exercitada_em_caso_real, resultado inconclusiva (nunca reprovada) — o defeito pertence a f.2a e ao cenário ponta a ponta", () => {
@@ -769,6 +803,8 @@ function baseRecord(overrides: Partial<RealValidationTargetRecord> = {}): RealVa
         previousResult: null,
         newLevel: "experimental",
         newResult: "nao_avaliada",
+        previousFailureAssessment: null,
+        newFailureAssessment: "not_assessable",
         inconclusiveCausePt: null,
         evidenceConsideredPt: ["evidência fictícia de teste"],
         limitationsPt: ["nenhuma limitação conhecida registrada"],
@@ -801,12 +837,14 @@ function validDeepApprovedRecord(overrides: Partial<RealValidationTargetRecord> 
       expectationDefinedAt: "2026-01-01",
       expectationReference: "x",
       executionReference: "x",
+      executionObservedAt: "2026-01-05",
     },
     evaluationHistory: [
       {
         ...baseRecord().evaluationHistory[0],
         newLevel: "comparada_formalmente_em_caso_real",
         newResult: "aprovada",
+        newFailureAssessment: "none_known",
       },
     ],
     ...overrides,
@@ -831,7 +869,7 @@ runTest("NEGATIVO — resultado inválido é rejeitado", () => {
 runTest("NEGATIVO — fingerprint truncado é rejeitado", () => {
   const bad = baseRecord({
     currentLevel: "exercitada_em_caso_real",
-    realEvidence: { sourceFingerprintSha256: "5031da75...b92c5", pageOrTraceRange: "x", expectedResult: "x", observedResult: "x", divergences: [], reportReference: "x", expectationDefinedAt: null, expectationReference: null, executionReference: "x" },
+    realEvidence: { sourceFingerprintSha256: "5031da75...b92c5", pageOrTraceRange: "x", expectedResult: "x", observedResult: "x", divergences: [], reportReference: "x", expectationDefinedAt: null, expectationReference: null, executionReference: "x", executionObservedAt: "2026-01-01" },
   });
   assertTrue(issuesOfCode("invalid_fingerprint_format", [bad]).length > 0, "guard deve rejeitar fingerprint truncado");
 });
@@ -889,16 +927,50 @@ runTest("NEGATIVO — finalidade produtiva aberta com dependência reprovada é 
 
 runTest("NEGATIVO — expectationReference/expectationDefinedAt ausentes em nível que os exige é rejeitado", () => {
   const bad = validDeepApprovedRecord({
-    realEvidence: { sourceFingerprintSha256: "a".repeat(64), pageOrTraceRange: "x", expectedResult: "x", observedResult: "x", divergences: [], reportReference: "x", expectationDefinedAt: null, expectationReference: null, executionReference: "x" },
+    realEvidence: { sourceFingerprintSha256: "a".repeat(64), pageOrTraceRange: "x", expectedResult: "x", observedResult: "x", divergences: [], reportReference: "x", expectationDefinedAt: null, expectationReference: null, executionReference: "x", executionObservedAt: "2026-01-05" },
   });
   assertTrue(issuesOfCode("missing_expectation_provenance", [bad]).length > 0, "guard deve rejeitar comparação formal sem proveniência de expectativa");
 });
 
 runTest("NEGATIVO — expectationDefinedAt com data impossível é rejeitado", () => {
   const bad = validDeepApprovedRecord({
-    realEvidence: { sourceFingerprintSha256: "a".repeat(64), pageOrTraceRange: "x", expectedResult: "x", observedResult: "x", divergences: [], reportReference: "x", expectationDefinedAt: "2026-02-30", expectationReference: "x", executionReference: "x" },
+    realEvidence: { sourceFingerprintSha256: "a".repeat(64), pageOrTraceRange: "x", expectedResult: "x", observedResult: "x", divergences: [], reportReference: "x", expectationDefinedAt: "2026-02-30", expectationReference: "x", executionReference: "x", executionObservedAt: "2026-01-05" },
   });
   assertTrue(issuesOfCode("invalid_expectation_defined_at", [bad]).length > 0, "guard deve rejeitar expectationDefinedAt com data impossível");
+});
+
+runTest("NEGATIVO — executionObservedAt ausente/inválido é rejeitado", () => {
+  const bad = validDeepApprovedRecord({
+    realEvidence: { sourceFingerprintSha256: "a".repeat(64), pageOrTraceRange: "x", expectedResult: "x", observedResult: "x", divergences: [], reportReference: "x", expectationDefinedAt: "2026-01-01", expectationReference: "x", executionReference: "x", executionObservedAt: "2026-02-30" },
+  });
+  assertTrue(issuesOfCode("invalid_execution_observed_at", [bad]).length > 0, "guard deve rejeitar executionObservedAt com data impossível");
+});
+
+runTest("NEGATIVO — expectativa registrada na mesma data da execução não comprova precedência (rejeitado)", () => {
+  const bad = validDeepApprovedRecord({
+    realEvidence: { sourceFingerprintSha256: "a".repeat(64), pageOrTraceRange: "x", expectedResult: "x", observedResult: "x", divergences: [], reportReference: "x", expectationDefinedAt: "2026-01-05", expectationReference: "x", executionReference: "x", executionObservedAt: "2026-01-05" },
+  });
+  assertTrue(issuesOfCode("expectation_not_before_execution", [bad]).length > 0, "guard deve rejeitar expectationDefinedAt igual a executionObservedAt (comparação estrita)");
+});
+
+runTest("NEGATIVO — expectativa registrada depois da execução é rejeitada", () => {
+  const bad = validDeepApprovedRecord({
+    realEvidence: { sourceFingerprintSha256: "a".repeat(64), pageOrTraceRange: "x", expectedResult: "x", observedResult: "x", divergences: [], reportReference: "x", expectationDefinedAt: "2026-01-10", expectationReference: "x", executionReference: "x", executionObservedAt: "2026-01-05" },
+  });
+  assertTrue(issuesOfCode("expectation_not_before_execution", [bad]).length > 0, "guard deve rejeitar expectationDefinedAt posterior a executionObservedAt");
+});
+
+runTest("NEGATIVO — encadeamento de failureAssessment quebrado no histórico é rejeitado", () => {
+  const bad = baseRecord({
+    currentLevel: "evidenciada_sinteticamente",
+    currentResult: "aprovada",
+    failureAssessment: "none_known",
+    evaluationHistory: [
+      { evaluationId: "fa1", date: "2026-01-01", evaluatedRevision: "0".repeat(40), previousLevel: null, previousResult: null, newLevel: "experimental", newResult: "nao_avaliada", previousFailureAssessment: null, newFailureAssessment: "not_assessable", inconclusiveCausePt: null, evidenceConsideredPt: ["x"], limitationsPt: ["nenhuma limitação conhecida registrada"], knownFailuresPt: [], implementer: "t", adversarialReviewer: ROLE_NOT_FORMALIZED, approver: ROLE_NOT_FORMALIZED, decisionPt: "d", justificationPt: "j" },
+      { evaluationId: "fa2", date: "2026-01-02", evaluatedRevision: "0".repeat(40), previousLevel: "experimental", previousResult: "nao_avaliada", newLevel: "evidenciada_sinteticamente", newResult: "aprovada", previousFailureAssessment: "confirmed", newFailureAssessment: "none_known", inconclusiveCausePt: null, evidenceConsideredPt: ["x"], limitationsPt: ["nenhuma limitação conhecida registrada"], knownFailuresPt: [], implementer: "t", adversarialReviewer: ROLE_NOT_FORMALIZED, approver: ROLE_NOT_FORMALIZED, decisionPt: "d", justificationPt: "j" },
+    ],
+  });
+  assertTrue(issuesOfCode("history_chain_broken", [bad]).length > 0, "guard deve rejeitar previousFailureAssessment que não corresponde ao newFailureAssessment da entrada anterior");
 });
 
 const IMPOSSIBLE_DATES = ["2026-02-29", "2026-02-30", "2026-02-31", "2026-13-01", "2026-00-10", "2026-01-00"];
@@ -959,8 +1031,8 @@ runTest("NEGATIVO — histórico desconectado (encadeamento quebrado) é rejeita
     currentResult: "aprovada",
     failureAssessment: "none_known",
     evaluationHistory: [
-      { evaluationId: "e1", date: "2026-01-01", evaluatedRevision: "0".repeat(40), previousLevel: null, previousResult: null, newLevel: "experimental", newResult: "nao_avaliada", inconclusiveCausePt: null, evidenceConsideredPt: ["x"], limitationsPt: [], knownFailuresPt: [], implementer: "t", adversarialReviewer: ROLE_NOT_FORMALIZED, approver: ROLE_NOT_FORMALIZED, decisionPt: "d", justificationPt: "j" },
-      { evaluationId: "e2", date: "2026-01-02", evaluatedRevision: "0".repeat(40), previousLevel: "evidenciada_sinteticamente", previousResult: "reprovada", newLevel: "evidenciada_sinteticamente", newResult: "aprovada", inconclusiveCausePt: null, evidenceConsideredPt: ["x"], limitationsPt: [], knownFailuresPt: [], implementer: "t", adversarialReviewer: ROLE_NOT_FORMALIZED, approver: ROLE_NOT_FORMALIZED, decisionPt: "d", justificationPt: "j" },
+      { evaluationId: "e1", date: "2026-01-01", evaluatedRevision: "0".repeat(40), previousLevel: null, previousResult: null, newLevel: "experimental", newResult: "nao_avaliada", previousFailureAssessment: null, newFailureAssessment: "not_assessable", inconclusiveCausePt: null, evidenceConsideredPt: ["x"], limitationsPt: [], knownFailuresPt: [], implementer: "t", adversarialReviewer: ROLE_NOT_FORMALIZED, approver: ROLE_NOT_FORMALIZED, decisionPt: "d", justificationPt: "j" },
+      { evaluationId: "e2", date: "2026-01-02", evaluatedRevision: "0".repeat(40), previousLevel: "evidenciada_sinteticamente", previousResult: "reprovada", newLevel: "evidenciada_sinteticamente", newResult: "aprovada", previousFailureAssessment: "not_assessable", newFailureAssessment: "none_known", inconclusiveCausePt: null, evidenceConsideredPt: ["x"], limitationsPt: [], knownFailuresPt: [], implementer: "t", adversarialReviewer: ROLE_NOT_FORMALIZED, approver: ROLE_NOT_FORMALIZED, decisionPt: "d", justificationPt: "j" },
     ],
   });
   assertTrue(issuesOfCode("history_chain_broken", [bad]).length > 0, "guard deve rejeitar encadeamento de histórico quebrado");

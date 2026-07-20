@@ -22,26 +22,44 @@ import { REAL_VALIDATION_MATURITY_REGISTRY_VERSION, ROLE_NOT_FORMALIZED } from "
  * Terceira correção (pós-segunda revisão independente):
  *
  * - Toda evidência real em nível `comparada_formalmente_em_caso_real` ou
- *   `submetida_a_teste_adversarial` agora declara `expectationDefinedAt`/
+ *   `submetida_a_teste_adversarial` declara `expectationDefinedAt`/
  *   `expectationReference` apontando para um documento/commit
  *   GENUINAMENTE anterior à execução relatada em `executionReference` —
- *   nunca reconstruído de memória. Para f.2a, isso expôs uma distinção
- *   importante: apenas o INVARIANTE QUALITATIVO (uma janela de região
- *   tabular não deve fragmentar conteúdo que pertence legitimamente à
- *   mesma tabela) tinha proveniência anterior à execução real (commit
- *   `323de6bb6d83cfe0779c2d57e0ca8ba380fd6011`, 2026-07-17, suíte
- *   sintética pré-existente de `tabular-region-formation.test.ts`) — a
- *   caracterização NUMÉRICA específica deste documento (~10 colunas, 1
- *   região por página) foi obtida por inspeção DURANTE o diagnóstico
- *   (Sprints 21.4B.1/21.4B.2), ou seja, depois de a falha inicial já ter
- *   sido observada. O registro declara essa distinção explicitamente, em
- *   vez de apresentar a caracterização numérica como se estivesse
- *   congelada antes da primeira execução.
+ *   nunca reconstruído de memória.
  * - `failureAssessment` estruturado substitui toda inferência textual
  *   sobre a ausência/presença de falhas.
  * - Todo portão declara `minimumEvidenceLevel`/`allowedResults`/
  *   `consumerKind` explicitamente — nenhuma exigência universal
  *   inventada, nenhum portão produtivo herda aprovação por omissão.
+ *
+ * Quarta correção (pós-terceira revisão independente — CORREÇÃO HISTÓRICA
+ * NÃO OCULTADA): a terceira rodada apresentou o commit
+ * `323de6bb6d83cfe0779c2d57e0ca8ba380fd6011` (`tabular-region-formation.test.ts`,
+ * 2026-07-17) como proveniência anterior de um invariante QUALITATIVO
+ * ("uma janela não deve fragmentar conteúdo que pertence legitimamente à
+ * mesma tabela"), sustentando `comparada_formalmente_em_caso_real` e,
+ * com a matriz adversarial, `submetida_a_teste_adversarial` para f.2a. A
+ * inspeção DIRETA do conteúdo desse arquivo nesta quarta rodada mostrou
+ * que essa afirmação estava ERRADA: os testes ali determinavam
+ * exatamente o oposto — que uma linha com um único alinhamento nunca
+ * forma região, que uma linha não alinhada separa duas regiões, e que um
+ * elemento sem os alinhamentos mínimos fica fora da região — a própria
+ * regra que causou a fragmentação. Não existia, portanto, nenhuma
+ * proveniência anterior à execução real para f.2a. Corrigido: f.2a
+ * volta para `exercitada_em_caso_real`/`reprovada`, `expectationDefinedAt`/
+ * `expectationReference` nulos, e o texto de `realEvidence`/histórico
+ * declara explicitamente que a evidência adversarial (Casos J/L3/L7) foi
+ * produzida DEPOIS da descoberta da falha real — ela caracteriza a falha
+ * e refuta correções candidatas, mas nunca constitui uma expectativa
+ * formal pré-registrada, e o nível `submetida_a_teste_adversarial` não é
+ * reivindicado retroativamente. Adicionalmente: `executionObservedAt`
+ * (data ISO da execução real, sempre obrigatória quando `realEvidence`
+ * existe) mais verificação cronológica ESTRITA
+ * (`expectationDefinedAt < executionObservedAt`) contra reconstrução de
+ * proveniência no mesmo dia da execução; `previousFailureAssessment`/
+ * `newFailureAssessment` no histórico, com encadeamento verificado; e
+ * sincronização exata (não apenas não-vazio) entre `knownLimitationsPt`/
+ * `knownFailuresPt` do registro e da última entrada do histórico.
  *
  * Correção de revisão independente (segunda rodada, mantida): a
  * caracterização econômica NUNCA carrega, ela própria, o veredito
@@ -85,6 +103,9 @@ const SPRINT_21_4B_EXECUTION_COMMIT = "c7dc09ee675cb810ca338f83a33e1f22b8e65864"
 const SPRINT_21_4B1_COMMIT = "0e7fc0883f73b4f9fb868173d773e434b5362606";
 const SPRINT_21_4B2_COMMIT = "13257242e38273c3a816db2619f847112c466794";
 
+/** Data ISO da execução real observada (Sprint 21.4B e diagnósticos subsequentes 21.4B.1/21.4B.2 — todos no mesmo dia, confirmado via `git show -s --format=%ai` nos três commits). */
+const EXECUTION_DATE = "2026-07-20";
+
 const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = [
   {
     id: "f0-normalized-text-item-geometry",
@@ -109,6 +130,7 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
       expectationDefinedAt: null,
       expectationReference: null,
       executionReference: `Sprint 21.4B (commit ${SPRINT_21_4B_EXECUTION_COMMIT})`,
+      executionObservedAt: EXECUTION_DATE,
     },
     adversarialEvidence: null,
     failureAssessment: "not_assessable",
@@ -157,9 +179,13 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
         previousResult: null,
         newLevel: "exercitada_em_caso_real",
         newResult: "nao_avaliada",
+        previousFailureAssessment: null,
+        newFailureAssessment: "not_assessable",
         inconclusiveCausePt: null,
         evidenceConsideredPt: ["Execução completa da cadeia real (Sprint 21.4B) sem falha técnica em f.0."],
-        limitationsPt: ["Nenhuma comparação formal esperado/observado específica de f.0."],
+        limitationsPt: [
+          "Nenhuma comparação formal e isolada entre resultado esperado e observado foi registrada especificamente para f.0 — apenas execução sem falha técnica dentro da cadeia completa.",
+        ],
         knownFailuresPt: [],
         implementer: IMPLEMENTER,
         adversarialReviewer: ROLE_NOT_FORMALIZED,
@@ -193,6 +219,7 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
       expectationDefinedAt: null,
       expectationReference: null,
       executionReference: `Sprint 21.4B.1 (commit ${SPRINT_21_4B1_COMMIT})`,
+      executionObservedAt: EXECUTION_DATE,
     },
     adversarialEvidence: null,
     failureAssessment: "not_assessable",
@@ -252,9 +279,13 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
         previousResult: null,
         newLevel: "exercitada_em_caso_real",
         newResult: "nao_avaliada",
+        previousFailureAssessment: null,
+        newFailureAssessment: "not_assessable",
         inconclusiveCausePt: null,
         evidenceConsideredPt: ["Inspeção diagnóstica de amostras reais (3 continuações, 2 linhas esparsas) na Sprint 21.4B.1 — nenhum defeito próprio encontrado, mas sem critério formal de aceitação nem aprovação humana."],
-        limitationsPt: ["Inspeção informal, não uma comparação formal definida antes da execução; nenhuma decisão humana formal de aprovação."],
+        limitationsPt: [
+          "A inspeção real foi diagnóstica (script temporário, deletado após uso), não uma comparação formal esperado/observado definida antes da execução, e não houve decisão humana formal de aprovação — por isso o resultado permanece 'não avaliada', mesmo com evidência informal favorável já registrada.",
+        ],
         knownFailuresPt: [],
         implementer: IMPLEMENTER,
         adversarialReviewer: ROLE_NOT_FORMALIZED,
@@ -272,7 +303,7 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
     stageId: "21.4A.2.f.2a",
     descriptionPt:
       "Forma janelas contíguas candidatas a região tabular a partir de alinhamentos verticais recorrentes entre linhas físicas. Pasta `tabular-region-detection/`, orquestrador `detectBudgetDocumentTabularRegions`. Defeito estrutural comprovado: a regra de formação de janela exige que toda linha física sustente sozinha um número mínimo de alinhamentos recorrentes — uma invariante falsa para qualquer linha física que pertença legitimamente a uma tabela real sem sustentar alinhamento próprio suficiente, incluindo (mas não limitado a) continuações de descrição multilinha, linhas internas esparsas de grupo/subgrupo, cabeçalhos internos, e alinhamentos privados formados por conteúdo externo coincidente (Casos J/L3/L7). Nunca caracterizar o defeito como restrito a 'descrições multilinha', nem exigir uma forma geométrica específica (ex.: exatamente uma região por página) sem evidência prévia que a sustente — a exigência real é cobertura estrutural e preservação das colunas/linhas que pertencem à tabela, não uma forma inventada.",
-    currentLevel: "submetida_a_teste_adversarial",
+    currentLevel: "exercitada_em_caso_real",
     currentResult: "reprovada",
     inconclusiveCausePt: null,
     syntheticEvidenceSummaryPt:
@@ -281,21 +312,22 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
       sourceFingerprintSha256: REAL_DOCUMENT_FINGERPRINT_SHA256,
       pageOrTraceRange: "páginas 46-54 do documento real",
       expectedResult:
-        `Invariante estrutural QUALITATIVO, com proveniência anterior à execução real: uma janela de região tabular candidata não deve fragmentar conteúdo que pertence legitimamente à mesma tabela (linhas internas esparsas, continuações de descrição, cabeçalhos, alinhamentos privados) — documentado antes de qualquer execução contra o documento real na suíte sintética pré-existente de \`tabular-region-formation.test.ts\` (commit ${TABULAR_REGION_INVARIANT_COMMIT}, ${TABULAR_REGION_INVARIANT_DATE}). A caracterização NUMÉRICA específica deste documento (~10 colunas visíveis, 1 região contígua por página) NÃO tinha essa mesma proveniência anterior — foi obtida por inspeção estrutural do documento DURANTE o diagnóstico (Sprints 21.4B.1/21.4B.2), ou seja, depois de a fragmentação já ter sido observada na execução real inicial (Sprint 21.4B). Este registro declara essa distinção explicitamente: apenas o invariante qualitativo sustenta o nível \`comparada_formalmente_em_caso_real\`; os números específicos abaixo descrevem o observado, não uma predição pré-registrada.`,
+        `Correção de revisão independente (quarta rodada): não existia, antes da execução real, nenhum critério formal e versionado específico para f.2a que definisse a preservação de linhas internas esparsas/continuações pertencentes à mesma tabela. A inspeção direta do arquivo \`tabular-region-formation.test.ts\` no commit ${TABULAR_REGION_INVARIANT_COMMIT} (${TABULAR_REGION_INVARIANT_DATE}) confirmou o oposto do que uma rodada anterior desta governança havia afirmado: os testes ali determinavam que uma linha com somente um alinhamento nunca forma região, que uma linha não alinhada separa duas regiões, e que um elemento sem os alinhamentos mínimos fica fora da região — exatamente a regra que causou a fragmentação. Nenhuma expectativa formal pré-registrada é reivindicada aqui. O comportamento tecnicamente correto (preservar cobertura estrutural e as colunas/linhas legítimas da tabela real) só foi reconhecido DEPOIS de a falha real já ter sido observada (Sprint 21.4B).`,
       observedResult:
-        "Página real fragmentada em ~7 regiões pequenas por página, a maior com apenas 4 linhas e 2 colunas resolvidas — muito aquém das ~10 colunas visíveis no documento, violando diretamente o invariante qualitativo pré-existente. Causa raiz isolada com precisão nas Sprints 21.4B.1/21.4B.2: a regra de formação de janela em `tabular-region-formation.ts` exige que toda linha física sustente sozinha `>= minimumRecurrentAlignmentCount` alinhamentos — uma invariante falsa para continuações de descrição multilinha e linhas esparsas legítimas, comprovada por comparação formal e por investigação adversarial direcionada à lógica própria desta capacidade (não à reconciliação econômica, que é avaliada separadamente no cenário ponta a ponta `tender-budget-real-extraction-e2e`).",
+        "Página real fragmentada em ~7 regiões pequenas por página, a maior com apenas 4 linhas e 2 colunas resolvidas — caracterização obtida por inspeção estrutural durante o diagnóstico das Sprints 21.4B.1/21.4B.2, depois de a falha já ter sido descoberta na execução real inicial (Sprint 21.4B), nunca antes. Causa raiz isolada com precisão: a regra de formação de janela em `tabular-region-formation.ts` exige que toda linha física sustente sozinha `>= minimumRecurrentAlignmentCount` alinhamentos — uma invariante que descarta continuações de descrição multilinha, linhas internas esparsas de grupo/subgrupo, cabeçalhos internos e é explorável por alinhamentos privados formados por conteúdo externo coincidente (Casos J/L3/L7, produzidos e avaliados depois da descoberta da falha, não antes).",
       divergences: [
-        "~10 colunas visíveis esperadas por região vs. no máximo 2 colunas resolvidas observadas (caracterização numérica obtida durante o diagnóstico, não pré-registrada)",
-        "1 região contígua por página esperada (pelo invariante qualitativo pré-existente) vs. ~7 regiões pequenas observadas",
+        "Documento real: ~10 colunas visíveis por região tabular legítima, segundo inspeção direta das páginas durante o diagnóstico (caracterização observada, nunca uma expectativa pré-registrada) vs. no máximo 2 colunas resolvidas pela implementação",
+        "Documento real: 1 região contígua por página, segundo a mesma inspeção diagnóstica, vs. ~7 regiões pequenas produzidas pela implementação",
       ],
       reportReference: `EPIC_21_SPRINT_4B_REAL_TENDER_BUDGET_EXTRACTION.md; checkpoints das Sprints 21.4B.1 (commit ${SPRINT_21_4B1_COMMIT}) e 21.4B.2 (commit ${SPRINT_21_4B2_COMMIT})`,
-      expectationDefinedAt: TABULAR_REGION_INVARIANT_DATE,
-      expectationReference: `Commit ${TABULAR_REGION_INVARIANT_COMMIT} — suíte sintética pré-existente de \`tabular-region-formation.test.ts\`, anterior a qualquer execução contra o documento real. Cobre apenas o invariante qualitativo (não fragmentar conteúdo legítimo); não prediz as quantidades numéricas específicas deste documento.`,
+      expectationDefinedAt: null,
+      expectationReference: null,
       executionReference: `Sprint 21.4B, execução real (commit ${SPRINT_21_4B_EXECUTION_COMMIT}); diagnósticos das Sprints 21.4B.1 (commit ${SPRINT_21_4B1_COMMIT}) e 21.4B.2 (commit ${SPRINT_21_4B2_COMMIT})`,
+      executionObservedAt: EXECUTION_DATE,
     },
     adversarialEvidence: {
       adversarialCasesSummary:
-        "Caso J (21.4B.1) e Caso L7 (21.4B.2): parágrafo externo com espaçamento apertado deliberado e exatamente 1 alinhamento coincidente com uma coluna real — construído para imitar uma continuação legítima. Caso L3 (21.4B.2): três continuações consecutivas idênticas formando alinhamento privado. A matriz L1-L12 (incluindo o Caso L7 adversarial obrigatório) foi mandatada pelo usuário nesta mesma conversa, por escrito, ANTES de qualquer tentativa de correção da Sprint 21.4B.2 — proveniência da autorização do teste adversarial anterior à execução, ainda que sem um commit Git isolado que separe cronologicamente a redação da fixture da tentativa de correção dentro da mesma sessão de trabalho (limitação reconhecida abaixo).",
+        "Caso J (21.4B.1) e Caso L7 (21.4B.2): parágrafo externo com espaçamento apertado deliberado e exatamente 1 alinhamento coincidente com uma coluna real — construído para imitar uma continuação legítima. Caso L3 (21.4B.2): três continuações consecutivas idênticas formando alinhamento privado. Toda a matriz adversarial (incluindo o Caso L7) foi produzida e avaliada DEPOIS de a falha real já ter sido descoberta (Sprint 21.4B): ela caracteriza a falha já confirmada e refuta tentativas candidatas de correção — nunca constitui uma expectativa formal pré-registrada para a implementação original de f.2a. Por isso o nível cumulativo `submetida_a_teste_adversarial` não é reivindicado retroativamente por esta evidência; f.2a permanece em `exercitada_em_caso_real`.",
       outcomeSummary:
         "Um spike de correção testado nas duas Sprints absorveu incorretamente o caso adversarial após corrigir os casos positivos — confirmando que nenhum discriminador seguro existe dentro da evidência estrutural mínima (razão de intervalo, subconjunto de alinhamentos, reconfirmação) sem conhecimento de envelope/grade de colunas, fora do escopo autorizado. Resultado da matriz adversarial: reprovada.",
       reportReference: "Checkpoints das Sprints 21.4B.1 e 21.4B.2 (branches preservadas, sem correção de produção mantida)",
@@ -304,8 +336,8 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
     knownLimitationsPt: [
       "A falha é isolada e específica a tabelas reais densas com descrições multilinha, linhas esparsas, cabeçalhos internos e alinhamentos privados — nunca exercitada pelos testes sintéticos originais.",
       "Nenhum discriminador estrutural mínimo (sem grade de colunas) resolve o caso adversarial (Caso J/L7) sem também absorver conteúdo não tabular.",
-      "A proveniência anterior à execução cobre apenas o invariante QUALITATIVO (não fragmentar conteúdo legítimo). A caracterização numérica específica deste documento (colunas/regiões) foi obtida durante o diagnóstico, após a falha inicial já observada — não deve ser lida como uma predição pré-registrada.",
-      "A matriz adversarial (Casos J/L3/L7) foi autorizada por escrito antes da tentativa de correção, mas não existe um commit Git isolado que separe cronologicamente a redação das fixtures da execução do spike dentro da mesma sessão — a proveniência repousa no registro de conversa/autorização, não apenas em metadados Git.",
+      "Correção de revisão independente (quarta rodada): uma rodada anterior desta governança apresentou o commit 323de6bb como proveniência anterior de um invariante de preservação de linhas esparsas. Inspeção direta do arquivo confirmou o oposto — a suíte codificava exatamente a regra que causou a falha. Essa afirmação foi removida; nenhuma proveniência anterior é reivindicada para f.2a.",
+      "A matriz adversarial (Casos J/L3/L7) foi produzida depois da descoberta da falha real, para caracterizá-la e testar candidatos de correção — nunca como expectativa formal pré-registrada da implementação original.",
     ],
     knownFailuresPt: [
       "Fragmentação severa de regiões tabulares reais densas com descrições multilinha (Sprint 21.4B).",
@@ -362,22 +394,30 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
         evaluatedRevision: MAIN_REVISION,
         previousLevel: null,
         previousResult: null,
-        newLevel: "submetida_a_teste_adversarial",
+        newLevel: "exercitada_em_caso_real",
         newResult: "reprovada",
+        previousFailureAssessment: null,
+        newFailureAssessment: "confirmed",
         inconclusiveCausePt: null,
         evidenceConsideredPt: [
-          "Comparação formal contra o invariante qualitativo pré-existente (commit 323de6bb, 2026-07-17): ~10 colunas esperadas por região vs. no máximo 2 observadas; 1 região esperada vs. ~7 observadas (Sprint 21.4B).",
-          "Investigação de causa raiz e tentativas de correção nas Sprints 21.4B.1 e 21.4B.2, ambas revertidas após falha adversarial (Caso J/L7/L3).",
+          "Falha confirmada em documento real (Sprint 21.4B): fragmentação severa de região tabular legítima (~7 regiões pequenas por página, no máximo 2 colunas resolvidas).",
+          "Investigação de causa raiz e tentativas de correção nas Sprints 21.4B.1 e 21.4B.2, com matriz adversarial (Casos J/L3/L7) produzida DEPOIS da descoberta da falha para caracterizá-la e testar candidatos de correção — nenhuma correção segura encontrada dentro do escopo autorizado.",
+          "Correção de revisão independente (quarta rodada): inspeção direta do commit 323de6bb confirmou que a suíte sintética pré-existente não documentava um invariante de preservação de linhas esparsas — pelo contrário, codificava a regra que causou a falha. Reclassificado de submetida_a_teste_adversarial/reprovada (proveniência indevida, terceira rodada) para exercitada_em_caso_real/reprovada (proveniência honesta).",
         ],
         limitationsPt: [
-          "Falha isolada a tabelas reais densas com descrições multilinha, linhas esparsas, cabeçalhos e alinhamentos privados; nenhum discriminador mínimo encontrado sem grade de colunas.",
-          "Apenas o invariante qualitativo tinha proveniência anterior à execução — a caracterização numérica é diagnóstica.",
+          "A falha é isolada e específica a tabelas reais densas com descrições multilinha, linhas esparsas, cabeçalhos internos e alinhamentos privados — nunca exercitada pelos testes sintéticos originais.",
+          "Nenhum discriminador estrutural mínimo (sem grade de colunas) resolve o caso adversarial (Caso J/L7) sem também absorver conteúdo não tabular.",
+          "Correção de revisão independente (quarta rodada): uma rodada anterior desta governança apresentou o commit 323de6bb como proveniência anterior de um invariante de preservação de linhas esparsas. Inspeção direta do arquivo confirmou o oposto — a suíte codificava exatamente a regra que causou a falha. Essa afirmação foi removida; nenhuma proveniência anterior é reivindicada para f.2a.",
+          "A matriz adversarial (Casos J/L3/L7) foi produzida depois da descoberta da falha real, para caracterizá-la e testar candidatos de correção — nunca como expectativa formal pré-registrada da implementação original.",
         ],
-        knownFailuresPt: ["Fragmentação severa (Sprint 21.4B); alinhamento privado de continuações consecutivas (Caso L3, Sprint 21.4B.2)."],
+        knownFailuresPt: [
+          "Fragmentação severa de regiões tabulares reais densas com descrições multilinha (Sprint 21.4B).",
+          "Três continuações consecutivas idênticas formam seu próprio alinhamento privado, criando uma janela concorrente espúria (Sprint 21.4B.2, Caso L3) — um segundo modo de falha, não corrigido.",
+        ],
         implementer: IMPLEMENTER,
         adversarialReviewer: "Claude Code (mesma sessão — não formalizado como papel independente)",
         approver: ROLE_NOT_FORMALIZED,
-        decisionPt: "Registro formal (terceira correção): nível submetida_a_teste_adversarial, resultado reprovada, com proveniência da expectativa honestamente separada entre invariante qualitativo pré-existente e caracterização numérica diagnóstica.",
+        decisionPt: "Correção de revisão independente (quarta rodada): nível exercitada_em_caso_real (nunca submetida_a_teste_adversarial sem proveniência genuína), resultado reprovada. Não esconde a correção histórica — a reclassificação anterior é registrada e explicada explicitamente acima.",
         justificationPt: CHECKPOINT_REVIEWER_NOTE,
       },
     ],
@@ -404,6 +444,7 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
       expectationDefinedAt: null,
       expectationReference: null,
       executionReference: `Sprint 21.4B (commit ${SPRINT_21_4B_EXECUTION_COMMIT})`,
+      executionObservedAt: EXECUTION_DATE,
     },
     adversarialEvidence: null,
     failureAssessment: "not_assessable",
@@ -451,9 +492,13 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
         previousResult: null,
         newLevel: "exercitada_em_caso_real",
         newResult: "inconclusiva",
+        previousFailureAssessment: null,
+        newFailureAssessment: "not_assessable",
         inconclusiveCausePt: "Entrada real recebida já estava degradada pela reprovação upstream de f.2a (região tabular fragmentada) — o resultado observado reflete a entrada degradada, não a correção própria desta capacidade.",
         evidenceConsideredPt: ["Execução sem falha técnica sobre entrada já fragmentada por f.2a (Sprint 21.4B)."],
-        limitationsPt: ["Evidência confundida por defeito upstream conhecido."],
+        limitationsPt: [
+          "Evidência real confundida pelo defeito upstream conhecido de f.2a — 'sem falha técnica' aqui não comprova correção substantiva contra dados reais não degradados.",
+        ],
         knownFailuresPt: [],
         implementer: IMPLEMENTER,
         adversarialReviewer: ROLE_NOT_FORMALIZED,
@@ -484,6 +529,7 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
       expectationDefinedAt: null,
       expectationReference: null,
       executionReference: `Sprint 21.4B (commit ${SPRINT_21_4B_EXECUTION_COMMIT})`,
+      executionObservedAt: EXECUTION_DATE,
     },
     adversarialEvidence: null,
     failureAssessment: "not_assessable",
@@ -529,9 +575,11 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
         previousResult: null,
         newLevel: "exercitada_em_caso_real",
         newResult: "inconclusiva",
+        previousFailureAssessment: null,
+        newFailureAssessment: "not_assessable",
         inconclusiveCausePt: "Entrada real recebida já estava degradada pela reprovação upstream de f.2a — mesma causa do registro de f.2b.",
         evidenceConsideredPt: ["Execução sem falha técnica sobre entrada já fragmentada por f.2a/f.2b (Sprint 21.4B)."],
-        limitationsPt: ["Evidência confundida por defeito upstream conhecido."],
+        limitationsPt: ["Evidência real confundida pelo defeito upstream conhecido de f.2a — mesma ressalva do registro de f.2b."],
         knownFailuresPt: [],
         implementer: IMPLEMENTER,
         adversarialReviewer: ROLE_NOT_FORMALIZED,
@@ -562,6 +610,7 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
       expectationDefinedAt: null,
       expectationReference: null,
       executionReference: `Sprint 21.4B (commit ${SPRINT_21_4B_EXECUTION_COMMIT})`,
+      executionObservedAt: EXECUTION_DATE,
     },
     adversarialEvidence: null,
     failureAssessment: "not_assessable",
@@ -607,9 +656,11 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
         previousResult: null,
         newLevel: "exercitada_em_caso_real",
         newResult: "inconclusiva",
+        previousFailureAssessment: null,
+        newFailureAssessment: "not_assessable",
         inconclusiveCausePt: "Entrada real recebida já estava degradada pela reprovação upstream de f.2a.",
         evidenceConsideredPt: ["Execução sem falha técnica sobre entrada já fragmentada a montante (Sprint 21.4B)."],
-        limitationsPt: ["Evidência confundida por defeito upstream conhecido."],
+        limitationsPt: ["Evidência real confundida pelo defeito upstream conhecido de f.2a."],
         knownFailuresPt: [],
         implementer: IMPLEMENTER,
         adversarialReviewer: ROLE_NOT_FORMALIZED,
@@ -640,6 +691,7 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
       expectationDefinedAt: null,
       expectationReference: null,
       executionReference: `Sprint 21.4B (commit ${SPRINT_21_4B_EXECUTION_COMMIT})`,
+      executionObservedAt: EXECUTION_DATE,
     },
     adversarialEvidence: null,
     failureAssessment: "not_assessable",
@@ -685,9 +737,11 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
         previousResult: null,
         newLevel: "exercitada_em_caso_real",
         newResult: "inconclusiva",
+        previousFailureAssessment: null,
+        newFailureAssessment: "not_assessable",
         inconclusiveCausePt: "Entrada real recebida já estava degradada pela reprovação upstream de f.2a.",
         evidenceConsideredPt: ["Execução sem falha técnica sobre entrada já fragmentada a montante (Sprint 21.4B)."],
-        limitationsPt: ["Evidência confundida por defeito upstream conhecido."],
+        limitationsPt: ["Evidência real confundida pelo defeito upstream conhecido de f.2a."],
         knownFailuresPt: [],
         implementer: IMPLEMENTER,
         adversarialReviewer: ROLE_NOT_FORMALIZED,
@@ -718,6 +772,7 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
       expectationDefinedAt: null,
       expectationReference: null,
       executionReference: `Sprint 21.4B (commit ${SPRINT_21_4B_EXECUTION_COMMIT})`,
+      executionObservedAt: EXECUTION_DATE,
     },
     adversarialEvidence: null,
     failureAssessment: "not_assessable",
@@ -751,9 +806,11 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
         previousResult: null,
         newLevel: "exercitada_em_caso_real",
         newResult: "inconclusiva",
+        previousFailureAssessment: null,
+        newFailureAssessment: "not_assessable",
         inconclusiveCausePt: "Entrada real recebida já estava degradada pela reprovação upstream de f.2a.",
         evidenceConsideredPt: ["Execução sem falha técnica sobre entrada já fragmentada a montante (Sprint 21.4B)."],
-        limitationsPt: ["Evidência confundida por defeito upstream conhecido."],
+        limitationsPt: ["Evidência real confundida pelo defeito upstream conhecido de f.2a."],
         knownFailuresPt: [],
         implementer: IMPLEMENTER,
         adversarialReviewer: ROLE_NOT_FORMALIZED,
@@ -786,6 +843,7 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
       expectationDefinedAt: null,
       expectationReference: null,
       executionReference: `Sprint 21.4B (commit ${SPRINT_21_4B_EXECUTION_COMMIT})`,
+      executionObservedAt: EXECUTION_DATE,
     },
     adversarialEvidence: null,
     failureAssessment: "not_assessable",
@@ -822,9 +880,14 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
         previousResult: null,
         newLevel: "exercitada_em_caso_real",
         newResult: "inconclusiva",
+        previousFailureAssessment: null,
+        newFailureAssessment: "not_assessable",
         inconclusiveCausePt: "Nunca recebeu entrada real estruturalmente válida devido à reprovação upstream de f.2a — a lógica própria desta capacidade nunca teve a chance de processar uma região tabular real íntegra. O veredito 'reprovada' pertence a f.2a (defeito estrutural comprovado em sua própria lógica) e ao cenário ponta a ponta `tender-budget-real-extraction-e2e` (objetivo declarado não alcançado) — nunca a esta capacidade isoladamente.",
         evidenceConsideredPt: ["Execução da Sprint 21.4B sobre entrada real já degradada por f.2a — nenhum defeito próprio identificável, entrada nunca estruturalmente válida."],
-        limitationsPt: ["Resultado inteiramente determinado pela entrada degradada de f.2a, não pela lógica própria desta capacidade."],
+        limitationsPt: [
+          "Nunca foi exercitada contra uma entrada real estruturalmente válida — nenhuma conclusão sobre sua própria correção contra dados reais é possível ainda.",
+          "O resultado 'inconclusiva' (não 'reprovada') reflete precisamente isso: ausência de evidência válida, não evidência de defeito.",
+        ],
         knownFailuresPt: [],
         implementer: IMPLEMENTER,
         adversarialReviewer: ROLE_NOT_FORMALIZED,
@@ -861,6 +924,7 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
       expectationDefinedAt: LAGOA_DO_ARROZ_FIXTURE_DATE,
       expectationReference: `Commit ${LAGOA_DO_ARROZ_FIXTURE_COMMIT} — fixture de referência independente \`LAGOA_DO_ARROZ_OFFICIAL_LINES\` (Sprint 21.3B, \`packages/bdos-core/src/domain/budget-version/lagoa-do-arroz.official-fixture.ts\`), anterior à execução real da Sprint 21.4B.`,
       executionReference: `Sprint 21.4B, execução real completa (commit ${SPRINT_21_4B_EXECUTION_COMMIT})`,
+      executionObservedAt: EXECUTION_DATE,
     },
     adversarialEvidence: null,
     failureAssessment: "confirmed",
@@ -906,10 +970,14 @@ const MUTABLE_CAPABILITY_MATURITY_REGISTRY: Array<RealValidationTargetRecord> = 
         previousResult: null,
         newLevel: "comparada_formalmente_em_caso_real",
         newResult: "reprovada",
+        previousFailureAssessment: null,
+        newFailureAssessment: "confirmed",
         inconclusiveCausePt: null,
         evidenceConsideredPt: ["Reconciliação real completa da Sprint 21.4B: 0/11 grupos, 0/25 subgrupos, 0/300 itens, nenhum total reconciliado, contra a fixture de referência independente definida na Sprint 21.3B (commit 5c86f451), anterior à execução."],
-        limitationsPt: ["Defeito raiz isolado em f.2a — ver registro próprio."],
-        knownFailuresPt: ["Reconciliação econômica real completamente malsucedida."],
+        limitationsPt: [
+          "O defeito raiz deste cenário está isolado em f.2a (ver registro próprio) — este registro descreve o resultado agregado do cenário, nunca atribui o defeito a nenhuma capacidade downstream de f.2a.",
+        ],
+        knownFailuresPt: ["Reconciliação econômica real completamente malsucedida — 0/11 grupos, 0/25 subgrupos, 0/300 itens, nenhum total reconciliado."],
         implementer: IMPLEMENTER,
         adversarialReviewer: ROLE_NOT_FORMALIZED,
         approver: ROLE_NOT_FORMALIZED,

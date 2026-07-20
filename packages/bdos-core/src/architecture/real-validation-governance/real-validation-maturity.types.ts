@@ -280,22 +280,34 @@ export interface RealValidationEvidenceReal {
   readonly reportReference: string;
   /**
    * Data ISO em que a expectativa (`expectedResult`) foi genuinamente
-   * definida — DEVE ser anterior à execução relatada em
-   * `executionReference`. Obrigatória a partir de
-   * `comparada_formalmente_em_caso_real`. Nunca preenchida de memória:
+   * definida — DEVE ser estritamente anterior a `executionObservedAt`
+   * (comparação estrita: expectativa registrada no mesmo dia da execução
+   * não comprova, sozinha, que foi definida antes). Obrigatória a partir
+   * de `comparada_formalmente_em_caso_real`. Nunca preenchida de memória:
    * se não houver um documento/commit/checkpoint anterior comprovando a
-   * data, o nível não pode reivindicar comparação formal.
+   * data, o nível não pode reivindicar comparação formal — nesse caso,
+   * `null`, e o nível reivindicado deve refletir honestamente essa
+   * ausência (ex.: `exercitada_em_caso_real`, nunca `comparada_formalmente_em_caso_real`).
    */
   readonly expectationDefinedAt: string | null;
   /**
    * Referência (documento, commit ou checkpoint) que comprova que a
    * expectativa existia ANTES da execução — nunca um relatório escrito
    * depois, redescrevendo o que "deveria" ter acontecido. Obrigatória a
-   * partir de `comparada_formalmente_em_caso_real`.
+   * partir de `comparada_formalmente_em_caso_real`. A referência deve ser
+   * verificada por inspeção direta do conteúdo citado, nunca presumida a
+   * partir do nome do arquivo ou da data do commit isoladamente.
    */
   readonly expectationReference: string | null;
   /** Referência (commit/checkpoint) da execução real que produziu `observedResult`. */
   readonly executionReference: string;
+  /**
+   * Data ISO (AAAA-MM-DD) da execução/observação real que produziu
+   * `observedResult` — sempre obrigatória quando `realEvidence` existe,
+   * independente do nível. Usada para comparar cronologicamente contra
+   * `expectationDefinedAt` (que deve ser estritamente anterior).
+   */
+  readonly executionObservedAt: string;
 }
 
 export interface RealValidationEvidenceAdversarial {
@@ -316,6 +328,10 @@ export interface RealValidationTargetEvaluationHistoryEntry {
   readonly previousResult: ValidationResult | null;
   readonly newLevel: RealValidationMaturityLevel;
   readonly newResult: ValidationResult;
+  /** Estado de avaliação de falhas ANTES desta entrada — `null` apenas na primeira entrada de um alvo. Deve igualar o `newFailureAssessment` da entrada imediatamente anterior. */
+  readonly previousFailureAssessment: FailureAssessment | null;
+  /** Estado de avaliação de falhas resultante desta entrada — a última entrada de um alvo deve igualar `failureAssessment` do registro. */
+  readonly newFailureAssessment: FailureAssessment;
   /** Preenchida apenas quando `newResult === "inconclusiva"` — deve corresponder a `inconclusiveCausePt` do registro quando esta é a última entrada. */
   readonly inconclusiveCausePt: string | null;
   readonly evidenceConsideredPt: ReadonlyArray<string>;
@@ -385,6 +401,8 @@ export type RealValidationTargetIssueCode =
   | "inconclusiva_requires_assessable_failure_state"
   | "missing_expectation_provenance"
   | "invalid_expectation_defined_at"
+  | "invalid_execution_observed_at"
+  | "expectation_not_before_execution"
   | "gate_missing_consumer_or_purpose"
   | "gate_unrecognized_purpose_kind"
   | "unrecognized_consumer_kind"
