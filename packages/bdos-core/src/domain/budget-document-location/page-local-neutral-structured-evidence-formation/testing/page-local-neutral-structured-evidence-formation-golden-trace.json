@@ -1,0 +1,946 @@
+{
+  "region": {
+    "sourceRegionKey": "R1",
+    "pageNumber": 1,
+    "order": 1,
+    "status": "structured_with_ambiguities",
+    "sourceRegionCandidate": {
+      "regionKey": "R1",
+      "pageNumber": 1,
+      "order": 1,
+      "lineKeys": [
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "L5"
+      ],
+      "supportingAlignmentKeys": [
+        "align-1",
+        "align-2"
+      ],
+      "leftPoints": 0,
+      "topPoints": 0,
+      "rightPoints": 100,
+      "bottomPoints": 50,
+      "widthPoints": 100,
+      "heightPoints": 50,
+      "centerXPoints": 50,
+      "centerYPoints": 25,
+      "formationRuleId": "fixture",
+      "formationRuleVersion": 1,
+      "profileId": "fixture",
+      "profileVersion": 1
+    },
+    "sourcePhysicalCellHypothesisFormationRegionStatus": "formed_with_ambiguities",
+    "sourcePhysicalCellTextEvidenceFormationRegionStatus": "formed",
+    "documentLines": [
+      {
+        "sourceLineKey": "L5",
+        "pageNumber": 1,
+        "verticalOrder": 5,
+        "status": "without_positions",
+        "sourceLine": {
+          "lineKey": "L5",
+          "pageNumber": 1,
+          "verticalOrder": 5,
+          "leftPoints": 0,
+          "topPoints": 0,
+          "rightPoints": 100,
+          "bottomPoints": 10,
+          "widthPoints": 100,
+          "heightPoints": 10,
+          "centerXPoints": 50,
+          "centerYPoints": 5,
+          "seedSourceTextItemIndex": 0,
+          "sourceTextItemIndices": [],
+          "segmentKeys": [
+            "L5seg1",
+            "L5seg2"
+          ],
+          "formationRuleId": "fixture",
+          "formationRuleVersion": 1,
+          "profileId": "fixture",
+          "profileVersion": 1
+        },
+        "physicalSegments": [
+          {
+            "segmentKey": "L5seg1",
+            "lineKey": "L5",
+            "pageNumber": 1,
+            "horizontalOrder": 1,
+            "leftPoints": 0,
+            "topPoints": 0,
+            "rightPoints": 50,
+            "bottomPoints": 10,
+            "widthPoints": 50,
+            "heightPoints": 10,
+            "centerXPoints": 25,
+            "centerYPoints": 5,
+            "sourceTextItemIndices": [
+              6
+            ],
+            "observedInternalGaps": [],
+            "formationRuleId": "fixture",
+            "formationRuleVersion": 1,
+            "profileId": "fixture",
+            "profileVersion": 1
+          },
+          {
+            "segmentKey": "L5seg2",
+            "lineKey": "L5",
+            "pageNumber": 1,
+            "horizontalOrder": 2,
+            "leftPoints": 0,
+            "topPoints": 0,
+            "rightPoints": 50,
+            "bottomPoints": 10,
+            "widthPoints": 50,
+            "heightPoints": 10,
+            "centerXPoints": 25,
+            "centerYPoints": 5,
+            "sourceTextItemIndices": [
+              7
+            ],
+            "observedInternalGaps": [],
+            "formationRuleId": "fixture",
+            "formationRuleVersion": 1,
+            "profileId": "fixture",
+            "profileVersion": 1
+          }
+        ],
+        "positions": [],
+        "technicalProblems": [],
+        "metrics": {
+          "physicalSegmentCount": 2,
+          "positionCount": 0,
+          "emptyPositionCount": 0,
+          "cellStructuredPositionCount": 0,
+          "ambiguousPartialIntersectionPositionCount": 0,
+          "ambiguousMultipleIntersectionsPositionCount": 0,
+          "ambiguousContentOutsideGridBoundsPositionCount": 0,
+          "technicalFailurePositionCount": 0,
+          "documentCellCount": 0,
+          "cellStructuredCount": 0,
+          "cellStructuredWithTextProblemsCount": 0,
+          "cellStructuredWithoutResolvedTextCount": 0,
+          "cellFailedCount": 0,
+          "fragmentPreservedCount": 0,
+          "technicalProblemCount": 0
+        }
+      },
+      {
+        "sourceLineKey": "L1",
+        "pageNumber": 1,
+        "verticalOrder": 10,
+        "status": "structured",
+        "sourceLine": {
+          "lineKey": "L1",
+          "pageNumber": 1,
+          "verticalOrder": 10,
+          "leftPoints": 0,
+          "topPoints": 0,
+          "rightPoints": 100,
+          "bottomPoints": 10,
+          "widthPoints": 100,
+          "heightPoints": 10,
+          "centerXPoints": 50,
+          "centerYPoints": 5,
+          "seedSourceTextItemIndex": 0,
+          "sourceTextItemIndices": [],
+          "segmentKeys": [
+            "L1c1seg"
+          ],
+          "formationRuleId": "fixture",
+          "formationRuleVersion": 1,
+          "profileId": "fixture",
+          "profileVersion": 1
+        },
+        "physicalSegments": [
+          {
+            "segmentKey": "L1c1seg",
+            "lineKey": "L1",
+            "pageNumber": 1,
+            "horizontalOrder": 1,
+            "leftPoints": 0,
+            "topPoints": 0,
+            "rightPoints": 50,
+            "bottomPoints": 10,
+            "widthPoints": 50,
+            "heightPoints": 10,
+            "centerXPoints": 25,
+            "centerYPoints": 5,
+            "sourceTextItemIndices": [
+              0
+            ],
+            "observedInternalGaps": [],
+            "formationRuleId": "fixture",
+            "formationRuleVersion": 1,
+            "profileId": "fixture",
+            "profileVersion": 1
+          }
+        ],
+        "positions": [
+          {
+            "gridIntersectionKey": "gi-L1c1",
+            "sourceLineKey": "L1",
+            "rowOrder": 1,
+            "columnOrder": 1,
+            "sourceGridIntersection": {
+              "gridIntersectionKey": "gi-L1c1",
+              "sourceLineKey": "L1",
+              "sourcePhysicalColumnHypothesisKey": "column-1",
+              "sourceRegionKey": "R1",
+              "pageNumber": 1,
+              "rowOrder": 1,
+              "columnOrder": 1,
+              "gridBounds": {
+                "leftPoints": 0,
+                "topPoints": 0,
+                "rightPoints": 10,
+                "bottomPoints": 10,
+                "widthPoints": 10,
+                "heightPoints": 10,
+                "centerXPoints": 5,
+                "centerYPoints": 5
+              },
+              "gridFormationRuleId": "fixture",
+              "gridFormationRuleVersion": 1,
+              "profileId": "fixture",
+              "profileVersion": 1,
+              "status": "cell_hypothesis_formed",
+              "cellHypothesisKey": "cell-simple"
+            },
+            "status": "cell_structured",
+            "cell": {
+              "cellHypothesisKey": "cell-simple",
+              "gridIntersectionKey": "gi-L1c1",
+              "rowOrder": 1,
+              "columnOrder": 1,
+              "status": "structured",
+              "sourceTextEvidenceStatus": "formed",
+              "sourceCellHypothesis": {
+                "cellHypothesisKey": "cell-simple",
+                "gridIntersectionKey": "gi-L1c1",
+                "observedContentBounds": {
+                  "leftPoints": 0,
+                  "topPoints": 0,
+                  "rightPoints": 10,
+                  "bottomPoints": 10,
+                  "widthPoints": 10,
+                  "heightPoints": 10,
+                  "centerXPoints": 5,
+                  "centerYPoints": 5
+                },
+                "segmentKeys": [
+                  "L1c1seg"
+                ],
+                "cellFormationRuleId": "fixture",
+                "cellFormationRuleVersion": 1,
+                "profileId": "fixture",
+                "profileVersion": 1
+              },
+              "sourceTextEvidence": {
+                "status": "formed",
+                "cellHypothesisKey": "cell-simple",
+                "gridIntersectionKey": "gi-L1c1",
+                "segmentOutcomes": [
+                  {
+                    "status": "resolved",
+                    "segmentKey": "L1c1seg",
+                    "lineKey": "L1",
+                    "fragments": [
+                      {
+                        "sourceReferenceOrder": 1,
+                        "textItemIndex": 0,
+                        "originalText": "R$ 1.234,56",
+                        "normalizedText": "R$ 1.234,56"
+                      }
+                    ],
+                    "itemDispositions": [
+                      {
+                        "status": "included_in_text_fragment",
+                        "segmentKey": "L1c1seg",
+                        "sourceReferenceOrder": 1,
+                        "textItemIndex": 0
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "gridIntersectionKey": "gi-L1c2",
+            "sourceLineKey": "L1",
+            "rowOrder": 1,
+            "columnOrder": 2,
+            "sourceGridIntersection": {
+              "gridIntersectionKey": "gi-L1c2",
+              "sourceLineKey": "L1",
+              "sourcePhysicalColumnHypothesisKey": "column-2",
+              "sourceRegionKey": "R1",
+              "pageNumber": 1,
+              "rowOrder": 1,
+              "columnOrder": 2,
+              "gridBounds": {
+                "leftPoints": 0,
+                "topPoints": 0,
+                "rightPoints": 10,
+                "bottomPoints": 10,
+                "widthPoints": 10,
+                "heightPoints": 10,
+                "centerXPoints": 5,
+                "centerYPoints": 5
+              },
+              "gridFormationRuleId": "fixture",
+              "gridFormationRuleVersion": 1,
+              "profileId": "fixture",
+              "profileVersion": 1,
+              "status": "empty"
+            },
+            "status": "empty",
+            "cell": null
+          }
+        ],
+        "technicalProblems": [],
+        "metrics": {
+          "physicalSegmentCount": 1,
+          "positionCount": 2,
+          "emptyPositionCount": 1,
+          "cellStructuredPositionCount": 1,
+          "ambiguousPartialIntersectionPositionCount": 0,
+          "ambiguousMultipleIntersectionsPositionCount": 0,
+          "ambiguousContentOutsideGridBoundsPositionCount": 0,
+          "technicalFailurePositionCount": 0,
+          "documentCellCount": 1,
+          "cellStructuredCount": 1,
+          "cellStructuredWithTextProblemsCount": 0,
+          "cellStructuredWithoutResolvedTextCount": 0,
+          "cellFailedCount": 0,
+          "fragmentPreservedCount": 1,
+          "technicalProblemCount": 0
+        }
+      },
+      {
+        "sourceLineKey": "L2",
+        "pageNumber": 1,
+        "verticalOrder": 20,
+        "status": "structured",
+        "sourceLine": {
+          "lineKey": "L2",
+          "pageNumber": 1,
+          "verticalOrder": 20,
+          "leftPoints": 0,
+          "topPoints": 0,
+          "rightPoints": 100,
+          "bottomPoints": 10,
+          "widthPoints": 100,
+          "heightPoints": 10,
+          "centerXPoints": 50,
+          "centerYPoints": 5,
+          "seedSourceTextItemIndex": 0,
+          "sourceTextItemIndices": [],
+          "segmentKeys": [
+            "L2c1s1",
+            "L2c1s2"
+          ],
+          "formationRuleId": "fixture",
+          "formationRuleVersion": 1,
+          "profileId": "fixture",
+          "profileVersion": 1
+        },
+        "physicalSegments": [
+          {
+            "segmentKey": "L2c1s1",
+            "lineKey": "L2",
+            "pageNumber": 1,
+            "horizontalOrder": 1,
+            "leftPoints": 0,
+            "topPoints": 0,
+            "rightPoints": 50,
+            "bottomPoints": 10,
+            "widthPoints": 50,
+            "heightPoints": 10,
+            "centerXPoints": 25,
+            "centerYPoints": 5,
+            "sourceTextItemIndices": [
+              1
+            ],
+            "observedInternalGaps": [],
+            "formationRuleId": "fixture",
+            "formationRuleVersion": 1,
+            "profileId": "fixture",
+            "profileVersion": 1
+          },
+          {
+            "segmentKey": "L2c1s2",
+            "lineKey": "L2",
+            "pageNumber": 1,
+            "horizontalOrder": 2,
+            "leftPoints": 0,
+            "topPoints": 0,
+            "rightPoints": 50,
+            "bottomPoints": 10,
+            "widthPoints": 50,
+            "heightPoints": 10,
+            "centerXPoints": 25,
+            "centerYPoints": 5,
+            "sourceTextItemIndices": [
+              2,
+              3
+            ],
+            "observedInternalGaps": [
+              0
+            ],
+            "formationRuleId": "fixture",
+            "formationRuleVersion": 1,
+            "profileId": "fixture",
+            "profileVersion": 1
+          }
+        ],
+        "positions": [
+          {
+            "gridIntersectionKey": "gi-L2c1",
+            "sourceLineKey": "L2",
+            "rowOrder": 2,
+            "columnOrder": 1,
+            "sourceGridIntersection": {
+              "gridIntersectionKey": "gi-L2c1",
+              "sourceLineKey": "L2",
+              "sourcePhysicalColumnHypothesisKey": "column-1",
+              "sourceRegionKey": "R1",
+              "pageNumber": 1,
+              "rowOrder": 2,
+              "columnOrder": 1,
+              "gridBounds": {
+                "leftPoints": 0,
+                "topPoints": 0,
+                "rightPoints": 10,
+                "bottomPoints": 10,
+                "widthPoints": 10,
+                "heightPoints": 10,
+                "centerXPoints": 5,
+                "centerYPoints": 5
+              },
+              "gridFormationRuleId": "fixture",
+              "gridFormationRuleVersion": 1,
+              "profileId": "fixture",
+              "profileVersion": 1,
+              "status": "cell_hypothesis_formed",
+              "cellHypothesisKey": "cell-multiseg"
+            },
+            "status": "cell_structured",
+            "cell": {
+              "cellHypothesisKey": "cell-multiseg",
+              "gridIntersectionKey": "gi-L2c1",
+              "rowOrder": 2,
+              "columnOrder": 1,
+              "status": "structured",
+              "sourceTextEvidenceStatus": "formed",
+              "sourceCellHypothesis": {
+                "cellHypothesisKey": "cell-multiseg",
+                "gridIntersectionKey": "gi-L2c1",
+                "observedContentBounds": {
+                  "leftPoints": 0,
+                  "topPoints": 0,
+                  "rightPoints": 10,
+                  "bottomPoints": 10,
+                  "widthPoints": 10,
+                  "heightPoints": 10,
+                  "centerXPoints": 5,
+                  "centerYPoints": 5
+                },
+                "segmentKeys": [
+                  "L2c1s1",
+                  "L2c1s2"
+                ],
+                "cellFormationRuleId": "fixture",
+                "cellFormationRuleVersion": 1,
+                "profileId": "fixture",
+                "profileVersion": 1
+              },
+              "sourceTextEvidence": {
+                "status": "formed",
+                "cellHypothesisKey": "cell-multiseg",
+                "gridIntersectionKey": "gi-L2c1",
+                "segmentOutcomes": [
+                  {
+                    "status": "resolved",
+                    "segmentKey": "L2c1s1",
+                    "lineKey": "L2",
+                    "fragments": [
+                      {
+                        "sourceReferenceOrder": 1,
+                        "textItemIndex": 1,
+                        "originalText": "A   B\t C",
+                        "normalizedText": "A B C"
+                      }
+                    ],
+                    "itemDispositions": [
+                      {
+                        "status": "included_in_text_fragment",
+                        "segmentKey": "L2c1s1",
+                        "sourceReferenceOrder": 1,
+                        "textItemIndex": 1
+                      }
+                    ]
+                  },
+                  {
+                    "status": "resolved",
+                    "segmentKey": "L2c1s2",
+                    "lineKey": "L2",
+                    "fragments": [
+                      {
+                        "sourceReferenceOrder": 1,
+                        "textItemIndex": 2,
+                        "originalText": "50%",
+                        "normalizedText": "50%"
+                      },
+                      {
+                        "sourceReferenceOrder": 2,
+                        "textItemIndex": 3,
+                        "originalText": "Preço|Total",
+                        "normalizedText": "Preço|Total"
+                      }
+                    ],
+                    "itemDispositions": [
+                      {
+                        "status": "included_in_text_fragment",
+                        "segmentKey": "L2c1s2",
+                        "sourceReferenceOrder": 1,
+                        "textItemIndex": 2
+                      },
+                      {
+                        "status": "included_in_text_fragment",
+                        "segmentKey": "L2c1s2",
+                        "sourceReferenceOrder": 2,
+                        "textItemIndex": 3
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "gridIntersectionKey": "gi-L2c2",
+            "sourceLineKey": "L2",
+            "rowOrder": 2,
+            "columnOrder": 2,
+            "sourceGridIntersection": {
+              "gridIntersectionKey": "gi-L2c2",
+              "sourceLineKey": "L2",
+              "sourcePhysicalColumnHypothesisKey": "column-2",
+              "sourceRegionKey": "R1",
+              "pageNumber": 1,
+              "rowOrder": 2,
+              "columnOrder": 2,
+              "gridBounds": {
+                "leftPoints": 0,
+                "topPoints": 0,
+                "rightPoints": 10,
+                "bottomPoints": 10,
+                "widthPoints": 10,
+                "heightPoints": 10,
+                "centerXPoints": 5,
+                "centerYPoints": 5
+              },
+              "gridFormationRuleId": "fixture",
+              "gridFormationRuleVersion": 1,
+              "profileId": "fixture",
+              "profileVersion": 1,
+              "status": "unresolved_segment_association_ambiguity",
+              "ambiguityReason": "partial_segment_intersection",
+              "partiallyIntersectingSegmentKeys": [
+                "seg-x"
+              ]
+            },
+            "status": "ambiguous_partial_intersection",
+            "cell": null
+          },
+          {
+            "gridIntersectionKey": "gi-L2c3",
+            "sourceLineKey": "L2",
+            "rowOrder": 2,
+            "columnOrder": 3,
+            "sourceGridIntersection": {
+              "gridIntersectionKey": "gi-L2c3",
+              "sourceLineKey": "L2",
+              "sourcePhysicalColumnHypothesisKey": "column-3",
+              "sourceRegionKey": "R1",
+              "pageNumber": 1,
+              "rowOrder": 2,
+              "columnOrder": 3,
+              "gridBounds": {
+                "leftPoints": 0,
+                "topPoints": 0,
+                "rightPoints": 10,
+                "bottomPoints": 10,
+                "widthPoints": 10,
+                "heightPoints": 10,
+                "centerXPoints": 5,
+                "centerYPoints": 5
+              },
+              "gridFormationRuleId": "fixture",
+              "gridFormationRuleVersion": 1,
+              "profileId": "fixture",
+              "profileVersion": 1,
+              "status": "unresolved_segment_association_ambiguity",
+              "ambiguityReason": "segment_claimed_by_multiple_intersections",
+              "disputedSegmentKeys": [
+                "seg-x"
+              ],
+              "conflictingGridIntersectionKeys": [
+                "gi-other"
+              ]
+            },
+            "status": "ambiguous_multiple_intersections",
+            "cell": null
+          }
+        ],
+        "technicalProblems": [],
+        "metrics": {
+          "physicalSegmentCount": 2,
+          "positionCount": 3,
+          "emptyPositionCount": 0,
+          "cellStructuredPositionCount": 1,
+          "ambiguousPartialIntersectionPositionCount": 1,
+          "ambiguousMultipleIntersectionsPositionCount": 1,
+          "ambiguousContentOutsideGridBoundsPositionCount": 0,
+          "technicalFailurePositionCount": 0,
+          "documentCellCount": 1,
+          "cellStructuredCount": 1,
+          "cellStructuredWithTextProblemsCount": 0,
+          "cellStructuredWithoutResolvedTextCount": 0,
+          "cellFailedCount": 0,
+          "fragmentPreservedCount": 3,
+          "technicalProblemCount": 0
+        }
+      },
+      {
+        "sourceLineKey": "L3",
+        "pageNumber": 1,
+        "verticalOrder": 30,
+        "status": "structured",
+        "sourceLine": {
+          "lineKey": "L3",
+          "pageNumber": 1,
+          "verticalOrder": 30,
+          "leftPoints": 0,
+          "topPoints": 0,
+          "rightPoints": 100,
+          "bottomPoints": 10,
+          "widthPoints": 100,
+          "heightPoints": 10,
+          "centerXPoints": 50,
+          "centerYPoints": 5,
+          "seedSourceTextItemIndex": 0,
+          "sourceTextItemIndices": [],
+          "segmentKeys": [
+            "L3seg"
+          ],
+          "formationRuleId": "fixture",
+          "formationRuleVersion": 1,
+          "profileId": "fixture",
+          "profileVersion": 1
+        },
+        "physicalSegments": [
+          {
+            "segmentKey": "L3seg",
+            "lineKey": "L3",
+            "pageNumber": 1,
+            "horizontalOrder": 1,
+            "leftPoints": 0,
+            "topPoints": 0,
+            "rightPoints": 50,
+            "bottomPoints": 10,
+            "widthPoints": 50,
+            "heightPoints": 10,
+            "centerXPoints": 25,
+            "centerYPoints": 5,
+            "sourceTextItemIndices": [
+              4
+            ],
+            "observedInternalGaps": [],
+            "formationRuleId": "fixture",
+            "formationRuleVersion": 1,
+            "profileId": "fixture",
+            "profileVersion": 1
+          }
+        ],
+        "positions": [
+          {
+            "gridIntersectionKey": "gi-L3c1",
+            "sourceLineKey": "L3",
+            "rowOrder": 3,
+            "columnOrder": 1,
+            "sourceGridIntersection": {
+              "gridIntersectionKey": "gi-L3c1",
+              "sourceLineKey": "L3",
+              "sourcePhysicalColumnHypothesisKey": "column-1",
+              "sourceRegionKey": "R1",
+              "pageNumber": 1,
+              "rowOrder": 3,
+              "columnOrder": 1,
+              "gridBounds": {
+                "leftPoints": 0,
+                "topPoints": 0,
+                "rightPoints": 10,
+                "bottomPoints": 10,
+                "widthPoints": 10,
+                "heightPoints": 10,
+                "centerXPoints": 5,
+                "centerYPoints": 5
+              },
+              "gridFormationRuleId": "fixture",
+              "gridFormationRuleVersion": 1,
+              "profileId": "fixture",
+              "profileVersion": 1,
+              "status": "unresolved_segment_association_ambiguity",
+              "ambiguityReason": "observed_content_outside_grid_bounds",
+              "evidenceSegmentKeys": [
+                "seg-x"
+              ],
+              "observedContentBounds": {
+                "leftPoints": 0,
+                "topPoints": 0,
+                "rightPoints": 10,
+                "bottomPoints": 10,
+                "widthPoints": 10,
+                "heightPoints": 10,
+                "centerXPoints": 5,
+                "centerYPoints": 5
+              }
+            },
+            "status": "ambiguous_content_outside_grid_bounds",
+            "cell": null
+          },
+          {
+            "gridIntersectionKey": "gi-L3c2",
+            "sourceLineKey": "L3",
+            "rowOrder": 3,
+            "columnOrder": 2,
+            "sourceGridIntersection": {
+              "gridIntersectionKey": "gi-L3c2",
+              "sourceLineKey": "L3",
+              "sourcePhysicalColumnHypothesisKey": "column-2",
+              "sourceRegionKey": "R1",
+              "pageNumber": 1,
+              "rowOrder": 3,
+              "columnOrder": 2,
+              "gridBounds": {
+                "leftPoints": 0,
+                "topPoints": 0,
+                "rightPoints": 10,
+                "bottomPoints": 10,
+                "widthPoints": 10,
+                "heightPoints": 10,
+                "centerXPoints": 5,
+                "centerYPoints": 5
+              },
+              "gridFormationRuleId": "fixture",
+              "gridFormationRuleVersion": 1,
+              "profileId": "fixture",
+              "profileVersion": 1,
+              "status": "unresolved_technical_failure",
+              "failedPhase": "cell_hypothesis_formation",
+              "affectedSegmentKeys": [
+                "seg-x"
+              ]
+            },
+            "status": "technical_failure",
+            "cell": null
+          }
+        ],
+        "technicalProblems": [],
+        "metrics": {
+          "physicalSegmentCount": 1,
+          "positionCount": 2,
+          "emptyPositionCount": 0,
+          "cellStructuredPositionCount": 0,
+          "ambiguousPartialIntersectionPositionCount": 0,
+          "ambiguousMultipleIntersectionsPositionCount": 0,
+          "ambiguousContentOutsideGridBoundsPositionCount": 1,
+          "technicalFailurePositionCount": 1,
+          "documentCellCount": 0,
+          "cellStructuredCount": 0,
+          "cellStructuredWithTextProblemsCount": 0,
+          "cellStructuredWithoutResolvedTextCount": 0,
+          "cellFailedCount": 0,
+          "fragmentPreservedCount": 0,
+          "technicalProblemCount": 0
+        }
+      },
+      {
+        "sourceLineKey": "L4",
+        "pageNumber": 1,
+        "verticalOrder": 40,
+        "status": "structured",
+        "sourceLine": {
+          "lineKey": "L4",
+          "pageNumber": 1,
+          "verticalOrder": 40,
+          "leftPoints": 0,
+          "topPoints": 0,
+          "rightPoints": 100,
+          "bottomPoints": 10,
+          "widthPoints": 100,
+          "heightPoints": 10,
+          "centerXPoints": 50,
+          "centerYPoints": 5,
+          "seedSourceTextItemIndex": 0,
+          "sourceTextItemIndices": [],
+          "segmentKeys": [
+            "L4seg"
+          ],
+          "formationRuleId": "fixture",
+          "formationRuleVersion": 1,
+          "profileId": "fixture",
+          "profileVersion": 1
+        },
+        "physicalSegments": [
+          {
+            "segmentKey": "L4seg",
+            "lineKey": "L4",
+            "pageNumber": 1,
+            "horizontalOrder": 1,
+            "leftPoints": 0,
+            "topPoints": 0,
+            "rightPoints": 50,
+            "bottomPoints": 10,
+            "widthPoints": 50,
+            "heightPoints": 10,
+            "centerXPoints": 25,
+            "centerYPoints": 5,
+            "sourceTextItemIndices": [
+              5
+            ],
+            "observedInternalGaps": [],
+            "formationRuleId": "fixture",
+            "formationRuleVersion": 1,
+            "profileId": "fixture",
+            "profileVersion": 1
+          }
+        ],
+        "positions": [
+          {
+            "gridIntersectionKey": "gi-L4c1",
+            "sourceLineKey": "L4",
+            "rowOrder": 4,
+            "columnOrder": 1,
+            "sourceGridIntersection": {
+              "gridIntersectionKey": "gi-L4c1",
+              "sourceLineKey": "L4",
+              "sourcePhysicalColumnHypothesisKey": "column-1",
+              "sourceRegionKey": "R1",
+              "pageNumber": 1,
+              "rowOrder": 4,
+              "columnOrder": 1,
+              "gridBounds": {
+                "leftPoints": 0,
+                "topPoints": 0,
+                "rightPoints": 10,
+                "bottomPoints": 10,
+                "widthPoints": 10,
+                "heightPoints": 10,
+                "centerXPoints": 5,
+                "centerYPoints": 5
+              },
+              "gridFormationRuleId": "fixture",
+              "gridFormationRuleVersion": 1,
+              "profileId": "fixture",
+              "profileVersion": 1,
+              "status": "empty"
+            },
+            "status": "empty",
+            "cell": null
+          },
+          {
+            "gridIntersectionKey": "gi-L4c2",
+            "sourceLineKey": "L4",
+            "rowOrder": 4,
+            "columnOrder": 2,
+            "sourceGridIntersection": {
+              "gridIntersectionKey": "gi-L4c2",
+              "sourceLineKey": "L4",
+              "sourcePhysicalColumnHypothesisKey": "column-2",
+              "sourceRegionKey": "R1",
+              "pageNumber": 1,
+              "rowOrder": 4,
+              "columnOrder": 2,
+              "gridBounds": {
+                "leftPoints": 0,
+                "topPoints": 0,
+                "rightPoints": 10,
+                "bottomPoints": 10,
+                "widthPoints": 10,
+                "heightPoints": 10,
+                "centerXPoints": 5,
+                "centerYPoints": 5
+              },
+              "gridFormationRuleId": "fixture",
+              "gridFormationRuleVersion": 1,
+              "profileId": "fixture",
+              "profileVersion": 1,
+              "status": "empty"
+            },
+            "status": "empty",
+            "cell": null
+          }
+        ],
+        "technicalProblems": [],
+        "metrics": {
+          "physicalSegmentCount": 1,
+          "positionCount": 2,
+          "emptyPositionCount": 2,
+          "cellStructuredPositionCount": 0,
+          "ambiguousPartialIntersectionPositionCount": 0,
+          "ambiguousMultipleIntersectionsPositionCount": 0,
+          "ambiguousContentOutsideGridBoundsPositionCount": 0,
+          "technicalFailurePositionCount": 0,
+          "documentCellCount": 0,
+          "cellStructuredCount": 0,
+          "cellStructuredWithTextProblemsCount": 0,
+          "cellStructuredWithoutResolvedTextCount": 0,
+          "cellFailedCount": 0,
+          "fragmentPreservedCount": 0,
+          "technicalProblemCount": 0
+        }
+      }
+    ],
+    "technicalProblems": [],
+    "metrics": {
+      "physicalLineReceivedCount": 5,
+      "documentLineProducedCount": 5,
+      "documentLineStructuredCount": 4,
+      "documentLineStructuredWithProblemsCount": 0,
+      "documentLineWithoutPositionsCount": 1,
+      "documentLineUpstreamNotProcessableCount": 0,
+      "documentLineFailedCount": 0,
+      "physicalSegmentPreservedCount": 7,
+      "gridIntersectionReceivedCount": 9,
+      "positionProducedCount": 9,
+      "emptyPositionCount": 3,
+      "cellStructuredPositionCount": 2,
+      "ambiguousPartialIntersectionPositionCount": 1,
+      "ambiguousMultipleIntersectionsPositionCount": 1,
+      "ambiguousContentOutsideGridBoundsPositionCount": 1,
+      "technicalFailurePositionCount": 1,
+      "physicalCellHypothesisCount": 2,
+      "documentCellCount": 2,
+      "cellStructuredCount": 2,
+      "cellStructuredWithTextProblemsCount": 0,
+      "cellStructuredWithoutResolvedTextCount": 0,
+      "cellFailedCount": 0,
+      "textEvidenceCount": 2,
+      "segmentOutcomeCount": 3,
+      "fragmentReceivedCount": 4,
+      "fragmentPreservedCount": 4,
+      "technicalProblemCount": 0
+    }
+  },
+  "conservation": null,
+  "metricOk": true,
+  "fingerprint": "9e11dd3bf50b14dc16951a598938e6bebe90e1b868ed7258c9cfdac5e47944e2"
+}
