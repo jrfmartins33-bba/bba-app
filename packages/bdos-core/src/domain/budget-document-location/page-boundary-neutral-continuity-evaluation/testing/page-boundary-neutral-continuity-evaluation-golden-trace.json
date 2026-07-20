@@ -1,0 +1,194 @@
+{
+  "status": "evaluated",
+  "evaluations": [
+    {
+      "sourceCandidateGroupKey": "GOLD-A",
+      "originPageNumber": 1,
+      "targetPageNumber": 2,
+      "originRegionKey": "R1",
+      "targetRegionKey": "R2",
+      "originBoundaryLineKey": "L1",
+      "targetBoundaryLineKey": "L2",
+      "status": "continuity_sustained",
+      "observedSignals": [
+        {
+          "signal": "page_processability",
+          "outcome": "both_pages_processable"
+        },
+        {
+          "signal": "boundary_region_existence",
+          "outcome": "both_boundary_regions_available"
+        },
+        {
+          "signal": "boundary_line_existence",
+          "outcome": "both_boundary_lines_available"
+        },
+        {
+          "signal": "column_signature_compatibility",
+          "outcome": "column_signature_match",
+          "originPositionCount": 1,
+          "targetPositionCount": 1
+        },
+        {
+          "signal": "horizontal_geometry_compatibility",
+          "outcome": "geometry_compatible",
+          "horizontalOverlapRatio": 1,
+          "widthSimilarityRatio": 1,
+          "leftBoundaryDeviationRatio": 0,
+          "rightBoundaryDeviationRatio": 0
+        }
+      ],
+      "favorableEvidence": [
+        {
+          "evidence": "matching_column_signature",
+          "sourceSignal": "column_signature_compatibility",
+          "sourceOutcome": "column_signature_match"
+        },
+        {
+          "evidence": "compatible_horizontal_geometry",
+          "sourceSignal": "horizontal_geometry_compatibility",
+          "sourceOutcome": "geometry_compatible"
+        }
+      ],
+      "contraryEvidence": [],
+      "technicalProblems": []
+    },
+    {
+      "sourceCandidateGroupKey": "GOLD-A",
+      "originPageNumber": 2,
+      "targetPageNumber": 3,
+      "originRegionKey": "R2",
+      "targetRegionKey": "R3",
+      "originBoundaryLineKey": "L2",
+      "targetBoundaryLineKey": "L3",
+      "status": "continuity_not_sustained",
+      "observedSignals": [
+        {
+          "signal": "page_processability",
+          "outcome": "both_pages_processable"
+        },
+        {
+          "signal": "boundary_region_existence",
+          "outcome": "both_boundary_regions_available"
+        },
+        {
+          "signal": "boundary_line_existence",
+          "outcome": "both_boundary_lines_available"
+        },
+        {
+          "signal": "column_signature_compatibility",
+          "outcome": "column_signature_match",
+          "originPositionCount": 1,
+          "targetPositionCount": 1
+        },
+        {
+          "signal": "horizontal_geometry_compatibility",
+          "outcome": "geometry_incompatible",
+          "horizontalOverlapRatio": 0,
+          "widthSimilarityRatio": 0.25,
+          "leftBoundaryDeviationRatio": 5,
+          "rightBoundaryDeviationRatio": 8
+        }
+      ],
+      "favorableEvidence": [
+        {
+          "evidence": "matching_column_signature",
+          "sourceSignal": "column_signature_compatibility",
+          "sourceOutcome": "column_signature_match"
+        }
+      ],
+      "contraryEvidence": [
+        {
+          "evidence": "incompatible_horizontal_geometry",
+          "sourceSignal": "horizontal_geometry_compatibility",
+          "sourceOutcome": "geometry_incompatible"
+        }
+      ],
+      "technicalProblems": []
+    },
+    {
+      "sourceCandidateGroupKey": "GOLD-A",
+      "originPageNumber": 3,
+      "targetPageNumber": 4,
+      "originRegionKey": "R3",
+      "targetRegionKey": "R4",
+      "originBoundaryLineKey": "L3",
+      "targetBoundaryLineKey": "L4",
+      "status": "continuity_ambiguous",
+      "observedSignals": [
+        {
+          "signal": "page_processability",
+          "outcome": "both_pages_processable"
+        },
+        {
+          "signal": "boundary_region_existence",
+          "outcome": "both_boundary_regions_available"
+        },
+        {
+          "signal": "boundary_line_existence",
+          "outcome": "both_boundary_lines_available"
+        },
+        {
+          "signal": "column_signature_compatibility",
+          "outcome": "column_signature_inconclusive",
+          "originPositionCount": 1,
+          "targetPositionCount": 0
+        },
+        {
+          "signal": "horizontal_geometry_compatibility",
+          "outcome": "geometry_compatible",
+          "horizontalOverlapRatio": 1,
+          "widthSimilarityRatio": 1,
+          "leftBoundaryDeviationRatio": 0,
+          "rightBoundaryDeviationRatio": 0
+        }
+      ],
+      "favorableEvidence": [
+        {
+          "evidence": "compatible_horizontal_geometry",
+          "sourceSignal": "horizontal_geometry_compatibility",
+          "sourceOutcome": "geometry_compatible"
+        }
+      ],
+      "contraryEvidence": [],
+      "technicalProblems": []
+    },
+    {
+      "sourceCandidateGroupKey": "GOLD-B",
+      "originPageNumber": 10,
+      "targetPageNumber": 11,
+      "originRegionKey": null,
+      "targetRegionKey": null,
+      "originBoundaryLineKey": null,
+      "targetBoundaryLineKey": null,
+      "status": "continuity_not_processable",
+      "observedSignals": [
+        {
+          "signal": "page_processability",
+          "outcome": "target_page_not_processable"
+        }
+      ],
+      "favorableEvidence": [],
+      "contraryEvidence": [],
+      "technicalProblems": []
+    }
+  ],
+  "technicalProblems": [],
+  "metrics": {
+    "receivedGroupCount": 2,
+    "incoherentGroupCount": 0,
+    "receivedPageCount": 6,
+    "expectedPageBoundaryCount": 4,
+    "producedEvaluationCount": 4,
+    "sustainedCount": 1,
+    "ambiguousCount": 1,
+    "notSustainedCount": 1,
+    "notProcessableCount": 1,
+    "failedCount": 0,
+    "favorableEvidenceCount": 4,
+    "contraryEvidenceCount": 1,
+    "technicalProblemCount": 0
+  },
+  "identityFingerprint": "d32f420ee5348949f7a6ef35aea3ee056b060c603047239147a9a9ca002c1c10",
+  "resultFingerprint": "b2e2a892ec0930b7a194daefa11a54322ad3a85c4ef77e41861fe5f0d3133966"
+}
