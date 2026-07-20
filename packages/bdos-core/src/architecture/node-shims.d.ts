@@ -7,11 +7,15 @@
 
 declare module "node:fs" {
   export function readFileSync(path: string, encoding: "utf8"): string;
+  /** Forma binária (sem encoding) — usada pelo diagnóstico manual de documento real (Sprint 21.4B), nunca por um guard arquitetural. */
+  export function readFileSync(path: string): Uint8Array;
   export function readdirSync(path: string): string[];
   export function statSync(path: string): {
     isDirectory(): boolean;
     isFile(): boolean;
   };
+  export function writeFileSync(path: string, data: string, encoding?: "utf8"): void;
+  export function mkdirSync(path: string, options?: { readonly recursive: boolean }): void;
 }
 
 declare module "node:path" {

@@ -35,7 +35,9 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "advisor:live-check": "tsx src/advisor/advisor-live-check.ts"
+    "typecheck:scripts": "tsc --noEmit -p scripts/tsconfig.json",
+    "advisor:live-check": "tsx src/advisor/advisor-live-check.ts",
+    "diagnose:real-budget-document": "tsx scripts/diagnose-real-budget-document.ts"
   },
   "devDependencies": {
     "typescript": "^5.7.2"
