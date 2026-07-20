@@ -4,6 +4,10 @@ Copie este arquivo para o relatório final de qualquer Sprint que reivindique va
 
 **Antes de preencher, releia `EPIC_21_SPRINT_4G_REAL_VALIDATION_GOVERNANCE.md`** — em particular o padrão de maturidade e a distinção entre teste de caracterização, teste de aceitação, teste adversarial e validação em documento real (seção "Regra sobre testes").
 
+## 0. Tipo de alvo (`targetKind`)
+
+`capability` ou `end_to_end_scenario` — nunca ambíguo. Uma capacidade isolada nunca carrega o veredito de um cenário ponta a ponta do qual ela é apenas uma das dependências: se a evidência demonstra apenas que a capacidade recebeu entrada inválida de uma dependência upstream reprovada, o resultado próprio da capacidade é `inconclusiva` (com a causa registrada), nunca `reprovada` — o veredito `reprovada` pertence à dependência upstream defeituosa e/ou ao registro `end_to_end_scenario` que descreve o cenário completo.
+
 ## 1. Objetivo verificável
 
 Uma frase, testável — nunca "melhorar X" ou "investigar Y" sem um critério de sucesso explícito.
@@ -22,7 +26,7 @@ Nome genérico da fonte (nunca o caminho local) — ex.: "Anexo Técnico do Term
 
 ## 5. Fingerprint da fonte
 
-SHA-256 (ou a forma já registrada em um relatório anterior, mesmo que truncada) — nunca reconstruído de memória.
+SHA-256 **completo** (64 caracteres hexadecimais, `[0-9a-f]{64}`) — nunca truncado, nunca reconstruído de memória. Fingerprint truncado não é mais aceito quando a governança reivindicar evidência real.
 
 ## 6. Páginas ou intervalos
 
@@ -58,11 +62,11 @@ Conforme `CAPABILITY_MATURITY_REGISTRY` antes desta Sprint — nível (`currentL
 
 ## 13. Nível de evidência solicitado e resultado solicitado (separados)
 
-O nível que este pacote de evidências reivindica (deve satisfazer precisamente `REAL_VALIDATION_MATURITY_LEVEL_REQUIREMENTS_PT` para esse nível) **e**, separadamente, o resultado que a evidência sustenta (`aprovada`/`reprovada`/`inconclusiva`/`não avaliada`). Confirme que a combinação (nível, resultado) está entre as permitidas em `PERMITTED_LEVEL_RESULT_COMBINATIONS` — em particular, `validada_em_caso_real`/`validada_adversarialmente` só combinam com `aprovada`; um resultado negativo mantém o nível em `caracterizada_em_caso_real`. Se o resultado solicitado for `inconclusiva`, preencha também a causa da inconclusão.
+O nível que este pacote de evidências reivindica (deve satisfazer precisamente `REAL_VALIDATION_MATURITY_LEVEL_REQUIREMENTS_PT` para esse nível) **e**, separadamente, o resultado que a evidência sustenta (`aprovada`/`reprovada`/`inconclusiva`/`não avaliada`). O nível de evidência NUNCA implica o resultado — um nível profundo (`comparada_formalmente_em_caso_real`, `submetida_a_teste_adversarial`) permite legitimamente resultado `reprovada` ou `inconclusiva`. Confirme que a combinação está entre as permitidas em `PERMITTED_LEVEL_RESULT_COMBINATIONS`. Se o resultado solicitado for `inconclusiva`, preencha também a causa da inconclusão. Liste também `dependsOnTargetIds` afetados por esta Sprint, e se alguma dependência upstream está `reprovada`/`inconclusiva`/`não avaliada` (o que, pelo grafo de dependências, impede portões `real_validation`/`productive_use` de ficarem `aberto`).
 
-## 14. Portões afetados (específicos, nunca genéricos)
+## 14. Portões afetados (específicos, com `purposeKind` estruturado)
 
-Liste cada `DownstreamGate` afetado por esta Sprint como `{ consumidor, finalidade, status, justificativa, evidência faltante, comportamento quando bloqueado }` — nunca um único status genérico para a capacidade inteira. Uma mesma capacidade pode ter portões diferentes abertos para diagnóstico e bloqueados para consumo produtivo/econômico simultaneamente.
+Liste cada `DownstreamGate` afetado por esta Sprint como `{ consumidor, finalidade em português, purposeKind (diagnostic | development | technical_chaining | real_validation | productive_use), status, justificativa, evidência faltante, comportamento quando bloqueado }` — nunca um único status genérico para o alvo inteiro. Um mesmo alvo pode ter portões diferentes abertos para diagnóstico (`purposeKind: "diagnostic"`/`"development"`) e bloqueados para uso produtivo/validação real (`purposeKind: "productive_use"`/`"real_validation"`) simultaneamente. O bloqueio por dependência reprovada/inconclusiva é decidido pelo grafo (`dependsOnTargetIds`) e por `purposeKind` — nunca por palavras em `purposePt`.
 
 ## 15. Arquivos de produção alterados
 

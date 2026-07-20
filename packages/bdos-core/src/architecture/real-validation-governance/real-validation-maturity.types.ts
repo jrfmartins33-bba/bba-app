@@ -2,77 +2,73 @@
  * Contrato puro da Sprint 21.4G — Governança de Validação Real e Portões
  * de Evidência. Reaproveita o idioma já estabelecido pelo catálogo de
  * sinais (`budget-document-signal-catalog.types.ts`/`.ts`): um array
- * literal exportado, `as const`, imutável em runtime via `deepFreeze`,
- * com seu próprio teste de integridade estrutural ao lado — nunca um
- * arquivo JSON/YAML externo, nunca um scanner textual da documentação.
+ * literal exportado, `as const`, imutável em runtime via `deepFreeze`
+ * recursivo (não apenas no primeiro nível), com seu próprio teste de
+ * integridade estrutural ao lado — nunca um arquivo JSON/YAML externo,
+ * nunca um scanner textual da documentação.
  *
  * Localização: `src/architecture/`, não `src/domain/` — esta governança
  * não é domínio de negócio; é a mesma camada transversal que já hospeda
- * os guards de fronteira arquitetural (`*-boundaries.test.ts`). Nenhuma
- * nova camada foi criada (correção estrutural da Sprint 21.4G, §5).
+ * os guards de fronteira arquitetural (`*-boundaries.test.ts`).
  *
  * Este módulo nunca corrige algoritmo documental, nunca importa nenhum
  * domínio operacional ou de decisão, nunca referencia conteúdo real de
- * documento (apenas metadados estruturais: fingerprint, intervalo de
- * página, resultado esperado/observado em texto livre nunca extenso).
+ * documento (apenas metadados estruturais: fingerprint completo,
+ * intervalo de página, resultado esperado/observado em texto livre
+ * nunca extenso).
+ *
+ * Correção de revisão independente (segunda rodada): o eixo de
+ * evidência anterior ainda incorporava resultado ao usar "validada"
+ * (ex.: "validada_em_caso_real"). Corrigido: os cinco níveis abaixo
+ * expressam SOMENTE profundidade de evidência coletada — nunca o que
+ * essa evidência concluiu. "Nível informa até onde a capacidade foi
+ * submetida a evidência. Resultado informa o que essa evidência
+ * concluiu." Um nível profundo (`submetida_a_teste_adversarial`) pode
+ * legitimamente combinar com resultado `reprovada` ou `inconclusiva` —
+ * nunca o contrário do que já era verdade sobre f.2a.
  */
 
-export const REAL_VALIDATION_MATURITY_SCHEMA_VERSION = 2 as const;
-export const REAL_VALIDATION_MATURITY_REGISTRY_VERSION = "real-validation-maturity-registry-v2" as const;
+export const REAL_VALIDATION_MATURITY_SCHEMA_VERSION = 3 as const;
+export const REAL_VALIDATION_MATURITY_REGISTRY_VERSION = "real-validation-maturity-registry-v3" as const;
 
-// --- eixo 1: nível de evidência (quanto rigor de evidência existe) --------
+// --- eixo 1: nível de evidência (profundidade, nunca resultado) ----------
 
-/**
- * Cinco níveis, em ordem crescente de RIGOR de evidência coletada —
- * nunca de resultado. Um nível alto não implica que o resultado tenha
- * sido positivo (ver `ValidationResult` abaixo e
- * `PERMITTED_LEVEL_RESULT_COMBINATIONS`). Corrigido nesta Sprint: a
- * versão anterior misturava nível e resultado num único eixo de 6
- * valores, incluindo indevidamente "reprovada" como se fosse um nível de
- * evidência.
- */
 export const REAL_VALIDATION_MATURITY_LEVELS = [
   "experimental",
-  "validada_sinteticamente",
-  "caracterizada_em_caso_real",
-  "validada_em_caso_real",
-  "validada_adversarialmente",
+  "evidenciada_sinteticamente",
+  "exercitada_em_caso_real",
+  "comparada_formalmente_em_caso_real",
+  "submetida_a_teste_adversarial",
 ] as const;
 
 export type RealValidationMaturityLevel = (typeof REAL_VALIDATION_MATURITY_LEVELS)[number];
 
 export const REAL_VALIDATION_MATURITY_LEVEL_LABELS_PT: Readonly<Record<RealValidationMaturityLevel, string>> = {
   experimental: "Experimental",
-  validada_sinteticamente: "Validada sinteticamente",
-  caracterizada_em_caso_real: "Caracterizada em caso real",
-  validada_em_caso_real: "Validada em caso real",
-  validada_adversarialmente: "Validada adversarialmente",
+  evidenciada_sinteticamente: "Evidenciada sinteticamente",
+  exercitada_em_caso_real: "Exercitada em caso real",
+  comparada_formalmente_em_caso_real: "Comparada formalmente em caso real",
+  submetida_a_teste_adversarial: "Submetida a teste adversarial",
 };
 
 export const REAL_VALIDATION_MATURITY_LEVEL_REQUIREMENTS_PT: Readonly<Record<RealValidationMaturityLevel, string>> = {
-  experimental: "Existe uma implementação com contrato definido (tipos, função pública), mas sem suíte de testes sintéticos abrangente.",
-  validada_sinteticamente:
-    "Suíte de testes sintéticos cobre o comportamento nominal e casos de fronteira — mas nunca foi exercitada contra um documento real (nem mesmo tecnicamente).",
-  caracterizada_em_caso_real:
-    "A capacidade foi exercitada tecnicamente contra ao menos um documento real (fingerprint registrado). `completed`/`structured`/`evaluated` sozinho NUNCA basta — é preciso ao menos uma observação estrutural registrada e comparada (formalmente ou informalmente) contra alguma expectativa. Este é o nível correto mesmo quando uma comparação formal FOI feita e o resultado saiu reprovado ou inconclusivo — ver `ValidationResult`: 'validada' descreve rigor com resultado positivo confirmado, nunca rigor isolado do resultado.",
-  validada_em_caso_real:
-    "Existe resultado esperado definido ANTES da execução e resultado observado comparado explicitamente contra ele, e o resultado dessa comparação é `aprovada` (ver combinações permitidas). Se o resultado for `reprovada` ou `inconclusiva`, o nível correto permanece `caracterizada_em_caso_real` — a tentativa formal de validação não confirma, por si, que a capacidade foi validada.",
-  validada_adversarialmente:
-    "Além de `validada_em_caso_real` com resultado `aprovada`, existe uma matriz de casos adversariais deliberados que a capacidade corretamente rejeita, com resultado `aprovada`. Nível mais alto; não exige `promotionConditionPt` adicional.",
+  experimental: "Existe uma implementação com contrato definido (tipos, função pública), mas sem suíte de testes sintéticos abrangente. Nenhum resultado além de 'não avaliada' é possível neste nível.",
+  evidenciada_sinteticamente:
+    "Suíte de testes sintéticos cobre o comportamento nominal e casos de fronteira. Ainda não expressa nada sobre documento real — o resultado pode ser 'não avaliada' (suíte existe, não interpretada como portão) ou refletir o veredito da própria suíte sintética.",
+  exercitada_em_caso_real:
+    "A capacidade foi executada tecnicamente contra ao menos um documento real (fingerprint completo registrado). `completed`/`structured`/`evaluated` sozinho NUNCA basta — é preciso ao menos uma observação estrutural registrada. Não implica nenhum resultado específico: o resultado pode ser 'não avaliada' (executada, nunca interpretada/comparada), 'aprovada', 'reprovada' ou 'inconclusiva'.",
+  comparada_formalmente_em_caso_real:
+    "Existe resultado esperado definido ANTES da execução e resultado observado comparado explicitamente contra ele, com divergências (se houver) registradas. Este nível por si só NÃO implica aprovação — uma comparação formal pode legitimamente concluir 'reprovada' (ex.: f.2a) ou 'inconclusiva'.",
+  submetida_a_teste_adversarial:
+    "Além de uma comparação formal, existe uma matriz de casos adversariais deliberados (conteúdo não pertencente, mas geometricamente ou estruturalmente semelhante) avaliada contra a capacidade. O resultado da matriz adversarial pode ser 'aprovada' (todos os casos corretamente rejeitados/tratados), 'reprovada' (um caso adversarial revelou falha, ex.: f.2a) ou 'inconclusiva' (a matriz não sustenta conclusão final).",
 };
 
-export function isTerminalMaturityLevel(level: RealValidationMaturityLevel): boolean {
-  return level === "validada_adversarialmente";
+export function isDeepestMaturityLevel(level: RealValidationMaturityLevel): boolean {
+  return level === "submetida_a_teste_adversarial";
 }
 
-// --- eixo 2: resultado da validação (o que a evidência diz) ---------------
+// --- eixo 2: resultado da validação (o que a evidência concluiu) ---------
 
-/**
- * Quatro resultados possíveis — independente do nível de evidência. Um
- * resultado `reprovada` em `caracterizada_em_caso_real` (ex.: f.2a) é uma
- * combinação válida e esperada; o nível não sobe para `validada_em_caso_real`
- * quando o resultado é negativo (ver requisito do nível acima).
- */
 export const VALIDATION_RESULTS = ["nao_avaliada", "aprovada", "reprovada", "inconclusiva"] as const;
 export type ValidationResult = (typeof VALIDATION_RESULTS)[number];
 
@@ -84,27 +80,49 @@ export const VALIDATION_RESULT_LABELS_PT: Readonly<Record<ValidationResult, stri
 };
 
 /**
- * Combinações permitidas de (nível, resultado) — o guard rejeita
- * qualquer par fora desta lista. `experimental` só combina com
- * `nao_avaliada`; `validada_em_caso_real`/`validada_adversarialmente` só
- * combinam com `aprovada` (por definição do próprio nível); `validada_sinteticamente`
- * combina com `nao_avaliada` (suíte existe, ainda não interpretada como
- * portão) ou `aprovada` (suíte revisada e aprovada); `caracterizada_em_caso_real`
- * é o único nível que aceita os quatro resultados — é exatamente o
- * nível em que uma tentativa real pode sair aprovada, reprovada,
- * inconclusiva, ou ainda não ter sido formalmente lida.
+ * Combinações permitidas de (nível, resultado). Nível de evidência nunca
+ * implica aprovação — um nível profundo permite resultado negativo:
+ * `comparada_formalmente_em_caso_real` + `reprovada` é permitido (f.2a);
+ * `submetida_a_teste_adversarial` + `reprovada` é permitido; `submetida_a_teste_adversarial`
+ * + `inconclusiva` é permitido quando a matriz adversarial não sustenta
+ * conclusão final. Apenas `experimental` fica restrito a `nao_avaliada`
+ * (nenhuma evidência foi ainda coletada, logo nenhum resultado pode ser
+ * concluído). Os demais níveis aceitam os quatro resultados.
  */
 export const PERMITTED_LEVEL_RESULT_COMBINATIONS: Readonly<Record<RealValidationMaturityLevel, ReadonlyArray<ValidationResult>>> = {
   experimental: ["nao_avaliada"],
-  validada_sinteticamente: ["nao_avaliada", "aprovada"],
-  caracterizada_em_caso_real: ["nao_avaliada", "aprovada", "reprovada", "inconclusiva"],
-  validada_em_caso_real: ["aprovada"],
-  validada_adversarialmente: ["aprovada"],
+  evidenciada_sinteticamente: ["nao_avaliada", "aprovada", "reprovada", "inconclusiva"],
+  exercitada_em_caso_real: ["nao_avaliada", "aprovada", "reprovada", "inconclusiva"],
+  comparada_formalmente_em_caso_real: ["aprovada", "reprovada", "inconclusiva"],
+  submetida_a_teste_adversarial: ["aprovada", "reprovada", "inconclusiva"],
 };
+
+/**
+ * `promotionConditionPt` é obrigatória exceto quando o nível já é o mais
+ * profundo E o resultado já é `aprovada` — mesmo no nível mais profundo,
+ * um resultado `reprovada`/`inconclusiva` ainda exige um caminho adiante
+ * documentado.
+ */
+export function requiresPromotionCondition(level: RealValidationMaturityLevel, result: ValidationResult): boolean {
+  return !(isDeepestMaturityLevel(level) && result === "aprovada");
+}
+
+// --- discriminador de alvo: capacidade vs. cenário ponta a ponta ----------
+
+/**
+ * Correção de revisão independente: uma capacidade isolada (ex.:
+ * caracterização econômica) nunca deve carregar o veredito de um
+ * cenário ponta a ponta (ex.: a extração real completa) quando a
+ * evidência demonstra apenas que a capacidade recebeu entrada inválida
+ * — o defeito pertence à capacidade upstream real (f.2a) e ao cenário
+ * ponta a ponta como um todo, nunca à capacidade downstream que apenas
+ * nunca teve a chance de processar entrada válida.
+ */
+export const TARGET_KINDS = ["capability", "end_to_end_scenario"] as const;
+export type TargetKind = (typeof TARGET_KINDS)[number];
 
 // --- papéis formais -------------------------------------------------------
 
-/** Papéis formais da Sprint 21.4G — nunca aprovação só pelo relatório do implementador. */
 export const GOVERNANCE_ROLES = ["implementador", "revisor_adversarial", "aprovador"] as const;
 export type GovernanceRole = (typeof GOVERNANCE_ROLES)[number];
 
@@ -123,16 +141,41 @@ export const DOWNSTREAM_GATE_STATUSES = ["aberto", "bloqueado", "condicional"] a
 export type DownstreamGateStatus = (typeof DOWNSTREAM_GATE_STATUSES)[number];
 
 /**
- * Um portão por par (consumidor, finalidade) — nunca um único portão
- * genérico por capacidade. Ex.: f.1 pode estar `aberto` para diagnóstico
- * upstream e `bloqueado` para consumo econômico validado, ao mesmo
- * tempo — dois registros de `DownstreamGate` distintos, nunca um único
- * status genérico "aberto"/"bloqueado" para a capacidade inteira.
+ * Finalidade estruturada do portão — o guard decide bloqueios
+ * EXCLUSIVAMENTE por `purposeKind`, nunca por varredura de palavras em
+ * `purposePt` (correção de revisão independente: a versão anterior
+ * procurava substrings como "econôm"/"produtiv" em texto livre, frágil
+ * e não estruturado).
+ *
+ * - `diagnostic`: uso apenas para observação/inspeção, nunca produção.
+ * - `development`: uso em desenvolvimento/investigação técnica.
+ * - `technical_chaining`: encadeamento técnico entre etapas, sem
+ *   reivindicar validação de conteúdo.
+ * - `real_validation`: uso como evidência de validação real.
+ * - `productive_use`: uso produtivo (ex.: criação de rascunho de Versão
+ *   do Orçamento).
  */
+export const GATE_PURPOSE_KINDS = ["diagnostic", "development", "technical_chaining", "real_validation", "productive_use"] as const;
+export type GatePurposeKind = (typeof GATE_PURPOSE_KINDS)[number];
+
+export const GATE_PURPOSE_KIND_LABELS_PT: Readonly<Record<GatePurposeKind, string>> = {
+  diagnostic: "Diagnóstico",
+  development: "Desenvolvimento",
+  technical_chaining: "Encadeamento técnico",
+  real_validation: "Validação real",
+  productive_use: "Uso produtivo",
+};
+
+/** `real_validation` e `productive_use` são as finalidades que o grafo de dependências pode bloquear/condicionar; `diagnostic`/`development`/`technical_chaining` nunca são bloqueadas por reprovação upstream. */
+export function isGatedByDependencyOutcome(purposeKind: GatePurposeKind): boolean {
+  return purposeKind === "real_validation" || purposeKind === "productive_use";
+}
+
 export interface DownstreamGate {
-  /** Capacidade consumidora (id estável) ou classe de consumidor (ex.: "qualquer_consumo_produtivo"). */
+  /** Capacidade/cenário consumidor (id estável) ou classe de consumidor (ex.: "qualquer_consumo_produtivo"). */
   readonly consumerId: string;
   readonly purposePt: string;
+  readonly purposeKind: GatePurposeKind;
   readonly status: DownstreamGateStatus;
   readonly rationalePt: string;
   /** Obrigatório (não vazio) quando `status !== "aberto"`; `null` apenas quando `status === "aberto"`. */
@@ -142,7 +185,11 @@ export interface DownstreamGate {
 
 // --- evidências -------------------------------------------------------------
 
+/** Regex de validação de SHA-256 completo — usada pelo guard, nunca aceita reticências/truncamento. */
+export const FULL_SHA256_PATTERN = /^[0-9a-f]{64}$/;
+
 export interface RealValidationEvidenceReal {
+  /** SHA-256 completo (64 caracteres hexadecimais) — nunca truncado, nunca reconstruído de memória. */
   readonly sourceFingerprintSha256: string;
   readonly pageOrTraceRange: string;
   readonly expectedResult: string;
@@ -159,13 +206,9 @@ export interface RealValidationEvidenceAdversarial {
 
 // --- histórico de avaliações -------------------------------------------------
 
-/**
- * Um registro imutável por avaliação — nunca sobrescrito, apenas
- * anexado. Nenhuma infraestrutura de eventos/banco: apenas um array
- * `ReadonlyArray` dentro do próprio registro estático.
- */
 export interface CapabilityEvaluationHistoryEntry {
   readonly evaluationId: string;
+  /** Data ISO (AAAA-MM-DD). */
   readonly date: string;
   /** Revisão do código avaliado (f.0-g.3) — nunca o commit que contém o próprio registro de governança. */
   readonly evaluatedRevision: string;
@@ -186,11 +229,12 @@ export interface CapabilityEvaluationHistoryEntry {
   readonly justificationPt: string;
 }
 
-// --- registro por capacidade --------------------------------------------------
+// --- registro por alvo (capacidade ou cenário ponta a ponta) ------------------
 
 export interface CapabilityMaturityRecord {
   readonly id: string;
   readonly namePt: string;
+  readonly targetKind: TargetKind;
   readonly stageId: string;
   readonly descriptionPt: string;
   readonly currentLevel: RealValidationMaturityLevel;
@@ -207,8 +251,10 @@ export interface CapabilityMaturityRecord {
   readonly evaluatedRevision: string;
   readonly lastEvaluatedDate: string;
   readonly technicalReportOwner: string;
-  /** Múltiplos portões específicos (consumidor + finalidade) — nunca um único status genérico. */
+  /** Múltiplos portões específicos (consumidor + finalidade estruturada) — nunca um único status genérico. */
   readonly downstreamGates: ReadonlyArray<DownstreamGate>;
+  /** Ids de outros alvos deste mesmo registro dos quais este alvo depende — nunca um caminho local, sempre um id estável já registrado. */
+  readonly dependsOnTargetIds: ReadonlyArray<string>;
   readonly evaluationHistory: ReadonlyArray<CapabilityEvaluationHistoryEntry>;
   readonly registryVersion: typeof REAL_VALIDATION_MATURITY_REGISTRY_VERSION;
 }
@@ -219,6 +265,7 @@ export type CapabilityMaturityIssueCode =
   | "duplicate_id"
   | "unrecognized_level"
   | "unrecognized_result"
+  | "unrecognized_target_kind"
   | "disallowed_level_result_combination"
   | "missing_real_evidence"
   | "missing_adversarial_evidence"
@@ -228,16 +275,26 @@ export type CapabilityMaturityIssueCode =
   | "unexpected_inconclusive_cause"
   | "gate_missing_consumer_or_purpose"
   | "gate_missing_evidence_when_not_open"
-  | "upstream_failure_not_blocking_downstream"
+  | "gate_open_despite_unresolved_dependency"
+  | "gate_aberto_requires_no_unresolved_dependency"
+  | "dangling_dependency"
+  | "self_dependency"
+  | "dependency_cycle"
+  | "end_to_end_scenario_missing_dependencies"
   | "missing_evaluation_history"
   | "history_entry_missing_roles"
+  | "duplicate_evaluation_id"
+  | "history_last_entry_mismatch"
+  | "history_chain_broken"
+  | "history_invalid_date"
+  | "history_dates_not_ordered"
+  | "history_disallowed_combination"
   | "suspicious_local_path_in_evidence"
   | "missing_fingerprint"
+  | "invalid_fingerprint_format"
   | "missing_expected_or_observed_result"
   | "reprovada_without_known_failures"
-  | "inconclusiva_without_cause"
-  | "aprovada_with_known_failure"
-  | "gate_open_for_blocked_upstream_purpose";
+  | "aprovada_with_known_failure";
 
 export interface CapabilityMaturityIssue {
   readonly code: CapabilityMaturityIssueCode;
