@@ -58,7 +58,7 @@ export const H3C_REAL_MANIFEST_BASE_COMMIT = "aa63e1264c93a56e8c77b6d3aba8ade179
 export const H3C_REAL_MANIFEST_PROFILE_ID = "budget-document-tabular-region-detection-profile-v1" as const;
 export const H3C_REAL_MANIFEST_PROFILE_VERSION = 1 as const;
 export const H3C_REAL_MANIFEST_EXTRACTION_RULE_PT =
-  "Extraído pela cadeia real de produção, inalterada: leitura física (pdfjs) → observação de sinais → localização de páginas → reconstrução estrutural (f.0/f.1). Nenhuma etapa de detecção de região tabular (f.2a) ou candidata de pertencimento (H0-H4/H3b/H3c) foi executada para produzir este manifesto.";
+  "Extraído pela cadeia real de produção, inalterada: leitura física (adaptador de extração de texto/geometria da fonte real) → observação de sinais → localização de páginas → reconstrução estrutural (f.0/f.1). Nenhuma etapa de detecção de região tabular (f.2a) ou candidata de pertencimento (H0-H4/H3b/H3c) foi executada para produzir este manifesto.";
 export const H3C_REAL_MANIFEST_CANDIDATE_USAGE_PROHIBITION_PT =
   "A candidata H3c (e qualquer outra) NUNCA pode receber `textLocatorForHumanAudit` como entrada — apenas identidade, ordem e geometria. Este campo existe exclusivamente para auditoria humana.";
 export const H3C_REAL_MANIFEST_NO_OBSERVED_RESULTS_PT =
