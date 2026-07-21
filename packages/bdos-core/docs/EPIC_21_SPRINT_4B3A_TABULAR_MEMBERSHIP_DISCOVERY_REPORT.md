@@ -89,7 +89,7 @@ Nenhum falso positivo real foi observado em nenhuma das duas variantes. A amostr
 
 ## 13. Contrato atual: suficiente ou insuficiente
 
-Insuficiente no **nível do helper** (prova formal, §6). Potencialmente suficiente no **nível da capacidade completa** para o caso sintético (H3/H3b), mas essa suficiência não foi comprovada para o caso real dentro desta Sprint.
+Insuficiência comprovada apenas para a **evidência local da linha-alvo**. A suficiência ou insuficiência do contrato completo do helper permanece inconclusiva. No **nível da capacidade completa**, H3/H3b resolvem a matriz sintética exploratória, mas essa suficiência não foi comprovada para o documento real dentro desta Sprint.
 
 ## 14. Extensão mínima eventualmente necessária
 
@@ -155,11 +155,11 @@ Não alterados em nenhum dos três commits: `capability-maturity-registry.ts` e 
 
 - Primeiro commit (pré-registro): `764a62cbf3ebaa51cda98da62c6c832cabfd97ff` — `test(architecture): preregister tabular membership discovery`.
 - Segundo commit (avaliação): `50bf42aba7804e537b25a85f672ebbe17c96ab9b` — `test(architecture): evaluate tabular membership invariants`.
-- Terceiro commit (esta correção): hash gerado pelo `git commit` desta correção — um commit não pode conter seu próprio hash antes de ser criado, por isso não é fabricado aqui; confirmado por `git rev-parse HEAD` imediatamente após o commit e reportado ao usuário na resposta desta sessão (nunca inventado neste arquivo).
+- Terceiro commit (correção das afirmações de evidência): `ec0f8f609db9cf5e7aac815f968900c083e80011` — `docs(architecture): correct tabular discovery evidence claims`.
 
 ## 20. Confirmação do push, `git status`, ausência de PR, ausência de início da 21.4B.3B
 
-- **Push**: confirmado para os dois primeiros commits (`git push -u origin ...` e `git push origin ...`); o terceiro commit desta correção também será enviado com `git push origin claude/epic-21-sprint-4b3a-tabular-membership-invariant-discovery` (sem force, sem amend), confirmado na resposta desta sessão.
+- **Push**: os três commits foram enviados para `origin/claude/epic-21-sprint-4b3a-tabular-membership-invariant-discovery`. O terceiro push confirmou o intervalo `50bf42a..ec0f8f6`, sem amend e sem force-push.
 - **`git status --short` após o terceiro commit**: apenas as duas alterações locais pré-existentes e protegidas (`supabase/.temp/cli-latest`, `supabase/tests/data-integrity-validation.sql`), presentes desde antes do início desta Sprint, nunca adicionadas ao stage por nenhum dos três commits.
 - **Ausência de PR**: nenhum `gh pr create` ou equivalente foi executado nesta Sprint (nenhuma das três etapas). O GitHub oferece o link para abrir um PR ao receber o push (comportamento padrão do `git push` para uma branch nova/atualizada), mas nenhum PR foi de fato criado.
 - **21.4B.3B**: não iniciada — nenhum código de `tabular-region-formation.ts`, `detect-budget-document-tabular-regions.ts`, ou qualquer arquivo de produção de `f.0` a `g.3` foi alterado em nenhum dos três commits desta Sprint.
