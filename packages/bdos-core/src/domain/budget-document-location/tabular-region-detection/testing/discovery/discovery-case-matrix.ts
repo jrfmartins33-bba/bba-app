@@ -7,6 +7,18 @@ import * as fixtures from "./discovery-case-fixtures";
  * de experimento. Congelada no commit de pré-registro; qualquer alteração
  * posterior exige novo commit que explique a necessidade e invalide
  * execuções anteriores sob o critério antigo.
+ *
+ * CORREÇÃO (commit `docs(architecture): correct tabular discovery
+ * evidence claims`): a matriz abaixo tem 20 ENTRADAS classificadas
+ * (P1-P10, N1-N10), mas apenas 19 GEOMETRIAS DISTINTAS — N6 e N10
+ * reaproveitam deliberadamente a mesma função construtora (`buildPage`)
+ * e a mesma linha-alvo (`caseN6N10_wideElementBetweenIndependentRegions`
+ * / `N6_TARGET_LABEL`), documentado explicitamente na atribuição de N10
+ * ("papel duplo") desde o pré-registro original. Qualquer contagem de
+ * "casos passados/reprovados" deve declarar se está contando entradas
+ * classificadas (20) ou geometrias distintas (19) — os testes desta
+ * Sprint contam ENTRADAS (20), nunca geometrias, o que é consistente mas
+ * deve ser lido com essa ressalva.
  */
 
 export type DiscoveryExpectedLabel = "must_include" | "must_exclude";

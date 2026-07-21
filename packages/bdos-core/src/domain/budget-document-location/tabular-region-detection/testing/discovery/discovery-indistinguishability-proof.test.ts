@@ -13,20 +13,39 @@ import {
 } from "./discovery-evidence-representation";
 
 /**
- * Prova de indistinguibilidade executável (Sprint 21.4B.3A, §8 do
- * enunciado) — primeira verificação, ANTES de qualquer algoritmo
- * candidato. Executa a cadeia real (reconstrução + detecção atual) sobre
- * os pares pré-registrados em `INDISTINGUISHABILITY_PAIRS` e demonstra,
- * por execução real (nunca por leitura de comentário histórico), que:
+ * Prova de indistinguibilidade LOCAL DA LINHA-ALVO, executável (Sprint
+ * 21.4B.3A, §8 do enunciado) — primeira verificação, ANTES de qualquer
+ * algoritmo candidato. Executa a cadeia real (reconstrução + detecção
+ * atual) sobre os pares pré-registrados em `INDISTINGUISHABILITY_PAIRS` e
+ * demonstra, por execução real (nunca por leitura de comentário
+ * histórico), que:
  *
  * 1. No nível do contrato ATUAL do helper (`formTabularRegionCandidateWindows`),
- *    a linha positiva e a linha negativa de cada par produzem
- *    representação canônica IDÊNTICA — nenhuma função determinística
- *    limitada a essa evidência pode distingui-las.
+ *    o FINGERPRINT CANÔNICO DA LINHA-ALVO especificamente (posição
+ *    relativa dentro da janela + extents de alinhamento relativos à sua
+ *    própria posição — ver `extractTargetLineFingerprint`) é IDÊNTICO
+ *    entre a linha positiva e a negativa de cada par.
  * 2. Ao ampliar a evidência para o nível da capacidade completa (geometria
  *    de segmento, já calculada por `detectPage` antes da chamada ao
- *    helper, mas descartada), a igualdade se desfaz — refutando H0 nesse
- *    nível mais amplo e habilitando H1/H3 como candidatas viáveis.
+ *    helper, mas descartada), essa igualdade se desfaz.
+ *
+ * CORREÇÃO (commit `docs(architecture): correct tabular discovery
+ * evidence claims`): a versão original desta Sprint (commit `764a62c`)
+ * afirmava que isso provava "que nenhuma função determinística limitada
+ * a essa evidência pode distingui-las" — uma afirmação mais forte do que
+ * o que foi de fato executado. O que foi comparado é apenas o
+ * FINGERPRINT DA LINHA-ALVO (uma fatia da evidência: sua própria posição
+ * relativa e os extents de alinhamento que ela sustenta, relativos a
+ * si mesma) — nunca a representação canônica INTEGRAL de todo o
+ * contrato recebido pelo helper (todas as linhas da janela, todos os
+ * alinhamentos, módulo renomeação de `lineKey`/`alignmentKey`). É
+ * inteiramente possível que uma função que examine a evidência de OUTRAS
+ * linhas da janela (não apenas a linha-alvo) distinga os dois casos
+ * mesmo com o fingerprint da linha-alvo idêntico — isso nunca foi testado
+ * aqui. A afirmação correta e mais restrita: **a evidência
+ * especificamente atribuível à linha-alvo, no nível do helper atual, é
+ * insuficiente para decidir sobre ELA MESMA** — nunca que o contrato
+ * inteiro da janela seja indistinguível.
  *
  * Nenhum algoritmo candidato de decisão é definido aqui — apenas
  * extração e comparação de fatos observáveis.

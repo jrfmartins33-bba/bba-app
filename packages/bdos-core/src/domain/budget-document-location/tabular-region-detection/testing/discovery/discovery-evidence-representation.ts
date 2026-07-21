@@ -11,6 +11,20 @@
  * pelo CONJUNTO ORDENADO de posições relativas de linha que ele cobre
  * dentro da janela sob análise, tornando duas janelas estruturalmente
  * idênticas comparáveis mesmo vindas de fixtures diferentes.
+ *
+ * ESCOPO DA PROVA (correção — commit `docs(architecture): correct
+ * tabular discovery evidence claims`): `extractTargetLineFingerprint`
+ * produz o fingerprint de UMA linha específica (sua posição relativa e
+ * os extents de alinhamento que ela sustenta, relativos a si mesma) —
+ * nunca a representação canônica de TODAS as linhas da janela ao mesmo
+ * tempo. `buildHelperLevelWindowEvidence` calcula essa informação para
+ * todas as linhas da janela (necessário para extrair o fingerprint de
+ * qualquer uma delas), mas a comparação de igualdade feita pela prova de
+ * indistinguibilidade usa apenas o fingerprint de UMA linha por vez
+ * (`fingerprintsEqual`) — nunca uma comparação módulo renomeação do
+ * contrato inteiro (todas as linhas, todos os alinhamentos). A afirmação
+ * correta é "indistinguibilidade local da linha-alvo", não
+ * "indistinguibilidade do contrato completo".
  */
 
 export interface HelperLevelInputLine {
