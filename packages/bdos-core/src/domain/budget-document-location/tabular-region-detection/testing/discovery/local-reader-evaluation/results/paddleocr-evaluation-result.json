@@ -1,0 +1,1369 @@
+{
+  "tool": "paddleocr",
+  "execution": {
+    "pagesCompleted": 3,
+    "pagesFailed": 0,
+    "coldStartTimeMs": 4808.722257614136,
+    "perPageTimeMs": [
+      {
+        "realPageNumber": 46,
+        "timeMs": 355997.8256225586
+      },
+      {
+        "realPageNumber": 50,
+        "timeMs": 456574.3451118469
+      },
+      {
+        "realPageNumber": 54,
+        "timeMs": 226831.9923877716
+      }
+    ],
+    "peakMemoryMb": 326.6015625,
+    "warnings": [],
+    "partialFailures": []
+  },
+  "regionTextByPage": {
+    "46": {
+      "expectedRegionsRecovered": 10,
+      "regionsOmitted": 4,
+      "regionsAdditional": 63,
+      "exactTextMatches": 10,
+      "divergentText": 1,
+      "textWithoutCoordinate": 0,
+      "coordinateWithoutText": 1
+    },
+    "50": {
+      "expectedRegionsRecovered": 8,
+      "regionsOmitted": 3,
+      "regionsAdditional": 77,
+      "exactTextMatches": 8,
+      "divergentText": 2,
+      "textWithoutCoordinate": 0,
+      "coordinateWithoutText": 2
+    },
+    "54": {
+      "expectedRegionsRecovered": 8,
+      "regionsOmitted": 7,
+      "regionsAdditional": 35,
+      "exactTextMatches": 8,
+      "divergentText": 0,
+      "textWithoutCoordinate": 0,
+      "coordinateWithoutText": 0
+    }
+  },
+  "regionComparisonDetailByPage": {
+    "46": [
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 1,
+        "observedCount": 6
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 38,
+        "observedCount": 197
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 1,
+        "observedCount": 11
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 4,
+        "observedCount": 26
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 14,
+        "observedCount": 47
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 5,
+        "observedCount": 39
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 1,
+        "observedCount": 5
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 1,
+        "observedCount": 3
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 1,
+        "observedCount": 2
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 2,
+        "observedCount": 2
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "text_divergent",
+        "expectedCount": 1,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "omitted",
+        "expectedCount": 1,
+        "observedCount": 0
+      },
+      {
+        "outcome": "omitted",
+        "expectedCount": 1,
+        "observedCount": 0
+      },
+      {
+        "outcome": "omitted",
+        "expectedCount": 1,
+        "observedCount": 0
+      },
+      {
+        "outcome": "omitted",
+        "expectedCount": 1,
+        "observedCount": 0
+      }
+    ],
+    "50": [
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 22,
+        "observedCount": 178
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 4,
+        "observedCount": 24
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 1,
+        "observedCount": 5
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 5,
+        "observedCount": 27
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 11,
+        "observedCount": 69
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 3,
+        "observedCount": 17
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 27,
+        "observedCount": 158
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "text_divergent",
+        "expectedCount": 1,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 2,
+        "observedCount": 2
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "text_divergent",
+        "expectedCount": 1,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "omitted",
+        "expectedCount": 1,
+        "observedCount": 0
+      },
+      {
+        "outcome": "omitted",
+        "expectedCount": 1,
+        "observedCount": 0
+      },
+      {
+        "outcome": "omitted",
+        "expectedCount": 1,
+        "observedCount": 0
+      }
+    ],
+    "54": [
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 1,
+        "observedCount": 6
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 3,
+        "observedCount": 29
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 2,
+        "observedCount": 5
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 5,
+        "observedCount": 14
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 4,
+        "observedCount": 26
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 9,
+        "observedCount": 44
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 1,
+        "observedCount": 2
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "recovered",
+        "expectedCount": 1,
+        "observedCount": 2
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "additional",
+        "expectedCount": 0,
+        "observedCount": 1
+      },
+      {
+        "outcome": "omitted",
+        "expectedCount": 1,
+        "observedCount": 0
+      },
+      {
+        "outcome": "omitted",
+        "expectedCount": 1,
+        "observedCount": 0
+      },
+      {
+        "outcome": "omitted",
+        "expectedCount": 1,
+        "observedCount": 0
+      },
+      {
+        "outcome": "omitted",
+        "expectedCount": 1,
+        "observedCount": 0
+      },
+      {
+        "outcome": "omitted",
+        "expectedCount": 1,
+        "observedCount": 0
+      },
+      {
+        "outcome": "omitted",
+        "expectedCount": 1,
+        "observedCount": 0
+      },
+      {
+        "outcome": "omitted",
+        "expectedCount": 1,
+        "observedCount": 0
+      }
+    ]
+  },
+  "tableStructureByPage": {
+    "46": {
+      "tablesDetected": 0,
+      "expectedColumnsRecovered": 0,
+      "expectedColumnsTotal": 12,
+      "columnsSplit": 0,
+      "columnsMerged": 0,
+      "rowsDetected": 0,
+      "cellOutcomeCounts": {
+        "direct_match": 0,
+        "expected_cell_split_into_multiple_observed": 0,
+        "multiple_expected_cells_merged": 0,
+        "expected_cell_omitted": 358,
+        "invented_cell": 0,
+        "correct_text_wrong_column": 0,
+        "correct_text_no_usable_coordinate": 0,
+        "correct_coordinate_wrong_text": 0
+      },
+      "cellsTotal": 358
+    },
+    "50": {
+      "tablesDetected": 0,
+      "expectedColumnsRecovered": 0,
+      "expectedColumnsTotal": 12,
+      "columnsSplit": 0,
+      "columnsMerged": 0,
+      "rowsDetected": 0,
+      "cellOutcomeCounts": {
+        "direct_match": 0,
+        "expected_cell_split_into_multiple_observed": 0,
+        "multiple_expected_cells_merged": 0,
+        "expected_cell_omitted": 526,
+        "invented_cell": 0,
+        "correct_text_wrong_column": 0,
+        "correct_text_no_usable_coordinate": 0,
+        "correct_coordinate_wrong_text": 0
+      },
+      "cellsTotal": 526
+    },
+    "54": {
+      "tablesDetected": 0,
+      "expectedColumnsRecovered": 0,
+      "expectedColumnsTotal": 12,
+      "columnsSplit": 0,
+      "columnsMerged": 0,
+      "rowsDetected": 0,
+      "cellOutcomeCounts": {
+        "direct_match": 0,
+        "expected_cell_split_into_multiple_observed": 0,
+        "multiple_expected_cells_merged": 0,
+        "expected_cell_omitted": 135,
+        "invented_cell": 0,
+        "correct_text_wrong_column": 0,
+        "correct_text_no_usable_coordinate": 0,
+        "correct_coordinate_wrong_text": 0
+      },
+      "cellsTotal": 135
+    }
+  },
+  "criticalFields": [
+    {
+      "role": "item",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": null,
+      "mismatches": 80
+    },
+    {
+      "role": "codigo",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": null,
+      "mismatches": 80
+    },
+    {
+      "role": "fonte",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": null,
+      "mismatches": 80
+    },
+    {
+      "role": "tipo",
+      "itemsTotal": 77,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": null,
+      "mismatches": 77
+    },
+    {
+      "role": "descricao",
+      "itemsTotal": 122,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": null,
+      "mismatches": 122
+    },
+    {
+      "role": "unidade",
+      "itemsTotal": 67,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": null,
+      "mismatches": 67
+    },
+    {
+      "role": "quantidade",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": 0,
+      "mismatches": 80
+    },
+    {
+      "role": "custo_unitario_sem_bdi",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": 0,
+      "mismatches": 80
+    },
+    {
+      "role": "bdi_percentual",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": 0,
+      "mismatches": 80
+    },
+    {
+      "role": "preco_unitario_com_bdi",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": 0,
+      "mismatches": 80
+    },
+    {
+      "role": "preco_total_com_bdi",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": 0,
+      "mismatches": 80
+    },
+    {
+      "role": "col_fgv",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": null,
+      "mismatches": 80
+    }
+  ],
+  "multiline": [
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted"
+  ],
+  "multilineCaseCount": 38,
+  "externalContent": {
+    "regionId": "reg-46-051",
+    "outcome": "detected_as_external_or_out_of_table",
+    "isCriticalRisk": false
+  },
+  "mathEvidenceCounts": {
+    "evidencia_completa": 0,
+    "evidencia_parcial": 0,
+    "evidencia_ausente": 84,
+    "evidencia_divergente_da_fonte": 0
+  },
+  "mathEvidenceTotal": 84,
+  "viability": {
+    "classification": "nao_viavel_nesta_configuracao",
+    "reasonsPt": [
+      "Não forneceu origem física utilizável para os campos críticos.",
+      "Não produziu estrutura utilizável de tabela/célula."
+    ]
+  },
+  "repetition": {
+    "rawOutputHashMatchByPage": {
+      "46": true,
+      "50": true,
+      "54": true
+    },
+    "canonicalOutputHashMatchByPage": {
+      "46": true,
+      "50": true,
+      "54": true
+    }
+  }
+}
