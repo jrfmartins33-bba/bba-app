@@ -9,10 +9,19 @@
  * ausentes: contagem total de células e resolução de `physicalRegionIds`
  * não vazios.
  *
- * As 921 células com `physicalRegionIds: []` (que usam apenas o campo
- * textual `physicalOriginPt` como proveniência) permanecem exatamente
- * como estão — esta Sprint declara explicitamente que não serão
- * retroativamente alteradas.
+ * As 1.019 células com `physicalRegionIds: []` (100% delas — nenhuma
+ * célula preenche este campo; todas usam apenas o campo textual
+ * `physicalOriginPt` como proveniência, ver diagnóstico abaixo)
+ * permanecem exatamente como estão — esta Sprint declara explicitamente
+ * que não serão retroativamente alteradas.
+ *
+ * Correção documental (Momento 3C.1A): este comentário originalmente
+ * dizia "921 células com physicalRegionIds: []", herdando um número
+ * incorreto da revisão técnica que precedeu o Momento 3C.1 (o "921"
+ * pressupunha 98 células com vínculo estruturado; o diagnóstico real,
+ * já executado neste arquivo, mostra 0). Nenhum dado da verdade de
+ * referência foi alterado por esta correção — apenas o texto do
+ * comentário.
  */
 
 import { REFERENCE_TRUTH_BUNDLES } from "./discovery-reference-truth";

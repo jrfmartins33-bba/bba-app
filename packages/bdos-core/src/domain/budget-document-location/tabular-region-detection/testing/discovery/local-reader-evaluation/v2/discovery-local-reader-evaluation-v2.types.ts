@@ -8,7 +8,7 @@
  * diagnóstico, mesmo diretório de teste/descoberta já aprovado.
  */
 
-import type { LocalReaderCellComparisonOutcome } from "../discovery-local-reader-evaluation.types";
+import type { LocalReaderCellComparisonOutcome, LocalReaderMathEvidenceAvailability } from "../discovery-local-reader-evaluation.types";
 
 // --- Problema A (§3 do pré-registro): granularidade das regiões ------------
 
@@ -51,22 +51,51 @@ export interface LocalReaderMultilineObservedInputV2 {
 export type LocalReaderMathEvidenceFieldKeyV2 = "quantity" | "unitPrice" | "total" | "subtotalOrTotal";
 
 /**
- * Nota (§6 do pré-registro): `Record` completo das 4 chaves, espelhando o
- * parâmetro real de `classifyLocalReaderMathEvidence` (v1, congelada) —
- * NÃO um tipo parcial. A resolução de "campo não aplicável a esta linha"
- * (ex. `subtotalOrTotal` numa linha `item_de_servico`) fica registrada
- * como pendência explícita no §6 do documento de pré-registro, não
- * decidida por presunção aqui.
+ * @deprecated Superseded pelo Momento 3C.1A (ver
+ * `EPIC_21_SPRINT_4B3A3_MOMENTO3C1A_MATH_APPLICABILITY_AND_CELL_PROVENANCE_ADDENDUM.md`
+ * §1). O `Record<4,boolean>` completo não consegue representar "campo não
+ * aplicável a esta linha" sem sobrecarregar `true`/`false` com um segundo
+ * significado — as três resoluções possíveis foram avaliadas e todas
+ * rejeitadas explicitamente no adendo. Mantido apenas como registro
+ * histórico do que foi pré-registrado e depois superado nesta mesma
+ * Sprint; NUNCA reutilizado pela implementação real do Momento 3C.2 — usar
+ * `LocalReaderMathEvidenceFieldStatesV2` em seu lugar.
  */
 export interface LocalReaderMathEvidenceDerivedInputV2 {
   readonly fieldsPresent: Record<LocalReaderMathEvidenceFieldKeyV2, boolean>;
   readonly fieldsDivergentFromSource: ReadonlyArray<LocalReaderMathEvidenceFieldKeyV2>;
 }
 
-/** Desfechos de célula que contam como "campo presente" para evidência matemática (§6, passo 4). Nunca ampliado por conveniência. */
+/** @deprecated Ver `LocalReaderMathEvidenceDerivedInputV2`. Desfecho de célula que contava como "campo presente" sob o modelo booleano superado. */
 export const MATH_EVIDENCE_PRESENT_OUTCOME_V2: LocalReaderCellComparisonOutcome = "direct_match";
-/** Desfecho de célula que conta como "campo divergente da fonte" (§6, passo 5). Nunca ampliado por conveniência. */
+/** @deprecated Ver `LocalReaderMathEvidenceDerivedInputV2`. Desfecho de célula que contava como "campo divergente" sob o modelo booleano superado. */
 export const MATH_EVIDENCE_DIVERGENT_OUTCOME_V2: LocalReaderCellComparisonOutcome = "correct_coordinate_wrong_text";
+
+// --- Problema D, resolvido (Momento 3C.1A): evidência matemática de 4 estados
+
+/**
+ * Resolução vinculante da ambiguidade "campo não aplicável" (Momento
+ * 3C.1A, §1-§2). Substitui, para fins de classificação v2,
+ * `LocalReaderMathEvidenceDerivedInputV2` (acima, superado). Mapeamento
+ * `LocalReaderCellComparisonOutcome` → estado congelado no adendo §2.
+ */
+export type LocalReaderMathEvidenceFieldStateV2 = "not_applicable" | "present" | "missing" | "divergent";
+
+export interface LocalReaderMathEvidenceFieldStatesV2 {
+  readonly quantity: LocalReaderMathEvidenceFieldStateV2;
+  readonly unitPrice: LocalReaderMathEvidenceFieldStateV2;
+  readonly total: LocalReaderMathEvidenceFieldStateV2;
+  readonly subtotalOrTotal: LocalReaderMathEvidenceFieldStateV2;
+}
+
+/** Distinto de `LocalReaderMathEvidenceAvailability` (v1) — sinaliza o caso "nenhum campo aplicável" (adendo §3, passo 2), que nunca é uma classificação de disponibilidade. */
+export type LocalReaderMathEvidenceIntegrityErrorV2 = "integrity_error_no_applicable_field";
+
+export interface LocalReaderMathEvidenceResultV2 {
+  readonly mathRelationId: string;
+  readonly availability: LocalReaderMathEvidenceAvailability;
+  readonly missingFieldsPt: ReadonlyArray<string>;
+}
 
 // --- Problema E (§7 do pré-registro): origem dos insumos de viabilidade ----
 

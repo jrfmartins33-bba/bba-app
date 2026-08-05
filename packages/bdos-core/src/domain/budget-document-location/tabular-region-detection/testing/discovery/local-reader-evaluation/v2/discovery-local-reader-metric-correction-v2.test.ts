@@ -30,8 +30,10 @@ import type { LocalReaderConvertedBoundingBox, LocalReaderExpectedRegionRef, Loc
 import { associateObservedRegionsToReferenceV2 } from "./discovery-local-reader-comparison-v2";
 import { computeLocalReaderRegionTextMetricsV2 } from "./discovery-local-reader-metrics-v2";
 import { deriveObservedDescriptionLinesV2 } from "./discovery-local-reader-multiline-v2";
-import { deriveMathEvidenceFieldsV2 } from "./discovery-local-reader-math-evidence-v2";
+import { classifyLocalReaderMathEvidenceV2, deriveMathEvidenceFieldStatesV2, deriveMathEvidenceFieldsV2 } from "./discovery-local-reader-math-evidence-v2";
 import { deriveViabilityInputsV2 } from "./discovery-local-reader-viability-inputs-v2";
+import type { LocalReaderMathEvidenceFieldStatesV2 } from "./discovery-local-reader-evaluation-v2.types";
+import type { LocalReaderMathEvidenceAvailability } from "../discovery-local-reader-evaluation.types";
 
 function runTest(name: string, testCase: () => void): void {
   testCase();
@@ -163,9 +165,13 @@ runTest("Problema C (§5) — item 5: descrição parcial quando apenas uma das 
 // assinatura real de `classifyLocalReaderMathEvidence`). Estas 3 fixtures
 // tratam os 4 campos como aplicáveis (ex. uma relação de nível de grupo,
 // onde `subtotalOrTotal` genuinamente existe), contornando deliberadamente
-// a ambiguidade de "campo não aplicável" registrada como pendência no §6
-// do pré-registro — essa ambiguidade só afeta linhas `item_de_servico`
-// sem `subtotalOrTotal`, não os 3 campos sempre aplicáveis.
+// a ambiguidade de "campo não aplicável" — resolvida no Momento 3C.1A (ver
+// EPIC_21_SPRINT_4B3A3_MOMENTO3C1A_MATH_APPLICABILITY_AND_CELL_PROVENANCE_ADDENDUM.md
+// §1-§4, que introduz o modelo de 4 estados testado na seção "Momento
+// 3C.1A" mais abaixo). Estas 3 fixtures continuam válidas porque tratam os
+// 4 campos como aplicáveis, caso em que o Record booleano nunca foi
+// ambíguo — a ambiguidade só afeta linhas `item_de_servico` sem
+// `subtotalOrTotal`.
 
 runTest("Problema D (§6) — item 6: evidência matemática completa quando todos os campos aplicáveis vêm de direct_match", () => {
   const result = classifyLocalReaderMathEvidence("math-fixture-1", { quantity: true, unitPrice: true, total: true, subtotalOrTotal: true }, []);
@@ -227,4 +233,105 @@ runTest("stubs v2: deriveMathEvidenceFieldsV2 lança 'not implemented' hoje", ()
 
 runTest("stubs v2: deriveViabilityInputsV2 lança 'not implemented' hoje", () => {
   assertThrows(() => deriveViabilityInputsV2({} as never), "deveria lançar até o Momento 3C.2 ser implementado");
+});
+
+// ============================================================================
+// Momento 3C.1A — adendo: aplicabilidade de evidência matemática (4 estados)
+// Ver EPIC_21_SPRINT_4B3A3_MOMENTO3C1A_MATH_APPLICABILITY_AND_CELL_PROVENANCE_ADDENDUM.md
+// §1-§4. Resolve a ambiguidade registrada como pendência no §6 do
+// pré-registro original — nunca adota "sempre true", "sempre false" ou
+// alternância artificial. classifyLocalReaderMathEvidenceV2 é stub (não
+// executado); as 7 fixtures abaixo são dados declarativos, nunca
+// calculados chamando o stub.
+// ============================================================================
+
+interface MathEvidenceFixtureV2 {
+  readonly description: string;
+  readonly fieldStates: LocalReaderMathEvidenceFieldStatesV2;
+  readonly expectedResult: LocalReaderMathEvidenceAvailability | "integrity_error_no_applicable_field";
+}
+
+const VALID_MATH_EVIDENCE_STATES = ["not_applicable", "present", "missing", "divergent"] as const;
+const VALID_MATH_EVIDENCE_RESULTS = ["evidencia_completa", "evidencia_parcial", "evidencia_ausente", "evidencia_divergente_da_fonte", "integrity_error_no_applicable_field"] as const;
+
+export const MATH_EVIDENCE_V2_FIXTURE_1_ITEM_NO_EVIDENCE: MathEvidenceFixtureV2 = {
+  description: "item 1 (§4) — item de serviço sem evidência",
+  fieldStates: { quantity: "missing", unitPrice: "missing", total: "missing", subtotalOrTotal: "not_applicable" },
+  expectedResult: "evidencia_ausente",
+};
+
+export const MATH_EVIDENCE_V2_FIXTURE_2_ITEM_COMPLETE: MathEvidenceFixtureV2 = {
+  description: "item 2 (§4) — item de serviço completo",
+  fieldStates: { quantity: "present", unitPrice: "present", total: "present", subtotalOrTotal: "not_applicable" },
+  expectedResult: "evidencia_completa",
+};
+
+export const MATH_EVIDENCE_V2_FIXTURE_3_ITEM_PARTIAL: MathEvidenceFixtureV2 = {
+  description: "item 3 (§4) — item de serviço parcial",
+  fieldStates: { quantity: "present", unitPrice: "present", total: "missing", subtotalOrTotal: "not_applicable" },
+  expectedResult: "evidencia_parcial",
+};
+
+export const MATH_EVIDENCE_V2_FIXTURE_4_ITEM_DIVERGENT: MathEvidenceFixtureV2 = {
+  description: "item 4 (§4) — item de serviço divergente",
+  fieldStates: { quantity: "present", unitPrice: "divergent", total: "present", subtotalOrTotal: "not_applicable" },
+  expectedResult: "evidencia_divergente_da_fonte",
+};
+
+export const MATH_EVIDENCE_V2_FIXTURE_5_GROUP_COMPLETE: MathEvidenceFixtureV2 = {
+  description: "item 5 (§4) — grupo completo",
+  fieldStates: { quantity: "not_applicable", unitPrice: "not_applicable", total: "not_applicable", subtotalOrTotal: "present" },
+  expectedResult: "evidencia_completa",
+};
+
+export const MATH_EVIDENCE_V2_FIXTURE_6_GROUP_MISSING: MathEvidenceFixtureV2 = {
+  description: "item 6 (§4) — grupo ausente",
+  fieldStates: { quantity: "not_applicable", unitPrice: "not_applicable", total: "not_applicable", subtotalOrTotal: "missing" },
+  expectedResult: "evidencia_ausente",
+};
+
+export const MATH_EVIDENCE_V2_FIXTURE_7_NO_APPLICABLE_FIELD: MathEvidenceFixtureV2 = {
+  description: "item 7 (§4) — relação sem campo aplicável",
+  fieldStates: { quantity: "not_applicable", unitPrice: "not_applicable", total: "not_applicable", subtotalOrTotal: "not_applicable" },
+  expectedResult: "integrity_error_no_applicable_field",
+};
+
+const MATH_EVIDENCE_V2_FIXTURES: ReadonlyArray<MathEvidenceFixtureV2> = [
+  MATH_EVIDENCE_V2_FIXTURE_1_ITEM_NO_EVIDENCE,
+  MATH_EVIDENCE_V2_FIXTURE_2_ITEM_COMPLETE,
+  MATH_EVIDENCE_V2_FIXTURE_3_ITEM_PARTIAL,
+  MATH_EVIDENCE_V2_FIXTURE_4_ITEM_DIVERGENT,
+  MATH_EVIDENCE_V2_FIXTURE_5_GROUP_COMPLETE,
+  MATH_EVIDENCE_V2_FIXTURE_6_GROUP_MISSING,
+  MATH_EVIDENCE_V2_FIXTURE_7_NO_APPLICABLE_FIELD,
+];
+
+MATH_EVIDENCE_V2_FIXTURES.forEach((fixture) => {
+  runTest(`Momento 3C.1A (§4) — ${fixture.description}: fixture bem formada (4 estados válidos, resultado esperado é um dos 5 valores possíveis) — nenhuma implementação v2 executada`, () => {
+    (Object.keys(fixture.fieldStates) as Array<keyof LocalReaderMathEvidenceFieldStatesV2>).forEach((key) => {
+      assert(
+        (VALID_MATH_EVIDENCE_STATES as readonly string[]).includes(fixture.fieldStates[key]),
+        `${fixture.description}: estado inválido para "${key}": "${fixture.fieldStates[key]}"`,
+      );
+    });
+    assert(
+      (VALID_MATH_EVIDENCE_RESULTS as readonly string[]).includes(fixture.expectedResult),
+      `${fixture.description}: expectedResult inválido: "${fixture.expectedResult}"`,
+    );
+
+    const applicableCount = Object.values(fixture.fieldStates).filter((s) => s !== "not_applicable").length;
+    if (fixture.expectedResult === "integrity_error_no_applicable_field") {
+      assertEqual(applicableCount, 0, `${fixture.description}: erro de integridade esperado apenas quando 0 campos são aplicáveis`);
+    } else {
+      assert(applicableCount > 0, `${fixture.description}: resultado de disponibilidade esperado exige ao menos 1 campo aplicável`);
+    }
+  });
+});
+
+runTest("stubs v2 (Momento 3C.1A): deriveMathEvidenceFieldStatesV2 lança 'not implemented' hoje", () => {
+  assertThrows(() => deriveMathEvidenceFieldStatesV2({} as never, [], {} as never), "deveria lançar até o Momento 3C.2 ser implementado");
+});
+
+runTest("stubs v2 (Momento 3C.1A): classifyLocalReaderMathEvidenceV2 lança 'not implemented' hoje", () => {
+  assertThrows(() => classifyLocalReaderMathEvidenceV2("relation-x", MATH_EVIDENCE_V2_FIXTURE_1_ITEM_NO_EVIDENCE.fieldStates), "deveria lançar até o Momento 3C.2 ser implementado");
 });
