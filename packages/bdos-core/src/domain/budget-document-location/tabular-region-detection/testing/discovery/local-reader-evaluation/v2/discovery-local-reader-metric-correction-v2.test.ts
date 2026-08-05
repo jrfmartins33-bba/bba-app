@@ -1,19 +1,22 @@
 /**
- * Pré-registro da correção aditiva de métricas (Sprint 21.4B.3A.3, Momento
- * 3C.1). Ver
- * `packages/bdos-core/docs/EPIC_21_SPRINT_4B3A3_MOMENTO3C1_METRIC_CORRECTION_PREREGISTRATION.md`
- * §2 e §9.
+ * Pré-registro da correção aditiva de métricas (Sprint 21.4B.3A.3,
+ * Momentos 3C.1, 3C.1A e 3C.1B). Ver
+ * `EPIC_21_SPRINT_4B3A3_MOMENTO3C1_METRIC_CORRECTION_PREREGISTRATION.md`
+ * §2 e §9, `EPIC_21_SPRINT_4B3A3_MOMENTO3C1A_MATH_APPLICABILITY_AND_CELL_PROVENANCE_ADDENDUM.md`
+ * §4, e `EPIC_21_SPRINT_4B3A3_MOMENTO3C1B_FINAL_V2_CONTRACT_ADDENDUM.md`
+ * §1-§3.
  *
  * Este arquivo NUNCA executa as funções v2 (todas ainda são stubs que
  * lançam erro — Momento 3C.2 não autorizado). Em vez disso:
- * (a) congela, como fixtures exportadas, os 9 casos sintéticos exigidos,
- *     com o resultado esperado calculado à mão e verificado aqui apenas
- *     com primitivas já congeladas do Momento 3A (`boxesOverlapStrictly`,
- *     `normalizeLocalReaderText`) ou com as próprias funções de
- *     classificação finais já congeladas (`classifyLocalReaderMultilineDescription`,
- *     `classifyLocalReaderMathEvidence`, `classifyLocalReaderViability`) —
- *     nenhuma delas é "nova implementação", todas já existiam e foram
- *     aprovadas antes desta etapa;
+ * (a) congela, como fixtures exportadas, os casos sintéticos exigidos em
+ *     cada Momento, com o resultado esperado calculado à mão e verificado
+ *     aqui apenas com primitivas já congeladas do Momento 3A
+ *     (`boxesOverlapStrictly`, `normalizeLocalReaderText`), com as
+ *     próprias funções de classificação finais já congeladas
+ *     (`classifyLocalReaderMultilineDescription`,
+ *     `classifyLocalReaderMathEvidence`, `classifyLocalReaderViability`),
+ *     ou por auto-consistência contra os próprios dados da fixture —
+ *     nenhuma delas é "nova implementação v2";
  * (b) confirma que cada stub v2 lança o erro "not implemented" hoje —
  *     uma afirmação verdadeira e verificável neste exato commit.
  *
@@ -32,8 +35,9 @@ import { computeLocalReaderRegionTextMetricsV2 } from "./discovery-local-reader-
 import { deriveObservedDescriptionLinesV2 } from "./discovery-local-reader-multiline-v2";
 import { classifyLocalReaderMathEvidenceV2, deriveMathEvidenceFieldStatesV2, deriveMathEvidenceFieldsV2 } from "./discovery-local-reader-math-evidence-v2";
 import { deriveViabilityInputsV2 } from "./discovery-local-reader-viability-inputs-v2";
-import type { LocalReaderMathEvidenceFieldStatesV2 } from "./discovery-local-reader-evaluation-v2.types";
+import type { LocalReaderMathEvidenceDerivationIntegrityErrorV2, LocalReaderMathEvidenceFieldStatesV2 } from "./discovery-local-reader-evaluation-v2.types";
 import type { LocalReaderMathEvidenceAvailability } from "../discovery-local-reader-evaluation.types";
+import type { ReferenceTruthMathRelation } from "../../reference-truth/discovery-reference-truth.types";
 
 function runTest(name: string, testCase: () => void): void {
   testCase();
@@ -245,55 +249,82 @@ runTest("stubs v2: deriveViabilityInputsV2 lança 'not implemented' hoje", () =>
 // calculados chamando o stub.
 // ============================================================================
 
+// Rótulos em português — espelham exatamente MATH_EVIDENCE_FIELD_LABELS_PT
+// (v1, discovery-local-reader-metrics.ts, inalterado), reaproveitados aqui
+// apenas como literais de dados (nenhum import de função v1 necessário).
+const MATH_EVIDENCE_FIELD_LABELS_PT_V2: Record<keyof LocalReaderMathEvidenceFieldStatesV2, string> = {
+  quantity: "quantidade",
+  unitPrice: "preço unitário",
+  total: "total",
+  subtotalOrTotal: "subtotal ou total oficial aplicável",
+};
+
 interface MathEvidenceFixtureV2 {
   readonly description: string;
   readonly fieldStates: LocalReaderMathEvidenceFieldStatesV2;
   readonly expectedResult: LocalReaderMathEvidenceAvailability | "integrity_error_no_applicable_field";
+  /** `null` apenas para o caso de erro de integridade (item 7) — sem resultado de disponibilidade, as duas listas não se aplicam. */
+  readonly expectedMissingFieldsPt: ReadonlyArray<string> | null;
+  readonly expectedDivergentFieldsPt: ReadonlyArray<string> | null;
 }
 
 const VALID_MATH_EVIDENCE_STATES = ["not_applicable", "present", "missing", "divergent"] as const;
 const VALID_MATH_EVIDENCE_RESULTS = ["evidencia_completa", "evidencia_parcial", "evidencia_ausente", "evidencia_divergente_da_fonte", "integrity_error_no_applicable_field"] as const;
 
 export const MATH_EVIDENCE_V2_FIXTURE_1_ITEM_NO_EVIDENCE: MathEvidenceFixtureV2 = {
-  description: "item 1 (§4) — item de serviço sem evidência",
+  description: "item 1 (§4/3C.1A, §3/3C.1B) — item de serviço sem evidência",
   fieldStates: { quantity: "missing", unitPrice: "missing", total: "missing", subtotalOrTotal: "not_applicable" },
   expectedResult: "evidencia_ausente",
+  expectedMissingFieldsPt: ["quantidade", "preço unitário", "total"],
+  expectedDivergentFieldsPt: [],
 };
 
 export const MATH_EVIDENCE_V2_FIXTURE_2_ITEM_COMPLETE: MathEvidenceFixtureV2 = {
-  description: "item 2 (§4) — item de serviço completo",
+  description: "item 2 (§4/3C.1A) — item de serviço completo",
   fieldStates: { quantity: "present", unitPrice: "present", total: "present", subtotalOrTotal: "not_applicable" },
   expectedResult: "evidencia_completa",
+  expectedMissingFieldsPt: [],
+  expectedDivergentFieldsPt: [],
 };
 
 export const MATH_EVIDENCE_V2_FIXTURE_3_ITEM_PARTIAL: MathEvidenceFixtureV2 = {
-  description: "item 3 (§4) — item de serviço parcial",
+  description: "item 3 (§4/3C.1A, §3/3C.1B) — item de serviço parcial",
   fieldStates: { quantity: "present", unitPrice: "present", total: "missing", subtotalOrTotal: "not_applicable" },
   expectedResult: "evidencia_parcial",
+  expectedMissingFieldsPt: ["total"],
+  expectedDivergentFieldsPt: [],
 };
 
 export const MATH_EVIDENCE_V2_FIXTURE_4_ITEM_DIVERGENT: MathEvidenceFixtureV2 = {
-  description: "item 4 (§4) — item de serviço divergente",
+  description: "item 4 (§4/3C.1A, §3/3C.1B) — item de serviço divergente",
   fieldStates: { quantity: "present", unitPrice: "divergent", total: "present", subtotalOrTotal: "not_applicable" },
   expectedResult: "evidencia_divergente_da_fonte",
+  expectedMissingFieldsPt: [],
+  expectedDivergentFieldsPt: ["preço unitário"],
 };
 
 export const MATH_EVIDENCE_V2_FIXTURE_5_GROUP_COMPLETE: MathEvidenceFixtureV2 = {
-  description: "item 5 (§4) — grupo completo",
+  description: "item 5 (§4/3C.1A, §3/3C.1B) — grupo completo",
   fieldStates: { quantity: "not_applicable", unitPrice: "not_applicable", total: "not_applicable", subtotalOrTotal: "present" },
   expectedResult: "evidencia_completa",
+  expectedMissingFieldsPt: [],
+  expectedDivergentFieldsPt: [],
 };
 
 export const MATH_EVIDENCE_V2_FIXTURE_6_GROUP_MISSING: MathEvidenceFixtureV2 = {
-  description: "item 6 (§4) — grupo ausente",
+  description: "item 6 (§4/3C.1A, §3/3C.1B) — grupo ausente",
   fieldStates: { quantity: "not_applicable", unitPrice: "not_applicable", total: "not_applicable", subtotalOrTotal: "missing" },
   expectedResult: "evidencia_ausente",
+  expectedMissingFieldsPt: ["subtotal ou total oficial aplicável"],
+  expectedDivergentFieldsPt: [],
 };
 
 export const MATH_EVIDENCE_V2_FIXTURE_7_NO_APPLICABLE_FIELD: MathEvidenceFixtureV2 = {
-  description: "item 7 (§4) — relação sem campo aplicável",
+  description: "item 7 (§4/3C.1A) — relação sem campo aplicável",
   fieldStates: { quantity: "not_applicable", unitPrice: "not_applicable", total: "not_applicable", subtotalOrTotal: "not_applicable" },
   expectedResult: "integrity_error_no_applicable_field",
+  expectedMissingFieldsPt: null,
+  expectedDivergentFieldsPt: null,
 };
 
 const MATH_EVIDENCE_V2_FIXTURES: ReadonlyArray<MathEvidenceFixtureV2> = [
@@ -307,7 +338,7 @@ const MATH_EVIDENCE_V2_FIXTURES: ReadonlyArray<MathEvidenceFixtureV2> = [
 ];
 
 MATH_EVIDENCE_V2_FIXTURES.forEach((fixture) => {
-  runTest(`Momento 3C.1A (§4) — ${fixture.description}: fixture bem formada (4 estados válidos, resultado esperado é um dos 5 valores possíveis) — nenhuma implementação v2 executada`, () => {
+  runTest(`Momento 3C.1A/3C.1B — ${fixture.description}: fixture bem formada (4 estados válidos, resultado esperado é um dos 5 valores possíveis) — nenhuma implementação v2 executada`, () => {
     (Object.keys(fixture.fieldStates) as Array<keyof LocalReaderMathEvidenceFieldStatesV2>).forEach((key) => {
       assert(
         (VALID_MATH_EVIDENCE_STATES as readonly string[]).includes(fixture.fieldStates[key]),
@@ -328,10 +359,135 @@ MATH_EVIDENCE_V2_FIXTURES.forEach((fixture) => {
   });
 });
 
-runTest("stubs v2 (Momento 3C.1A): deriveMathEvidenceFieldStatesV2 lança 'not implemented' hoje", () => {
+// --- Momento 3C.1B §3: as duas listas auditáveis, verificadas por
+// auto-consistência contra o fieldStates da própria fixture — nunca
+// calculadas chamando classifyLocalReaderMathEvidenceV2 (stub). Cobre
+// exatamente os 5 casos exigidos: item ausente, item parcial, item
+// divergente, grupo completo, grupo ausente.
+[
+  MATH_EVIDENCE_V2_FIXTURE_1_ITEM_NO_EVIDENCE,
+  MATH_EVIDENCE_V2_FIXTURE_3_ITEM_PARTIAL,
+  MATH_EVIDENCE_V2_FIXTURE_4_ITEM_DIVERGENT,
+  MATH_EVIDENCE_V2_FIXTURE_5_GROUP_COMPLETE,
+  MATH_EVIDENCE_V2_FIXTURE_6_GROUP_MISSING,
+].forEach((fixture) => {
+  runTest(`Momento 3C.1B (§3) — ${fixture.description}: missingFieldsPt/divergentFieldsPt consistentes com fieldStates (apenas campos aplicáveis; not_applicable nunca aparece)`, () => {
+    const expectedMissing = (Object.keys(fixture.fieldStates) as Array<keyof LocalReaderMathEvidenceFieldStatesV2>)
+      .filter((k) => fixture.fieldStates[k] === "missing")
+      .map((k) => MATH_EVIDENCE_FIELD_LABELS_PT_V2[k]);
+    const expectedDivergent = (Object.keys(fixture.fieldStates) as Array<keyof LocalReaderMathEvidenceFieldStatesV2>)
+      .filter((k) => fixture.fieldStates[k] === "divergent")
+      .map((k) => MATH_EVIDENCE_FIELD_LABELS_PT_V2[k]);
+
+    assertEqual(JSON.stringify([...expectedMissing].sort()), JSON.stringify([...(fixture.expectedMissingFieldsPt ?? [])].sort()), `${fixture.description}: missingFieldsPt não bate com o derivado de fieldStates`);
+    assertEqual(JSON.stringify([...expectedDivergent].sort()), JSON.stringify([...(fixture.expectedDivergentFieldsPt ?? [])].sort()), `${fixture.description}: divergentFieldsPt não bate com o derivado de fieldStates`);
+
+    (Object.keys(fixture.fieldStates) as Array<keyof LocalReaderMathEvidenceFieldStatesV2>).forEach((key) => {
+      if (fixture.fieldStates[key] === "not_applicable") {
+        const label = MATH_EVIDENCE_FIELD_LABELS_PT_V2[key];
+        assert(!(fixture.expectedMissingFieldsPt ?? []).includes(label), `${fixture.description}: campo not_applicable "${key}" não deveria aparecer em missingFieldsPt`);
+        assert(!(fixture.expectedDivergentFieldsPt ?? []).includes(label), `${fixture.description}: campo not_applicable "${key}" não deveria aparecer em divergentFieldsPt`);
+      }
+    });
+  });
+});
+
+runTest("stubs v2 (Momento 3C.1A/3C.1B): deriveMathEvidenceFieldStatesV2 lança 'not implemented' hoje", () => {
   assertThrows(() => deriveMathEvidenceFieldStatesV2({} as never, [], {} as never), "deveria lançar até o Momento 3C.2 ser implementado");
 });
 
-runTest("stubs v2 (Momento 3C.1A): classifyLocalReaderMathEvidenceV2 lança 'not implemented' hoje", () => {
+runTest("stubs v2 (Momento 3C.1A/3C.1B): classifyLocalReaderMathEvidenceV2 lança 'not implemented' hoje", () => {
   assertThrows(() => classifyLocalReaderMathEvidenceV2("relation-x", MATH_EVIDENCE_V2_FIXTURE_1_ITEM_NO_EVIDENCE.fieldStates), "deveria lançar até o Momento 3C.2 ser implementado");
+});
+
+// ============================================================================
+// Momento 3C.1B §1-§2 — três cenários de erro de integridade, congelados
+// como fixtures declarativas. Nenhum chama deriveMathEvidenceFieldStatesV2
+// (stub, indistinguível hoje entre "not implemented" e um erro de
+// integridade específico) — cada fixture apenas descreve o cenário e
+// verifica, por auto-consistência, que ele de fato representa a violação
+// alegada.
+// ============================================================================
+
+interface MathApplicabilityIntegrityFixtureV2 {
+  readonly description: string;
+  readonly relation: ReferenceTruthMathRelation;
+  readonly relationFieldApplicable: boolean;
+  readonly expectedCellExists: boolean;
+  readonly expectedIntegrityError: LocalReaderMathEvidenceDerivationIntegrityErrorV2;
+}
+
+const SYNTHETIC_MATH_RELATION_BASE = {
+  verifiableOperationPt: "fixture sintética do Momento 3C.1B — não corresponde a nenhum dado real do documento Lagoa do Arroz",
+  result: "reconciliado_diretamente" as const,
+  undisplayedPrecisionProof: null,
+  sourceArithmeticInconsistency: null,
+  groupCompletenessProof: null,
+  notesPt: "Momento 3C.1B — fixture de cenário de erro de integridade, nunca dado real.",
+};
+
+export const MATH_APPLICABILITY_INTEGRITY_FIXTURE_A_APPLICABLE_NO_CELL: MathApplicabilityIntegrityFixtureV2 = {
+  description: "cenário (a) §1 — quantity aplicável pela relação (quantityScaled !== null), mas nenhuma célula esperada correspondente",
+  relation: {
+    ...SYNTHETIC_MATH_RELATION_BASE,
+    id: "math-integrity-a",
+    logicalRowId: "row-integrity-a",
+    quantityScaled: { scaledValue: 500, scale: 2 },
+    displayedUnitPriceCents: null,
+    displayedTotalCents: null,
+    officialSubtotalOrTotalCents: null,
+  },
+  relationFieldApplicable: true,
+  expectedCellExists: false,
+  expectedIntegrityError: "integrity_error_applicable_field_without_expected_cell",
+};
+
+export const MATH_APPLICABILITY_INTEGRITY_FIXTURE_B_NOT_APPLICABLE_HAS_CELL: MathApplicabilityIntegrityFixtureV2 = {
+  description: "cenário (b) §1 — quantity não aplicável pela relação (quantityScaled === null), mas uma célula esperada existe mesmo assim",
+  relation: {
+    ...SYNTHETIC_MATH_RELATION_BASE,
+    id: "math-integrity-b",
+    logicalRowId: "row-integrity-b",
+    quantityScaled: null,
+    displayedUnitPriceCents: 100000,
+    displayedTotalCents: 100000,
+    officialSubtotalOrTotalCents: null,
+  },
+  relationFieldApplicable: false,
+  expectedCellExists: true,
+  expectedIntegrityError: "integrity_error_not_applicable_field_has_expected_cell",
+};
+
+[MATH_APPLICABILITY_INTEGRITY_FIXTURE_A_APPLICABLE_NO_CELL, MATH_APPLICABILITY_INTEGRITY_FIXTURE_B_NOT_APPLICABLE_HAS_CELL].forEach((fixture) => {
+  runTest(`Momento 3C.1B (§1) — ${fixture.description}: cenário de fato representa a contradição alegada (relationFieldApplicable !== expectedCellExists) — nenhuma implementação v2 executada`, () => {
+    assert(fixture.relationFieldApplicable !== fixture.expectedCellExists, `${fixture.description}: a fixture deveria representar uma divergência entre aplicabilidade e existência de célula`);
+    assertEqual(fixture.relation.quantityScaled !== null, fixture.relationFieldApplicable, `${fixture.description}: relationFieldApplicable não bate com relation.quantityScaled`);
+  });
+});
+
+interface MathComparisonCardinalityIntegrityFixtureV2 {
+  readonly description: string;
+  readonly expectedCellId: string;
+  readonly matchingComparisonResultCount: number;
+  readonly expectedIntegrityError: LocalReaderMathEvidenceDerivationIntegrityErrorV2;
+}
+
+export const MATH_CARDINALITY_INTEGRITY_FIXTURE_ZERO_RESULTS: MathComparisonCardinalityIntegrityFixtureV2 = {
+  description: "cenário (c1) §2 — célula esperada aplicável com zero resultados de comparação contendo seu id",
+  expectedCellId: "cell-integrity-zero",
+  matchingComparisonResultCount: 0,
+  expectedIntegrityError: "integrity_error_ambiguous_comparison_result_for_expected_cell",
+};
+
+export const MATH_CARDINALITY_INTEGRITY_FIXTURE_MULTIPLE_RESULTS: MathComparisonCardinalityIntegrityFixtureV2 = {
+  description: "cenário (c2) §2 — célula esperada aplicável com mais de um resultado de comparação contendo seu id",
+  expectedCellId: "cell-integrity-multiple",
+  matchingComparisonResultCount: 2,
+  expectedIntegrityError: "integrity_error_ambiguous_comparison_result_for_expected_cell",
+};
+
+[MATH_CARDINALITY_INTEGRITY_FIXTURE_ZERO_RESULTS, MATH_CARDINALITY_INTEGRITY_FIXTURE_MULTIPLE_RESULTS].forEach((fixture) => {
+  runTest(`Momento 3C.1B (§2) — ${fixture.description}: contagem de fato viola "exatamente um" — nenhuma implementação v2 executada`, () => {
+    assert(fixture.matchingComparisonResultCount !== 1, `${fixture.description}: a fixture deveria violar a cardinalidade "exatamente um"`);
+  });
 });

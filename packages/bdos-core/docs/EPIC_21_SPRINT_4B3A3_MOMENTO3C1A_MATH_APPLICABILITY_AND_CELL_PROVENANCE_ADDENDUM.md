@@ -25,13 +25,18 @@ type LocalReaderMathEvidenceFieldStateV2 =
   | "divergent";
 ```
 
-Aplicabilidade nunca é inferida pelo nome, código ou posição da linha — apenas pela presença de uma célula esperada correspondente na verdade de referência (mesma consulta `logicalRowId`/`columnId` já congelada em §6 do pré-registro original): se a verdade de referência não tem uma célula daquele papel para aquela linha, o campo é `not_applicable`; se tem, o campo nunca é `not_applicable`.
+Aplicabilidade nunca é inferida pelo nome, código ou posição da linha.
+
+> **Correção (Momento 3C.1B):** a frase original desta seção definia aplicabilidade pela "presença de uma célula esperada correspondente na verdade de referência" — isto está **incorreto** e foi corrigido em
+> `EPIC_21_SPRINT_4B3A3_MOMENTO3C1B_FINAL_V2_CONTRACT_ADDENDUM.md` §1: aplicabilidade é determinada **exclusivamente** pelos campos da própria `ReferenceTruthMathRelation` (`quantityScaled`/`displayedUnitPriceCents`/`displayedTotalCents`/`officialSubtotalOrTotalCents` `!== null`), nunca pela existência de uma célula. A existência de célula é consultada **depois**, e uma divergência entre os dois passa a ser um erro de integridade explícito, não um `not_applicable` silencioso. Ver 3C.1B §1 para a tabela completa das 4 combinações.
 
 O tipo `LocalReaderMathEvidenceDerivedInputV2` (`Record<4,boolean>`, Momento 3C.1) e o stub `deriveMathEvidenceFieldsV2` que o consumia são marcados `@deprecated` — mantidos apenas como registro histórico do que foi pré-registrado e depois superado nesta mesma Sprint, nunca reutilizados pela implementação real do Momento 3C.2.
 
 ## 2. Estados dos campos — mapeamento de `LocalReaderCellComparisonOutcome`
 
-Para cada campo **aplicável** (célula esperada correspondente existe na verdade de referência):
+> **Nota (Momento 3C.1B):** a tabela original desta seção deixava 3 dos 8 `outcome` possíveis sem mapeamento (`correct_text_wrong_column`, `correct_text_no_usable_coordinate`, `invented_cell`) e definia aplicabilidade incorretamente (ver correção no §1 acima). O mapeamento **completo e definitivo** — os 7 `outcome` que mapeiam para um estado, mais o tratamento explícito de `invented_cell` — está congelado em `EPIC_21_SPRINT_4B3A3_MOMENTO3C1B_FINAL_V2_CONTRACT_ADDENDUM.md` §2. A tabela abaixo permanece apenas como registro histórico do estado parcial desta seção antes do fechamento.
+
+Para cada campo **aplicável** (definição corrigida no §1 acima):
 
 | `outcome` da comparação de célula | Estado v2 |
 |---|---|
@@ -39,9 +44,9 @@ Para cada campo **aplicável** (célula esperada correspondente existe na verdad
 | `correct_coordinate_wrong_text` | `divergent` |
 | `expected_cell_omitted` | `missing` |
 | `expected_cell_split_into_multiple_observed` / `multiple_expected_cells_merged` / qualquer associação que não preserve fielmente o campo individual | `missing`, salvo quando um contrato futuro específico provar preservação integral do valor individual dentro da divisão/fusão (não avaliado nem decidido nesta Sprint) |
-| `correct_text_wrong_column` / `correct_text_no_usable_coordinate` / `invented_cell` | não mapeados por este adendo — ausentes da tabela do enunciado; tratamento explícito fica pendente para o Momento 3C.2, nunca presumido como `present`, `missing` ou `divergent` por default |
+| `correct_text_wrong_column` / `correct_text_no_usable_coordinate` / `invented_cell` | não mapeados por este adendo — ausentes da tabela do enunciado; tratamento explícito fechado em 3C.1B §2 |
 
-Para cada campo **não aplicável** (nenhuma célula esperada correspondente): `not_applicable`, sempre — nenhuma exceção, nenhum fuzzy matching, nenhuma inferência por nome/código/posição.
+Para cada campo **não aplicável** (definição corrigida no §1 acima): `not_applicable`, sempre — nenhuma exceção, nenhum fuzzy matching, nenhuma inferência por nome/código/posição.
 
 ## 3. Classificador matemático v2 (contrato, ainda como stub)
 
@@ -97,7 +102,9 @@ Fatos confirmados nesta etapa (execução real contra `REFERENCE_TRUTH_BUNDLES`,
 
 **Não corrigido nesta Sprint.** Os 1.019 vínculos não são retroativamente preenchidos aqui — preenchê-los exigiria trabalho de anotação geométrica real (não uma inferência automática a partir do texto), fora do escopo de uma correção de métrica.
 
-**Registrado como próxima Sprint preparatória, antes de qualquer avaliação de motor determinístico:** construir e pré-registrar uma projeção estruturada de geometria de célula esperada, derivada de evidência física real (não do futuro motor, nunca circular) — isto é, um novo `physicalRegionIds` genuinamente populado para as 1.019 células, com o mesmo rigor de pré-registro/congelamento desta Sprint. **A implementação dessa projeção não é decidida agora** — apenas seu lugar no roteiro é registrado.
+**Registrado como próxima Sprint preparatória, antes de qualquer avaliação de motor determinístico:** construir e pré-registrar uma representação estruturada da geometria esperada das células, derivada de evidência física independente do futuro motor (nunca circular), com o mesmo rigor de pré-registro/congelamento desta Sprint. **A implementação dessa representação não é decidida agora** — apenas seu lugar no roteiro é registrado.
+>
+> **Correção (Momento 3C.1B):** a frase original desta seção prescrevia antecipadamente "um novo `physicalRegionIds` genuinamente populado para as 1.019 células" — uma escolha de representação específica, decidida cedo demais. Corrigida em `EPIC_21_SPRINT_4B3A3_MOMENTO3C1B_FINAL_V2_CONTRACT_ADDENDUM.md` §4, que registra alternativas a avaliar explicitamente (vínculo com regiões físicas, caixa esperada explícita, faixa vertical da linha × intervalo horizontal da coluna, representação composta, tratamento de células vazias/multilinha) sem escolher nenhuma agora.
 
 ## 6. Correção documental
 
