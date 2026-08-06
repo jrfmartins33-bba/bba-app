@@ -22,9 +22,16 @@
  *    vocabulário de topônimo/documento real — apenas os arquivos de DADOS
  *    reais (sufixo `-page-46`/`-page-50`/`-page-54`/`-physical-segments`/
  *    `-manifest`) podem;
- * 6. nada fora de `reference-truth/` importa a pasta `cell-geometry`
- *    (nem mesmo o resto do domínio) — isolamento estrito até que o futuro
- *    avaliador do motor seja construído em outra Sprint, noutra branch.
+ * 6. nada fora de `reference-truth/` importa a pasta `cell-geometry`,
+ *    exceto exatamente um consumidor nomeado e restrito: o gerador
+ *    único de dados reais
+ *    `infrastructure/budget-document-location/pdfjs/testing/generate-reference-truth-cell-geometry.ts`
+ *    — o único lugar do pacote em que a direção de dependência já
+ *    permitida (adaptador -> domínio) comporta rodar o reconstrutor
+ *    físico real e alimentar o algoritmo genérico já congelado desta
+ *    pasta. Fora dessa única exceção nomeada, o isolamento permanece
+ *    estrito até que o futuro avaliador do motor seja construído em
+ *    outra Sprint, noutra branch.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -151,11 +158,25 @@ runTest("the domain's public barrel never mentions cell-geometry", () => {
   assertEqual(content.toLowerCase().includes("cell-geometry"), false, "index.ts must not reference the cell-geometry diagnostic layer");
 });
 
-runTest("no file outside reference-truth/ imports the cell-geometry directory (strict isolation until a future evaluator Sprint)", () => {
+/**
+ * Única exceção nomeada e restrita: o gerador de dados reais desta
+ * Sprint precisa importar o algoritmo genérico já congelado (para
+ * alimentá-lo com a reconstrução física real) e o renderizador SVG
+ * (para materializar os diagnósticos visuais). Vive em
+ * `infrastructure/` porque é o único lugar do pacote em que a direção
+ * de dependência já permitida (adaptador -> domínio) comporta importar
+ * tanto o leitor físico real quanto este algoritmo diagnóstico — nunca
+ * o inverso, e nunca ampliada para nenhum outro arquivo.
+ */
+const CELL_GEOMETRY_ISOLATION_KNOWN_EXCEPTION_REPO_RELATIVE_SUFFIX =
+  "packages/bdos-core/src/infrastructure/budget-document-location/pdfjs/testing/generate-reference-truth-cell-geometry.ts";
+
+runTest("no file outside reference-truth/ imports the cell-geometry directory, except the single named real-data generator (strict isolation until a future evaluator Sprint)", () => {
   const violations: Violation[] = [];
   listTsFiles(PACKAGE_ROOT).forEach((file) => {
     const repoRelative = toRepoRelative(file);
     if (repoRelative.includes("/reference-truth/") || repoRelative.includes("\\reference-truth\\")) return;
+    if (repoRelative === CELL_GEOMETRY_ISOLATION_KNOWN_EXCEPTION_REPO_RELATIVE_SUFFIX) return;
     readImportsFromFile(file).forEach((ref) => {
       if (!ref.specifier.startsWith(".")) return;
       const resolved = toRepoRelative(resolve(dirname(file), ref.specifier));
@@ -165,6 +186,11 @@ runTest("no file outside reference-truth/ imports the cell-geometry directory (s
     });
   });
   assertNoViolations(violations, "a file outside reference-truth/ imports the cell-geometry diagnostic layer");
+});
+
+runTest("the cell-geometry isolation exception is narrow: exactly one file, and it is the real-data generator", () => {
+  const exceptionFile = listTsFiles(PACKAGE_ROOT).find((f) => toRepoRelative(f) === CELL_GEOMETRY_ISOLATION_KNOWN_EXCEPTION_REPO_RELATIVE_SUFFIX);
+  assertEqual(exceptionFile !== undefined, true, "expected the exempted real-data generator file to exist and be scanned");
 });
 
 runTest("no cell-geometry file imports PaddleOCR/Docling/local-reader-evaluation/results/corrected-v2 evidence", () => {
