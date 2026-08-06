@@ -29,9 +29,20 @@ export interface ReferenceTruthCellGeometryValidationIssue {
     | "shared_group_missing_partner"
     | "shared_group_asymmetric"
     | "shared_group_id_mismatch"
-    | "duplicate_geometry_for_cell";
+    | "duplicate_geometry_for_cell"
+    | "legacy_key_status_inconsistent"
+    | "reproducible_locator_missing"
+    | "reproducible_locator_unexpected"
+    | "reproducible_locator_wrong_page"
+    | "reproducible_locator_invalid_order"
+    | "reproducible_locator_invalid_box"
+    | "association_basis_missing"
+    | "association_basis_unexpected";
   readonly message: string;
 }
+
+const EXPECTED_LEGACY_KEY_STATUS = "legacy_unreproducible";
+const EXPECTED_ASSOCIATION_BASIS = "exact_structural_position_with_region_geometry_validation";
 
 export function validateReferenceTruthCellGeometries(
   geometries: ReadonlyArray<ReferenceTruthCellGeometry>,
@@ -80,6 +91,40 @@ export function validateReferenceTruthCellGeometries(
 
       if (!hasPositiveVerticalOverlap(fragment.projectedBoundingBox, geometry.rowBand)) {
         issues.push({ cellId: geometry.cellId, code: "fragment_outside_row_band", message: `fragment "${fragment.id}" has no vertical overlap with its logical row's band` });
+      }
+
+      const isEmptySlotFragment = fragment.projectionKind === "row_column_empty_slot";
+
+      if (isEmptySlotFragment) {
+        if (fragment.legacyDeclaredSegmentKey !== null || fragment.legacyDeclaredSegmentKeyStatus !== null || fragment.reproducibleLocator !== null || fragment.associationBasis !== null) {
+          issues.push({ cellId: geometry.cellId, code: "reproducible_locator_unexpected", message: `fragment "${fragment.id}" is an empty-slot projection but declares legacy key, status, locator or association basis` });
+        }
+      } else {
+        if (fragment.legacyDeclaredSegmentKey === null || fragment.legacyDeclaredSegmentKeyStatus !== EXPECTED_LEGACY_KEY_STATUS) {
+          issues.push({ cellId: geometry.cellId, code: "legacy_key_status_inconsistent", message: `fragment "${fragment.id}" must declare a legacy key with status "${EXPECTED_LEGACY_KEY_STATUS}"` });
+        }
+
+        if (fragment.associationBasis !== EXPECTED_ASSOCIATION_BASIS) {
+          issues.push({ cellId: geometry.cellId, code: "association_basis_missing", message: `fragment "${fragment.id}" must declare associationBasis "${EXPECTED_ASSOCIATION_BASIS}"` });
+        }
+
+        const locator = fragment.reproducibleLocator;
+        if (locator === null) {
+          issues.push({ cellId: geometry.cellId, code: "reproducible_locator_missing", message: `fragment "${fragment.id}" has no reproducibleLocator` });
+        } else {
+          if (locator.realPageNumber !== geometry.realPageNumber) {
+            issues.push({ cellId: geometry.cellId, code: "reproducible_locator_wrong_page", message: `fragment "${fragment.id}" locator page ${locator.realPageNumber} != geometry page ${geometry.realPageNumber}` });
+          }
+          if (!Number.isInteger(locator.regionVerticalOrder) || locator.regionVerticalOrder <= 0) {
+            issues.push({ cellId: geometry.cellId, code: "reproducible_locator_invalid_order", message: `fragment "${fragment.id}" locator has invalid regionVerticalOrder` });
+          }
+          if (!Number.isInteger(locator.segmentHorizontalOrder) || locator.segmentHorizontalOrder <= 0) {
+            issues.push({ cellId: geometry.cellId, code: "reproducible_locator_invalid_order", message: `fragment "${fragment.id}" locator has invalid segmentHorizontalOrder` });
+          }
+          if (!isValidBoundingBox(locator.regionBoundingBox) || !isValidBoundingBox(locator.segmentBoundingBox)) {
+            issues.push({ cellId: geometry.cellId, code: "reproducible_locator_invalid_box", message: `fragment "${fragment.id}" locator has an invalid region or segment bounding box` });
+          }
+        }
       }
     });
 

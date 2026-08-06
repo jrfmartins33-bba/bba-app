@@ -8,6 +8,14 @@ export * from "./discovery-reference-truth-cell-geometry.types";
 export { parseReferenceTruthCellPhysicalOrigin } from "./discovery-reference-truth-cell-geometry-origin-parser";
 export type { ReferenceTruthCellOriginParseResult } from "./discovery-reference-truth-cell-geometry-origin-parser";
 export * from "./discovery-reference-truth-cell-geometry-geometry-helpers";
+export { buildReproduciblePhysicalSegmentLocator } from "./discovery-reference-truth-cell-geometry-reproducible-locator";
+export type { ReproduciblePhysicalSegmentLocatorInput } from "./discovery-reference-truth-cell-geometry-reproducible-locator";
+export { buildCanonicalSpatialProjection } from "./discovery-reference-truth-cell-geometry-canonical-spatial-projection";
+export type {
+  CanonicalSpatialCellGeometry,
+  CanonicalSpatialFragment,
+  CanonicalSpatialProjectionSourceGeometry,
+} from "./discovery-reference-truth-cell-geometry-canonical-spatial-projection";
 export { projectReferenceTruthCellGeometry } from "./discovery-reference-truth-cell-geometry-projection";
 export { validateReferenceTruthCellGeometries } from "./discovery-reference-truth-cell-geometry-validation";
 export type { ReferenceTruthCellGeometryValidationIssue } from "./discovery-reference-truth-cell-geometry-validation";

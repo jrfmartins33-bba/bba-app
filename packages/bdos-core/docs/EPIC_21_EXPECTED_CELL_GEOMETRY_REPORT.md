@@ -1,6 +1,8 @@
-# Epic 21 — Structured Expected Cell Geometry: Final Report
+# Epic 21 — Geometria Esperada Estruturada das Células: Relatório Final
 
 Sprint: "Representação Estruturada da Geometria Esperada das Células" (preparatória para o futuro motor determinístico). Branch `claude/epic-21-expected-cell-geometry`, aberta a partir do merge commit `7dc0cc393d52452e5e5bb58d818fb215936775f0` de `main`.
+
+**Atualizado pela verificação probatória final da PR #82** (proveniência corrigida para schemaVersion 2; geometria espacial inalterada — ver §2, e o registro completo em `EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md`).
 
 ## 1. Fonte
 
@@ -18,24 +20,47 @@ Sprint: "Representação Estruturada da Geometria Esperada das Células" (prepar
 
 Nenhum Docling, PaddleOCR, OCR, LLM, API ou motor determinístico foi executado. A única dependência de execução foi o reconstrutor físico do próprio domínio, já aprovado em Sprints anteriores.
 
-## 2. Achado material: divergência de `segmentKey` e o remapeamento posicional verificado
+## 2. Achado material: divergência de `segmentKey`, a ponte estrutural provisória, e a prova histórica independente final
 
 Antes de gerar qualquer dado real, a tentativa direta de resolver os `segmentKey` já congelados em `physicalOriginPt`/`ReferenceTruthPhysicalRegion.segmentKeys` contra uma reconstrução física fresca **falhou em 100% dos casos (0/186 regiões)**.
 
-**Causa comprovada**: `computeSegmentKey` nunca foi um hash de conteúdo — é `sha256(["segment", lineKey, ...sourceTextItemIndices])`, e `lineKey` encadeia através de um `reconstructionContextFingerprint` que incorpora a identidade do conjunto de regras de localização/reconstrução de páginas. Esse conjunto de regras foi versionado adiante desde que a verdade de referência foi congelada (Sprint 21.4B.3A.3) — algo natural e esperado numa base de código em evolução — mudando toda a cadeia de chaves sem mudar nenhuma geometria real.
+### 2.1 Ponte provisória (primeira análise desta Sprint)
 
-**Evidência**: pareando cada `ReferenceTruthPhysicalRegion` congelada com a linha física fresca correspondente exclusivamente por `verticalOrder` (campo determinístico, sequencial, 1-based, já parte do próprio contrato congelado — nunca texto, nunca proximidade), e cada `segmentKeys[i]` congelado com o `segmentKeys[i]` fresco da mesma linha exclusivamente por posição no array:
+O remapeamento posicional demonstrou igualdade dos 186 envelopes de região, igualdade das quantidades e ordenação determinística dos segmentos, ausência de ambiguidades e preservação das uniões geométricas: pareando cada `ReferenceTruthPhysicalRegion` congelada com a linha física fresca correspondente exclusivamente por `verticalOrder`, e cada `segmentKeys[i]` congelado com o `segmentKeys[i]` fresco da mesma linha exclusivamente por posição no array:
 
 - **186/186** pares região↔linha bateram exatamente (bounding box idêntica, zero tolerância) nas 3 páginas;
 - **936/936** pares de segmento bateram exatamente (bounding box idêntica);
-- **0** conflitos de ambiguidade (nenhuma chave antiga mapeou para mais de uma geometria nova distinta);
-- **1.019/1.019** células resolvíveis através do remapeamento.
+- **0** conflitos de ambiguidade;
+- **1.019/1.019** células resolvíveis através da ponte.
 
-**Isto nunca é**: correção de hash, inferência por conteúdo textual, ou casamento aproximado/"mais próximo" — todos explicitamente proibidos pelo enunciado da Sprint. **É**: recuperação de uma identidade geométrica exata através de um atributo estrutural, determinístico e não-textual que já fazia parte do contrato congelado (ordem vertical da região/linha na página, ordem horizontal do segmento na linha).
+Esta análise, por si só, **não constitui** uma comparação individual entre a caixa historicamente produzida para a chave antiga e a caixa hoje publicada — apenas demonstra correspondência estrutural via posição, nunca via identidade de chave.
 
-**Efeito no resultado publicado**: nenhum. Toda `segmentKey` que aparece nos arquivos publicados desta Sprint (`physical-segments-page-*.ts`, e dentro de cada `ReferenceTruthCellGeometry.sourceSegmentKeys`/`provenance.parsedSegmentKeys`) é a chave **original**, já declarada em `physicalOriginPt` — nunca a chave recém-computada. O remapeamento foi usado exclusivamente como mecanismo interno, de uso único, para recuperar a caixa delimitadora de cada chave já declarada.
+### 2.2 Prova independente final (verificação probatória final da PR #82)
 
-O script que produziu e verificou este remapeamento está em `infrastructure/budget-document-location/pdfjs/testing/generate-reference-truth-cell-geometry.ts` — falha (`process.exit(1)`) caso qualquer uma das validações acima não passe integralmente.
+Um replay direto da cadeia física — executado exatamente no commit `ccd8f8f1627e4f628f8787c36a2b27517a42e29b`, em que a verdade de referência foi congelada, num worktree isolado com lockfile congelado (`pnpm install --frozen-lockfile`), contra o documento exato — tentou resolver diretamente as `lineKey`/`segmentKey` originais, exclusivamente por igualdade exata de chave (nunca posição, texto ou proximidade). Resultado:
+
+```
+regiões resolvidas diretamente por lineKey = 0 / 186
+falhas de lineKey = 186 / 186
+ambiguidades = 0
+```
+
+**Causa comprovada**: `computeSegmentKey` nunca foi um hash de conteúdo — é `sha256(["segment", lineKey, ...sourceTextItemIndices])`, e `lineKey` encadeia através de um `reconstructionContextFingerprint`. O código da cadeia física (`domain/budget-document-location/{signal-observation,page-location,structure-reconstruction}`) é comprovadamente **byte-idêntico** entre o commit histórico e esta branch (`git diff` sem nenhuma linha de diferença) — portanto a causa não é uma mudança de código detectável por diff; apenas que a chave declarada não é reproduzível por nenhuma execução conhecida da cadeia, em nenhum ponto do histórico do repositório. Registro completo, incluindo ambiente, comandos e hashes, em `EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md`.
+
+**Decisão semântica vinculante**: `lineKey`/`segmentKey` já declaradas na verdade de referência passam a ser classificadas formalmente como `LegacyDeclaredKeyStatus = "legacy_unreproducible"` — identificadores históricos internos congelados, cuja origem de geração não pôde ser reproduzida nem pelo código, documento e ambiente do próprio commit em que foram registradas. Nunca mais tratadas como hash de conteúdo, identidade física reproduzível, prova de proveniência direta, ou chave canônica do segmento atual. Continuam válidas apenas para preservar a relação já congelada célula → chave histórica declarada → posição da chave dentro da região física congelada.
+
+**Identidade canônica a partir do schemaVersion 2**: `ReproduciblePhysicalSegmentLocator`, construído deterministicamente a partir de posição estrutural já congelada (página, `frozenPhysicalRegionId`, `regionVerticalOrder`, `segmentHorizontalOrder`) mais identidade verificada do reconstrutor físico (hashes de adaptador/biblioteca, fingerprints) — nunca da chave histórica. A base formal da associação é `SegmentGeometryAssociationBasis = "exact_structural_position_with_region_geometry_validation"`: mesma página + mesma posição vertical da região + caixa da região exatamente igual + mesma quantidade de segmentos + mesma ordem horizontal do segmento + duas execuções físicas independentes e idênticas + zero ambiguidade estrutural — nunca resolução direta por chave, nunca fuzzy matching, nunca aproximação.
+
+**Efeito no resultado publicado**: nenhuma coordenada, faixa, fragmento, envelope ou grupo compartilhado mudou. O hash canônico exclusivamente espacial (nunca de proveniência) é **idêntico** entre os dados publicados antes desta correção (schemaVersion 1) e depois (schemaVersion 2):
+
+```
+canonicalSpatialGeometrySha256 (schemaVersion 1, antes) = 9221d8bb0f7994cdde106cdf1ba718380881d2d4cbe1710add52705bec62680b
+canonicalSpatialGeometrySha256 (schemaVersion 2, depois) = 9221d8bb0f7994cdde106cdf1ba718380881d2d4cbe1710add52705bec62680b
+```
+
+Toda `legacyDeclaredSegmentKey` que aparece nos arquivos publicados (`physical-segments-page-*.ts`, e dentro de cada `ReferenceTruthCellGeometry.legacyDeclaredSegmentKeys`/`provenance.legacyDeclaredSegmentKeys`) é a chave **original**, já declarada em `physicalOriginPt` — nunca a chave recém-computada. A ponte estrutural (§2.1) permanece o mecanismo interno usado para recuperar a caixa delimitadora de cada chave já declarada; a prova histórica (§2.2) é o que determina como essa proveniência pode — e não pode — ser descrita.
+
+O gerador que produz e verifica tudo isto está em `infrastructure/budget-document-location/pdfjs/testing/generate-reference-truth-cell-geometry.ts` — falha (`process.exit(1)`) caso qualquer uma das validações acima não passe integralmente, incluindo a igualdade do hash espacial.
 
 ## 3. Inventário inicial (dados reais, 1.019 células)
 
@@ -67,9 +92,12 @@ Ver `EPIC_21_EXPECTED_CELL_GEOMETRY_CONTRACT.md` para o contrato completo. Resum
 
 - Algoritmo genérico congelado no Commit 1 (`ab848769799e9d3099680670acd6426362cba657`), antes de qualquer dado real.
 - Duas execuções independentes da cadeia física completa (bytes copiados independentemente) → resultado JSON-equivalente: `sha256 = 73dc3acc2f4c8b9d9ad75127938e25e8553c2ad1ae823eea42dbbe0dc4ba84ac`.
-- Remapeamento posicional verificado (§2): 186/186, 936/936, 0 ambiguidades.
-- Duas execuções independentes da geração de geometria (mesmo algoritmo do Commit 1, mesmo registro de segmentos) → resultado JSON-equivalente: `sha256 = b0724ca46e4018b182bcb9d95b5016e7704440a5c5bbaba71e4d9272f02c1da7` (== `canonicalGenerationSha256` do manifesto).
-- Publicação só ocorreu após igualdade integral confirmada em ambas as etapas.
+- Ponte estrutural verificada (§2.1): 186/186, 936/936, 0 ambiguidades.
+- Prova histórica independente (§2.2): 0/186 `lineKey` resolvidas diretamente no commit de congelamento — ver `EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md`.
+- Duas execuções independentes da geração de geometria schemaVersion 1 (algoritmo do Commit 1, registro de segmentos via ponte estrutural) → `sha256 = b0724ca46e4018b182bcb9d95b5016e7704440a5c5bbaba71e4d9272f02c1da7` (`previousFullArtifactSha256` no manifesto atual).
+- Após a correção de proveniência (schemaVersion 2, localizador estrutural reproduzível): duas execuções independentes da geração de geometria → resultado JSON-equivalente: `sha256 = 23a267c23861429fca698b626d5f85095ab61ca1046e6cf85cca29a2515e4aca` (== `canonicalGenerationSha256` do manifesto atual).
+- Hash canônico exclusivamente espacial recalculado sobre os dados schemaVersion 2 e comparado ao hash já capturado dos dados schemaVersion 1: **idênticos** — `canonicalSpatialGeometrySha256 = 9221d8bb0f7994cdde106cdf1ba718380881d2d4cbe1710add52705bec62680b` em ambos.
+- Publicação só ocorreu após igualdade integral confirmada em todas as etapas acima.
 
 ## 6. Resultado
 
@@ -92,6 +120,8 @@ Ver `EPIC_21_EXPECTED_CELL_GEOMETRY_CONTRACT.md` para o contrato completo. Resum
 =
 1.019 disposições geométricas válidas e auditáveis
 ```
+
+Proveniência (schemaVersion 2): 1.019/1.019 geometrias com `reproducibleLocator` válido em todo fragmento não vazio; 0 geometrias usando `legacyDeclaredSegmentKey` como identidade canônica; toda `legacyDeclaredSegmentKey` publicada com status exatamente `"legacy_unreproducible"`.
 
 ## 7. Validação visual
 
@@ -116,12 +146,17 @@ Confirmado:
 - nenhuma alteração produtiva foi feita (guardas arquiteturais confirmam isolamento total sob `testing/`);
 - nenhuma alteração foi feita na verdade histórica: `ReferenceTruthCell.physicalRegionIds` permanece `[]` em todas as 1.019 células; nenhuma célula, região, coluna, linha, relatório ou resultado v1/v2 pré-existente foi tocado.
 
-## 9. Próxima etapa
+## 9. Documentos relacionados
 
-1. Merge desta Sprint (geometria esperada estruturada) em `main`.
+- `EPIC_21_EXPECTED_CELL_GEOMETRY_CONTRACT.md` — contrato completo do modelo de dados e de identidade (schemaVersion 2).
+- `EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md` — registro objetivo e completo da prova histórica negativa (§2.2).
+
+## 10. Próxima etapa
+
+1. Merge desta Sprint (geometria esperada estruturada, proveniência reproduzível) em `main`.
 2. Nova branch limpa para o Codex construir o motor determinístico.
 3. O motor deve consumir exclusivamente texto, coordenadas e estrutura física de entrada — nunca esta camada de geometria esperada.
-4. A verdade geométrica desta Sprint permanece exclusiva do futuro avaliador (nunca importada pelo motor; guarda arquitetural dedicado já impede isso).
+4. A verdade geométrica desta Sprint permanece exclusiva do futuro avaliador (nunca importada pelo motor; guarda arquitetural dedicado já impede isso, inclusive contra o uso de `legacyDeclaredSegmentKey` como chave canônica).
 5. Claude revisa independentemente a implementação do Codex quando ela chegar.
 
 Não iniciado: nenhum código do motor determinístico foi escrito nesta Sprint.

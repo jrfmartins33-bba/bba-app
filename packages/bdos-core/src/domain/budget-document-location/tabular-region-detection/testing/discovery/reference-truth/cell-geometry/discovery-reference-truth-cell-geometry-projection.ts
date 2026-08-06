@@ -6,6 +6,11 @@
  * hash real, código de item real ou texto do documento — apenas os tipos
  * já congelados da verdade de referência mais o registro de segmentos
  * físicos fornecido pelo chamador.
+ *
+ * A identidade canônica de cada segmento é o `reproducibleLocator`
+ * (schemaVersion 2) — nunca a `legacyDeclaredSegmentKey` histórica, que
+ * é apenas o ponteiro interno usado para localizar a entrada certa no
+ * registro de segmentos fornecido (ver `discovery-reference-truth-cell-geometry.types.ts`).
  */
 import type {
   ReferenceTruthCell,
@@ -31,34 +36,29 @@ import {
   type ReferenceTruthPhysicalSegmentGeometry,
 } from "./discovery-reference-truth-cell-geometry.types";
 
-function sharedGeometryGroupId(realPageNumber: number, segmentKey: string): string {
-  return `shared-geometry:${realPageNumber}:${segmentKey}`;
-}
-
-interface ResolvedSegment {
-  readonly segmentKey: string;
-  readonly boundingBox: ReferenceTruthBoundingBox;
+function sharedGeometryGroupId(realPageNumber: number, reproducibleSegmentKey: string): string {
+  return `shared-geometry:${realPageNumber}:${reproducibleSegmentKey}`;
 }
 
 function buildSegmentIndex(segments: ReadonlyArray<ReferenceTruthPhysicalSegmentGeometry>): {
-  readonly byKey: ReadonlyMap<string, ReferenceTruthPhysicalSegmentGeometry>;
-  readonly ambiguousKeys: ReadonlySet<string>;
+  readonly byLegacyKey: ReadonlyMap<string, ReferenceTruthPhysicalSegmentGeometry>;
+  readonly ambiguousLegacyKeys: ReadonlySet<string>;
 } {
-  const byKey = new Map<string, ReferenceTruthPhysicalSegmentGeometry>();
-  const ambiguousKeys = new Set<string>();
+  const byLegacyKey = new Map<string, ReferenceTruthPhysicalSegmentGeometry>();
+  const ambiguousLegacyKeys = new Set<string>();
 
   segments.forEach((segment) => {
-    const existing = byKey.get(segment.segmentKey);
+    const existing = byLegacyKey.get(segment.legacyDeclaredSegmentKey);
     if (existing === undefined) {
-      byKey.set(segment.segmentKey, segment);
+      byLegacyKey.set(segment.legacyDeclaredSegmentKey, segment);
       return;
     }
     if (existing.realPageNumber !== segment.realPageNumber || !boundingBoxEqual(existing.boundingBox, segment.boundingBox)) {
-      ambiguousKeys.add(segment.segmentKey);
+      ambiguousLegacyKeys.add(segment.legacyDeclaredSegmentKey);
     }
   });
 
-  return { byKey, ambiguousKeys };
+  return { byLegacyKey, ambiguousLegacyKeys };
 }
 
 function boundingBoxEqual(a: ReferenceTruthBoundingBox, b: ReferenceTruthBoundingBox): boolean {
@@ -99,14 +99,14 @@ function resolveRowBand(
   return unionBoundingBoxes(boxes);
 }
 
-/** Regiões físicas (da mesma página) cujo `segmentKeys` já congelado lista a chave informada — vínculo exclusivamente diagnóstico, nunca escrito de volta em `ReferenceTruthCell.physicalRegionIds`. */
+/** Regiões físicas (da mesma página) cujo `segmentKeys` já congelado lista a chave histórica informada — vínculo exclusivamente diagnóstico, nunca escrito de volta em `ReferenceTruthCell.physicalRegionIds`. */
 function findOwningRegionIds(
-  segmentKey: string,
+  legacyDeclaredSegmentKey: string,
   page: number,
   regionsByPage: ReadonlyMap<number, ReadonlyArray<ReferenceTruthPhysicalRegion>>,
 ): ReadonlyArray<string> {
   const regions = regionsByPage.get(page) ?? [];
-  return regions.filter((region) => region.segmentKeys.includes(segmentKey)).map((region) => region.id);
+  return regions.filter((region) => region.segmentKeys.includes(legacyDeclaredSegmentKey)).map((region) => region.id);
 }
 
 interface CellResolutionContext {
@@ -115,7 +115,7 @@ interface CellResolutionContext {
   readonly row: ReferenceTruthLogicalRow;
   readonly rowBand: ReferenceTruthBoundingBox;
   readonly isEmpty: boolean;
-  readonly resolvedSegments: ReadonlyArray<ResolvedSegment>;
+  readonly resolvedSegments: ReadonlyArray<ReferenceTruthPhysicalSegmentGeometry>;
 }
 
 function resolveCellContext(
@@ -157,22 +157,22 @@ function resolveCellContext(
     return null;
   }
 
-  const resolvedSegments: ResolvedSegment[] = [];
-  for (const segmentKey of parsed.segmentKeys) {
-    if (segmentIndex.ambiguousKeys.has(segmentKey)) {
-      issues.push({ cellId: cell.id, code: "segment_key_ambiguous_in_registry", message: `segment key "${segmentKey}" resolves to more than one distinct geometry in the physical segment registry` });
+  const resolvedSegments: ReferenceTruthPhysicalSegmentGeometry[] = [];
+  for (const legacyDeclaredSegmentKey of parsed.segmentKeys) {
+    if (segmentIndex.ambiguousLegacyKeys.has(legacyDeclaredSegmentKey)) {
+      issues.push({ cellId: cell.id, code: "segment_key_ambiguous_in_registry", message: `legacy declared segment key "${legacyDeclaredSegmentKey}" resolves to more than one distinct geometry in the physical segment registry` });
       return null;
     }
-    const segment = segmentIndex.byKey.get(segmentKey);
+    const segment = segmentIndex.byLegacyKey.get(legacyDeclaredSegmentKey);
     if (segment === undefined) {
-      issues.push({ cellId: cell.id, code: "segment_not_found", message: `segment key "${segmentKey}" was not found in the physical segment registry` });
+      issues.push({ cellId: cell.id, code: "segment_not_found", message: `legacy declared segment key "${legacyDeclaredSegmentKey}" was not found in the physical segment registry` });
       return null;
     }
     if (segment.realPageNumber !== cell.realPageNumber) {
-      issues.push({ cellId: cell.id, code: "segment_wrong_page", message: `segment key "${segmentKey}" belongs to page ${segment.realPageNumber}, expected page ${cell.realPageNumber}` });
+      issues.push({ cellId: cell.id, code: "segment_wrong_page", message: `legacy declared segment key "${legacyDeclaredSegmentKey}" belongs to page ${segment.realPageNumber}, expected page ${cell.realPageNumber}` });
       return null;
     }
-    resolvedSegments.push({ segmentKey, boundingBox: segment.boundingBox });
+    resolvedSegments.push(segment);
   }
 
   return { cell, column, row, rowBand, isEmpty: false, resolvedSegments };
@@ -203,11 +203,11 @@ export function projectReferenceTruthCellGeometry(input: ReferenceTruthCellGeome
     if (context !== null) contexts.set(cell.id, context);
   });
 
-  // Mapa global (página, segmentKey) -> células que o referenciam, apenas entre células já resolvidas — necessário para classificar geometria compartilhada (§8/§11 do enunciado).
+  // Mapa global (página, reproducibleSegmentKey) -> células que o referenciam, apenas entre células já resolvidas — necessário para classificar geometria compartilhada (§8/§11 do enunciado original; identidade canônica a partir do schemaVersion 2).
   const sharingByPageAndSegment = new Map<string, string[]>();
   contexts.forEach((context) => {
     context.resolvedSegments.forEach((segment) => {
-      const key = `${context.cell.realPageNumber}:${segment.segmentKey}`;
+      const key = `${context.cell.realPageNumber}:${segment.reproducibleLocator.reproducibleSegmentKey}`;
       if (!sharingByPageAndSegment.has(key)) sharingByPageAndSegment.set(key, []);
       sharingByPageAndSegment.get(key)!.push(context.cell.id);
     });
@@ -230,7 +230,10 @@ export function projectReferenceTruthCellGeometry(input: ReferenceTruthCellGeome
       };
       const fragment: ReferenceTruthCellGeometryFragment = {
         id: `${cell.id}-fragment-1`,
-        sourceSegmentKey: null,
+        legacyDeclaredSegmentKey: null,
+        legacyDeclaredSegmentKeyStatus: null,
+        reproducibleLocator: null,
+        associationBasis: null,
         sourceBoundingBox: null,
         projectionKind: "row_column_empty_slot",
         projectedBoundingBox: projectedBox,
@@ -243,7 +246,7 @@ export function projectReferenceTruthCellGeometry(input: ReferenceTruthCellGeome
         columnId: cell.columnId,
         resolutionKind: "empty_slot_projection",
         spatialSemantics: "empty_slot",
-        sourceSegmentKeys: [],
+        legacyDeclaredSegmentKeys: [],
         sourcePhysicalRegionIds: [],
         rowBand: context.rowBand,
         columnBand,
@@ -257,7 +260,7 @@ export function projectReferenceTruthCellGeometry(input: ReferenceTruthCellGeome
           columnId: cell.columnId,
           columnRole: context.column.role,
           physicalOriginPt: cell.physicalOriginPt,
-          parsedSegmentKeys: [],
+          legacyDeclaredSegmentKeys: [],
           rowPhysicalRegionIds: context.row.physicalRegionIds,
           resolutionNotesPt: "Célula fisicamente vazia na verdade de referência (literalText vazio); geometria projetada exclusivamente a partir da faixa da linha e da faixa da coluna, sem nenhum segmento de origem.",
         },
@@ -273,11 +276,11 @@ export function projectReferenceTruthCellGeometry(input: ReferenceTruthCellGeome
     const sharedWithCellIdsSet = new Set<string>();
 
     context.resolvedSegments.forEach((segment, index) => {
-      const sharingKey = `${cell.realPageNumber}:${segment.segmentKey}`;
+      const sharingKey = `${cell.realPageNumber}:${segment.reproducibleLocator.reproducibleSegmentKey}`;
       const sharers = (sharingByPageAndSegment.get(sharingKey) ?? []).filter((id) => id !== cell.id);
       const isShared = sharers.length > 0;
 
-      findOwningRegionIds(segment.segmentKey, cell.realPageNumber, regionsByPage).forEach((id) => sourcePhysicalRegionIds.add(id));
+      findOwningRegionIds(segment.legacyDeclaredSegmentKey, cell.realPageNumber, regionsByPage).forEach((id) => sourcePhysicalRegionIds.add(id));
 
       const intersection = intersectHorizontal(segment.boundingBox, columnBand);
 
@@ -291,20 +294,23 @@ export function projectReferenceTruthCellGeometry(input: ReferenceTruthCellGeome
         projectionKind = "source_segment_exact_box";
         projectedBox = segment.boundingBox;
       } else {
-        issues.push({ cellId: cell.id, code: "fragment_no_column_intersection", message: `segment "${segment.segmentKey}" has no horizontal intersection with column "${cell.columnId}" and is not shared with another cell` });
+        issues.push({ cellId: cell.id, code: "fragment_no_column_intersection", message: `segment (legacy declared key "${segment.legacyDeclaredSegmentKey}") has no horizontal intersection with column "${cell.columnId}" and is not shared with another cell` });
         unresolvable = true;
         return;
       }
 
       if (isShared) {
-        const groupId = sharedGeometryGroupId(cell.realPageNumber, segment.segmentKey);
+        const groupId = sharedGeometryGroupId(cell.realPageNumber, segment.reproducibleLocator.reproducibleSegmentKey);
         if (sharedGroupIdForCell === null) sharedGroupIdForCell = groupId;
         sharers.forEach((id) => sharedWithCellIdsSet.add(id));
       }
 
       fragments.push({
         id: `${cell.id}-fragment-${index + 1}`,
-        sourceSegmentKey: segment.segmentKey,
+        legacyDeclaredSegmentKey: segment.legacyDeclaredSegmentKey,
+        legacyDeclaredSegmentKeyStatus: segment.legacyDeclaredSegmentKeyStatus,
+        reproducibleLocator: segment.reproducibleLocator,
+        associationBasis: segment.associationBasis,
         sourceBoundingBox: segment.boundingBox,
         projectionKind,
         projectedBoundingBox: projectedBox,
@@ -330,7 +336,7 @@ export function projectReferenceTruthCellGeometry(input: ReferenceTruthCellGeome
       columnId: cell.columnId,
       resolutionKind,
       spatialSemantics,
-      sourceSegmentKeys: context.resolvedSegments.map((s) => s.segmentKey),
+      legacyDeclaredSegmentKeys: context.resolvedSegments.map((s) => s.legacyDeclaredSegmentKey),
       sourcePhysicalRegionIds: [...sourcePhysicalRegionIds].sort(),
       rowBand: context.rowBand,
       columnBand,
@@ -344,11 +350,11 @@ export function projectReferenceTruthCellGeometry(input: ReferenceTruthCellGeome
         columnId: cell.columnId,
         columnRole: context.column.role,
         physicalOriginPt: cell.physicalOriginPt,
-        parsedSegmentKeys: context.resolvedSegments.map((s) => s.segmentKey),
+        legacyDeclaredSegmentKeys: context.resolvedSegments.map((s) => s.legacyDeclaredSegmentKey),
         rowPhysicalRegionIds: context.row.physicalRegionIds,
         resolutionNotesPt: isCellShared
-          ? "Origem física compartilhada com outra(s) célula(s) sob o mesmo segmento — ver sharedGeometryGroupId/sharedWithCellIds."
-          : "Origem física exclusiva desta célula, resolvida a partir de physicalOriginPt.",
+          ? "Geometria compartilhada com outra(s) célula(s) sob o mesmo localizador estrutural reproduzível — ver sharedGeometryGroupId/sharedWithCellIds."
+          : "Geometria exclusiva desta célula, associada por posição estrutural exata a partir da chave histórica declarada em physicalOriginPt.",
       },
     });
   });

@@ -88,9 +88,9 @@ export function renderReferenceTruthCellGeometryPageSvg(input: ReferenceTruthCel
   const drawnSegmentKeys = new Set<string>();
   input.geometries.forEach((geometry) => {
     geometry.fragments.forEach((fragment) => {
-      if (fragment.sourceBoundingBox === null || fragment.sourceSegmentKey === null) return;
-      if (drawnSegmentKeys.has(fragment.sourceSegmentKey)) return;
-      drawnSegmentKeys.add(fragment.sourceSegmentKey);
+      if (fragment.sourceBoundingBox === null || fragment.legacyDeclaredSegmentKey === null) return;
+      if (drawnSegmentKeys.has(fragment.legacyDeclaredSegmentKey)) return;
+      drawnSegmentKeys.add(fragment.legacyDeclaredSegmentKey);
       parts.push(boxRect(fragment.sourceBoundingBox, ""));
     });
   });

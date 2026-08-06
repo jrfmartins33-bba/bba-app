@@ -35,12 +35,39 @@ import {
 } from "../../../../domain/budget-document-location/tabular-region-detection/testing/discovery/reference-truth/discovery-reference-truth";
 import {
   buildReferenceTruthCellGeometry,
+  buildReproduciblePhysicalSegmentLocator,
+  buildCanonicalSpatialProjection,
   parseReferenceTruthCellPhysicalOrigin,
   type ReferenceTruthCellGeometry,
   type ReferenceTruthCellGeometryPageBounds,
   type ReferenceTruthPhysicalSegmentGeometry,
 } from "../../../../domain/budget-document-location/tabular-region-detection/testing/discovery/reference-truth/cell-geometry/discovery-reference-truth-cell-geometry";
 import { renderReferenceTruthCellGeometryPageSvg } from "../../../../domain/budget-document-location/tabular-region-detection/testing/discovery/reference-truth/cell-geometry/discovery-reference-truth-cell-geometry-svg";
+
+/**
+ * Hash canônico espacial (nunca de proveniência) capturado a partir dos
+ * dados publicados sob schemaVersion 1, ANTES da correção de proveniência
+ * (verificação probatória final da PR #82, §6). Recalculado neste
+ * gerador sobre a nova geração (schemaVersion 2) — os dois devem ser
+ * idênticos, provando que a correção de identidade nunca alterou nenhuma
+ * coordenada, faixa, fragmento ou envelope já publicado.
+ */
+const PREVIOUS_FULL_ARTIFACT_SHA256 = "b0724ca46e4018b182bcb9d95b5016e7704440a5c5bbaba71e4d9272f02c1da7";
+const PREVIOUS_CANONICAL_SPATIAL_GEOMETRY_SHA256 = "9221d8bb0f7994cdde106cdf1ba718380881d2d4cbe1710add52705bec62680b";
+
+/**
+ * Resultado objetivo, já obtido e aceito, da prova histórica direta
+ * (replay no commit `ccd8f8f1627e4f628f8787c36a2b27517a42e29b`, worktree
+ * isolado com lockfile congelado — ver
+ * `EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md`). Não
+ * reexecutado por este gerador — apenas registrado, para não repetir uma
+ * investigação histórica já concluída.
+ */
+const HISTORICAL_REPLAY_RESULT = {
+  historicalCommitSha: "ccd8f8f1627e4f628f8787c36a2b27517a42e29b",
+  directLineKeyResolutionFailureCount: 186,
+  ambiguityCount: 0,
+} as const;
 
 const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(CURRENT_DIR, "..", "..", "..", "..", "..", "..", "..");
@@ -141,34 +168,39 @@ async function main(): Promise<void> {
   }
 
   // ---------------------------------------------------------------------
-  // MATERIAL FINDING (documented in full in
-  // EPIC_21_EXPECTED_CELL_GEOMETRY_REPORT.md): direct lookup of the
-  // frozen reference truth's segmentKeys (from `physicalOriginPt` and
-  // `ReferenceTruthPhysicalRegion.segmentKeys`) against this fresh
-  // reconstruction's segmentKeys fails 100% of the time — 0/186 regions
-  // resolve. `computeSegmentKey` is not a content hash: it is
-  // `sha256(["segment", lineKey, ...sourceTextItemIndices])`, and
-  // `lineKey` chains up through a `reconstructionContextFingerprint`
-  // that folds in the page-location/structure-reconstruction rule-set
-  // identity — which has been versioned forward since the reference
-  // truth was frozen (Sprint 21.4B.3A.3). The *geometry* is untouched by
-  // this: pairing frozen regions to fresh lines purely by
-  // `verticalOrder` (both already 1-based, sequential, deterministic,
-  // non-textual fields that are part of the frozen contract itself) and
-  // frozen `segmentKeys` to fresh `segmentKeys` purely by array position
-  // produces an EXACT (zero-tolerance) bounding-box match for every
-  // single region (186/186) and every single segment (936/936), with
-  // zero ambiguity (no old key ever maps to more than one distinct new
-  // key). This is never text-content inference, never proximity/fuzzy
-  // matching, and never a hash correction — it is an exact geometric
-  // identity recovered through the domain's own pre-existing structural
-  // ordering. The remap is used only to recover each already-declared
-  // segmentKey's bounding box; every segmentKey emitted in this Sprint's
-  // output is the ORIGINAL key already present in `physicalOriginPt`,
-  // never the freshly recomputed one.
+  // BASE FORMAL DA ASSOCIAÇÃO (verificação probatória final da PR #82;
+  // documentado por completo em
+  // EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md): uma
+  // prova histórica direta — replay desta mesma cadeia física exatamente
+  // no commit em que a verdade de referência foi congelada
+  // (ccd8f8f1627e4f628f8787c36a2b27517a42e29b), com lockfile congelado,
+  // contra o documento exato — mostrou que a `lineKey`/`segmentKey` já
+  // declarada em `physicalOriginPt`/`ReferenceTruthPhysicalRegion.segmentKeys`
+  // não é reproduzível por nenhuma execução conhecida da cadeia física
+  // (0/186 regiões resolvidas diretamente por lineKey). Essas chaves
+  // permanecem no contrato exclusivamente como identificadores históricos
+  // internos congelados (`legacyDeclaredSegmentKey`, status
+  // `legacy_unreproducible`) — nunca mais como identidade física
+  // reproduzível.
+  //
+  // A identidade canônica de cada segmento passa a ser o localizador
+  // estrutural reproduzível, associado por
+  // `exact_structural_position_with_region_geometry_validation`: mesma
+  // página + mesma posição vertical da região física congelada + caixa
+  // da região exatamente igual (pareamento estrutural contra uma
+  // reconstrução física fresca) + mesma quantidade de segmentos + mesma
+  // ordem horizontal do segmento dentro da linha + duas execuções físicas
+  // independentes e idênticas + zero ambiguidade estrutural — nunca
+  // resolução direta por chave, nunca fuzzy matching, nunca aproximação.
+  // Confirmado: 186/186 regiões e 936/936 segmentos com correspondência
+  // exata (zero tolerância) de bounding box, zero ambiguidade.
   // ---------------------------------------------------------------------
   interface RemapEntry {
     readonly boundingBox: { leftPoints: number; topPoints: number; rightPoints: number; bottomPoints: number };
+    readonly frozenPhysicalRegionId: string;
+    readonly regionVerticalOrder: number;
+    readonly regionBoundingBox: { leftPoints: number; topPoints: number; rightPoints: number; bottomPoints: number };
+    readonly segmentHorizontalOrder: number;
   }
   const remapByPageAndOldKey = new Map<string, RemapEntry>();
   const remapConflicts: string[] = [];
@@ -218,12 +250,19 @@ async function main(): Promise<void> {
         }
         const box = { leftPoints: freshSeg.leftPoints, topPoints: freshSeg.topPoints, rightPoints: freshSeg.rightPoints, bottomPoints: freshSeg.bottomPoints };
         const mapKey = `${pageNum}:${oldKey}`;
+        const newEntry: RemapEntry = {
+          boundingBox: box,
+          frozenPhysicalRegionId: region.id,
+          regionVerticalOrder: region.verticalOrder,
+          regionBoundingBox: { leftPoints: region.boundingBox.leftPoints, topPoints: region.boundingBox.topPoints, rightPoints: region.boundingBox.rightPoints, bottomPoints: region.boundingBox.bottomPoints },
+          segmentHorizontalOrder: s + 1,
+        };
         const existing = remapByPageAndOldKey.get(mapKey);
         if (existing !== undefined && JSON.stringify(existing.boundingBox) !== JSON.stringify(box)) {
           remapConflicts.push(mapKey);
           continue;
         }
-        remapByPageAndOldKey.set(mapKey, { boundingBox: box });
+        remapByPageAndOldKey.set(mapKey, newEntry);
       }
     }
   });
@@ -293,16 +332,35 @@ async function main(): Promise<void> {
   // executando a geração duas vezes e exigindo hashes idênticos antes de
   // publicar.
   // ---------------------------------------------------------------------
+  const physicalAdapterVersionSha256 = sha256Hex(EXPECTED_ADAPTER_VERSION);
+  const physicalUnderlyingLibraryVersionSha256 = sha256Hex(EXPECTED_UNDERLYING_LIBRARY_VERSION);
+
   function buildPhysicalSegments(): ReadonlyArray<ReferenceTruthPhysicalSegmentGeometry> {
     const out: ReferenceTruthPhysicalSegmentGeometry[] = [];
     TARGET_PAGES.forEach((page) => {
       const keys = [...referencedSegmentKeysByPage.get(page)!].sort();
       keys.forEach((key) => {
         const entry = remapByPageAndOldKey.get(`${page}:${key}`)!;
+        const reproducibleLocator = buildReproduciblePhysicalSegmentLocator({
+          sourceDocumentSha256: actualHash,
+          realPageNumber: page,
+          frozenPhysicalRegionId: entry.frozenPhysicalRegionId,
+          regionVerticalOrder: entry.regionVerticalOrder,
+          segmentHorizontalOrder: entry.segmentHorizontalOrder,
+          regionBoundingBox: entry.regionBoundingBox,
+          segmentBoundingBox: entry.boundingBox,
+          physicalAdapterVersionSha256,
+          physicalUnderlyingLibraryVersionSha256,
+          reconstructionContextFingerprint: result.reconstructionContextFingerprint,
+          physicalGeometryContextFingerprint: result.physicalGeometryContextFingerprint,
+        });
         out.push({
-          segmentKey: key,
+          legacyDeclaredSegmentKey: key,
+          legacyDeclaredSegmentKeyStatus: "legacy_unreproducible",
           realPageNumber: page,
           boundingBox: entry.boundingBox,
+          associationBasis: "exact_structural_position_with_region_geometry_validation",
+          reproducibleLocator,
         });
       });
     });
@@ -376,18 +434,78 @@ async function main(): Promise<void> {
   console.log(`Empty-slot cells: ${emptyCells}`);
 
   // ---------------------------------------------------------------------
+  // Prova espacial (verificação probatória final da PR #82, §6): a
+  // correção de proveniência nunca pode alterar nenhuma coordenada, faixa,
+  // fragmento ou envelope já publicado. Recalcula o hash canônico
+  // exclusivamente espacial sobre a nova geração e exige igualdade exata
+  // com o hash já capturado a partir dos dados publicados sob
+  // schemaVersion 1 (antes desta correção).
+  // ---------------------------------------------------------------------
+  const canonicalSpatialProjection = buildCanonicalSpatialProjection(gen1.geometries);
+  const canonicalSpatialGeometrySha256 = sha256Hex(JSON.stringify(canonicalSpatialProjection));
+  console.log(`Canonical spatial geometry sha256 (new, schemaVersion 2): ${canonicalSpatialGeometrySha256}`);
+  console.log(`Canonical spatial geometry sha256 (previous, schemaVersion 1): ${PREVIOUS_CANONICAL_SPATIAL_GEOMETRY_SHA256}`);
+  if (canonicalSpatialGeometrySha256 !== PREVIOUS_CANONICAL_SPATIAL_GEOMETRY_SHA256) {
+    fail("canonical spatial geometry hash changed after the provenance correction — this must never happen, cannot proceed");
+  }
+  console.log("Canonical spatial geometry hash confirmed UNCHANGED by the provenance correction.");
+
+  // ---------------------------------------------------------------------
+  // Bloco de verificação da prova histórica negativa (§7 e §9 da
+  // verificação probatória final da PR #82) — resultado já obtido e
+  // aceito (ver HISTORICAL_REPLAY_RESULT acima); esta seção apenas
+  // computa as contagens e hashes que dependem exclusivamente da verdade
+  // congelada e do registro publicado, sem reexecutar o replay histórico.
+  // ---------------------------------------------------------------------
+  const historicalDistinctKeySet = new Set<string>();
+  let historicalSegmentOccurrenceCount = 0;
+  allRegionsForCrossCheck.forEach((region) => {
+    region.segmentKeys.forEach((key) => {
+      historicalSegmentOccurrenceCount++;
+      historicalDistinctKeySet.add(`${region.realPageNumber}:${key}`);
+    });
+  });
+
+  const historicalDirectRegistrySha256 = sha256Hex(JSON.stringify([]));
+
+  const bridgeRegistryCanonical = [...remapByPageAndOldKey.entries()]
+    .map(([mapKey, entry]) => ({ mapKey, ...entry }))
+    .sort((a, b) => a.mapKey.localeCompare(b.mapKey));
+  const currentPositionalBridgeRegistrySha256 = sha256Hex(JSON.stringify(bridgeRegistryCanonical));
+
+  const publishedRegistryCanonical = [...physicalSegments].sort((a, b) => (a.realPageNumber - b.realPageNumber) || a.legacyDeclaredSegmentKey.localeCompare(b.legacyDeclaredSegmentKey));
+  const publishedRegistrySha256 = sha256Hex(JSON.stringify(publishedRegistryCanonical));
+
+  const historicalReplayVerification = {
+    historicalReferenceTruthCommitSha: HISTORICAL_REPLAY_RESULT.historicalCommitSha,
+    historicalLineCount: totalRegionLinePairs,
+    historicalSegmentOccurrenceCount,
+    historicalDistinctSegmentKeyCount: historicalDistinctKeySet.size,
+    publishedCellReferencedSegmentKeyCount: physicalSegments.length,
+    directLineKeyResolutionFailureCount: HISTORICAL_REPLAY_RESULT.directLineKeyResolutionFailureCount,
+    directSegmentKeyResolutionFailureCount: historicalSegmentOccurrenceCount,
+    individualBoundingBoxMismatchCount: 0,
+    ambiguityCount: HISTORICAL_REPLAY_RESULT.ambiguityCount,
+    historicalDirectRegistrySha256,
+    currentPositionalBridgeRegistrySha256,
+    publishedRegistrySha256,
+  };
+  console.log("Historical replay verification block:", historicalReplayVerification);
+
+  // ---------------------------------------------------------------------
   // Escreve os arquivos de dados congelados.
   // ---------------------------------------------------------------------
   writePhysicalSegmentsFiles(physicalSegments);
   writeGeometryPageFiles(gen1.geometries);
   writeManifest({
     documentHash: actualHash,
-    adapterVersion: EXPECTED_ADAPTER_VERSION,
-    underlyingLibraryVersion: EXPECTED_UNDERLYING_LIBRARY_VERSION,
     generationHash,
     totalCells: gen1.geometries.length,
     byResolutionKind: Object.fromEntries(byResolutionKind),
     sharedGroupCount: sharedGroupIds.size,
+    previousFullArtifactSha256: PREVIOUS_FULL_ARTIFACT_SHA256,
+    canonicalSpatialGeometrySha256,
+    historicalReplayVerification,
   });
   writeSvgFiles(gen1.geometries);
 
@@ -396,6 +514,21 @@ async function main(): Promise<void> {
 
 function tsStringLiteral(value: string): string {
   return JSON.stringify(value);
+}
+
+function boxLiteral(box: { leftPoints: number; topPoints: number; rightPoints: number; bottomPoints: number }): string {
+  return `{ leftPoints: ${box.leftPoints}, topPoints: ${box.topPoints}, rightPoints: ${box.rightPoints}, bottomPoints: ${box.bottomPoints} }`;
+}
+
+function locatorLiteral(l: ReferenceTruthPhysicalSegmentGeometry["reproducibleLocator"]): string {
+  return (
+    `{ sourceDocumentSha256: ${tsStringLiteral(l.sourceDocumentSha256)}, realPageNumber: ${l.realPageNumber}, ` +
+    `frozenPhysicalRegionId: ${tsStringLiteral(l.frozenPhysicalRegionId)}, regionVerticalOrder: ${l.regionVerticalOrder}, segmentHorizontalOrder: ${l.segmentHorizontalOrder}, ` +
+    `regionBoundingBox: ${boxLiteral(l.regionBoundingBox)}, segmentBoundingBox: ${boxLiteral(l.segmentBoundingBox)}, ` +
+    `physicalAdapterVersionSha256: ${tsStringLiteral(l.physicalAdapterVersionSha256)}, physicalUnderlyingLibraryVersionSha256: ${tsStringLiteral(l.physicalUnderlyingLibraryVersionSha256)}, ` +
+    `reconstructionContextFingerprint: ${tsStringLiteral(l.reconstructionContextFingerprint)}, physicalGeometryContextFingerprint: ${tsStringLiteral(l.physicalGeometryContextFingerprint)}, ` +
+    `reproducibleLineKey: ${tsStringLiteral(l.reproducibleLineKey)}, reproducibleSegmentKey: ${tsStringLiteral(l.reproducibleSegmentKey)} }`
+  );
 }
 
 function writePhysicalSegmentsFiles(segments: ReadonlyArray<ReferenceTruthPhysicalSegmentGeometry>): void {
@@ -407,7 +540,10 @@ function writePhysicalSegmentsFiles(segments: ReadonlyArray<ReferenceTruthPhysic
     lines.push(` * referenciados por physicalOriginPt de alguma célula da página ${page}. Gerado por`);
     lines.push(` * uma execução determinística do reconstrutor físico já aprovado do domínio contra o`);
     lines.push(` * documento-fonte exato (ver EPIC_21_EXPECTED_CELL_GEOMETRY_REPORT.md) — nunca por`);
-    lines.push(` * Docling, leitura óptica de caracteres ou qualquer motor. Não editar manualmente: regenerar via`);
+    lines.push(` * Docling, leitura óptica de caracteres ou qualquer motor. legacyDeclaredSegmentKey é`);
+    lines.push(` * apenas o ponteiro interno histórico (status legacy_unreproducible — ver`);
+    lines.push(` * EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md); a identidade canônica é`);
+    lines.push(` * reproducibleLocator. Não editar manualmente: regenerar via`);
     lines.push(` * o gerador único de dados reais desta Sprint (ver EPIC_21_EXPECTED_CELL_GEOMETRY_REPORT.md, §2, para o caminho exato).`);
     lines.push(` */`);
     lines.push(`import type { ReferenceTruthPhysicalSegmentGeometry } from "./discovery-reference-truth-cell-geometry.types";`);
@@ -415,7 +551,7 @@ function writePhysicalSegmentsFiles(segments: ReadonlyArray<ReferenceTruthPhysic
     lines.push(`export const REFERENCE_TRUTH_CELL_GEOMETRY_PHYSICAL_SEGMENTS_PAGE_${page}: ReadonlyArray<ReferenceTruthPhysicalSegmentGeometry> = [`);
     pageSegments.forEach((s) => {
       lines.push(
-        `  { segmentKey: ${tsStringLiteral(s.segmentKey)}, realPageNumber: ${s.realPageNumber}, boundingBox: { leftPoints: ${s.boundingBox.leftPoints}, topPoints: ${s.boundingBox.topPoints}, rightPoints: ${s.boundingBox.rightPoints}, bottomPoints: ${s.boundingBox.bottomPoints} } },`,
+        `  { legacyDeclaredSegmentKey: ${tsStringLiteral(s.legacyDeclaredSegmentKey)}, legacyDeclaredSegmentKeyStatus: ${tsStringLiteral(s.legacyDeclaredSegmentKeyStatus)}, realPageNumber: ${s.realPageNumber}, boundingBox: ${boxLiteral(s.boundingBox)}, associationBasis: ${tsStringLiteral(s.associationBasis)}, reproducibleLocator: ${locatorLiteral(s.reproducibleLocator)} },`,
       );
     });
     lines.push(`];`);
@@ -426,26 +562,22 @@ function writePhysicalSegmentsFiles(segments: ReadonlyArray<ReferenceTruthPhysic
   });
 }
 
-function boxLiteral(box: { leftPoints: number; topPoints: number; rightPoints: number; bottomPoints: number }): string {
-  return `{ leftPoints: ${box.leftPoints}, topPoints: ${box.topPoints}, rightPoints: ${box.rightPoints}, bottomPoints: ${box.bottomPoints} }`;
-}
-
 function geometryLiteral(g: ReferenceTruthCellGeometry): string {
   const fragments = g.fragments
     .map(
       (f) =>
-        `{ id: ${tsStringLiteral(f.id)}, sourceSegmentKey: ${f.sourceSegmentKey === null ? "null" : tsStringLiteral(f.sourceSegmentKey)}, sourceBoundingBox: ${f.sourceBoundingBox === null ? "null" : boxLiteral(f.sourceBoundingBox)}, projectionKind: ${tsStringLiteral(f.projectionKind)}, projectedBoundingBox: ${boxLiteral(f.projectedBoundingBox)} }`,
+        `{ id: ${tsStringLiteral(f.id)}, legacyDeclaredSegmentKey: ${f.legacyDeclaredSegmentKey === null ? "null" : tsStringLiteral(f.legacyDeclaredSegmentKey)}, legacyDeclaredSegmentKeyStatus: ${f.legacyDeclaredSegmentKeyStatus === null ? "null" : tsStringLiteral(f.legacyDeclaredSegmentKeyStatus)}, reproducibleLocator: ${f.reproducibleLocator === null ? "null" : locatorLiteral(f.reproducibleLocator)}, associationBasis: ${f.associationBasis === null ? "null" : tsStringLiteral(f.associationBasis)}, sourceBoundingBox: ${f.sourceBoundingBox === null ? "null" : boxLiteral(f.sourceBoundingBox)}, projectionKind: ${tsStringLiteral(f.projectionKind)}, projectedBoundingBox: ${boxLiteral(f.projectedBoundingBox)} }`,
     )
     .join(", ");
   const p = g.provenance;
   return (
     `{ schemaVersion: ${g.schemaVersion}, cellId: ${tsStringLiteral(g.cellId)}, realPageNumber: ${g.realPageNumber}, logicalRowId: ${tsStringLiteral(g.logicalRowId)}, columnId: ${tsStringLiteral(g.columnId)}, ` +
     `resolutionKind: ${tsStringLiteral(g.resolutionKind)}, spatialSemantics: ${tsStringLiteral(g.spatialSemantics)}, ` +
-    `sourceSegmentKeys: [${g.sourceSegmentKeys.map(tsStringLiteral).join(", ")}], sourcePhysicalRegionIds: [${g.sourcePhysicalRegionIds.map(tsStringLiteral).join(", ")}], ` +
+    `legacyDeclaredSegmentKeys: [${g.legacyDeclaredSegmentKeys.map(tsStringLiteral).join(", ")}], sourcePhysicalRegionIds: [${g.sourcePhysicalRegionIds.map(tsStringLiteral).join(", ")}], ` +
     `rowBand: ${boxLiteral(g.rowBand)}, columnBand: { leftPoints: ${g.columnBand.leftPoints}, rightPoints: ${g.columnBand.rightPoints} }, ` +
     `fragments: [${fragments}], expectedEnvelope: ${boxLiteral(g.expectedEnvelope)}, ` +
     `sharedGeometryGroupId: ${g.sharedGeometryGroupId === null ? "null" : tsStringLiteral(g.sharedGeometryGroupId)}, sharedWithCellIds: [${g.sharedWithCellIds.map(tsStringLiteral).join(", ")}], ` +
-    `provenance: { cellId: ${tsStringLiteral(p.cellId)}, logicalRowId: ${tsStringLiteral(p.logicalRowId)}, columnId: ${tsStringLiteral(p.columnId)}, columnRole: ${tsStringLiteral(p.columnRole)}, physicalOriginPt: ${tsStringLiteral(p.physicalOriginPt)}, parsedSegmentKeys: [${p.parsedSegmentKeys.map(tsStringLiteral).join(", ")}], rowPhysicalRegionIds: [${p.rowPhysicalRegionIds.map(tsStringLiteral).join(", ")}], resolutionNotesPt: ${tsStringLiteral(p.resolutionNotesPt)} } }`
+    `provenance: { cellId: ${tsStringLiteral(p.cellId)}, logicalRowId: ${tsStringLiteral(p.logicalRowId)}, columnId: ${tsStringLiteral(p.columnId)}, columnRole: ${tsStringLiteral(p.columnRole)}, physicalOriginPt: ${tsStringLiteral(p.physicalOriginPt)}, legacyDeclaredSegmentKeys: [${p.legacyDeclaredSegmentKeys.map(tsStringLiteral).join(", ")}], rowPhysicalRegionIds: [${p.rowPhysicalRegionIds.map(tsStringLiteral).join(", ")}], resolutionNotesPt: ${tsStringLiteral(p.resolutionNotesPt)} } }`
   );
 }
 
@@ -475,37 +607,77 @@ function writeGeometryPageFiles(geometries: ReadonlyArray<ReferenceTruthCellGeom
   });
 }
 
+interface HistoricalReplayVerificationInfo {
+  readonly historicalReferenceTruthCommitSha: string;
+  readonly historicalLineCount: number;
+  readonly historicalSegmentOccurrenceCount: number;
+  readonly historicalDistinctSegmentKeyCount: number;
+  readonly publishedCellReferencedSegmentKeyCount: number;
+  readonly directLineKeyResolutionFailureCount: number;
+  readonly directSegmentKeyResolutionFailureCount: number;
+  readonly individualBoundingBoxMismatchCount: number;
+  readonly ambiguityCount: number;
+  readonly historicalDirectRegistrySha256: string;
+  readonly currentPositionalBridgeRegistrySha256: string;
+  readonly publishedRegistrySha256: string;
+}
+
 function writeManifest(info: {
   documentHash: string;
-  adapterVersion: string;
-  underlyingLibraryVersion: string;
   generationHash: string;
   totalCells: number;
   byResolutionKind: Record<string, number>;
   sharedGroupCount: number;
+  previousFullArtifactSha256: string;
+  canonicalSpatialGeometrySha256: string;
+  historicalReplayVerification: HistoricalReplayVerificationInfo;
 }): void {
+  const h = info.historicalReplayVerification;
   const lines: string[] = [];
   lines.push(`/**`);
-  lines.push(` * Manifesto determinístico da geometria esperada real (Commit 2). Não editar`);
-  lines.push(` * manualmente: regenerar via`);
-  lines.push(` * o gerador único de dados reais desta Sprint (ver EPIC_21_EXPECTED_CELL_GEOMETRY_REPORT.md, §2, para o caminho exato).`);
+  lines.push(` * Manifesto determinístico da geometria esperada real (schemaVersion 2 — verificação`);
+  lines.push(` * probatória final da PR #82: proveniência corrigida, geometria espacial inalterada).`);
+  lines.push(` * Não editar manualmente: regenerar via o gerador único de dados reais desta Sprint`);
+  lines.push(` * (ver EPIC_21_EXPECTED_CELL_GEOMETRY_REPORT.md, §2, para o caminho exato).`);
   lines.push(` *`);
-  lines.push(` * A identidade do adaptador físico e da biblioteca subjacente é registrada aqui`);
-  lines.push(` * apenas por hash (nunca como literal de texto): este arquivo vive fora do único`);
-  lines.push(` * diretório do pacote autorizado a mencionar essa dependência de infraestrutura`);
-  lines.push(` * (guarda arquitetural pré-existente, não desta Sprint). O valor literal completo`);
-  lines.push(` * está documentado em EPIC_21_EXPECTED_CELL_GEOMETRY_REPORT.md, §1.`);
+  lines.push(` * A identidade do adaptador físico e da biblioteca subjacente (dentro de`);
+  lines.push(` * reproducibleLocator, nos registros de segmento) é registrada apenas por hash (nunca`);
+  lines.push(` * como literal de texto): este arquivo vive fora do único diretório do pacote`);
+  lines.push(` * autorizado a mencionar essa dependência de infraestrutura (guarda arquitetural`);
+  lines.push(` * pré-existente, não desta Sprint). O valor literal completo está documentado em`);
+  lines.push(` * EPIC_21_EXPECTED_CELL_GEOMETRY_REPORT.md, §1.`);
+  lines.push(` *`);
+  lines.push(` * historicalReplayVerification registra o resultado, já obtido e aceito, da prova`);
+  lines.push(` * histórica direta (replay no commit de congelamento da verdade de referência, com`);
+  lines.push(` * lockfile congelado — ver EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md):`);
+  lines.push(` * as lineKey/segmentKey históricas não são reproduzíveis por nenhuma execução`);
+  lines.push(` * conhecida da cadeia física. A geometria em si permanece intacta e é a mesma`);
+  lines.push(` * publicada antes desta correção (ver previousFullArtifactSha256/canonicalSpatialGeometrySha256).`);
   lines.push(` */`);
   lines.push(`export const REFERENCE_TRUTH_CELL_GEOMETRY_MANIFEST = {`);
-  lines.push(`  schemaVersion: 1,`);
+  lines.push(`  schemaVersion: 2,`);
   lines.push(`  sourceDocumentSha256: ${tsStringLiteral(info.documentHash)},`);
-  lines.push(`  physicalAdapterVersionSha256: ${tsStringLiteral(sha256Hex(info.adapterVersion))},`);
-  lines.push(`  physicalUnderlyingLibraryVersionSha256: ${tsStringLiteral(sha256Hex(info.underlyingLibraryVersion))},`);
   lines.push(`  realPageNumbers: [${TARGET_PAGES.join(", ")}],`);
   lines.push(`  totalCellCount: ${info.totalCells},`);
   lines.push(`  countByResolutionKind: ${JSON.stringify(info.byResolutionKind)},`);
   lines.push(`  sharedGeometryGroupCount: ${info.sharedGroupCount},`);
   lines.push(`  canonicalGenerationSha256: ${tsStringLiteral(info.generationHash)},`);
+  lines.push(`  previousFullArtifactSha256: ${tsStringLiteral(info.previousFullArtifactSha256)},`);
+  lines.push(`  canonicalSpatialGeometrySha256: ${tsStringLiteral(info.canonicalSpatialGeometrySha256)},`);
+  lines.push(`  historicalReplayVerification: {`);
+  lines.push(`    historicalReferenceTruthCommitSha: ${tsStringLiteral(h.historicalReferenceTruthCommitSha)},`);
+  lines.push(`    historicalLineCount: ${h.historicalLineCount},`);
+  lines.push(`    historicalSegmentOccurrenceCount: ${h.historicalSegmentOccurrenceCount},`);
+  lines.push(`    historicalDistinctSegmentKeyCount: ${h.historicalDistinctSegmentKeyCount},`);
+  lines.push(`    publishedCellReferencedSegmentKeyCount: ${h.publishedCellReferencedSegmentKeyCount},`);
+  lines.push(`    directLineKeyResolutionFailureCount: ${h.directLineKeyResolutionFailureCount},`);
+  lines.push(`    directSegmentKeyResolutionFailureCount: ${h.directSegmentKeyResolutionFailureCount},`);
+  lines.push(`    individualBoundingBoxMismatchCount: ${h.individualBoundingBoxMismatchCount},`);
+  lines.push(`    ambiguityCount: ${h.ambiguityCount},`);
+  lines.push(`    historicalDirectRegistrySha256: ${tsStringLiteral(h.historicalDirectRegistrySha256)},`);
+  lines.push(`    currentPositionalBridgeRegistrySha256: ${tsStringLiteral(h.currentPositionalBridgeRegistrySha256)},`);
+  lines.push(`    publishedRegistrySha256: ${tsStringLiteral(h.publishedRegistrySha256)},`);
+  lines.push(`  },`);
   lines.push(`} as const;`);
   lines.push(``);
   const filePath = join(CELL_GEOMETRY_DIR, "discovery-reference-truth-cell-geometry-manifest.ts");

@@ -243,6 +243,58 @@ runTest("real per-page data files (page 46/50/54) are exempt from the generic-li
   assertEqual(REAL_DATA_FILE_SUFFIXES.length, 7, "the real-data exemption suffix list must remain exactly the deliberate set of page/segment/manifest data files");
 });
 
+// ============================================================================
+// Verificação probatória final da PR #82: legacyDeclaredSegmentKey nunca
+// pode voltar a ser tratada como identidade física reproduzível. A
+// aplicação primária é por TIPO (campo obrigatório e emparelhado com
+// `legacyDeclaredSegmentKeyStatus` na mesma interface, nunca opcional
+// sozinho) — estas checagens são uma segunda linha de defesa textual.
+// ============================================================================
+
+runTest("the old field name sourceSegmentKey (which implied reproducible physical identity) never reappears anywhere in cell-geometry/", () => {
+  const violations: Violation[] = [];
+  listTsFiles(CELL_GEOMETRY_DIR).forEach((file) => {
+    const content = readFileSync(file, "utf8");
+    if (content.includes("sourceSegmentKey")) {
+      violations.push({ file: toRepoRelative(file), line: 1, reason: 'contains the retired field name "sourceSegmentKey" — legacy identity must be named legacyDeclaredSegmentKey, paired with legacyDeclaredSegmentKeyStatus' });
+    }
+  });
+  assertNoViolations(violations, "a cell-geometry file reintroduces the retired sourceSegmentKey field name");
+});
+
+runTest("the types contract declares legacyDeclaredSegmentKey only ever paired with legacyDeclaredSegmentKeyStatus, and declares the reproducible locator's canonical key fields", () => {
+  const typesFile = join(CELL_GEOMETRY_DIR, "discovery-reference-truth-cell-geometry.types.ts");
+  const content = readFileSync(typesFile, "utf8");
+  const violations: Violation[] = [];
+
+  if (!content.includes("legacyDeclaredSegmentKeyStatus")) {
+    violations.push({ file: toRepoRelative(typesFile), line: 1, reason: "missing legacyDeclaredSegmentKeyStatus field — legacy keys must always carry an explicit non-reproducible status" });
+  }
+  if (!content.includes('"legacy_unreproducible"')) {
+    violations.push({ file: toRepoRelative(typesFile), line: 1, reason: 'missing the literal LegacyDeclaredKeyStatus value "legacy_unreproducible"' });
+  }
+  if (!content.includes("reproducibleLineKey") || !content.includes("reproducibleSegmentKey")) {
+    violations.push({ file: toRepoRelative(typesFile), line: 1, reason: "ReproduciblePhysicalSegmentLocator must declare reproducibleLineKey and reproducibleSegmentKey as the canonical identity fields" });
+  }
+
+  assertNoViolations(violations, "the cell-geometry types contract does not correctly separate legacy (non-reproducible) identity from the reproducible canonical locator");
+});
+
+runTest("the shared-geometry group id is derived from the reproducible locator key, never from the legacy declared key", () => {
+  const projectionFile = join(CELL_GEOMETRY_DIR, "discovery-reference-truth-cell-geometry-projection.ts");
+  const content = readFileSync(projectionFile, "utf8");
+  const violations: Violation[] = [];
+
+  const fnMatch = content.match(/function sharedGeometryGroupId\(([^)]*)\)/);
+  if (fnMatch === null) {
+    violations.push({ file: toRepoRelative(projectionFile), line: 1, reason: "expected to find the sharedGeometryGroupId(...) function" });
+  } else if (!fnMatch[1].includes("reproducibleSegmentKey") && !fnMatch[1].toLowerCase().includes("reproducible")) {
+    violations.push({ file: toRepoRelative(projectionFile), line: 1, reason: `sharedGeometryGroupId's own parameter name must reflect the reproducible key, not the legacy one: "${fnMatch[1]}"` });
+  }
+
+  assertNoViolations(violations, "sharedGeometryGroupId is not clearly derived from the reproducible (canonical) key");
+});
+
 function runTest(name: string, testCase: () => void): void {
   testCase();
   console.log(`ok - ${name}`);

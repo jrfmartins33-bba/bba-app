@@ -11,8 +11,11 @@
  */
 import { createHash } from "node:crypto";
 import { REFERENCE_TRUTH_BUNDLES, REFERENCE_TRUTH_COLUMNS } from "../discovery-reference-truth";
-import { buildReferenceTruthCellGeometry } from "./discovery-reference-truth-cell-geometry";
+import { buildReferenceTruthCellGeometry, buildCanonicalSpatialProjection } from "./discovery-reference-truth-cell-geometry";
 import type { ReferenceTruthCellGeometryPageBounds } from "./discovery-reference-truth-cell-geometry.types";
+
+/** Hash canônico espacial capturado a partir dos dados publicados sob schemaVersion 1, antes da correção de proveniência (verificação probatória final da PR #82, §6) — ver EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md. */
+const PREVIOUS_CANONICAL_SPATIAL_GEOMETRY_SHA256 = "9221d8bb0f7994cdde106cdf1ba718380881d2d4cbe1710add52705bec62680b";
 import { REFERENCE_TRUTH_CELL_GEOMETRY_PHYSICAL_SEGMENTS_PAGE_46 } from "./discovery-reference-truth-cell-geometry-physical-segments-page-46";
 import { REFERENCE_TRUTH_CELL_GEOMETRY_PHYSICAL_SEGMENTS_PAGE_50 } from "./discovery-reference-truth-cell-geometry-physical-segments-page-50";
 import { REFERENCE_TRUTH_CELL_GEOMETRY_PHYSICAL_SEGMENTS_PAGE_54 } from "./discovery-reference-truth-cell-geometry-physical-segments-page-54";
@@ -207,7 +210,7 @@ runTest("nenhum segmento do registro físico está órfão: todo segmento public
     m[1].split(",").forEach((k) => referenced.add(`${cell.realPageNumber}:${k.trim()}`));
   });
   PUBLISHED_SEGMENTS.forEach((s) => {
-    assert(referenced.has(`${s.realPageNumber}:${s.segmentKey}`), `published segment "${s.segmentKey}" on page ${s.realPageNumber} is never referenced by any cell`);
+    assert(referenced.has(`${s.realPageNumber}:${s.legacyDeclaredSegmentKey}`), `published segment "${s.legacyDeclaredSegmentKey}" on page ${s.realPageNumber} is never referenced by any cell`);
   });
 });
 
@@ -221,4 +224,93 @@ runTest("todas as caixas publicadas são finitas, corretamente ordenadas (left<r
       assert(box.leftPoints >= 0 && box.topPoints >= 0 && box.rightPoints <= bounds.pageWidthPoints && box.bottomPoints <= bounds.pageHeightPoints, `cell "${g.cellId}" has a bounding box outside the page`);
     });
   });
+});
+
+// ============================================================================
+// schemaVersion 2 — verificação probatória final da PR #82: proveniência
+// reproduzível, geometria espacial inalterada (ver
+// EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md).
+// ============================================================================
+
+runTest("nenhuma caixa espacial mudou: o hash canônico espacial recalculado sobre os dados publicados é idêntico ao hash já registrado no manifesto", () => {
+  const projection = buildCanonicalSpatialProjection(PUBLISHED_GEOMETRIES);
+  const recomputed = createHash("sha256").update(JSON.stringify(projection)).digest("hex");
+  assertEqual(recomputed, REFERENCE_TRUTH_CELL_GEOMETRY_MANIFEST.canonicalSpatialGeometrySha256);
+});
+
+runTest("hash espacial anterior (schemaVersion 1, pré-correção) é idêntico ao hash espacial novo (schemaVersion 2) — a correção de proveniência nunca alterou nenhuma geometria", () => {
+  assertEqual(REFERENCE_TRUTH_CELL_GEOMETRY_MANIFEST.canonicalSpatialGeometrySha256, PREVIOUS_CANONICAL_SPATIAL_GEOMETRY_SHA256);
+});
+
+runTest("toda geometria não-vazia possui, em cada fragmento, um localizador estrutural reproduzível com página/ordens/caixas/fingerprints válidos", () => {
+  PUBLISHED_GEOMETRIES.forEach((g) => {
+    g.fragments.forEach((f) => {
+      if (f.projectionKind === "row_column_empty_slot") {
+        assertEqual(f.reproducibleLocator, null, `empty-slot fragment "${f.id}" must never carry a reproducibleLocator`);
+        assertEqual(f.legacyDeclaredSegmentKey, null);
+        assertEqual(f.legacyDeclaredSegmentKeyStatus, null);
+        assertEqual(f.associationBasis, null);
+        return;
+      }
+      const locator = f.reproducibleLocator;
+      assert(locator !== null, `fragment "${f.id}" of cell "${g.cellId}" must have a reproducibleLocator`);
+      assertEqual(locator!.realPageNumber, g.realPageNumber, `fragment "${f.id}" locator page must match the cell's page`);
+      assert(Number.isInteger(locator!.regionVerticalOrder) && locator!.regionVerticalOrder > 0, `fragment "${f.id}" locator has an invalid regionVerticalOrder`);
+      assert(Number.isInteger(locator!.segmentHorizontalOrder) && locator!.segmentHorizontalOrder > 0, `fragment "${f.id}" locator has an invalid segmentHorizontalOrder`);
+      assert(locator!.regionBoundingBox.leftPoints < locator!.regionBoundingBox.rightPoints && locator!.regionBoundingBox.topPoints < locator!.regionBoundingBox.bottomPoints, `fragment "${f.id}" locator has an invalid regionBoundingBox`);
+      assert(locator!.segmentBoundingBox.leftPoints < locator!.segmentBoundingBox.rightPoints && locator!.segmentBoundingBox.topPoints < locator!.segmentBoundingBox.bottomPoints, `fragment "${f.id}" locator has an invalid segmentBoundingBox`);
+      assert(locator!.sourceDocumentSha256.length === 64, `fragment "${f.id}" locator has an invalid sourceDocumentSha256`);
+      assert(locator!.physicalAdapterVersionSha256.length === 64, `fragment "${f.id}" locator has an invalid physicalAdapterVersionSha256`);
+      assert(locator!.physicalUnderlyingLibraryVersionSha256.length === 64, `fragment "${f.id}" locator has an invalid physicalUnderlyingLibraryVersionSha256`);
+      assert(locator!.reconstructionContextFingerprint.length === 64, `fragment "${f.id}" locator has an invalid reconstructionContextFingerprint`);
+      assert(locator!.physicalGeometryContextFingerprint.length === 64, `fragment "${f.id}" locator has an invalid physicalGeometryContextFingerprint`);
+      assert(locator!.reproducibleLineKey.length === 64 && locator!.reproducibleSegmentKey.length === 64, `fragment "${f.id}" locator has invalid reproducible keys`);
+    });
+  });
+});
+
+runTest("nenhuma geometria usa a chave histórica declarada como identidade canônica: reproducibleSegmentKey nunca é igual a legacyDeclaredSegmentKey", () => {
+  let checked = 0;
+  PUBLISHED_GEOMETRIES.forEach((g) => {
+    g.fragments.forEach((f) => {
+      if (f.reproducibleLocator === null || f.legacyDeclaredSegmentKey === null) return;
+      checked++;
+      assert(f.reproducibleLocator.reproducibleSegmentKey !== f.legacyDeclaredSegmentKey, `fragment "${f.id}" must never use the legacy declared key as its reproducible identity`);
+    });
+  });
+  assert(checked > 0, "expected at least one resolved fragment to check");
+});
+
+runTest("toda legacyDeclaredSegmentKey publicada possui exatamente o status legacy_unreproducible", () => {
+  PUBLISHED_SEGMENTS.forEach((s) => {
+    assertEqual(s.legacyDeclaredSegmentKeyStatus, "legacy_unreproducible", `segment "${s.legacyDeclaredSegmentKey}" must have status legacy_unreproducible`);
+    assertEqual(s.associationBasis, "exact_structural_position_with_region_geometry_validation", `segment "${s.legacyDeclaredSegmentKey}" must declare the exact structural association basis`);
+  });
+  PUBLISHED_GEOMETRIES.forEach((g) => {
+    g.fragments.forEach((f) => {
+      if (f.legacyDeclaredSegmentKey === null) return;
+      assertEqual(f.legacyDeclaredSegmentKeyStatus, "legacy_unreproducible", `fragment "${f.id}" must have status legacy_unreproducible`);
+      assertEqual(f.associationBasis, "exact_structural_position_with_region_geometry_validation", `fragment "${f.id}" must declare the exact structural association basis`);
+    });
+  });
+});
+
+runTest("distribuição preservada: 683 geometrias exclusivas (single_source_fragment) e 336 compartilhadas (shared_source_geometry), 167 grupos compartilhados", () => {
+  const single = PUBLISHED_GEOMETRIES.filter((g) => g.resolutionKind === "single_source_fragment").length;
+  const shared = PUBLISHED_GEOMETRIES.filter((g) => g.resolutionKind === "shared_source_geometry").length;
+  assertEqual(single, 683);
+  assertEqual(shared, 336);
+  assertEqual(single + shared, 1019);
+  const sharedGroupIds = new Set(PUBLISHED_GEOMETRIES.map((g) => g.sharedGeometryGroupId).filter((id): id is string => id !== null));
+  assertEqual(sharedGroupIds.size, 167);
+});
+
+runTest("prova histórica negativa registrada no manifesto: 186/186 falhas de lineKey direta, 0 ambiguidades, commit histórico correto", () => {
+  const h = REFERENCE_TRUTH_CELL_GEOMETRY_MANIFEST.historicalReplayVerification;
+  assertEqual(h.historicalReferenceTruthCommitSha, "ccd8f8f1627e4f628f8787c36a2b27517a42e29b");
+  assertEqual(h.historicalLineCount, 186);
+  assertEqual(h.directLineKeyResolutionFailureCount, 186);
+  assertEqual(h.ambiguityCount, 0);
+  assertEqual(h.individualBoundingBoxMismatchCount, 0);
+  assertEqual(h.publishedCellReferencedSegmentKeyCount, PUBLISHED_SEGMENTS.length);
 });

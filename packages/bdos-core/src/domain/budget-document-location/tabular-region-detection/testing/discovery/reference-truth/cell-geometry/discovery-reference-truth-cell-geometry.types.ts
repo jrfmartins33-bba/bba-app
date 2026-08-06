@@ -10,10 +10,27 @@
  * determinístico ou qualquer resultado v1/v2 — apenas os tipos já
  * congelados de `discovery-reference-truth.types` e uma evidência física
  * de segmentos, resolvida à parte.
+ *
+ * schemaVersion 2 (verificação probatória final da PR #81/#82): a prova
+ * histórica direta — replay da cadeia física exatamente no commit em que
+ * a verdade de referência foi congelada, com lockfile congelado, contra
+ * o documento exato — mostrou que as `lineKey`/`segmentKey` já
+ * declaradas em `physicalOriginPt`/`ReferenceTruthPhysicalRegion.segmentKeys`
+ * não são reproduzíveis por nenhuma execução, em nenhum commit conhecido,
+ * do reconstrutor físico já aprovado do domínio (leitor físico ->
+ * observação de sinais -> localização de páginas -> reconstrução de
+ * estrutura — ver `EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md`). Essas
+ * chaves permanecem no contrato exclusivamente como identificadores
+ * históricos internos congelados — nunca mais como identidade física
+ * reproduzível. A identidade canônica de cada segmento passou a ser o
+ * `ReproduciblePhysicalSegmentLocator`, construído deterministicamente a
+ * partir de posição estrutural congelada (página, região física, ordem
+ * vertical da região, ordem horizontal do segmento) mais identidade
+ * verificada do reconstrutor físico — nunca a partir da chave antiga.
  */
 import type { ReferenceTruthColumnRole } from "../discovery-reference-truth.types";
 
-export const REFERENCE_TRUTH_CELL_GEOMETRY_SCHEMA_VERSION = 1 as const;
+export const REFERENCE_TRUTH_CELL_GEOMETRY_SCHEMA_VERSION = 2 as const;
 
 // --- geometria primitiva -----------------------------------------------------
 
@@ -29,22 +46,86 @@ export interface ReferenceTruthHorizontalBand {
   readonly rightPoints: number;
 }
 
+// --- identidade histórica (não reproduzível) e identidade reproduzível ------
+
+/**
+ * Estado único e definitivo das chaves `lineKey`/`segmentKey` já
+ * declaradas na verdade de referência congelada. Comprovado por replay
+ * direto no próprio commit de congelamento (ver
+ * `EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md`): não
+ * existe evidência versionada ou execução reproduzível capaz de
+ * demonstrar como essas chaves foram produzidas. Nunca tratado como
+ * "chave provavelmente errada" ou "chave desatualizada" — apenas como o
+ * que é: um identificador histórico interno cuja origem de geração não
+ * pôde ser reproduzida.
+ */
+export type LegacyDeclaredKeyStatus = "legacy_unreproducible";
+
+/**
+ * Base formal, e única, da associação entre uma célula e a geometria de
+ * um segmento físico nesta camada: mesma página + mesma posição vertical
+ * da região física congelada + caixa da região exatamente igual (via
+ * pareamento estrutural contra uma reconstrução física fresca) + mesma
+ * quantidade de segmentos + mesma ordem horizontal do segmento dentro da
+ * linha + duas execuções físicas independentes e idênticas + zero
+ * ambiguidade estrutural. Nunca "resolução direta por chave" (as chaves
+ * antigas não são reproduzíveis — ver `LegacyDeclaredKeyStatus`), nunca
+ * fuzzy matching, nunca aproximação, nunca inferência por conteúdo
+ * textual.
+ */
+export type SegmentGeometryAssociationBasis = "exact_structural_position_with_region_geometry_validation";
+
+/**
+ * Localizador estrutural reproduzível — a identidade canônica de um
+ * segmento físico nesta camada, a partir do schemaVersion 2. Determinístico
+ * por construção: toda entrada é um fato estrutural já congelado (posição
+ * da região/segmento) ou uma identidade de reconstrutor já verificada
+ * como determinística (duas execuções físicas independentes e
+ * idênticas). `reproducibleLineKey`/`reproducibleSegmentKey` são
+ * calculadas a partir exclusivamente desses campos — nunca da
+ * `lineKey`/`segmentKey` histórica.
+ */
+export interface ReproduciblePhysicalSegmentLocator {
+  readonly sourceDocumentSha256: string;
+  readonly realPageNumber: number;
+
+  readonly frozenPhysicalRegionId: string;
+  readonly regionVerticalOrder: number;
+  readonly segmentHorizontalOrder: number;
+
+  readonly regionBoundingBox: ReferenceTruthBoundingBox;
+  readonly segmentBoundingBox: ReferenceTruthBoundingBox;
+
+  readonly physicalAdapterVersionSha256: string;
+  readonly physicalUnderlyingLibraryVersionSha256: string;
+  readonly reconstructionContextFingerprint: string;
+  readonly physicalGeometryContextFingerprint: string;
+
+  readonly reproducibleLineKey: string;
+  readonly reproducibleSegmentKey: string;
+}
+
 // --- evidência física independente (nunca derivada do motor ou de leitores) -
 
 /**
- * Um segmento horizontal físico já reconstruído pelo reconstrutor
- * estrutural aprovado do domínio (linhas/segmentos/blocos), identificado
- * por `segmentKey` — a mesma chave referenciada em
- * `ReferenceTruthCell.physicalOriginPt` e em
- * `ReferenceTruthPhysicalRegion.segmentKeys`. Não é recalculada por este
- * módulo: é lida de um registro congelado (ver `physical-segments-page-*`
- * nesta mesma pasta), produzido por uma execução independente e
- * determinística do reconstrutor físico contra o documento exato.
+ * Uma entrada do registro de segmentos físicos, indexada pela chave
+ * histórica declarada (a única forma de resolver `physicalOriginPt`,
+ * que nunca é reescrito). Carrega, lado a lado: a chave histórica com
+ * seu status definitivo, a caixa delimitadora física (obtida por
+ * associação estrutural exata — nunca alterada por esta correção), e o
+ * localizador estrutural reproduzível que passa a ser a identidade
+ * canônica. Não é recalculada por este módulo: é lida de um registro
+ * congelado (ver `physical-segments-page-*` nesta mesma pasta),
+ * produzido por uma execução independente e determinística do
+ * reconstrutor físico contra o documento exato.
  */
 export interface ReferenceTruthPhysicalSegmentGeometry {
-  readonly segmentKey: string;
+  readonly legacyDeclaredSegmentKey: string;
+  readonly legacyDeclaredSegmentKeyStatus: LegacyDeclaredKeyStatus;
   readonly realPageNumber: number;
   readonly boundingBox: ReferenceTruthBoundingBox;
+  readonly associationBasis: SegmentGeometryAssociationBasis;
+  readonly reproducibleLocator: ReproduciblePhysicalSegmentLocator;
 }
 
 // --- classificação da célula --------------------------------------------------
@@ -64,7 +145,12 @@ export type ReferenceTruthCellGeometryFragmentProjectionKind =
 
 export interface ReferenceTruthCellGeometryFragment {
   readonly id: string;
-  readonly sourceSegmentKey: string | null;
+  /** Identificador histórico interno congelado — nunca uma identidade física reproduzida. `null` apenas para `row_column_empty_slot`. */
+  readonly legacyDeclaredSegmentKey: string | null;
+  readonly legacyDeclaredSegmentKeyStatus: LegacyDeclaredKeyStatus | null;
+  /** Identidade canônica reproduzível deste fragmento. `null` apenas para `row_column_empty_slot` (que não tem segmento de origem). */
+  readonly reproducibleLocator: ReproduciblePhysicalSegmentLocator | null;
+  readonly associationBasis: SegmentGeometryAssociationBasis | null;
   readonly sourceBoundingBox: ReferenceTruthBoundingBox | null;
   readonly projectionKind: ReferenceTruthCellGeometryFragmentProjectionKind;
   readonly projectedBoundingBox: ReferenceTruthBoundingBox;
@@ -76,7 +162,8 @@ export interface ReferenceTruthCellGeometryProvenance {
   readonly columnId: string;
   readonly columnRole: ReferenceTruthColumnRole;
   readonly physicalOriginPt: string;
-  readonly parsedSegmentKeys: ReadonlyArray<string>;
+  /** Chaves históricas extraídas de `physicalOriginPt`, em ordem declarada — ver `LegacyDeclaredKeyStatus`. */
+  readonly legacyDeclaredSegmentKeys: ReadonlyArray<string>;
   readonly rowPhysicalRegionIds: ReadonlyArray<string>;
   readonly resolutionNotesPt: string;
 }
@@ -92,7 +179,8 @@ export interface ReferenceTruthCellGeometry {
   readonly resolutionKind: ReferenceTruthCellGeometryResolutionKind;
   readonly spatialSemantics: ReferenceTruthCellGeometrySpatialSemantics;
 
-  readonly sourceSegmentKeys: ReadonlyArray<string>;
+  /** Chaves históricas declaradas por esta célula, em ordem — ver `LegacyDeclaredKeyStatus`. Nunca a identidade canônica (ver `fragments[].reproducibleLocator`). */
+  readonly legacyDeclaredSegmentKeys: ReadonlyArray<string>;
   readonly sourcePhysicalRegionIds: ReadonlyArray<string>;
 
   /** Faixa (caixa) física da linha lógica inteira — evidência/validação independente, nunca a origem da coordenada vertical de uma célula com segmento próprio (ver §7 do enunciado da Sprint). */

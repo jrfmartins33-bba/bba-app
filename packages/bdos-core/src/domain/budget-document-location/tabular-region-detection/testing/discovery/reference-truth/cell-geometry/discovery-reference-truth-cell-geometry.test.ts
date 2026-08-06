@@ -10,10 +10,16 @@ import type { ReferenceTruthCell, ReferenceTruthColumn, ReferenceTruthLogicalRow
 import {
   projectReferenceTruthCellGeometry,
   buildReferenceTruthCellGeometry,
+  buildReproduciblePhysicalSegmentLocator,
 } from "./discovery-reference-truth-cell-geometry";
 import { validateReferenceTruthCellGeometries } from "./discovery-reference-truth-cell-geometry-validation";
 import { parseReferenceTruthCellPhysicalOrigin } from "./discovery-reference-truth-cell-geometry-origin-parser";
-import type { ReferenceTruthCellGeometryPageBounds, ReferenceTruthCellGeometryProjectionInput } from "./discovery-reference-truth-cell-geometry.types";
+import type {
+  ReferenceTruthBoundingBox,
+  ReferenceTruthCellGeometryPageBounds,
+  ReferenceTruthCellGeometryProjectionInput,
+  ReferenceTruthPhysicalSegmentGeometry,
+} from "./discovery-reference-truth-cell-geometry.types";
 
 function runTest(name: string, testCase: () => void): void {
   testCase();
@@ -109,6 +115,36 @@ function origin(...keys: ReadonlyArray<string>): string {
   return `Segmento(s): ${keys.join(", ")}`;
 }
 
+/**
+ * Constrói uma entrada sintética do registro de segmentos físicos, já no
+ * formato schemaVersion 2: chave histórica com status
+ * `legacy_unreproducible` + localizador estrutural reproduzível
+ * sintético (nunca dados reais — apenas rótulos sintéticos locais, como
+ * o resto deste arquivo).
+ */
+function physSeg(legacyDeclaredSegmentKey: string, page: number, boundingBox: ReferenceTruthBoundingBox, regionId = `synthetic-region-for-${legacyDeclaredSegmentKey}`, segmentHorizontalOrder = 1): ReferenceTruthPhysicalSegmentGeometry {
+  return {
+    legacyDeclaredSegmentKey,
+    legacyDeclaredSegmentKeyStatus: "legacy_unreproducible",
+    realPageNumber: page,
+    boundingBox,
+    associationBasis: "exact_structural_position_with_region_geometry_validation",
+    reproducibleLocator: buildReproduciblePhysicalSegmentLocator({
+      sourceDocumentSha256: syntheticSegmentKey("synthetic-document"),
+      realPageNumber: page,
+      frozenPhysicalRegionId: regionId,
+      regionVerticalOrder: 1,
+      segmentHorizontalOrder,
+      regionBoundingBox: boundingBox,
+      segmentBoundingBox: boundingBox,
+      physicalAdapterVersionSha256: syntheticSegmentKey("synthetic-adapter"),
+      physicalUnderlyingLibraryVersionSha256: syntheticSegmentKey("synthetic-library"),
+      reconstructionContextFingerprint: syntheticSegmentKey("synthetic-reconstruction-fingerprint"),
+      physicalGeometryContextFingerprint: syntheticSegmentKey("synthetic-geometry-fingerprint"),
+    }),
+  };
+}
+
 // ============================================================================
 // Cenário 1: uma célula, um segmento (caso exclusivo simples).
 // ============================================================================
@@ -123,7 +159,7 @@ runTest("uma célula com um segmento produz single_source_fragment/exclusive com
     logicalRows: [r],
     physicalRegions: [reg],
     columns: [column("col-separate-a")],
-    physicalSegments: [{ segmentKey: segKey, realPageNumber: PAGE, boundingBox: { leftPoints: 5, topPoints: 10, rightPoints: 95, bottomPoints: 20 } }],
+    physicalSegments: [physSeg(segKey, PAGE, { leftPoints: 5, topPoints: 10, rightPoints: 95, bottomPoints: 20 })],
     pageBounds: PAGE_BOUNDS,
   };
 
@@ -136,6 +172,17 @@ runTest("uma célula com um segmento produz single_source_fragment/exclusive com
   assertEqual(g.fragments.length, 1);
   assertEqual(g.fragments[0].projectionKind, "source_segment_column_intersection");
   assertEqual(g.sharedGeometryGroupId, null);
+  // schemaVersion 2: legacyDeclaredSegmentKey is never the canonical identity — reproducibleLocator is.
+  assertEqual(g.fragments[0].legacyDeclaredSegmentKey, segKey);
+  assertEqual(g.fragments[0].legacyDeclaredSegmentKeyStatus, "legacy_unreproducible");
+  assertEqual(g.fragments[0].associationBasis, "exact_structural_position_with_region_geometry_validation");
+  assert(g.fragments[0].reproducibleLocator !== null, "a resolved (non-empty-slot) fragment must always carry a reproducibleLocator");
+  const locator = g.fragments[0].reproducibleLocator!;
+  assertEqual(locator.realPageNumber, PAGE);
+  assertEqual(locator.frozenPhysicalRegionId, `synthetic-region-for-${segKey}`);
+  assert(locator.regionVerticalOrder > 0 && locator.segmentHorizontalOrder > 0, "locator order fields must be positive");
+  assert(locator.reproducibleLineKey.length === 64 && locator.reproducibleSegmentKey.length === 64, "reproducible keys must be 64-hex sha256 digests");
+  assert(locator.reproducibleSegmentKey !== segKey, "the reproducible key must never equal the legacy declared key");
 });
 
 // ============================================================================
@@ -154,8 +201,8 @@ runTest("uma célula com vários segmentos produz multiple_source_fragments/mult
     physicalRegions: [reg],
     columns: [column("col-descricao")],
     physicalSegments: [
-      { segmentKey: segA, realPageNumber: PAGE, boundingBox: { leftPoints: 710, topPoints: 10, rightPoints: 800, bottomPoints: 20 } },
-      { segmentKey: segB, realPageNumber: PAGE, boundingBox: { leftPoints: 710, topPoints: 25, rightPoints: 810, bottomPoints: 35 } },
+      physSeg(segA, PAGE, { leftPoints: 710, topPoints: 10, rightPoints: 800, bottomPoints: 20 }),
+      physSeg(segB, PAGE, { leftPoints: 710, topPoints: 25, rightPoints: 810, bottomPoints: 35 }),
     ],
     pageBounds: PAGE_BOUNDS,
   };
@@ -166,8 +213,8 @@ runTest("uma célula com vários segmentos produz multiple_source_fragments/mult
   assertEqual(g.resolutionKind, "multiple_source_fragments");
   assertEqual(g.spatialSemantics, "multi_fragment");
   assertEqual(g.fragments.length, 2);
-  assertEqual(g.fragments[0].sourceSegmentKey, segA, "fragment order must follow the declared physicalOriginPt order, not any other order");
-  assertEqual(g.fragments[1].sourceSegmentKey, segB);
+  assertEqual(g.fragments[0].legacyDeclaredSegmentKey, segA, "fragment order must follow the declared physicalOriginPt order, not any other order");
+  assertEqual(g.fragments[1].legacyDeclaredSegmentKey, segB);
   assert(g.expectedEnvelope.topPoints === 10 && g.expectedEnvelope.bottomPoints === 35, "envelope must be the union of both fragments");
 });
 
@@ -187,7 +234,7 @@ runTest("várias células compartilhando um segmento sobre colunas separadas rec
     physicalRegions: [reg],
     columns: [column("col-separate-a"), column("col-separate-b")],
     // The single physical segment spans across both non-overlapping columns (0-100 and 200-300).
-    physicalSegments: [{ segmentKey: sharedKey, realPageNumber: PAGE, boundingBox: { leftPoints: 10, topPoints: 50, rightPoints: 290, bottomPoints: 60 } }],
+    physicalSegments: [physSeg(sharedKey, PAGE, { leftPoints: 10, topPoints: 50, rightPoints: 290, bottomPoints: 60 })],
     pageBounds: PAGE_BOUNDS,
   };
 
@@ -198,7 +245,9 @@ runTest("várias células compartilhando um segmento sobre colunas separadas rec
   assertEqual(gA.resolutionKind, "shared_source_geometry");
   assertEqual(gA.spatialSemantics, "shared");
   assertEqual(gB.spatialSemantics, "shared");
-  assertEqual(gA.sharedGeometryGroupId, `shared-geometry:${PAGE}:${sharedKey}`);
+  // The group id is derived from the reproducible locator key, never the legacy declared key (schemaVersion 2).
+  assert(gA.sharedGeometryGroupId !== null && gA.sharedGeometryGroupId.startsWith(`shared-geometry:${PAGE}:`), "group id must be well-formed");
+  assert(!gA.sharedGeometryGroupId!.includes(sharedKey), "the shared group id must never be built from the legacy declared key");
   assertEqual(gA.sharedGeometryGroupId, gB.sharedGeometryGroupId);
   assert(gA.sharedWithCellIds.includes("cell-3b"), "cell-3a must list cell-3b as a partner");
   assert(gB.sharedWithCellIds.includes("cell-3a"), "cell-3b must list cell-3a as a partner (symmetry)");
@@ -225,7 +274,7 @@ runTest("colunas sobrepostas: quando o segmento compartilhado não permite subdi
     physicalRegions: [reg],
     columns: [column("col-overlap-c"), column("col-overlap-d")],
     // Segment box is entirely inside col-overlap-c's range (400-500) and does not reach col-overlap-d (470-560) at all... adjust to force zero intersection with d:
-    physicalSegments: [{ segmentKey: sharedKey, realPageNumber: PAGE, boundingBox: { leftPoints: 405, topPoints: 70, rightPoints: 460, bottomPoints: 80 } }],
+    physicalSegments: [physSeg(sharedKey, PAGE, { leftPoints: 405, topPoints: 70, rightPoints: 460, bottomPoints: 80 })],
     pageBounds: PAGE_BOUNDS,
   };
 
@@ -253,7 +302,7 @@ runTest("colunas idênticas: duas células lógicas distintas sobre a mesma faix
     logicalRows: [r],
     physicalRegions: [reg],
     columns: [column("col-identical-e"), column("col-identical-f")],
-    physicalSegments: [{ segmentKey: sharedKey, realPageNumber: PAGE, boundingBox: { leftPoints: 605, topPoints: 90, rightPoints: 695, bottomPoints: 100 } }],
+    physicalSegments: [physSeg(sharedKey, PAGE, { leftPoints: 605, topPoints: 90, rightPoints: 695, bottomPoints: 100 })],
     pageBounds: PAGE_BOUNDS,
   };
 
@@ -291,9 +340,9 @@ runTest("descrição multilinha: três células físicas permanecem três regist
     physicalRegions: [reg1, reg2, reg3],
     columns: [column("col-descricao")],
     physicalSegments: [
-      { segmentKey: seg1, realPageNumber: PAGE, boundingBox: { leftPoints: 710, topPoints: 100, rightPoints: 800, bottomPoints: 110 } },
-      { segmentKey: seg2, realPageNumber: PAGE, boundingBox: { leftPoints: 710, topPoints: 111, rightPoints: 800, bottomPoints: 121 } },
-      { segmentKey: seg3, realPageNumber: PAGE, boundingBox: { leftPoints: 710, topPoints: 122, rightPoints: 800, bottomPoints: 132 } },
+      physSeg(seg1, PAGE, { leftPoints: 710, topPoints: 100, rightPoints: 800, bottomPoints: 110 }),
+      physSeg(seg2, PAGE, { leftPoints: 710, topPoints: 111, rightPoints: 800, bottomPoints: 121 }),
+      physSeg(seg3, PAGE, { leftPoints: 710, topPoints: 122, rightPoints: 800, bottomPoints: 132 }),
     ],
     pageBounds: PAGE_BOUNDS,
   };
@@ -330,7 +379,7 @@ runTest("célula fisicamente vazia produz empty_slot_projection a partir da faix
   assertEqual(g.resolutionKind, "empty_slot_projection");
   assertEqual(g.spatialSemantics, "empty_slot");
   assertEqual(g.fragments[0].projectionKind, "row_column_empty_slot");
-  assertEqual(g.fragments[0].sourceSegmentKey, null);
+  assertEqual(g.fragments[0].legacyDeclaredSegmentKey, null);
   assertEqual(g.expectedEnvelope.topPoints, g.rowBand.topPoints);
   assertEqual(g.expectedEnvelope.leftPoints, 200);
   assertEqual(g.expectedEnvelope.rightPoints, 300);
@@ -347,7 +396,7 @@ runTest("célula vazia cujo physicalOriginPt declara um segmento real é um erro
     logicalRows: [r],
     physicalRegions: [reg],
     columns: [column("col-separate-b")],
-    physicalSegments: [{ segmentKey: segKey, realPageNumber: PAGE, boundingBox: { leftPoints: 205, topPoints: 140, rightPoints: 295, bottomPoints: 150 } }],
+    physicalSegments: [physSeg(segKey, PAGE, { leftPoints: 205, topPoints: 140, rightPoints: 295, bottomPoints: 150 })],
     pageBounds: PAGE_BOUNDS,
   };
 
@@ -394,7 +443,7 @@ runTest("segmentKey resolvido em página diferente da célula é um erro de inte
     logicalRows: [r],
     physicalRegions: [reg],
     columns: [column("col-separate-a")],
-    physicalSegments: [{ segmentKey: segKey, realPageNumber: OTHER_PAGE, boundingBox: { leftPoints: 5, topPoints: 180, rightPoints: 95, bottomPoints: 190 } }],
+    physicalSegments: [physSeg(segKey, OTHER_PAGE, { leftPoints: 5, topPoints: 180, rightPoints: 95, bottomPoints: 190 })],
     pageBounds: PAGE_BOUNDS,
   });
 
@@ -418,8 +467,8 @@ runTest("segmentKey ambíguo no registro físico (duas geometrias distintas para
     physicalRegions: [reg],
     columns: [column("col-separate-a")],
     physicalSegments: [
-      { segmentKey: ambiguousKey, realPageNumber: PAGE, boundingBox: { leftPoints: 5, topPoints: 200, rightPoints: 95, bottomPoints: 210 } },
-      { segmentKey: ambiguousKey, realPageNumber: PAGE, boundingBox: { leftPoints: 6, topPoints: 200, rightPoints: 96, bottomPoints: 210 } },
+      physSeg(ambiguousKey, PAGE, { leftPoints: 5, topPoints: 200, rightPoints: 95, bottomPoints: 210 }),
+      physSeg(ambiguousKey, PAGE, { leftPoints: 6, topPoints: 200, rightPoints: 96, bottomPoints: 210 }),
     ],
     pageBounds: PAGE_BOUNDS,
   });
@@ -458,7 +507,7 @@ runTest("fragmento com caixa fora dos limites da página é sinalizado pelo vali
       physicalRegions: [reg],
       columns: [column("col-separate-a")],
       // Segment box extends to topPoints = -20, above the page (page starts at 0).
-      physicalSegments: [{ segmentKey: segKey, realPageNumber: PAGE, boundingBox: { leftPoints: 5, topPoints: -20, rightPoints: 50, bottomPoints: 5 } }],
+      physicalSegments: [physSeg(segKey, PAGE, { leftPoints: 5, topPoints: -20, rightPoints: 50, bottomPoints: 5 })],
       pageBounds: PAGE_BOUNDS,
     },
     PAGE_BOUNDS,
@@ -486,7 +535,7 @@ runTest("fragmento sem interseção de coluna e sem justificativa de compartilha
     logicalRows: [r],
     physicalRegions: [reg],
     columns: [column("col-separate-a")],
-    physicalSegments: [{ segmentKey: segKey, realPageNumber: PAGE, boundingBox: { leftPoints: 400, topPoints: 240, rightPoints: 460, bottomPoints: 250 } }],
+    physicalSegments: [physSeg(segKey, PAGE, { leftPoints: 400, topPoints: 240, rightPoints: 460, bottomPoints: 250 })],
     pageBounds: PAGE_BOUNDS,
   });
 
@@ -511,7 +560,7 @@ runTest("fragmento cuja posição vertical não sobrepõe a faixa da linha é si
       logicalRows: [r],
       physicalRegions: [reg],
       columns: [column("col-separate-a")],
-      physicalSegments: [{ segmentKey: segKey, realPageNumber: PAGE, boundingBox: { leftPoints: 5, topPoints: 700, rightPoints: 95, bottomPoints: 710 } }],
+      physicalSegments: [physSeg(segKey, PAGE, { leftPoints: 5, topPoints: 700, rightPoints: 95, bottomPoints: 710 })],
       pageBounds: PAGE_BOUNDS,
     },
     PAGE_BOUNDS,
@@ -534,7 +583,7 @@ runTest("a mesma entrada produz exatamente a mesma saída (determinismo, duas ex
     logicalRows: [r],
     physicalRegions: [reg],
     columns: [column("col-separate-a")],
-    physicalSegments: [{ segmentKey: segKey, realPageNumber: PAGE, boundingBox: { leftPoints: 5, topPoints: 280, rightPoints: 95, bottomPoints: 290 } }],
+    physicalSegments: [physSeg(segKey, PAGE, { leftPoints: 5, topPoints: 280, rightPoints: 95, bottomPoints: 290 })],
     pageBounds: PAGE_BOUNDS,
   };
 
@@ -582,7 +631,7 @@ runTest("validador confirma simetria de grupo compartilhado a partir de um cená
       logicalRows: [r],
       physicalRegions: [reg],
       columns: [column("col-separate-a"), column("col-separate-b")],
-      physicalSegments: [{ segmentKey: sharedKey, realPageNumber: PAGE, boundingBox: { leftPoints: 10, topPoints: 300, rightPoints: 290, bottomPoints: 310 } }],
+      physicalSegments: [physSeg(sharedKey, PAGE, { leftPoints: 10, topPoints: 300, rightPoints: 290, bottomPoints: 310 })],
       pageBounds: PAGE_BOUNDS,
     },
     PAGE_BOUNDS,
@@ -597,21 +646,43 @@ runTest("validateReferenceTruthCellGeometries sinaliza grupo compartilhado assim
   const sharedKey = syntheticSegmentKey("asymmetric-check");
   const groupId = `shared-geometry:${PAGE}:${sharedKey}`;
   const box = { leftPoints: 0, topPoints: 0, rightPoints: 10, bottomPoints: 10 };
-  const fragment = { id: "f1", sourceSegmentKey: sharedKey, sourceBoundingBox: box, projectionKind: "source_segment_exact_box" as const, projectedBoundingBox: box };
+  const reproducibleLocator = buildReproduciblePhysicalSegmentLocator({
+    sourceDocumentSha256: syntheticSegmentKey("synthetic-document"),
+    realPageNumber: PAGE,
+    frozenPhysicalRegionId: "synthetic-region-asymmetric-check",
+    regionVerticalOrder: 1,
+    segmentHorizontalOrder: 1,
+    regionBoundingBox: box,
+    segmentBoundingBox: box,
+    physicalAdapterVersionSha256: syntheticSegmentKey("synthetic-adapter"),
+    physicalUnderlyingLibraryVersionSha256: syntheticSegmentKey("synthetic-library"),
+    reconstructionContextFingerprint: syntheticSegmentKey("synthetic-reconstruction-fingerprint"),
+    physicalGeometryContextFingerprint: syntheticSegmentKey("synthetic-geometry-fingerprint"),
+  });
+  const fragment = {
+    id: "f1",
+    legacyDeclaredSegmentKey: sharedKey,
+    legacyDeclaredSegmentKeyStatus: "legacy_unreproducible" as const,
+    reproducibleLocator,
+    associationBasis: "exact_structural_position_with_region_geometry_validation" as const,
+    sourceBoundingBox: box,
+    projectionKind: "source_segment_exact_box" as const,
+    projectedBoundingBox: box,
+  };
   const baseGeometry = {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     realPageNumber: PAGE,
     logicalRowId: "row-x",
     columnId: "col-x",
     resolutionKind: "shared_source_geometry" as const,
     spatialSemantics: "shared" as const,
-    sourceSegmentKeys: [sharedKey],
+    legacyDeclaredSegmentKeys: [sharedKey],
     sourcePhysicalRegionIds: [],
     rowBand: box,
     columnBand: { leftPoints: 0, rightPoints: 10 },
     fragments: [fragment],
     expectedEnvelope: box,
-    provenance: { cellId: "n/a", logicalRowId: "row-x", columnId: "col-x", columnRole: "item" as const, physicalOriginPt: origin(sharedKey), parsedSegmentKeys: [sharedKey], rowPhysicalRegionIds: [], resolutionNotesPt: "" },
+    provenance: { cellId: "n/a", logicalRowId: "row-x", columnId: "col-x", columnRole: "item" as const, physicalOriginPt: origin(sharedKey), legacyDeclaredSegmentKeys: [sharedKey], rowPhysicalRegionIds: [], resolutionNotesPt: "" },
   };
   // cell-A declares cell-B as a partner, but cell-B does not declare cell-A back.
   const geometryA = { ...baseGeometry, cellId: "cell-a", sharedGeometryGroupId: groupId, sharedWithCellIds: ["cell-b"] };
