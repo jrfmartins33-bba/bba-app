@@ -904,3 +904,4 @@ export * from "./engines/decision/playbook";
 export * from "./engines/decision/action-plan";
 export * from "./domain/procurement-case";
 export * from "./domain/budget-version";
+export * from "./domain/budget-table-reconstruction";

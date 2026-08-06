@@ -1,0 +1,6 @@
+import { fingerprintCanonical } from "./budget-table-reconstruction-fingerprint";
+import type { BudgetTableReconstructionInput, StructuralLocator } from "./budget-table-reconstruction.types";
+type Bounds={leftPoints:number;topPoints:number;rightPoints:number;bottomPoints:number};
+export function structuralLocator(input:BudgetTableReconstructionInput,pageNumber:number,lineOrder:number|null,segmentOrder:number|null,bounds:Bounds|null,indices:ReadonlyArray<number>):StructuralLocator{return{
+ documentSha256:input.physicalRead.sourceByteHash,pageNumber,lineVerticalOrder:lineOrder,segmentHorizontalOrder:segmentOrder,bounds:bounds?[bounds.leftPoints,bounds.topPoints,bounds.rightPoints,bounds.bottomPoints]:null,sourceTextItemIndices:[...indices].sort((a,b)=>a-b),readerIdentity:`${input.physicalRead.readerName}@${input.physicalRead.readerVersion}/${input.physicalRead.adapterVersion}`,libraryIdentity:input.physicalRead.underlyingLibraryVersion,reconstructorIdentity:`${input.structureReconstruction.reconstructorName}@${input.structureReconstruction.reconstructorVersion}`,physicalFingerprint:input.physicalRead.geometryContextFingerprint,structuralFingerprint:input.structureReconstruction.reconstructionContextFingerprint};}
+export function locatorKey(locator:StructuralLocator):string{return fingerprintCanonical(locator)}
