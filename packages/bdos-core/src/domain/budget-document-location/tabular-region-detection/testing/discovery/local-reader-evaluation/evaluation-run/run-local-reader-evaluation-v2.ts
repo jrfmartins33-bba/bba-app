@@ -1,53 +1,62 @@
 /**
- * Executor v2 — resultados corrigidos (Sprint 21.4B.3A.3, Momento 3C.2).
- * Espelha a estrutura de `run-local-reader-evaluation.ts` (v1, NUNCA
- * alterado por este arquivo) para facilitar auditoria lado a lado, mas
- * usa exclusivamente as funções v2 congeladas nos Momentos 3C.1/3C.1A/3C.1B
- * para regiões (Problema A/B), descrições multilinha (Problema C),
- * evidência matemática (Problema D) e insumos de viabilidade (Problema E).
+ * Executor v2 — resultados corrigidos (Sprint 21.4B.3A.3, fechamento
+ * consolidado). Espelha a estrutura de `run-local-reader-evaluation.ts`
+ * (v1, NUNCA alterado por este arquivo) para facilitar auditoria lado a
+ * lado, mas usa exclusivamente as funções v2 congeladas para regiões
+ * (Problema A/B), descrições multilinha (Problema C), evidência
+ * matemática (Problema D), insumos de viabilidade (Problema E) e
+ * conteúdo externo (§4.1 do fechamento).
  *
  * Reaproveita, sem alteração: os adaptadores brutos congelados
  * (`raw-adapters/`), as MESMAS saídas brutas imutáveis
  * (`private/local-reader-acquisition/`, fora do Git), a comparação de
- * células (`associateObservedCellsToReference`, v1 — não identificada
- * como problemática por esta correção), e os classificadores finais v1
- * (`classifyLocalReaderMultilineDescription`, `classifyLocalReaderViability`)
+ * células (`associateObservedCellsToReference`, v1), a métrica de
+ * estrutura tabular (`computeLocalReaderTableStructureMetrics`, v1) e os
+ * classificadores finais v1 (`classifyLocalReaderMultilineDescription`,
+ * `classifyLocalReaderViability`, `classifyLocalReaderExternalContent`)
  * — apenas seus insumos deixam de ser constantes.
  *
  * Nunca reexecuta Docling ou PaddleOCR. Nenhum valor final hardcoded.
  * Nenhuma importação de `results/corrected-v2` previamente produzido.
  * Nenhuma condição específica de ferramenta/página além da configuração
- * já congelada (REAL_PAGES/TOOLS/RUNS, idênticas ao v1). Nenhum código,
- * valor ou texto específico do documento fora da verdade de referência
+ * já congelada (REAL_PAGES/TOOLS, idênticas ao v1). Nenhum código, valor
+ * ou texto específico do documento fora da verdade de referência
  * (importada aqui, exclusivamente no executor de avaliação — nunca nas
- * funções v2 genéricas, conforme exigido).
+ * funções v2 genéricas).
  *
- * Convenção de execução idêntica à v1: `cd packages/bdos-core && npx tsx
- * src/domain/.../evaluation-run/run-local-reader-evaluation-v2.ts`.
- * Escreve em `results/corrected-v2/` (nunca em `results/`, que permanece
- * o registro histórico v1 intacto).
+ * Execução imutável (fechamento consolidado §4.4): `--output-dir` é
+ * OBRIGATÓRIO — sem ele, falha antes de ler qualquer saída bruta. Nunca
+ * escreve automaticamente em `results/corrected-v2/`; o destino é
+ * sempre explícito, decidido por quem chama (tipicamente o
+ * orquestrador, `orchestrate-corrected-evaluation-v2.ts`).
+ *
+ * Convenção de execução: `cd packages/bdos-core && npx tsx
+ * src/domain/.../evaluation-run/run-local-reader-evaluation-v2.ts
+ * --output-dir <caminho>`.
  */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 
-import { REFERENCE_TRUTH_BUNDLES, REFERENCE_TRUTH_PAGES } from "../../reference-truth/discovery-reference-truth";
+import { REFERENCE_TRUTH_BUNDLES, REFERENCE_TRUTH_PAGES, REFERENCE_TRUTH_COLUMNS } from "../../reference-truth/discovery-reference-truth";
 import type { ReferenceTruthColumnRole, ReferenceTruthPageBundle } from "../../reference-truth/discovery-reference-truth.types";
 import { parseDoclingRawExport } from "../raw-adapters/discovery-local-reader-docling-adapter";
 import type { DoclingRawExport } from "../raw-adapters/discovery-local-reader-docling-adapter";
 import { parsePaddleOcrRawExport } from "../raw-adapters/discovery-local-reader-paddleocr-adapter";
 import type { PaddleOcrRawExport } from "../raw-adapters/discovery-local-reader-paddleocr-adapter";
 import { associateObservedCellsToReference } from "../discovery-local-reader-comparison";
-import { computeLocalReaderCriticalFieldMetric, computeLocalReaderExecutionMetrics } from "../discovery-local-reader-metrics";
+import { computeLocalReaderCriticalFieldMetric, computeLocalReaderExecutionMetrics, computeLocalReaderTableStructureMetrics } from "../discovery-local-reader-metrics";
 import { classifyLocalReaderMultilineDescription } from "../discovery-local-reader-metrics";
 import { classifyLocalReaderViability } from "../discovery-local-reader-viability";
 import type {
   LocalReaderExpectedCellRef,
   LocalReaderExpectedRegionRef,
+  LocalReaderExternalContentMetric,
   LocalReaderObservedCellRef,
   LocalReaderObservedRegionRef,
   LocalReaderPageEvaluation,
   LocalReaderPageGeometry,
+  LocalReaderTableStructureMetrics,
   LocalReaderTool,
 } from "../discovery-local-reader-evaluation.types";
 import { associateObservedRegionsToReferenceV2 } from "../v2/discovery-local-reader-comparison-v2";
@@ -55,13 +64,14 @@ import { computeLocalReaderRegionTextMetricsV2 } from "../v2/discovery-local-rea
 import { deriveObservedDescriptionLinesV2 } from "../v2/discovery-local-reader-multiline-v2";
 import { classifyLocalReaderMathEvidenceV2, deriveMathEvidenceFieldStatesV2 } from "../v2/discovery-local-reader-math-evidence-v2";
 import { deriveViabilityInputsV2 } from "../v2/discovery-local-reader-viability-inputs-v2";
-import type { LocalReaderMathEvidenceResultV2, LocalReaderRegionTextMetricsV2 } from "../v2/discovery-local-reader-evaluation-v2.types";
+import type { LocalReaderMathEvidenceResultV2, LocalReaderRegionComponentResultV2, LocalReaderRegionTextMetricsV2 } from "../v2/discovery-local-reader-evaluation-v2.types";
+import { deriveExternalContentV2 } from "./derive-external-content-v2";
+import { parseOutputDirArg } from "./parse-output-dir-arg-v2";
 
 const REAL_PAGES = [46, 50, 54] as const;
 const TOOLS: ReadonlyArray<LocalReaderTool> = ["docling", "paddleocr"];
 
 const PRIVATE_ACQUISITION_DIR = resolve(process.cwd(), "..", "..", "private", "local-reader-acquisition");
-const RESULTS_DIR_V2 = resolve(process.cwd(), "src/domain/budget-document-location/tabular-region-detection/testing/discovery/local-reader-evaluation/results/corrected-v2");
 
 function pageGeometryFor(realPageNumber: number): LocalReaderPageGeometry {
   const page = REFERENCE_TRUTH_PAGES.find((p) => p.realPageNumber === realPageNumber)!;
@@ -164,12 +174,15 @@ interface ToolEvaluationResultV2 {
   readonly tool: LocalReaderTool;
   readonly execution: ReturnType<typeof computeLocalReaderExecutionMetrics>;
   readonly regionTextByPage: Record<number, LocalReaderRegionTextMetricsV2>;
+  readonly tableStructureByPage: Record<number, LocalReaderTableStructureMetrics>;
   readonly criticalFields: ReturnType<typeof computeLocalReaderCriticalFieldMetric>[];
+  readonly directMatchCellsTotal: number;
   readonly multiline: ReturnType<typeof classifyLocalReaderMultilineDescription>[];
   readonly multilineCaseCount: number;
   readonly mathEvidence: LocalReaderMathEvidenceResultV2[];
   readonly mathEvidenceCounts: Record<string, number>;
   readonly mathEvidenceTotal: number;
+  readonly externalContent: LocalReaderExternalContentMetric | null;
   readonly viability: ReturnType<typeof classifyLocalReaderViability>;
   readonly repetition: {
     readonly rawOutputHashMatchByPage: Record<number, boolean>;
@@ -207,6 +220,8 @@ const COLUMN_ID_BY_ROLE: Record<ReferenceTruthColumnRole, string> = {
   col_fgv: "col-fgv",
 };
 
+const COLUMN_ROLE_BY_COLUMN_ID = new Map(REFERENCE_TRUTH_COLUMNS.map((c) => [c.id, c.role]));
+
 function isItemRow(bundle: ReferenceTruthPageBundle, logicalRowId: string): boolean {
   const row = bundle.logicalRows.find((r) => r.id === logicalRowId);
   return row?.type === "item_de_servico";
@@ -234,6 +249,8 @@ function evaluateToolV2(tool: LocalReaderTool): ToolEvaluationResultV2 {
   const observedRegions: LocalReaderObservedRegionRef[] = [];
   const observedCells: LocalReaderObservedCellRef[] = [];
   const regionTextByPage: Record<number, LocalReaderRegionTextMetricsV2> = {};
+  const tableStructureByPage: Record<number, LocalReaderTableStructureMetrics> = {};
+  const regionComponentsByPage: Record<number, ReadonlyArray<LocalReaderRegionComponentResultV2>> = {};
   const rawOutputHashMatchByPage: Record<number, boolean> = {};
   const canonicalOutputHashMatchByPage: Record<number, boolean> = {};
 
@@ -250,7 +267,17 @@ function evaluateToolV2(tool: LocalReaderTool): ToolEvaluationResultV2 {
     const pageExpectedRegions = expectedRegionsFor(page);
     const pageObservedRegions = observedRegions.filter((r) => r.realPageNumber === page);
     const regionComponents = associateObservedRegionsToReferenceV2(pageExpectedRegions, pageObservedRegions);
+    regionComponentsByPage[page] = regionComponents;
     regionTextByPage[page] = computeLocalReaderRegionTextMetricsV2(regionComponents, pageExpectedRegions, pageObservedRegions);
+
+    // §4.2 do fechamento: métrica de estrutura tabular preservada, reusando
+    // computeLocalReaderTableStructureMetrics (v1, inalterada) — a correção
+    // v2 nunca remove uma métrica v1 válida.
+    const pageExpectedCells = expectedCellsFor(page);
+    const pageObservedCells = observedCells.filter((c) => c.realPageNumber === page);
+    const pageCellComparisons = associateObservedCellsToReference(pageExpectedCells, pageObservedCells);
+    const rowsDetected = out1.tables.reduce((sum, t) => sum + t.rowCount, 0);
+    tableStructureByPage[page] = computeLocalReaderTableStructureMetrics(pageExpectedCells, pageCellComparisons, out1.tables.length, rowsDetected);
   });
 
   const allCellComparisons = REAL_PAGES.flatMap((p) => {
@@ -258,6 +285,11 @@ function evaluateToolV2(tool: LocalReaderTool): ToolEvaluationResultV2 {
     const observed = observedCells.filter((c) => c.realPageNumber === p);
     return associateObservedCellsToReference(expected, observed);
   });
+
+  // §4.3 do fechamento: directMatchCellsTotal (TODAS as células) mantido
+  // separado de criticalFieldLiteralMatchesTotal (apenas papéis críticos) —
+  // a mesma separação que v1 já fazia corretamente.
+  const directMatchCellsTotal = allCellComparisons.filter((c) => c.outcome === "direct_match").length;
 
   const criticalFieldCellIds = new Set<string>(
     REAL_PAGES.flatMap((p) => CRITICAL_ROLES.flatMap((role) => bundleFor(p).cells.filter((c) => c.columnId === COLUMN_ID_BY_ROLE[role] && isItemRow(bundleFor(p), c.logicalRowId)).map((c) => c.id))),
@@ -297,8 +329,16 @@ function evaluateToolV2(tool: LocalReaderTool): ToolEvaluationResultV2 {
     mathEvidenceCounts[m.availability] += 1;
   });
 
+  // §4.1 do fechamento: conteúdo externo derivado de verdade — região
+  // externa esperada + regiões observadas correspondentes (comparação v2
+  // real) + comparações de célula reais. Nunca `tool === "paddleocr"`
+  // hardcoded como em v1.
+  const tcuRegion = bundleFor(46).physicalRegions.find((r) => r.classification === "nota_externa");
+  const observedRegionTextById = new Map(observedRegions.map((r) => [r.id, r.normalizedText]));
+  const expectedCellColumnById = new Map(REAL_PAGES.flatMap((p) => bundleFor(p).cells.map((c) => [c.id, c.columnId] as const)));
+  const externalContent = deriveExternalContentV2(tcuRegion, regionComponentsByPage[46] ?? [], observedRegionTextById, allCellComparisons, expectedCellColumnById, COLUMN_ROLE_BY_COLUMN_ID);
+
   const regionTextByPageV2 = regionTextByPage;
-  const usableTableCellStructure = allCellComparisons.some((c) => c.outcome === "direct_match");
   const viabilityInputs = deriveViabilityInputsV2({
     tool,
     execution,
@@ -307,23 +347,25 @@ function evaluateToolV2(tool: LocalReaderTool): ToolEvaluationResultV2 {
     criticalFields,
     criticalFieldCellIds,
     regionTextByPageV2,
-    incorporatedTcuNoteAsItemOrValue: false, // ver nota §3.6: métrica de conteúdo externo (§9.6) preservada como no v1, fora do escopo desta correção
+    incorporatedTcuNoteAsItemOrValue: externalContent?.isCriticalRisk ?? false,
     rawOutputHashMatchByPage,
     acquisitionMetaByPage: Object.fromEntries(REAL_PAGES.map((p, i) => [p, run1Pages[i].meta])),
   });
-  void usableTableCellStructure; // conferido dentro de deriveViabilityInputsV2 — mantido aqui apenas para paridade de leitura com v1
   const viability = classifyLocalReaderViability(viabilityInputs);
 
   return {
     tool,
     execution,
     regionTextByPage,
+    tableStructureByPage,
     criticalFields,
+    directMatchCellsTotal,
     multiline,
     multilineCaseCount: multiline.length,
     mathEvidence,
     mathEvidenceCounts,
     mathEvidenceTotal: allMathRelations.length,
+    externalContent,
     viability,
     repetition: { rawOutputHashMatchByPage, canonicalOutputHashMatchByPage },
   };
@@ -332,12 +374,13 @@ function evaluateToolV2(tool: LocalReaderTool): ToolEvaluationResultV2 {
 // --- Execução principal --------------------------------------------------------
 
 function main(): void {
-  mkdirSync(RESULTS_DIR_V2, { recursive: true });
+  const outputDir = resolve(parseOutputDirArg(process.argv.slice(2)));
+  mkdirSync(outputDir, { recursive: true });
 
   const results = TOOLS.map((tool) => evaluateToolV2(tool));
 
   results.forEach((result) => {
-    const path = join(RESULTS_DIR_V2, `${result.tool}-evaluation-result.v2.json`);
+    const path = join(outputDir, `${result.tool}-evaluation-result.v2.json`);
     writeFileSync(path, JSON.stringify(result, null, 2), "utf8");
     console.log(`WROTE ${path}`);
   });
@@ -347,17 +390,19 @@ function main(): void {
     pagesCompleted: r.execution.pagesCompleted,
     pagesFailed: r.execution.pagesFailed,
     regionTextByPage: r.regionTextByPage,
-    directMatchCellsTotal: r.criticalFields.reduce((sum, f) => sum + f.literalMatches, 0),
+    tableStructureByPage: r.tableStructureByPage,
+    directMatchCellsTotal: r.directMatchCellsTotal,
     criticalFieldLiteralMatchesTotal: r.criticalFields.reduce((sum, f) => sum + f.literalMatches, 0),
     multilineCaseCount: r.multilineCaseCount,
     multilineOutcomeCounts: r.multiline.reduce<Record<string, number>>((acc, o) => ({ ...acc, [o]: (acc[o] ?? 0) + 1 }), {}),
     mathEvidenceCounts: r.mathEvidenceCounts,
     mathEvidenceTotal: r.mathEvidenceTotal,
+    externalContent: r.externalContent,
     viability: r.viability,
     rawOutputHashMatchByPage: r.repetition.rawOutputHashMatchByPage,
     canonicalOutputHashMatchByPage: r.repetition.canonicalOutputHashMatchByPage,
   }));
-  writeFileSync(join(RESULTS_DIR_V2, "aggregate-summary.v2.json"), JSON.stringify(summary, null, 2), "utf8");
+  writeFileSync(join(outputDir, "aggregate-summary.v2.json"), JSON.stringify(summary, null, 2), "utf8");
   console.log(JSON.stringify(summary, null, 2));
 }
 
