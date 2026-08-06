@@ -1,0 +1,86 @@
+[
+  {
+    "tool": "docling",
+    "pagesCompleted": 3,
+    "pagesFailed": 0,
+    "regionComponentsRecoveredByPage": {
+      "46": 1,
+      "50": 1,
+      "54": 1
+    },
+    "expectedRegionsCoveredByAnyRecoveredComponentByPage": {
+      "46": 63,
+      "50": 70,
+      "54": 23
+    },
+    "directMatchCellsTotal": 0,
+    "criticalFieldLiteralMatchesTotal": 0,
+    "multilineCaseCount": 38,
+    "mathEvidenceCounts": {
+      "evidencia_completa": 0,
+      "evidencia_parcial": 0,
+      "evidencia_ausente": 84,
+      "evidencia_divergente_da_fonte": 0
+    },
+    "mathEvidenceTotal": 84,
+    "viability": {
+      "classification": "nao_viavel_nesta_configuracao",
+      "reasonsPt": [
+        "Não forneceu origem física utilizável para os campos críticos.",
+        "Não produziu estrutura utilizável de tabela/célula."
+      ]
+    },
+    "rawOutputHashMatchByPage": {
+      "46": true,
+      "50": true,
+      "54": true
+    },
+    "canonicalOutputHashMatchByPage": {
+      "46": true,
+      "50": true,
+      "54": true
+    }
+  },
+  {
+    "tool": "paddleocr",
+    "pagesCompleted": 3,
+    "pagesFailed": 0,
+    "regionComponentsRecoveredByPage": {
+      "46": 10,
+      "50": 8,
+      "54": 8
+    },
+    "expectedRegionsCoveredByAnyRecoveredComponentByPage": {
+      "46": 68,
+      "50": 75,
+      "54": 26
+    },
+    "directMatchCellsTotal": 0,
+    "criticalFieldLiteralMatchesTotal": 0,
+    "multilineCaseCount": 38,
+    "mathEvidenceCounts": {
+      "evidencia_completa": 0,
+      "evidencia_parcial": 0,
+      "evidencia_ausente": 84,
+      "evidencia_divergente_da_fonte": 0
+    },
+    "mathEvidenceTotal": 84,
+    "viability": {
+      "classification": "nao_viavel_nesta_configuracao",
+      "reasonsPt": [
+        "Não forneceu origem física utilizável para os campos críticos.",
+        "Não produziu estrutura utilizável de tabela/célula."
+      ]
+    },
+    "rawOutputHashMatchByPage": {
+      "46": true,
+      "50": true,
+      "54": true
+    },
+    "canonicalOutputHashMatchByPage": {
+      "46": true,
+      "50": true,
+      "54": true
+    }
+  }
+]

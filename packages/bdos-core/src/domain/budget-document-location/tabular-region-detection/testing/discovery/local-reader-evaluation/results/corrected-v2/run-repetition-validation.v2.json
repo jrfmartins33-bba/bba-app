@@ -1,0 +1,26 @@
+{
+  "files": [
+    {
+      "file": "aggregate-summary.v2.json",
+      "presentInA": true,
+      "presentInB": true,
+      "semanticallyEqual": true,
+      "differenceSummary": null
+    },
+    {
+      "file": "docling-evaluation-result.v2.json",
+      "presentInA": true,
+      "presentInB": true,
+      "semanticallyEqual": true,
+      "differenceSummary": null
+    },
+    {
+      "file": "paddleocr-evaluation-result.v2.json",
+      "presentInA": true,
+      "presentInB": true,
+      "semanticallyEqual": true,
+      "differenceSummary": null
+    }
+  ],
+  "identical": true
+}
