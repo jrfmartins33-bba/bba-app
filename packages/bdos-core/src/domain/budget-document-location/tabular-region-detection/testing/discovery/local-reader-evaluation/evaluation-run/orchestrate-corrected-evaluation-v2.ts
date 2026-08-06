@@ -15,6 +15,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, copyFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -32,10 +33,23 @@ const EXECUTOR_PATH = resolve(
   "src/domain/budget-document-location/tabular-region-detection/testing/discovery/local-reader-evaluation/evaluation-run/run-local-reader-evaluation-v2.ts",
 );
 
+/**
+ * Resolve o CLI do `tsx` diretamente (via `require.resolve`, o mesmo
+ * `tsx` já usado por toda a cadeia `pnpm test`/`npx tsx` do
+ * repositório — nenhuma instalação nova) e invoca com
+ * `process.execPath` (o próprio `node`), nunca via `npx`/shell. Isso
+ * evita simultaneamente o `EINVAL` do Windows ao invocar `.cmd` por
+ * `execFileSync` sem shell, e a quebra de quoting que `shell: true`
+ * causaria no caminho do repositório (contém espaço em "BBA APP") — um
+ * array de argumentos para `execFileSync` sem shell é passado ao
+ * processo filho exatamente como está, sem nenhuma re-tokenização por
+ * espaços.
+ */
+const TSX_CLI_PATH = createRequire(import.meta.url).resolve("tsx/cli");
+
 function runExecutorOnce(outputDir: string): void {
   mkdirSync(outputDir, { recursive: true });
-  const npxBin = process.platform === "win32" ? "npx.cmd" : "npx";
-  execFileSync(npxBin, ["tsx", EXECUTOR_PATH, "--output-dir", outputDir], { cwd: BDOS_CORE_DIR, stdio: "inherit" });
+  execFileSync(process.execPath, [TSX_CLI_PATH, EXECUTOR_PATH, "--output-dir", outputDir], { cwd: BDOS_CORE_DIR, stdio: "inherit" });
 }
 
 function main(): void {

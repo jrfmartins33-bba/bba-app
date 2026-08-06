@@ -1,0 +1,252 @@
+[
+  {
+    "tool": "docling",
+    "pagesCompleted": 3,
+    "pagesFailed": 0,
+    "regionTextByPage": {
+      "46": {
+        "associationComponents": 11,
+        "expectedRegionsCoveredByAnyComponent": 63,
+        "expectedRegionsWithExactTextualMatch": 0,
+        "expectedRegionsCoveredSpatiallyOnly": 63,
+        "expectedRegionsOmitted": 10,
+        "observedRegionsAdditional": 0
+      },
+      "50": {
+        "associationComponents": 11,
+        "expectedRegionsCoveredByAnyComponent": 70,
+        "expectedRegionsWithExactTextualMatch": 0,
+        "expectedRegionsCoveredSpatiallyOnly": 70,
+        "expectedRegionsOmitted": 10,
+        "observedRegionsAdditional": 0
+      },
+      "54": {
+        "associationComponents": 11,
+        "expectedRegionsCoveredByAnyComponent": 23,
+        "expectedRegionsWithExactTextualMatch": 0,
+        "expectedRegionsCoveredSpatiallyOnly": 23,
+        "expectedRegionsOmitted": 10,
+        "observedRegionsAdditional": 0
+      }
+    },
+    "tableStructureByPage": {
+      "46": {
+        "tablesDetected": 1,
+        "expectedColumnsRecovered": 0,
+        "expectedColumnsTotal": 12,
+        "columnsSplit": 0,
+        "columnsMerged": 0,
+        "rowsDetected": 0,
+        "cellOutcomeCounts": {
+          "direct_match": 0,
+          "expected_cell_split_into_multiple_observed": 0,
+          "multiple_expected_cells_merged": 0,
+          "expected_cell_omitted": 358,
+          "invented_cell": 0,
+          "correct_text_wrong_column": 0,
+          "correct_text_no_usable_coordinate": 0,
+          "correct_coordinate_wrong_text": 0
+        },
+        "cellsTotal": 358
+      },
+      "50": {
+        "tablesDetected": 1,
+        "expectedColumnsRecovered": 0,
+        "expectedColumnsTotal": 12,
+        "columnsSplit": 0,
+        "columnsMerged": 0,
+        "rowsDetected": 0,
+        "cellOutcomeCounts": {
+          "direct_match": 0,
+          "expected_cell_split_into_multiple_observed": 0,
+          "multiple_expected_cells_merged": 0,
+          "expected_cell_omitted": 526,
+          "invented_cell": 0,
+          "correct_text_wrong_column": 0,
+          "correct_text_no_usable_coordinate": 0,
+          "correct_coordinate_wrong_text": 0
+        },
+        "cellsTotal": 526
+      },
+      "54": {
+        "tablesDetected": 1,
+        "expectedColumnsRecovered": 0,
+        "expectedColumnsTotal": 12,
+        "columnsSplit": 0,
+        "columnsMerged": 0,
+        "rowsDetected": 0,
+        "cellOutcomeCounts": {
+          "direct_match": 0,
+          "expected_cell_split_into_multiple_observed": 0,
+          "multiple_expected_cells_merged": 0,
+          "expected_cell_omitted": 135,
+          "invented_cell": 0,
+          "correct_text_wrong_column": 0,
+          "correct_text_no_usable_coordinate": 0,
+          "correct_coordinate_wrong_text": 0
+        },
+        "cellsTotal": 135
+      }
+    },
+    "directMatchCellsTotal": 0,
+    "criticalFieldLiteralMatchesTotal": 0,
+    "multilineCaseCount": 38,
+    "multilineOutcomeCounts": {
+      "omitted": 38
+    },
+    "mathEvidenceCounts": {
+      "evidencia_completa": 0,
+      "evidencia_parcial": 0,
+      "evidencia_ausente": 84,
+      "evidencia_divergente_da_fonte": 0
+    },
+    "mathEvidenceTotal": 84,
+    "externalContent": {
+      "regionId": "reg-46-051",
+      "outcome": "detected_as_external_or_out_of_table",
+      "isCriticalRisk": false
+    },
+    "viability": {
+      "classification": "nao_viavel_nesta_configuracao",
+      "reasonsPt": [
+        "Não forneceu origem física utilizável para os campos críticos.",
+        "Não produziu estrutura utilizável de tabela/célula."
+      ]
+    },
+    "rawOutputHashMatchByPage": {
+      "46": true,
+      "50": true,
+      "54": true
+    },
+    "canonicalOutputHashMatchByPage": {
+      "46": true,
+      "50": true,
+      "54": true
+    }
+  },
+  {
+    "tool": "paddleocr",
+    "pagesCompleted": 3,
+    "pagesFailed": 0,
+    "regionTextByPage": {
+      "46": {
+        "associationComponents": 78,
+        "expectedRegionsCoveredByAnyComponent": 69,
+        "expectedRegionsWithExactTextualMatch": 24,
+        "expectedRegionsCoveredSpatiallyOnly": 45,
+        "expectedRegionsOmitted": 4,
+        "observedRegionsAdditional": 63
+      },
+      "50": {
+        "associationComponents": 90,
+        "expectedRegionsCoveredByAnyComponent": 77,
+        "expectedRegionsWithExactTextualMatch": 20,
+        "expectedRegionsCoveredSpatiallyOnly": 57,
+        "expectedRegionsOmitted": 3,
+        "observedRegionsAdditional": 77
+      },
+      "54": {
+        "associationComponents": 50,
+        "expectedRegionsCoveredByAnyComponent": 26,
+        "expectedRegionsWithExactTextualMatch": 6,
+        "expectedRegionsCoveredSpatiallyOnly": 20,
+        "expectedRegionsOmitted": 7,
+        "observedRegionsAdditional": 35
+      }
+    },
+    "tableStructureByPage": {
+      "46": {
+        "tablesDetected": 0,
+        "expectedColumnsRecovered": 0,
+        "expectedColumnsTotal": 12,
+        "columnsSplit": 0,
+        "columnsMerged": 0,
+        "rowsDetected": 0,
+        "cellOutcomeCounts": {
+          "direct_match": 0,
+          "expected_cell_split_into_multiple_observed": 0,
+          "multiple_expected_cells_merged": 0,
+          "expected_cell_omitted": 358,
+          "invented_cell": 0,
+          "correct_text_wrong_column": 0,
+          "correct_text_no_usable_coordinate": 0,
+          "correct_coordinate_wrong_text": 0
+        },
+        "cellsTotal": 358
+      },
+      "50": {
+        "tablesDetected": 0,
+        "expectedColumnsRecovered": 0,
+        "expectedColumnsTotal": 12,
+        "columnsSplit": 0,
+        "columnsMerged": 0,
+        "rowsDetected": 0,
+        "cellOutcomeCounts": {
+          "direct_match": 0,
+          "expected_cell_split_into_multiple_observed": 0,
+          "multiple_expected_cells_merged": 0,
+          "expected_cell_omitted": 526,
+          "invented_cell": 0,
+          "correct_text_wrong_column": 0,
+          "correct_text_no_usable_coordinate": 0,
+          "correct_coordinate_wrong_text": 0
+        },
+        "cellsTotal": 526
+      },
+      "54": {
+        "tablesDetected": 0,
+        "expectedColumnsRecovered": 0,
+        "expectedColumnsTotal": 12,
+        "columnsSplit": 0,
+        "columnsMerged": 0,
+        "rowsDetected": 0,
+        "cellOutcomeCounts": {
+          "direct_match": 0,
+          "expected_cell_split_into_multiple_observed": 0,
+          "multiple_expected_cells_merged": 0,
+          "expected_cell_omitted": 135,
+          "invented_cell": 0,
+          "correct_text_wrong_column": 0,
+          "correct_text_no_usable_coordinate": 0,
+          "correct_coordinate_wrong_text": 0
+        },
+        "cellsTotal": 135
+      }
+    },
+    "directMatchCellsTotal": 0,
+    "criticalFieldLiteralMatchesTotal": 0,
+    "multilineCaseCount": 38,
+    "multilineOutcomeCounts": {
+      "omitted": 38
+    },
+    "mathEvidenceCounts": {
+      "evidencia_completa": 0,
+      "evidencia_parcial": 0,
+      "evidencia_ausente": 84,
+      "evidencia_divergente_da_fonte": 0
+    },
+    "mathEvidenceTotal": 84,
+    "externalContent": {
+      "regionId": "reg-46-051",
+      "outcome": "detected_as_external_or_out_of_table",
+      "isCriticalRisk": false
+    },
+    "viability": {
+      "classification": "nao_viavel_nesta_configuracao",
+      "reasonsPt": [
+        "Não forneceu origem física utilizável para os campos críticos.",
+        "Não produziu estrutura utilizável de tabela/célula."
+      ]
+    },
+    "rawOutputHashMatchByPage": {
+      "46": true,
+      "50": true,
+      "54": true
+    },
+    "canonicalOutputHashMatchByPage": {
+      "46": true,
+      "50": true,
+      "54": true
+    }
+  }
+]

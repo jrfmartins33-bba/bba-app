@@ -1,0 +1,1607 @@
+{
+  "tool": "paddleocr",
+  "execution": {
+    "pagesCompleted": 3,
+    "pagesFailed": 0,
+    "coldStartTimeMs": 4808.722257614136,
+    "perPageTimeMs": [
+      {
+        "realPageNumber": 46,
+        "timeMs": 355997.8256225586
+      },
+      {
+        "realPageNumber": 50,
+        "timeMs": 456574.3451118469
+      },
+      {
+        "realPageNumber": 54,
+        "timeMs": 226831.9923877716
+      }
+    ],
+    "peakMemoryMb": 326.6015625,
+    "warnings": [],
+    "partialFailures": []
+  },
+  "regionTextByPage": {
+    "46": {
+      "associationComponents": 78,
+      "expectedRegionsCoveredByAnyComponent": 69,
+      "expectedRegionsWithExactTextualMatch": 24,
+      "expectedRegionsCoveredSpatiallyOnly": 45,
+      "expectedRegionsOmitted": 4,
+      "observedRegionsAdditional": 63
+    },
+    "50": {
+      "associationComponents": 90,
+      "expectedRegionsCoveredByAnyComponent": 77,
+      "expectedRegionsWithExactTextualMatch": 20,
+      "expectedRegionsCoveredSpatiallyOnly": 57,
+      "expectedRegionsOmitted": 3,
+      "observedRegionsAdditional": 77
+    },
+    "54": {
+      "associationComponents": 50,
+      "expectedRegionsCoveredByAnyComponent": 26,
+      "expectedRegionsWithExactTextualMatch": 6,
+      "expectedRegionsCoveredSpatiallyOnly": 20,
+      "expectedRegionsOmitted": 7,
+      "observedRegionsAdditional": 35
+    }
+  },
+  "tableStructureByPage": {
+    "46": {
+      "tablesDetected": 0,
+      "expectedColumnsRecovered": 0,
+      "expectedColumnsTotal": 12,
+      "columnsSplit": 0,
+      "columnsMerged": 0,
+      "rowsDetected": 0,
+      "cellOutcomeCounts": {
+        "direct_match": 0,
+        "expected_cell_split_into_multiple_observed": 0,
+        "multiple_expected_cells_merged": 0,
+        "expected_cell_omitted": 358,
+        "invented_cell": 0,
+        "correct_text_wrong_column": 0,
+        "correct_text_no_usable_coordinate": 0,
+        "correct_coordinate_wrong_text": 0
+      },
+      "cellsTotal": 358
+    },
+    "50": {
+      "tablesDetected": 0,
+      "expectedColumnsRecovered": 0,
+      "expectedColumnsTotal": 12,
+      "columnsSplit": 0,
+      "columnsMerged": 0,
+      "rowsDetected": 0,
+      "cellOutcomeCounts": {
+        "direct_match": 0,
+        "expected_cell_split_into_multiple_observed": 0,
+        "multiple_expected_cells_merged": 0,
+        "expected_cell_omitted": 526,
+        "invented_cell": 0,
+        "correct_text_wrong_column": 0,
+        "correct_text_no_usable_coordinate": 0,
+        "correct_coordinate_wrong_text": 0
+      },
+      "cellsTotal": 526
+    },
+    "54": {
+      "tablesDetected": 0,
+      "expectedColumnsRecovered": 0,
+      "expectedColumnsTotal": 12,
+      "columnsSplit": 0,
+      "columnsMerged": 0,
+      "rowsDetected": 0,
+      "cellOutcomeCounts": {
+        "direct_match": 0,
+        "expected_cell_split_into_multiple_observed": 0,
+        "multiple_expected_cells_merged": 0,
+        "expected_cell_omitted": 135,
+        "invented_cell": 0,
+        "correct_text_wrong_column": 0,
+        "correct_text_no_usable_coordinate": 0,
+        "correct_coordinate_wrong_text": 0
+      },
+      "cellsTotal": 135
+    }
+  },
+  "criticalFields": [
+    {
+      "role": "item",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": null,
+      "mismatches": 80
+    },
+    {
+      "role": "codigo",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": null,
+      "mismatches": 80
+    },
+    {
+      "role": "fonte",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": null,
+      "mismatches": 80
+    },
+    {
+      "role": "tipo",
+      "itemsTotal": 77,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": null,
+      "mismatches": 77
+    },
+    {
+      "role": "descricao",
+      "itemsTotal": 122,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": null,
+      "mismatches": 122
+    },
+    {
+      "role": "unidade",
+      "itemsTotal": 67,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": null,
+      "mismatches": 67
+    },
+    {
+      "role": "quantidade",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": 0,
+      "mismatches": 80
+    },
+    {
+      "role": "custo_unitario_sem_bdi",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": 0,
+      "mismatches": 80
+    },
+    {
+      "role": "bdi_percentual",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": 0,
+      "mismatches": 80
+    },
+    {
+      "role": "preco_unitario_com_bdi",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": 0,
+      "mismatches": 80
+    },
+    {
+      "role": "preco_total_com_bdi",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": 0,
+      "mismatches": 80
+    },
+    {
+      "role": "col_fgv",
+      "itemsTotal": 80,
+      "literalMatches": 0,
+      "exactDecimalValueMatches": null,
+      "mismatches": 80
+    }
+  ],
+  "directMatchCellsTotal": 0,
+  "multiline": [
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted",
+    "omitted"
+  ],
+  "multilineCaseCount": 38,
+  "mathEvidence": [
+    {
+      "mathRelationId": "math-46-row-46-010",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-011",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-013",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-015",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-016",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-018",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-021",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-022",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-023",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-025",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-027",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-029",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-032",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-033",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-035",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-037",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-039",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-041",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-042",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-044",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-046",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-048",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-050",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-060",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-061",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-063",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-064",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-066",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-46-row-46-008-subtotal",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "not_applicable",
+        "unitPrice": "not_applicable",
+        "total": "not_applicable",
+        "subtotalOrTotal": "missing"
+      },
+      "missingFieldsPt": [
+        "subtotal ou total oficial aplicável"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-008",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-010",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-011",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-012",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-013",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-014",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-015",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-016",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-017",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-018",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-019",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-020",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-021",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-022",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-023",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-024",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-026",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-028",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-030",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-031",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-034",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-035",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-037",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-038",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-040",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-041",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-043",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-046",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-048",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-050",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-051",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-053",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-055",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-057",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-059",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-061",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-062",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-063",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-065",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-068",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-071",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-074",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-50-row-50-032-subtotal",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "not_applicable",
+        "unitPrice": "not_applicable",
+        "total": "not_applicable",
+        "subtotalOrTotal": "missing"
+      },
+      "missingFieldsPt": [
+        "subtotal ou total oficial aplicável"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-54-row-54-008",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-54-row-54-010",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-54-row-54-013",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-54-row-54-014",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-54-row-54-015",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-54-row-54-016",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-54-row-54-019",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-54-row-54-022",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-54-row-54-024",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-54-row-54-026",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "missing",
+        "unitPrice": "missing",
+        "total": "missing",
+        "subtotalOrTotal": "not_applicable"
+      },
+      "missingFieldsPt": [
+        "quantidade",
+        "preço unitário",
+        "total"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-54-row-54-012-subtotal",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "not_applicable",
+        "unitPrice": "not_applicable",
+        "total": "not_applicable",
+        "subtotalOrTotal": "missing"
+      },
+      "missingFieldsPt": [
+        "subtotal ou total oficial aplicável"
+      ],
+      "divergentFieldsPt": []
+    },
+    {
+      "mathRelationId": "math-54-row-54-017-subtotal",
+      "availability": "evidencia_ausente",
+      "fieldStates": {
+        "quantity": "not_applicable",
+        "unitPrice": "not_applicable",
+        "total": "not_applicable",
+        "subtotalOrTotal": "missing"
+      },
+      "missingFieldsPt": [
+        "subtotal ou total oficial aplicável"
+      ],
+      "divergentFieldsPt": []
+    }
+  ],
+  "mathEvidenceCounts": {
+    "evidencia_completa": 0,
+    "evidencia_parcial": 0,
+    "evidencia_ausente": 84,
+    "evidencia_divergente_da_fonte": 0
+  },
+  "mathEvidenceTotal": 84,
+  "externalContent": {
+    "regionId": "reg-46-051",
+    "outcome": "detected_as_external_or_out_of_table",
+    "isCriticalRisk": false
+  },
+  "viability": {
+    "classification": "nao_viavel_nesta_configuracao",
+    "reasonsPt": [
+      "Não forneceu origem física utilizável para os campos críticos.",
+      "Não produziu estrutura utilizável de tabela/célula."
+    ]
+  },
+  "repetition": {
+    "rawOutputHashMatchByPage": {
+      "46": true,
+      "50": true,
+      "54": true
+    },
+    "canonicalOutputHashMatchByPage": {
+      "46": true,
+      "50": true,
+      "54": true
+    }
+  }
+}
