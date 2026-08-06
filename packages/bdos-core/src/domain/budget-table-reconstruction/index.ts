@@ -2,6 +2,7 @@ export * from "./budget-table-reconstruction.types";
 export * from "./budget-table-reconstruction-profile";
 export * from "./budget-table-reconstruction-exact-rational";
 export * from "./budget-table-reconstruction-numeric-evidence";
+export * from "./budget-table-reconstruction-text";
 export * from "./budget-table-reconstruction-fingerprint";
 export * from "./budget-table-reconstruction-input-validation";
 export * from "./budget-table-reconstruction-structural-locator";

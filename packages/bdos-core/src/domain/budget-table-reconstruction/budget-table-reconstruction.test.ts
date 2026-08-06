@@ -1,52 +1,458 @@
-import type { BudgetTableReconstructionInput,SourceFragmentReference } from "./budget-table-reconstruction.types";
-import { addExact,equalExact,multiplyExact,rational } from "./budget-table-reconstruction-exact-rational";
-import { parseNumericEvidence } from "./budget-table-reconstruction-numeric-evidence";
+import { evaluateArithmetic } from "./budget-table-reconstruction-arithmetic";
+import { canonicalChunks, fingerprintCanonical } from "./budget-table-reconstruction-fingerprint";
 import { reconstructBudgetTable } from "./budget-table-reconstruction";
-import { canonicalJson } from "./budget-table-reconstruction-fingerprint";
+import type {
+  ParsedNumericEvidence,
+  ReconstructedBudgetRecord,
+} from "./budget-table-reconstruction.types";
+import {
+  buildSyntheticInput,
+  entry,
+} from "./testing/budget-table-reconstruction-synthetic-fixture";
 
-function test(name:string,body:()=>void):void{body();console.log(`ok - ${name}`)}
-function equal(actual:unknown,expected:unknown):void{if(JSON.stringify(actual)!==JSON.stringify(expected))throw new Error(`expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`)}
-function truth(value:boolean,message="assertion failed"):void{if(!value)throw new Error(message)}
-const box=(left:number,right:number,top:number,bottom:number)=>({leftPoints:left,rightPoints:right,topPoints:top,bottomPoints:bottom,widthPoints:right-left,heightPoints:bottom-top,centerXPoints:(left+right)/2,centerYPoints:(top+bottom)/2});
-type Row=ReadonlyArray<readonly[string,number,number]>;
-function fixture(rows:ReadonlyArray<Row>,options:{columns?:boolean;hash?:string;keys?:string}={}):BudgetTableReconstructionInput{const hash=options.hash??"a".repeat(64);const prefix=options.keys??"runtime";let index=0;const items:Array<any>=[];const lines:Array<any>=[];const segments:Array<any>=[];for(const [rowIndex,row] of rows.entries()){const lineKey=`${prefix}-line-${rowIndex}`;const rowIndices:number[]=[];const segmentKeys:string[]=[];for(const [columnIndex,[text,left,right]] of row.entries()){const itemIndex=index++;const segmentKey=`${prefix}-segment-${rowIndex}-${columnIndex}`;rowIndices.push(itemIndex);segmentKeys.push(segmentKey);items.push({index:itemIndex,text,placement:{status:"placed",reasonCode:null,geometry:{...box(left,right,rowIndex*20,rowIndex*20+10),pageBoundsRelation:"inside",coordinateSpaceVersion:"physical-document-text-item-coordinate-space-v1",geometryProfileVersion:"physical-document-text-item-geometry-profile-v1"}}});segments.push({segmentKey,lineKey,pageNumber:1,horizontalOrder:columnIndex+1,...box(left,right,rowIndex*20,rowIndex*20+10),sourceTextItemIndices:[itemIndex],observedInternalGaps:[],formationRuleId:"synthetic",formationRuleVersion:1,profileId:"synthetic",profileVersion:1})}lines.push({lineKey,pageNumber:1,verticalOrder:rowIndex+1,...box(Math.min(...row.map(v=>v[1])),Math.max(...row.map(v=>v[2])),rowIndex*20,rowIndex*20+10),seedSourceTextItemIndex:rowIndices[0],sourceTextItemIndices:rowIndices,segmentKeys,formationRuleId:"synthetic",formationRuleVersion:1,profileId:"synthetic",profileVersion:1})}
- const physical:any={schemaVersion:2,readerName:"physical-document-reader",readerVersion:"physical-document-reader-v2",adapterVersion:"synthetic-adapter",underlyingLibraryVersion:"synthetic-library",sourceByteHash:hash,totalPageCount:1,pages:[{pageNumber:1,widthPoints:600,heightPoints:800,rotationDegrees:0,orientation:"portrait",textItems:items,normalizedText:items.map(v=>v.text).join(" "),metrics:{textItemCount:items.length,nonEmptyCharacterCount:1,replacementCharacterCount:0,unexpectedControlCharacterCount:0},textItemPlacementMetrics:{totalAdmittedTextItemCount:items.length,placedTextItemCount:items.length,unresolvedMissingGeometryCount:0,unresolvedInvalidGeometryCount:0,unresolvedUnsupportedOrientationCount:0,unresolvedNormalizationFailedCount:0},extractionAvailability:"text_available",technicalProblems:[]}],status:"completed",technicalProblems:[],textItemCoordinateSpaceVersion:"physical-document-text-item-coordinate-space-v1",textItemGeometryProfileVersion:"physical-document-text-item-geometry-profile-v1",geometryContextFingerprintVersion:"physical-document-geometry-context-fingerprint-v1",geometryContextFingerprint:"b".repeat(64)};
- const pageLocation:any={schemaVersion:1,locatorName:"budget-document-page-locator",locatorVersion:"budget-document-page-locator-v1",decisionRuleSetVersion:"rules",sourceByteHash:hash,status:"completed",candidateGroups:[],pageDecisions:[]};
- const page={pageReconstructionKey:`${prefix}-page`,pageNumber:1,candidateType:"direct",sourceDecisionReasonCode:"candidate_service_item_and_total",status:"reconstructed",sourceItemOutcomes:items.map((item:any)=>{const segment=segments.find(value=>value.sourceTextItemIndices.includes(item.index));return{status:"placed",sourceTextItemIndex:item.index,lineKey:segment.lineKey,segmentKey:segment.segmentKey}}),lines,segments,blocks:[],technicalProblems:[],metrics:{},profileId:"synthetic",profileVersion:1};
- const structure:any={schemaVersion:1,reconstructorName:"budget-document-structure-reconstructor",reconstructorVersion:"budget-document-structure-reconstructor-v1",reconstructionProfileId:"synthetic",reconstructionProfileVersion:1,reconstructionContextFingerprintVersion:"v1",reconstructionContextFingerprint:"c".repeat(64),sourceByteHash:hash,physicalReaderName:physical.readerName,physicalReaderVersion:physical.readerVersion,physicalAdapterVersion:physical.adapterVersion,physicalUnderlyingLibraryVersion:physical.underlyingLibraryVersion,physicalTextItemCoordinateSpaceVersion:physical.textItemCoordinateSpaceVersion,physicalTextItemGeometryProfileVersion:physical.textItemGeometryProfileVersion,physicalGeometryContextFingerprintVersion:physical.geometryContextFingerprintVersion,physicalGeometryContextFingerprint:physical.geometryContextFingerprint,pageLocatorName:pageLocation.locatorName,pageLocatorVersion:pageLocation.locatorVersion,groups:[{pages:[page]}],status:"completed"};
- const boundaries=[0,80,320,380,450,530,600];const hypotheses=boundaries.slice(0,-1).map((left,column)=>({hypothesisKey:`${prefix}-hyp-${column}`,pageNumber:1,order:column+1,contributingAlignmentKeys:[],lineKeys:lines.map(v=>v.lineKey),segmentKeys:segments.filter(v=>v.horizontalOrder===column+1).map(v=>v.segmentKey),...box(left,boundaries[column+1]!,0,rows.length*20),formationRuleId:"synthetic",formationRuleVersion:1,profileId:"synthetic",profileVersion:1}));
- const columns:any={schemaVersion:1,reconstructorName:"budget-document-physical-column-hypothesis-reconstructor",reconstructorVersion:"v1",reconstructionProfileId:"synthetic",reconstructionProfileVersion:1,reconstructionContextFingerprintVersion:"v1",reconstructionContextFingerprint:"d".repeat(64),sourceByteHash:hash,sourceStructureReconstructionContextFingerprint:structure.reconstructionContextFingerprint,groups:[{pages:[{pageNumber:1,regions:[{hypotheses}]}]}]};
- return{physicalRead:physical,pageLocation,structureReconstruction:structure,columnEvidence:options.columns===false?{availability:"unavailable",reasonCode:"synthetic_absence"}:{availability:"available",result:columns}};
+function test(name: string, body: () => void): void {
+  body();
+  console.log(`ok - ${name}`);
 }
-const TABLE:ReadonlyArray<Row>=[[["Código",5,70],["Descrição",90,300],["Unidade",330,370],["Quantidade",390,440],["Preço Unitário",460,520],["Preço Total",540,590]],[["A1",5,70],["Serviço sintético",90,300],["m",330,370],["2,00",390,440],["3,00",460,520],["6,00",540,590]]];
-const fragment=(text:string):SourceFragmentReference=>({locator:{documentSha256:"a",pageNumber:1,lineVerticalOrder:1,segmentHorizontalOrder:1,bounds:[0,0,1,1],sourceTextItemIndices:[0],readerIdentity:"r",libraryIdentity:null,reconstructorIdentity:"s",physicalFingerprint:"p",structuralFingerprint:"q"},sourceTextItemIndex:0,rawText:text,startOffset:0,endOffset:text.length,runtimeReference:{lineKey:null,segmentKey:null}});
 
-test("simple table reconstructs a service item",()=>truth(reconstructBudgetTable(fixture(TABLE)).records.some(record=>record.kind==="service_item")));
-test("unit cost, BDI and unit price rational relation",()=>equal(multiplyExact(rational(100n,1n),addExact(rational(1n,1n),rational(25n,100n))),rational(125n,1n)));
-test("two-line description keeps continuation provenance",()=>{const result=reconstructBudgetTable(fixture([...TABLE,[["continuação sintética",90,300]]]));truth(result.pages[0]!.logicalRows.some(row=>row.kind==="description_continuation"))});
-test("description with possible receivers remains non-invented",()=>truth(reconstructBudgetTable(fixture([...TABLE,TABLE[1]!,[["texto",90,300]]])).status!=="failed"));
-test("group subgroup item hierarchy does not invent parent",()=>truth(reconstructBudgetTable(fixture(TABLE)).records.every(record=>record.parentRecordId===null)));
-test("non-hierarchical alphanumeric code remains service item",()=>equal(reconstructBudgetTable(fixture(TABLE)).records[0]?.itemCode,"A1"));
-test("exact subtotal addition",()=>equal(addExact(rational(2n,1n),rational(3n,1n)),rational(5n,1n)));
-test("source arithmetic inconsistency is classified",()=>{const rows=[TABLE[0]!,[["A1",5,70],["Serviço",90,300],["m",330,370],["2,00",390,440],["3,00",460,520],["7,00",540,590]]] as const;truth(reconstructBudgetTable(fixture(rows)).arithmeticEvaluations.some(v=>v.outcome==="source_arithmetic_inconsistency"))});
-test("applicable missing cell is explicit",()=>{const rows=[TABLE[0]!,TABLE[1]!.slice(0,5)] as ReadonlyArray<Row>;truth(reconstructBudgetTable(fixture(rows)).records.some(record=>record.totalPrice===null))});
-test("divergent cell state is representable",()=>truth(true));
-test("segment crossing two columns is shared",()=>{const rows=[TABLE[0]!,[["A1",5,70],["Serviço",90,300],["m",330,370],["2,00 3,00",390,520],["6,00",540,590]]] as const;truth(reconstructBudgetTable(fixture(rows)).pages[0]!.cells.some(cell=>cell.geometryUse==="shared"))});
-test("segment crossing more than two columns is shared",()=>{const rows=[TABLE[0]!,[["A1",5,70],["Serviço",90,300],["m 2 3",330,520],["6",540,590]]] as const;truth(reconstructBudgetTable(fixture(rows)).pages[0]!.cells.filter(cell=>cell.geometryUse==="shared").length>=3)});
-test("shared token offsets are preserved",()=>equal(fragment("12").endOffset,2));
-test("ambiguous shared tokenization stays ambiguous",()=>truth(parseNumericEvidence("1.234",[fragment("1.234")]).status==="ambiguous"));
-test("1.234 notation exposes alternatives",()=>equal(parseNumericEvidence("1.234",[fragment("1.234")]).alternativeValues.length,2));
-test("column grammar resolves decimal notation",()=>equal(parseNumericEvidence("1.234",[fragment("1.234")],"decimal_point").exactValue,rational(1234n,1000n)));
-test("exact arithmetic correspondence",()=>truth(equalExact(multiplyExact(rational(2n,1n),rational(3n,1n)),rational(6n,1n))));
-test("undisplayed precision can retain higher exact operand",()=>equal(rational(12345n,1000n),{numerator:"2469",denominator:"200"}));
-test("undisplayed precision is not inferred from rounded literal",()=>truth(!equalExact(rational(12345n,1000n),rational(1235n,100n))));
-test("evidence-free values are never produced",()=>truth(reconstructBudgetTable(fixture(TABLE)).records.flatMap(r=>[r.quantity,r.unitPrice,r.totalPrice]).filter(Boolean).every(v=>v!.sourceFragments.length>0)));
-test("unavailable column evidence invents no grid",()=>equal(reconstructBudgetTable(fixture(TABLE,{columns:false})).pages[0]!.columns.length,0));
-test("conflicting column evidence preserves ambiguity",()=>truth(reconstructBudgetTable(fixture(TABLE)).pages[0]!.columns.some(column=>column.status!=="resolved")||true));
-test("external description-like line remains auditable",()=>truth(reconstructBudgetTable(fixture([...TABLE,[["nota externa",10,70]]])).evidenceDispositions.length>0));
-test("permuted upstream collections canonicalize identically",()=>{const input=fixture(TABLE);const permuted=fixture(TABLE);const physicalPage=(permuted.physicalRead.pages[0] as any);physicalPage.textItems=[...physicalPage.textItems].reverse();const structurePage=(permuted.structureReconstruction.groups[0] as any).pages[0];structurePage.lines=[...structurePage.lines].reverse();structurePage.segments=[...structurePage.segments].reverse();const columnPage=(permuted.columnEvidence as any).result.groups[0].pages[0];columnPage.regions[0].hypotheses=[...columnPage.regions[0].hypotheses].reverse();equal(reconstructBudgetTable(input).canonicalFingerprint,reconstructBudgetTable(permuted).canonicalFingerprint)});
-test("runtime line and segment keys do not affect fingerprint",()=>equal(reconstructBudgetTable(fixture(TABLE,{keys:"one"})).canonicalFingerprint,reconstructBudgetTable(fixture(TABLE,{keys:"two"})).canonicalFingerprint));
-test("lineage mismatch fails explicitly",()=>{const input=fixture(TABLE);(input.pageLocation as any).sourceByteHash="f".repeat(64);equal(reconstructBudgetTable(input).status,"failed")});
-test("double counting risk has no implicit total scope",()=>truth(reconstructBudgetTable(fixture(TABLE)).arithmeticEvaluations.every(value=>value.relation!=="descendant_sum")));
-test("total without demonstrated scope is insufficient",()=>truth(parseNumericEvidence("total",[fragment("total")]).status==="invalid"));
-test("canonical JSON has stable property order",()=>equal(canonicalJson({b:2,a:1}),'{"a":1,"b":2}'));
+function assert(condition: boolean, message: string): void {
+  if (!condition) throw new Error(message);
+}
+
+function equal(actual: unknown, expected: unknown, message = "values differ"): void {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`${message}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+}
+
+const SIMPLE_COLUMNS = [
+  { header: "Código", left: 0, right: 70 },
+  { header: "Descrição", left: 80, right: 300 },
+  { header: "Unidade", left: 310, right: 360 },
+  { header: "Quantidade", left: 370, right: 430 },
+  { header: "Preço Unitário", left: 440, right: 510 },
+  { header: "Preço Total", left: 520, right: 600 },
+] as const;
+
+const SIMPLE_ITEM = [
+  entry("A1", 0),
+  entry("Serviço sintético", 1),
+  entry("m", 2),
+  entry("2,00", 3),
+  entry("3,00", 4),
+  entry("6,00", 5),
+] as const;
+
+function simpleResult() {
+  return reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows: [SIMPLE_ITEM] }]),
+  );
+}
+
+test("simple table reconstructs displayed values end to end", () => {
+  const result = simpleResult();
+  const record = result.records.find((candidate) => candidate.kind === "service_item");
+  equal(record?.itemCode, "A1");
+  equal(record?.unit, "m");
+  equal(record?.quantity?.exactValue, { numerator: "2", denominator: "1" });
+  equal(record?.unitPrice?.exactValue, { numerator: "3", denominator: "1" });
+  equal(record?.totalPrice?.exactValue, { numerator: "6", denominator: "1" });
+  assert(
+    result.arithmeticEvaluations.some(
+      (evaluation) => evaluation.outcome === "direct_correspondence",
+    ),
+    "expected exact quantity × unit price correspondence",
+  );
+});
+
+test("BDI relation is evaluated through reconstructBudgetTable", () => {
+  const columns = [
+    ...SIMPLE_COLUMNS.slice(0, 4),
+    { header: "Custo Unitário", left: 440, right: 500 },
+    { header: "BDI", left: 510, right: 550 },
+    { header: "Preço Unitário", left: 560, right: 620 },
+    { header: "Preço Total", left: 630, right: 700 },
+  ];
+  const row = [
+    entry("B2", 0), entry("Composição sintética", 1), entry("m", 2), entry("1", 3),
+    entry("100", 4), entry("25", 5), entry("125", 6), entry("125", 7),
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [row] }]),
+  );
+  assert(
+    result.arithmeticEvaluations.some(
+      (evaluation) =>
+        evaluation.relation === "unit_cost_with_bdi" &&
+        evaluation.outcome === "direct_correspondence",
+    ),
+    "expected exact unit cost with BDI correspondence",
+  );
+});
+
+test("single eligible multiline-description receiver is resolved", () => {
+  const continuation = [entry("continuação exclusivamente descritiva", 1)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [
+      { pageNumber: 1, rows: [SIMPLE_ITEM, continuation] },
+    ]),
+  );
+  const row = result.logicalRows.find(
+    (candidate) => candidate.kind === "description_continuation",
+  );
+  equal(row?.status, "resolved");
+  equal(row?.descriptionSourceRowIds.length, 1);
+});
+
+test("two genuinely eligible multiline-description receivers stay ambiguous", () => {
+  const secondItem = SIMPLE_ITEM.map((sourceEntry, index) =>
+    index === 0 ? entry("A2", 0) : sourceEntry,
+  );
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [
+      {
+        pageNumber: 1,
+        rows: [SIMPLE_ITEM, secondItem, [entry("continuação descritiva", 1)]],
+      },
+    ]),
+  );
+  const row = result.logicalRows.find(
+    (candidate) => candidate.kind === "description_continuation",
+  );
+  equal(row?.status, "ambiguous");
+  equal(row?.continuationCandidateRowIds.length, 2);
+});
+
+test("local branch hierarchy links group, subgroup and item", () => {
+  const rows = [
+    [entry("1", 0), entry("Grupo sintético", 1)],
+    [entry("1.1", 0), entry("Subgrupo sintético", 1)],
+    [entry("1.1.1", 0), ...SIMPLE_ITEM.slice(1)],
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows }]),
+  );
+  const group = result.records.find((record) => record.kind === "group");
+  const subgroup = result.records.find((record) => record.kind === "subgroup");
+  const item = result.records.find((record) => record.kind === "service_item");
+  equal(subgroup?.parentRecordId, group?.recordId);
+  equal(item?.parentRecordId, subgroup?.recordId);
+});
+
+test("subtotal and total use exact, non-overlapping summands", () => {
+  const itemTwo = SIMPLE_ITEM.map((sourceEntry, index) =>
+    index === 0 ? entry("A2", 0) : sourceEntry,
+  );
+  const rows = [
+    SIMPLE_ITEM,
+    itemTwo,
+    [entry("Subtotal", 1), entry("12,00", 5)],
+    [entry("Total", 1), entry("12,00", 5)],
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows }]),
+  );
+  const subtotal = result.arithmeticEvaluations.find(
+    (evaluation) =>
+      result.records.find((record) => record.recordId === evaluation.recordId)?.kind ===
+      "subtotal",
+  );
+  const total = result.arithmeticEvaluations.find(
+    (evaluation) =>
+      result.records.find((record) => record.recordId === evaluation.recordId)?.kind ===
+      "total",
+  );
+  equal(subtotal?.outcome, "direct_correspondence");
+  equal(subtotal?.summandRecordIds.length, 2);
+  equal(total?.outcome, "direct_correspondence");
+  equal(total?.summandRecordIds.length, 1);
+});
+
+test("divergent logical field produces divergent_cell", () => {
+  const row = [...SIMPLE_ITEM, entry("7,00", 5)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows: [row] }]),
+  );
+  assert(
+    result.arithmeticEvaluations.some(
+      (evaluation) => evaluation.outcome === "divergent_cell",
+    ),
+    "expected divergent arithmetic cell",
+  );
+  assert(result.completeness.divergentFieldCount > 0, "expected divergent completeness count");
+});
+
+test("invented operand is classified and traceable by arithmetic helper", () => {
+  const sourced: ParsedNumericEvidence = {
+    rawText: "2",
+    normalizedText: "2",
+    displayedScale: 0,
+    grammarId: "decimal-point-v1",
+    exactValue: { numerator: "2", denominator: "1" },
+    alternativeValues: [],
+    status: "resolved",
+    sourceCellIds: ["cell-1"],
+    sourceFragmentIds: ["fragment-1"],
+  };
+  const invented = { ...sourced, sourceCellIds: [], sourceFragmentIds: [] };
+  const record: ReconstructedBudgetRecord = {
+    recordId: "record-1", pageNumber: 1, documentOrder: 0, kind: "service_item",
+    status: "resolved", rowIds: ["row-1"], parentRecordId: null, itemCode: "X",
+    description: "Synthetic", unit: "m", quantity: invented, unitCost: null,
+    bdiRate: null, unitPrice: sourced, totalPrice: sourced,
+  };
+  const evaluations = evaluateArithmetic([record], [
+    { columnId: "q", pageNumber: 1, horizontalOrder: 1, leftPoints: 0, rightPoints: 1,
+      candidateRoles: ["quantity"], role: "quantity", status: "resolved", headerLineIds: [], evidenceLocatorIds: [] },
+    { columnId: "u", pageNumber: 1, horizontalOrder: 2, leftPoints: 1, rightPoints: 2,
+      candidateRoles: ["unit_price"], role: "unit_price", status: "resolved", headerLineIds: [], evidenceLocatorIds: [] },
+    { columnId: "t", pageNumber: 1, horizontalOrder: 3, leftPoints: 2, rightPoints: 3,
+      candidateRoles: ["total_price"], role: "total_price", status: "resolved", headerLineIds: [], evidenceLocatorIds: [] },
+  ]);
+  equal(evaluations[0]?.outcome, "invented_evidence");
+});
+
+test("schema without cost and BDI produces not_applicable", () => {
+  const result = simpleResult();
+  equal(
+    result.arithmeticEvaluations.find(
+      (evaluation) => evaluation.relation === "unit_cost_with_bdi",
+    )?.outcome,
+    "not_applicable",
+  );
+});
+
+test("undisplayed precision requires higher source precision", () => {
+  const row = SIMPLE_ITEM.map((sourceEntry, index) =>
+    index === 3
+      ? entry("1", 3)
+      : index === 4
+        ? entry("1,2345", 4)
+        : index === 5
+          ? entry("1,23", 5)
+          : sourceEntry,
+  );
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows: [row] }]),
+  );
+  equal(
+    result.arithmeticEvaluations.find(
+      (evaluation) => evaluation.relation === "quantity_times_unit_price",
+    )?.outcome,
+    "undisplayed_precision",
+  );
+});
+
+test("missing cells receive a non-exclusive disposition", () => {
+  const row = SIMPLE_ITEM.slice(0, 5);
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows: [row] }]),
+  );
+  const missingCell = result.cells.find(
+    (cell) => cell.state === "missing" && cell.role === "total_price",
+  );
+  const disposition = result.evidenceDispositions.find(
+    (candidate) => candidate.evidenceId === missingCell?.cellId,
+  );
+  equal(disposition?.disposition, "not_applicable");
+});
+
+test("available f.2c evidence is preferred", () => {
+  const result = simpleResult();
+  assert(
+    result.cells.some(
+      (cell) =>
+        cell.upstreamCellHypothesisIds.length > 0 &&
+        cell.reasonCode === "preferred_upstream_physical_cell_evidence",
+    ),
+    "expected upstream physical cell provenance",
+  );
+});
+
+test("unavailable f.2c evidence keeps structural lines", () => {
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(
+      SIMPLE_COLUMNS,
+      [{ pageNumber: 1, rows: [SIMPLE_ITEM] }],
+      { physicalCellEvidence: "unavailable" },
+    ),
+  );
+  assert(result.lines.length > 0, "structural lines must remain");
+  assert(
+    result.cells.every((cell) => cell.upstreamCellHypothesisIds.length === 0),
+    "no upstream cell ids should be invented",
+  );
+});
+
+test("line omitted by upstream cells remains in semantic reconstruction", () => {
+  const input = buildSyntheticInput(SIMPLE_COLUMNS, [
+    { pageNumber: 1, rows: [SIMPLE_ITEM] },
+  ]);
+  const cellPages = (input.physicalCellEvidence as any).cellHypothesisFormation.groups[0].pages;
+  cellPages[0].regions[0].cellHypotheses = [];
+  const result = reconstructBudgetTable(input);
+  assert(result.lines.length === 2, "header and item lines must remain");
+  assert(result.records.some((record) => record.kind === "service_item"), "item must remain");
+});
+
+test("shared segment decomposes uniquely into two fragments", () => {
+  const columns = [
+    { header: "Descrição", left: 0, right: 200 },
+    { header: "Unidade", left: 210, right: 280 },
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      { pageNumber: 1, rows: [[entry("Impermeabilização m", 0, 1)]] },
+    ]),
+  );
+  const shared = result.cells.filter(
+    (cell) => cell.geometryUse === "shared" && cell.reasonCode === "unique_token_role_decomposition",
+  );
+  equal(shared.length, 2);
+  equal(new Set(shared.flatMap((cell) => cell.fragmentIds)).size, 2);
+});
+
+test("shared segment decomposes uniquely into more than two fragments", () => {
+  const columns = [
+    { header: "Descrição", left: 0, right: 200 },
+    { header: "Unidade", left: 210, right: 280 },
+    { header: "Quantidade", left: 290, right: 360 },
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      { pageNumber: 1, rows: [[entry("Impermeabilização m 2", 0, 2)]] },
+    ]),
+  );
+  equal(
+    result.cells.filter(
+      (cell) => cell.reasonCode === "unique_token_role_decomposition",
+    ).length,
+    3,
+  );
+});
+
+test("ambiguous shared decomposition preserves shared references", () => {
+  const columns = [
+    { header: "Descrição", left: 0, right: 200 },
+    { header: "Unidade", left: 210, right: 280 },
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      { pageNumber: 1, rows: [[entry("Pintura m", 0, 1)]] },
+    ]),
+  );
+  assert(
+    result.cells.filter((cell) => cell.geometryUse === "shared").every(
+      (cell) => cell.state === "ambiguous",
+    ),
+    "ambiguous decomposition must stay ambiguous",
+  );
+});
+
+test("column roles continue only across exactly compatible page bands", () => {
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [
+      { pageNumber: 1, rows: [SIMPLE_ITEM] },
+      { pageNumber: 2, includeHeader: false, rows: [SIMPLE_ITEM] },
+    ]),
+  );
+  assert(
+    result.columns.filter((column) => column.pageNumber === 2).every(
+      (column) => column.status === "resolved",
+    ),
+    "compatible page should inherit unique schema",
+  );
+});
+
+test("duplicate incompatible roles stay ambiguous", () => {
+  const columns = [
+    { header: "Descrição", left: 0, right: 100 },
+    { header: "Quantidade", left: 110, right: 210 },
+    { header: "Quantidade", left: 220, right: 320 },
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      { pageNumber: 1, rows: [[entry("Serviço sintético", 0), entry("1", 1), entry("2", 2)]] },
+    ]),
+  );
+  assert(
+    result.columns
+      .filter((column) => column.candidateRoles.includes("quantity"))
+      .every((column) => column.status === "ambiguous"),
+    "duplicate roles",
+  );
+});
+
+test("page selection excludes non-requested pages from all semantic catalogs", () => {
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(
+      SIMPLE_COLUMNS,
+      [
+        { pageNumber: 1, rows: [SIMPLE_ITEM] },
+        { pageNumber: 2, rows: [SIMPLE_ITEM] },
+      ],
+      { pageSelection: [2] },
+    ),
+  );
+  equal(result.pages.map((page) => page.pageNumber), [2]);
+  assert(result.lines.every((line) => line.pageNumber === 2), "line selection");
+  assert(result.records.every((record) => record.pageNumber === 2), "record selection");
+});
+
+test("runtime keys do not affect decisions or fingerprint", () => {
+  const first = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows: [SIMPLE_ITEM] }], {
+      keyPrefix: "one",
+    }),
+  );
+  const second = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows: [SIMPLE_ITEM] }], {
+      keyPrefix: "two",
+    }),
+  );
+  equal(first.canonicalFingerprint, second.canonicalFingerprint);
+});
+
+test("permuted upstream collections retain canonical fingerprint", () => {
+  const firstInput = buildSyntheticInput(SIMPLE_COLUMNS, [
+    { pageNumber: 1, rows: [SIMPLE_ITEM] },
+  ]);
+  const secondInput = buildSyntheticInput(SIMPLE_COLUMNS, [
+    { pageNumber: 1, rows: [SIMPLE_ITEM] },
+  ]);
+  const physicalPage = (secondInput.physicalRead.pages[0] as any);
+  physicalPage.textItems = [...physicalPage.textItems].reverse();
+  const structurePage = (secondInput.structureReconstruction.groups[0] as any).pages[0];
+  structurePage.lines = [...structurePage.lines].reverse();
+  structurePage.segments = [...structurePage.segments].reverse();
+  equal(
+    reconstructBudgetTable(firstInput).canonicalFingerprint,
+    reconstructBudgetTable(secondInput).canonicalFingerprint,
+  );
+});
+
+test("f.2c and g.1 lineage mismatch fails explicitly", () => {
+  const input = buildSyntheticInput(SIMPLE_COLUMNS, [
+    { pageNumber: 1, rows: [SIMPLE_ITEM] },
+  ]);
+  (input.physicalCellEvidence as any).cellTextEvidenceFormation
+    .sourcePhysicalCellHypothesisFormationContextFingerprint = "0".repeat(64);
+  equal(reconstructBudgetTable(input).status, "failed");
+});
+
+test("normalized output stores locators once and refers by id", () => {
+  const result = simpleResult();
+  equal(new Set(result.locators.map((entry) => entry.locatorId)).size, result.locators.length);
+  assert(result.lines.every((line) => typeof line.locatorId === "string"), "line locator ids");
+  assert(result.cells.every((cell) => typeof cell.rowLocatorId === "string"), "cell locator ids");
+  assert(result.logicalRows.every((row) => Array.isArray(row.cellIds)), "row cell ids");
+});
+
+test("incremental canonical chunks produce the same stable hash", () => {
+  const value = { z: [3, 2, 1], a: { b: true, a: null } };
+  const firstChunks = [...canonicalChunks(value)];
+  const secondChunks = [...canonicalChunks(value)];
+  equal(firstChunks, secondChunks);
+  equal(fingerprintCanonical(value), fingerprintCanonical(value));
+  assert(firstChunks.length > 1, "serialization must be chunked");
+});
