@@ -305,12 +305,31 @@ runTest("distribuição preservada: 683 geometrias exclusivas (single_source_fra
   assertEqual(sharedGroupIds.size, 167);
 });
 
-runTest("prova histórica negativa registrada no manifesto: 186/186 falhas de lineKey direta, 0 ambiguidades, commit histórico correto", () => {
+runTest("prova histórica negativa registrada no manifesto com aplicabilidade explícita: 186 tentativas de lineKey, todas ausentes; segmentKey e comparação individual de bounding box nunca tentadas (bloqueadas/não aplicáveis, nunca '0 reprovações')", () => {
   const h = REFERENCE_TRUTH_CELL_GEOMETRY_MANIFEST.historicalReplayVerification;
   assertEqual(h.historicalReferenceTruthCommitSha, "ccd8f8f1627e4f628f8787c36a2b27517a42e29b");
+
   assertEqual(h.historicalLineCount, 186);
-  assertEqual(h.directLineKeyResolutionFailureCount, 186);
-  assertEqual(h.ambiguityCount, 0);
-  assertEqual(h.individualBoundingBoxMismatchCount, 0);
+  assertEqual(h.directLineKeyResolutionAttemptCount, 186);
+  assertEqual(h.directLineKeyResolutionSuccessCount, 0);
+  assertEqual(h.directLineKeyResolutionAbsentCount, 186);
+  assertEqual(h.directLineKeyResolutionAmbiguityCount, 0);
+  assertEqual(h.directLineKeyResolutionSuccessCount + h.directLineKeyResolutionAbsentCount, h.directLineKeyResolutionAttemptCount, "success + absent must account for every attempt");
+
+  assertEqual(h.historicalSegmentOccurrenceCount, 936);
+  assertEqual(h.historicalDistinctSegmentKeyCount, 936);
+
+  // Segment-key resolution was never attempted (it depends on a resolved line, and none resolved) — this is "blocked", never "attempted and failed".
+  assertEqual(h.directSegmentKeyResolutionApplicability, "not_applicable_due_to_zero_resolved_lines");
+  assertEqual(h.directSegmentKeyResolutionAttemptCount, 0);
+  assertEqual(h.directSegmentKeyResolutionSuccessCount, 0);
+  assertEqual(h.directSegmentKeyResolutionFailureCount, 0);
+  assertEqual(h.directSegmentKeyResolutionBlockedCount, 936);
+
+  // Individual bounding-box comparison was never attempted either (no historical box to compare against) — the mismatch count is null, never 0, since "zero attempted" is not the same fact as "zero mismatches found among attempts".
+  assertEqual(h.individualBoundingBoxComparisonApplicability, "not_applicable_due_to_zero_resolved_segments");
+  assertEqual(h.individualBoundingBoxComparisonAttemptCount, 0);
+  assertEqual(h.individualBoundingBoxMismatchCount, null, "must be null (not applicable), never 0 (which would imply comparisons were attempted and found no mismatch)");
+
   assertEqual(h.publishedCellReferencedSegmentKeyCount, PUBLISHED_SEGMENTS.length);
 });

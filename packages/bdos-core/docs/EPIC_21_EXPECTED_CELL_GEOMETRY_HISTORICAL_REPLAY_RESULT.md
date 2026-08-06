@@ -66,10 +66,14 @@ Idênticos. Este mesmo hash já havia sido obtido, de forma independente, ao rod
 |---|---|
 | Regiões físicas congeladas em escopo (páginas 46/50/54) | 186 |
 | Linhas físicas frescas produzidas pelo replay (46: 73, 50: 80, 54: 33) | 186 |
-| **Regiões resolvidas diretamente por `lineKey`** | **0 / 186** |
-| **Falhas de `lineKey`** | **186 / 186** |
-| Ocorrências de segmento que chegaram a ser tentadas (dependem da resolução de linha) | 0 |
-| Ambiguidades (duas linhas para a mesma `lineKey`) | 0 — todas as 186 falhas são por ausência, nunca por ambiguidade |
+| Tentativas de resolução direta de `lineKey` | 186 |
+| **Sucessos de resolução direta de `lineKey`** | **0** |
+| **Ausências (chave não encontrada)** | **186** |
+| Ambiguidades (duas linhas para a mesma `lineKey`) | 0 — todas as 186 ausências são por falta de correspondência, nunca por ambiguidade |
+| Tentativas de resolução direta de `segmentKey` | **0** — nunca tentada: depende de uma linha já resolvida, e nenhuma resolveu (`directSegmentKeyResolutionApplicability = "not_applicable_due_to_zero_resolved_lines"`) |
+| Ocorrências de segmento bloqueadas por essa dependência | 936 |
+| Tentativas de comparação individual de bounding box | **0** — nunca tentada: não existe caixa histórica individual congelada por segmento contra a qual comparar (`individualBoundingBoxComparisonApplicability = "not_applicable_due_to_zero_resolved_segments"`) |
+| `individualBoundingBoxMismatchCount` | `null` (não `0` — "zero tentativas" não é o mesmo fato que "zero divergências entre tentativas realizadas") |
 
 ## 8. Verificação de que a geometria permanece intacta (controle, não parte da prova de chave)
 
@@ -88,16 +92,19 @@ Como a resolução direta produziu 0 linhas resolvidas, nenhuma ocorrência de s
 | Campo | Valor |
 |---|---|
 | `historicalDirectRegistrySha256` (registro A — replay direto, vazio) | `sha256(JSON.stringify([]))` |
-| `currentPositionalBridgeRegistrySha256` (registro B — ponte estrutural atual, 936 entradas) | ver manifesto |
+| `currentStructuralBridgeRegistrySha256` (registro B — ponte estrutural atual, 936 entradas) | ver manifesto |
 | `publishedRegistrySha256` (registro publicado, 850 entradas efetivamente referenciadas pelas células) | ver manifesto |
 
 ## 10. Resultado
 
 ```
-regiões resolvidas diretamente por lineKey = 0 / 186
-falhas de lineKey = 186 / 186
-ocorrências de segmento resolvidas diretamente = 0
+tentativas de resolução direta de lineKey = 186
+sucessos = 0
+ausências = 186
 ambiguidades = 0
+
+tentativas de resolução direta de segmentKey = 0 (not_applicable_due_to_zero_resolved_lines; 936 ocorrências bloqueadas)
+tentativas de comparação individual de bounding box = 0 (not_applicable_due_to_zero_resolved_segments; individualBoundingBoxMismatchCount = null)
 ```
 
 **A resolução direta por chave histórica não é possível — nem no `HEAD` atual, nem no próprio commit de congelamento, com lockfile congelado.**

@@ -28,10 +28,12 @@ Antes de gerar qualquer dado real, a tentativa direta de resolver os `segmentKey
 
 O remapeamento posicional demonstrou igualdade dos 186 envelopes de região, igualdade das quantidades e ordenação determinística dos segmentos, ausência de ambiguidades e preservação das uniões geométricas: pareando cada `ReferenceTruthPhysicalRegion` congelada com a linha física fresca correspondente exclusivamente por `verticalOrder`, e cada `segmentKeys[i]` congelado com o `segmentKeys[i]` fresco da mesma linha exclusivamente por posição no array:
 
-- **186/186** pares região↔linha bateram exatamente (bounding box idêntica, zero tolerância) nas 3 páginas;
-- **936/936** pares de segmento bateram exatamente (bounding box idêntica);
+- **186/186** pares região↔linha bateram exatamente (a caixa da região já congelada é comparada à caixa da linha física fresca — uma comparação real, zero tolerância) nas 3 páginas;
+- 936 ocorrências de segmento foram associadas estruturalmente pela mesma ordem horizontal dentro de regiões já pareadas por página, `verticalOrder` e caixa total exatamente igual;
 - **0** conflitos de ambiguidade;
 - **1.019/1.019** células resolvíveis através da ponte.
+
+Não existia caixa histórica individual congelada para cada segmento — apenas a chave. Portanto **não houve 936 comparações individuais de bounding box**: não há, e nunca houve, um valor histórico de caixa por segmento contra o qual comparar. A afirmação correta é: 936 ocorrências de segmento foram associadas estruturalmente (nunca comparadas individualmente) pela mesma ordem horizontal dentro de regiões já pareadas por página, `verticalOrder` e caixa total exatamente igual.
 
 Esta análise, por si só, **não constitui** uma comparação individual entre a caixa historicamente produzida para a chave antiga e a caixa hoje publicada — apenas demonstra correspondência estrutural via posição, nunca via identidade de chave.
 
@@ -40,10 +42,13 @@ Esta análise, por si só, **não constitui** uma comparação individual entre 
 Um replay direto da cadeia física — executado exatamente no commit `ccd8f8f1627e4f628f8787c36a2b27517a42e29b`, em que a verdade de referência foi congelada, num worktree isolado com lockfile congelado (`pnpm install --frozen-lockfile`), contra o documento exato — tentou resolver diretamente as `lineKey`/`segmentKey` originais, exclusivamente por igualdade exata de chave (nunca posição, texto ou proximidade). Resultado:
 
 ```
-regiões resolvidas diretamente por lineKey = 0 / 186
-falhas de lineKey = 186 / 186
+tentativas de resolução direta de lineKey = 186
+sucessos = 0
+ausências = 186
 ambiguidades = 0
 ```
+
+Como nenhuma `lineKey` resolveu, a resolução direta de `segmentKey` **nunca foi tentada** — depende de uma linha já resolvida. As 936 ocorrências de segmento ficam formalmente `"not_applicable_due_to_zero_resolved_lines"` (bloqueadas, nunca "tentadas e reprovadas"). Pelo mesmo motivo, a comparação individual de bounding box também nunca foi tentada (`"not_applicable_due_to_zero_resolved_segments"`) — não existe caixa histórica individual para comparar. O manifesto registra `individualBoundingBoxMismatchCount: null` — nunca `0` — precisamente porque "zero comparações tentadas" não é o mesmo fato que "zero divergências encontradas entre comparações realizadas". Ver `EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md` para o registro completo, incluindo estes campos de aplicabilidade.
 
 **Causa comprovada**: `computeSegmentKey` nunca foi um hash de conteúdo — é `sha256(["segment", lineKey, ...sourceTextItemIndices])`, e `lineKey` encadeia através de um `reconstructionContextFingerprint`. O código da cadeia física (`domain/budget-document-location/{signal-observation,page-location,structure-reconstruction}`) é comprovadamente **byte-idêntico** entre o commit histórico e esta branch (`git diff` sem nenhuma linha de diferença) — portanto a causa não é uma mudança de código detectável por diff; apenas que a chave declarada não é reproduzível por nenhuma execução conhecida da cadeia, em nenhum ponto do histórico do repositório. Registro completo, incluindo ambiente, comandos e hashes, em `EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md`.
 
@@ -92,7 +97,7 @@ Ver `EPIC_21_EXPECTED_CELL_GEOMETRY_CONTRACT.md` para o contrato completo. Resum
 
 - Algoritmo genérico congelado no Commit 1 (`ab848769799e9d3099680670acd6426362cba657`), antes de qualquer dado real.
 - Duas execuções independentes da cadeia física completa (bytes copiados independentemente) → resultado JSON-equivalente: `sha256 = 73dc3acc2f4c8b9d9ad75127938e25e8553c2ad1ae823eea42dbbe0dc4ba84ac`.
-- Ponte estrutural verificada (§2.1): 186/186, 936/936, 0 ambiguidades.
+- Ponte estrutural verificada (§2.1): 186/186 pares região↔linha com caixa idêntica, 936 ocorrências de segmento associadas estruturalmente (nunca comparadas individualmente contra uma caixa histórica, que nunca existiu), 0 ambiguidades.
 - Prova histórica independente (§2.2): 0/186 `lineKey` resolvidas diretamente no commit de congelamento — ver `EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md`.
 - Duas execuções independentes da geração de geometria schemaVersion 1 (algoritmo do Commit 1, registro de segmentos via ponte estrutural) → `sha256 = b0724ca46e4018b182bcb9d95b5016e7704440a5c5bbaba71e4d9272f02c1da7` (`previousFullArtifactSha256` no manifesto atual).
 - Após a correção de proveniência (schemaVersion 2, localizador estrutural reproduzível): duas execuções independentes da geração de geometria → resultado JSON-equivalente: `sha256 = 23a267c23861429fca698b626d5f85095ab61ca1046e6cf85cca29a2515e4aca` (== `canonicalGenerationSha256` do manifesto atual).

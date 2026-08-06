@@ -65,8 +65,10 @@ const PREVIOUS_CANONICAL_SPATIAL_GEOMETRY_SHA256 = "9221d8bb0f7994cdde106cdf1ba7
  */
 const HISTORICAL_REPLAY_RESULT = {
   historicalCommitSha: "ccd8f8f1627e4f628f8787c36a2b27517a42e29b",
-  directLineKeyResolutionFailureCount: 186,
-  ambiguityCount: 0,
+  directLineKeyResolutionAttemptCount: 186,
+  directLineKeyResolutionSuccessCount: 0,
+  directLineKeyResolutionAbsentCount: 186,
+  directLineKeyResolutionAmbiguityCount: 0,
 } as const;
 
 const CURRENT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -192,8 +194,15 @@ async function main(): Promise<void> {
   // ordem horizontal do segmento dentro da linha + duas execuções físicas
   // independentes e idênticas + zero ambiguidade estrutural — nunca
   // resolução direta por chave, nunca fuzzy matching, nunca aproximação.
-  // Confirmado: 186/186 regiões e 936/936 segmentos com correspondência
-  // exata (zero tolerância) de bounding box, zero ambiguidade.
+  // Confirmado: 186/186 regiões pareadas por página, verticalOrder e
+  // caixa total exatamente igual (zero tolerância); mesma quantidade de
+  // segmentos em cada par; 936 ocorrências de segmento associadas
+  // estruturalmente pela mesma ordem horizontal dentro de cada par; zero
+  // ambiguidade. Não existia caixa histórica individual congelada para
+  // comparar cada segmento — portanto isto nunca é "936/936 pares de
+  // segmento bateram exatamente em bounding box" (não houve 936
+  // comparações individuais de bounding box; ver
+  // EPIC_21_EXPECTED_CELL_GEOMETRY_HISTORICAL_REPLAY_RESULT.md).
   // ---------------------------------------------------------------------
   interface RemapEntry {
     readonly boundingBox: { leftPoints: number; topPoints: number; rightPoints: number; bottomPoints: number };
@@ -471,23 +480,48 @@ async function main(): Promise<void> {
   const bridgeRegistryCanonical = [...remapByPageAndOldKey.entries()]
     .map(([mapKey, entry]) => ({ mapKey, ...entry }))
     .sort((a, b) => a.mapKey.localeCompare(b.mapKey));
-  const currentPositionalBridgeRegistrySha256 = sha256Hex(JSON.stringify(bridgeRegistryCanonical));
+  const currentStructuralBridgeRegistrySha256 = sha256Hex(JSON.stringify(bridgeRegistryCanonical));
 
   const publishedRegistryCanonical = [...physicalSegments].sort((a, b) => (a.realPageNumber - b.realPageNumber) || a.legacyDeclaredSegmentKey.localeCompare(b.legacyDeclaredSegmentKey));
   const publishedRegistrySha256 = sha256Hex(JSON.stringify(publishedRegistryCanonical));
 
+  // Campos explícitos de aplicabilidade (correção factual da PR #82): a
+  // resolução direta de lineKey foi de fato tentada e falhou por
+  // ausência (nunca ambiguidade) em 186/186 casos. A resolução direta de
+  // segmentKey NUNCA foi tentada — depende de uma linha já resolvida, e
+  // nenhuma linha resolveu — portanto é "bloqueada", nunca "tentada e
+  // reprovada". A comparação individual de bounding box também nunca foi
+  // tentada, pelo mesmo motivo: não existe caixa histórica individual
+  // para comparar. `individualBoundingBoxMismatchCount` é `null`
+  // (nunca `0`) precisamente porque "zero comparações tentadas" não é o
+  // mesmo fato que "zero divergências encontradas entre comparações
+  // realizadas".
   const historicalReplayVerification = {
     historicalReferenceTruthCommitSha: HISTORICAL_REPLAY_RESULT.historicalCommitSha,
+
     historicalLineCount: totalRegionLinePairs,
+    directLineKeyResolutionAttemptCount: HISTORICAL_REPLAY_RESULT.directLineKeyResolutionAttemptCount,
+    directLineKeyResolutionSuccessCount: HISTORICAL_REPLAY_RESULT.directLineKeyResolutionSuccessCount,
+    directLineKeyResolutionAbsentCount: HISTORICAL_REPLAY_RESULT.directLineKeyResolutionAbsentCount,
+    directLineKeyResolutionAmbiguityCount: HISTORICAL_REPLAY_RESULT.directLineKeyResolutionAmbiguityCount,
+
     historicalSegmentOccurrenceCount,
     historicalDistinctSegmentKeyCount: historicalDistinctKeySet.size,
+
+    directSegmentKeyResolutionApplicability: "not_applicable_due_to_zero_resolved_lines" as const,
+    directSegmentKeyResolutionAttemptCount: 0,
+    directSegmentKeyResolutionSuccessCount: 0,
+    directSegmentKeyResolutionFailureCount: 0,
+    directSegmentKeyResolutionBlockedCount: historicalSegmentOccurrenceCount,
+
+    individualBoundingBoxComparisonApplicability: "not_applicable_due_to_zero_resolved_segments" as const,
+    individualBoundingBoxComparisonAttemptCount: 0,
+    individualBoundingBoxMismatchCount: null as number | null,
+
     publishedCellReferencedSegmentKeyCount: physicalSegments.length,
-    directLineKeyResolutionFailureCount: HISTORICAL_REPLAY_RESULT.directLineKeyResolutionFailureCount,
-    directSegmentKeyResolutionFailureCount: historicalSegmentOccurrenceCount,
-    individualBoundingBoxMismatchCount: 0,
-    ambiguityCount: HISTORICAL_REPLAY_RESULT.ambiguityCount,
+
     historicalDirectRegistrySha256,
-    currentPositionalBridgeRegistrySha256,
+    currentStructuralBridgeRegistrySha256,
     publishedRegistrySha256,
   };
   console.log("Historical replay verification block:", historicalReplayVerification);
@@ -609,16 +643,30 @@ function writeGeometryPageFiles(geometries: ReadonlyArray<ReferenceTruthCellGeom
 
 interface HistoricalReplayVerificationInfo {
   readonly historicalReferenceTruthCommitSha: string;
+
   readonly historicalLineCount: number;
+  readonly directLineKeyResolutionAttemptCount: number;
+  readonly directLineKeyResolutionSuccessCount: number;
+  readonly directLineKeyResolutionAbsentCount: number;
+  readonly directLineKeyResolutionAmbiguityCount: number;
+
   readonly historicalSegmentOccurrenceCount: number;
   readonly historicalDistinctSegmentKeyCount: number;
-  readonly publishedCellReferencedSegmentKeyCount: number;
-  readonly directLineKeyResolutionFailureCount: number;
+
+  readonly directSegmentKeyResolutionApplicability: "not_applicable_due_to_zero_resolved_lines";
+  readonly directSegmentKeyResolutionAttemptCount: number;
+  readonly directSegmentKeyResolutionSuccessCount: number;
   readonly directSegmentKeyResolutionFailureCount: number;
-  readonly individualBoundingBoxMismatchCount: number;
-  readonly ambiguityCount: number;
+  readonly directSegmentKeyResolutionBlockedCount: number;
+
+  readonly individualBoundingBoxComparisonApplicability: "not_applicable_due_to_zero_resolved_segments";
+  readonly individualBoundingBoxComparisonAttemptCount: number;
+  readonly individualBoundingBoxMismatchCount: number | null;
+
+  readonly publishedCellReferencedSegmentKeyCount: number;
+
   readonly historicalDirectRegistrySha256: string;
-  readonly currentPositionalBridgeRegistrySha256: string;
+  readonly currentStructuralBridgeRegistrySha256: string;
   readonly publishedRegistrySha256: string;
 }
 
@@ -653,6 +701,14 @@ function writeManifest(info: {
   lines.push(` * as lineKey/segmentKey históricas não são reproduzíveis por nenhuma execução`);
   lines.push(` * conhecida da cadeia física. A geometria em si permanece intacta e é a mesma`);
   lines.push(` * publicada antes desta correção (ver previousFullArtifactSha256/canonicalSpatialGeometrySha256).`);
+  lines.push(` *`);
+  lines.push(` * Campos de aplicabilidade explícitos (correção factual): a resolução direta de`);
+  lines.push(` * lineKey foi de fato tentada e ausente em 186/186 casos (nunca ambígua). A`);
+  lines.push(` * resolução direta de segmentKey NUNCA foi tentada — depende de uma linha já`);
+  lines.push(` * resolvida, e nenhuma resolveu — por isso "bloqueada", nunca "tentada e`);
+  lines.push(` * reprovada". Pelo mesmo motivo, individualBoundingBoxMismatchCount é \`null\`,`);
+  lines.push(` * nunca \`0\`: "zero comparações tentadas" não é o mesmo fato que "zero`);
+  lines.push(` * divergências encontradas entre comparações realizadas".`);
   lines.push(` */`);
   lines.push(`export const REFERENCE_TRUTH_CELL_GEOMETRY_MANIFEST = {`);
   lines.push(`  schemaVersion: 2,`);
@@ -666,16 +722,30 @@ function writeManifest(info: {
   lines.push(`  canonicalSpatialGeometrySha256: ${tsStringLiteral(info.canonicalSpatialGeometrySha256)},`);
   lines.push(`  historicalReplayVerification: {`);
   lines.push(`    historicalReferenceTruthCommitSha: ${tsStringLiteral(h.historicalReferenceTruthCommitSha)},`);
+  lines.push(``);
   lines.push(`    historicalLineCount: ${h.historicalLineCount},`);
+  lines.push(`    directLineKeyResolutionAttemptCount: ${h.directLineKeyResolutionAttemptCount},`);
+  lines.push(`    directLineKeyResolutionSuccessCount: ${h.directLineKeyResolutionSuccessCount},`);
+  lines.push(`    directLineKeyResolutionAbsentCount: ${h.directLineKeyResolutionAbsentCount},`);
+  lines.push(`    directLineKeyResolutionAmbiguityCount: ${h.directLineKeyResolutionAmbiguityCount},`);
+  lines.push(``);
   lines.push(`    historicalSegmentOccurrenceCount: ${h.historicalSegmentOccurrenceCount},`);
   lines.push(`    historicalDistinctSegmentKeyCount: ${h.historicalDistinctSegmentKeyCount},`);
-  lines.push(`    publishedCellReferencedSegmentKeyCount: ${h.publishedCellReferencedSegmentKeyCount},`);
-  lines.push(`    directLineKeyResolutionFailureCount: ${h.directLineKeyResolutionFailureCount},`);
+  lines.push(``);
+  lines.push(`    directSegmentKeyResolutionApplicability: ${tsStringLiteral(h.directSegmentKeyResolutionApplicability)},`);
+  lines.push(`    directSegmentKeyResolutionAttemptCount: ${h.directSegmentKeyResolutionAttemptCount},`);
+  lines.push(`    directSegmentKeyResolutionSuccessCount: ${h.directSegmentKeyResolutionSuccessCount},`);
   lines.push(`    directSegmentKeyResolutionFailureCount: ${h.directSegmentKeyResolutionFailureCount},`);
-  lines.push(`    individualBoundingBoxMismatchCount: ${h.individualBoundingBoxMismatchCount},`);
-  lines.push(`    ambiguityCount: ${h.ambiguityCount},`);
+  lines.push(`    directSegmentKeyResolutionBlockedCount: ${h.directSegmentKeyResolutionBlockedCount},`);
+  lines.push(``);
+  lines.push(`    individualBoundingBoxComparisonApplicability: ${tsStringLiteral(h.individualBoundingBoxComparisonApplicability)},`);
+  lines.push(`    individualBoundingBoxComparisonAttemptCount: ${h.individualBoundingBoxComparisonAttemptCount},`);
+  lines.push(`    individualBoundingBoxMismatchCount: ${h.individualBoundingBoxMismatchCount === null ? "null" : h.individualBoundingBoxMismatchCount},`);
+  lines.push(``);
+  lines.push(`    publishedCellReferencedSegmentKeyCount: ${h.publishedCellReferencedSegmentKeyCount},`);
+  lines.push(``);
   lines.push(`    historicalDirectRegistrySha256: ${tsStringLiteral(h.historicalDirectRegistrySha256)},`);
-  lines.push(`    currentPositionalBridgeRegistrySha256: ${tsStringLiteral(h.currentPositionalBridgeRegistrySha256)},`);
+  lines.push(`    currentStructuralBridgeRegistrySha256: ${tsStringLiteral(h.currentStructuralBridgeRegistrySha256)},`);
   lines.push(`    publishedRegistrySha256: ${tsStringLiteral(h.publishedRegistrySha256)},`);
   lines.push(`  },`);
   lines.push(`} as const;`);
