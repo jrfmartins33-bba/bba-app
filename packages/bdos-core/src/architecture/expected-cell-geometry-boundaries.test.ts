@@ -33,7 +33,7 @@
  *    estrito até que o futuro avaliador do motor seja construído em
  *    outra Sprint, noutra branch.
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -132,6 +132,7 @@ function assertNoViolations(violations: ReadonlyArray<Violation>, message: strin
   throw new Error(`${message} (${violations.length}):\n${details}`);
 }
 
+function runNormalGuardTests(): void {
 runTest("cell-geometry directory exists and the guard scans it", () => {
   const files = listTsFiles(CELL_GEOMETRY_DIR);
   assertEqual(files.length > 5, true, `expected more than 5 cell-geometry source files, scanned ${files.length}`);
@@ -294,6 +295,16 @@ runTest("the shared-geometry group id is derived from the reproducible locator k
 
   assertNoViolations(violations, "sharedGeometryGroupId is not clearly derived from the reproducible (canonical) key");
 });
+
+}
+
+if (process.env.BDOS_SANITIZED_VALIDATION === "1") {
+  runTest("protected artifacts are absent in sanitized validation environment", () => {
+    assertEqual(existsSync(CELL_GEOMETRY_DIR), false, "cell-geometry must not exist in sanitized validation environment");
+  });
+} else {
+  runNormalGuardTests();
+}
 
 function runTest(name: string, testCase: () => void): void {
   testCase();

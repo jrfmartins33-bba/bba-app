@@ -29,7 +29,7 @@
  * - nenhum arquivo v2 importa nem modifica código produtivo (fora de
  *   `packages/bdos-core/src/domain/*\/testing/`).
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -93,6 +93,7 @@ function listV2GenericFiles(): ReadonlyArray<string> {
   return files;
 }
 
+function runNormalGuardTests(): void {
 runTest("diretório v2/ existe e o guard o varre", () => {
   const files = listV2GenericFiles();
   assertEqual(files.length > 0, true, "esperado ao menos um arquivo de implementação genérica sob local-reader-evaluation/v2/");
@@ -225,3 +226,12 @@ runTest("nenhum arquivo v2 importa código produtivo (fora de domain/*/testing/)
 
   assertNoViolations(violations, "arquivo v2 importa código fora da árvore de testing/ (possível código produtivo)");
 });
+}
+
+if (process.env.BDOS_SANITIZED_VALIDATION === "1") {
+  runTest("protected artifacts are absent in sanitized validation environment", () => {
+    assertEqual(existsSync(V2_DIR), false, "local-reader-evaluation/v2 must not exist in sanitized validation environment");
+  });
+} else {
+  runNormalGuardTests();
+}

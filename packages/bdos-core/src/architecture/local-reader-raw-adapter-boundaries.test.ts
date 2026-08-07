@@ -8,7 +8,7 @@
  * formato canônico já congelado (Momento 3A), nunca conhecendo a
  * verdade de referência, os 80 itens, códigos ou textos esperados.
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -76,6 +76,7 @@ function assertEqual<T>(actual: T, expected: T, message: string): void {
   }
 }
 
+function runNormalGuardTests(): void {
 runTest("diretório raw-adapters/ existe e o guard o varre", () => {
   const files = listRawAdapterFiles();
   assertEqual(files.length > 0, true, "esperado ao menos um arquivo sob testing/discovery/local-reader-evaluation/raw-adapters/");
@@ -125,3 +126,12 @@ runTest("nenhum adaptador de implementação (exceto *.test.ts) referencia por n
 
   assertNoViolations(violations, "um adaptador de implementação referencia vocabulário da verdade de referência");
 });
+}
+
+if (process.env.BDOS_SANITIZED_VALIDATION === "1") {
+  runTest("protected artifacts are absent in sanitized validation environment", () => {
+    assertEqual(existsSync(RAW_ADAPTERS_DIR), false, "local-reader-evaluation/raw-adapters must not exist in sanitized validation environment");
+  });
+} else {
+  runNormalGuardTests();
+}
