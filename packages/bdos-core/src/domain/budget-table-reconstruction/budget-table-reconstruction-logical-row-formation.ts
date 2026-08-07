@@ -1,4 +1,5 @@
 import { fingerprintCanonical } from "./budget-table-reconstruction-fingerprint";
+import { headerVocabularyRoles } from "./budget-table-reconstruction-profile";
 import { cellText } from "./budget-table-reconstruction-text";
 import type {
   EvidenceLine,
@@ -34,14 +35,8 @@ function lineKind(
   const texts = presentCells
     .map((cell) => normalize(cellText(cell, fragments, textItems) ?? ""))
     .filter((text) => text.length > 0);
-  const contains = (term: string): boolean =>
-    texts.some((text) => text === term || text.includes(term));
-
-  if (
-    ["descricao", "unidade", "quantidade", "preco", "custo", "bdi"].filter(
-      contains,
-    ).length >= 2
-  ) {
+  const headerRoles = new Set(texts.flatMap((text) => headerVocabularyRoles(text)));
+  if (headerRoles.size >= 2) {
     return "header";
   }
   if (texts.some((text) => /\bsubtotal\b/.test(text))) {
@@ -91,27 +86,42 @@ function descriptionFor(
 function eligibleContinuationReceivers(
   rows: ReadonlyArray<ReconstructedLogicalRow>,
   continuationIndex: number,
+  cells: ReadonlyArray<ReconstructedCell>,
 ): ReadonlyArray<ReconstructedLogicalRow> {
   const continuation = rows[continuationIndex]!;
-  const candidates: ReconstructedLogicalRow[] = [];
+  const immediate = rows[continuationIndex - 1];
+  if (
+    immediate === undefined ||
+    immediate.pageNumber !== continuation.pageNumber ||
+    (immediate.kind !== "service_item" && immediate.kind !== "group")
+  ) return [];
 
-  for (let index = continuationIndex - 1; index >= 0; index -= 1) {
-    const candidate = rows[index]!;
-    if (candidate.pageNumber !== continuation.pageNumber) {
-      break;
-    }
-    if (candidate.kind === "description_continuation") {
-      continue;
-    }
-    if (candidate.kind !== "service_item" && candidate.kind !== "group") {
-      break;
-    }
-    candidates.push(candidate);
-    if (index !== continuationIndex - 1) {
-      break;
-    }
-  }
-  return candidates;
+  const rowCells = (row: ReconstructedLogicalRow) => {
+    const ids = new Set(row.cellIds);
+    return cells.filter((cell) => ids.has(cell.cellId) && cell.role === "description");
+  };
+  const continuationCells = rowCells(continuation);
+  const physicallyEquivalent = rows
+    .slice(0, continuationIndex - 1)
+    .reverse()
+    .find((candidate) => {
+      if (
+        candidate.pageNumber !== continuation.pageNumber ||
+        (candidate.kind !== "service_item" && candidate.kind !== "group")
+      ) return false;
+      return rowCells(candidate).some((candidateCell) =>
+        continuationCells.some(
+          (continuationCell) =>
+            candidateCell.sourceSegmentIds.some((id) =>
+              continuationCell.sourceSegmentIds.includes(id),
+            ) ||
+            candidateCell.upstreamCellHypothesisIds.some((id) =>
+              continuationCell.upstreamCellHypothesisIds.includes(id),
+            ),
+        ),
+      );
+    });
+  return physicallyEquivalent === undefined ? [immediate] : [immediate, physicallyEquivalent];
 }
 
 export function formLogicalRows(
@@ -145,7 +155,7 @@ export function formLogicalRows(
     if (row.kind !== "description_continuation") {
       return row;
     }
-    const receivers = eligibleContinuationReceivers(rows, index);
+    const receivers = eligibleContinuationReceivers(rows, index, cells);
     return {
       ...row,
       status:

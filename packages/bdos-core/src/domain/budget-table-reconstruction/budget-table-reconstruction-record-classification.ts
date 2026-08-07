@@ -9,6 +9,7 @@ import type {
   ReconstructedCell,
   ReconstructedLogicalRow,
   ReconstructedRecordKind,
+  ResolvedColumn,
   SourceFragment,
 } from "./budget-table-reconstruction.types";
 
@@ -16,6 +17,46 @@ interface RecordFormationContext {
   readonly cells: ReadonlyArray<ReconstructedCell>;
   readonly fragments: ReadonlyArray<SourceFragment>;
   readonly textItems: ReadonlyArray<EvidenceTextItem>;
+  readonly columns: ReadonlyArray<ResolvedColumn>;
+  readonly rows: ReadonlyArray<ReconstructedLogicalRow>;
+}
+
+function pagesHavePositiveContinuity(
+  originPage: number,
+  targetPage: number,
+  context: RecordFormationContext,
+): boolean {
+  if (targetPage !== originPage + 1) return false;
+  if (context.rows.some((row) => row.pageNumber === targetPage && row.kind === "header")) {
+    return false;
+  }
+  const origin = context.columns
+    .filter((column) => column.pageNumber === originPage && column.status === "resolved")
+    .sort((left, right) => left.horizontalOrder - right.horizontalOrder);
+  const target = context.columns
+    .filter((column) => column.pageNumber === targetPage && column.status === "resolved")
+    .sort((left, right) => left.horizontalOrder - right.horizontalOrder);
+  return (
+    origin.length > 0 &&
+    origin.length === target.length &&
+    origin.every(
+      (column, index) =>
+        column.role === target[index]!.role &&
+        column.leftPoints === target[index]!.leftPoints &&
+        column.rightPoints === target[index]!.rightPoints,
+    )
+  );
+}
+
+function pageIsLinked(
+  candidatePage: number,
+  currentPage: number,
+  context: RecordFormationContext,
+): boolean {
+  return (
+    candidatePage === currentPage ||
+    pagesHavePositiveContinuity(candidatePage, currentPage, context)
+  );
 }
 
 function cellsForRole(
@@ -94,6 +135,7 @@ function recordKindForRow(
   row: ReconstructedLogicalRow,
   code: string | null,
   previousHeaders: ReadonlyArray<ReconstructedBudgetRecord>,
+  context: RecordFormationContext,
 ): ReconstructedRecordKind {
   if (row.kind !== "group") {
     return row.kind === "header" || row.kind === "description_continuation"
@@ -108,7 +150,7 @@ function recordKindForRow(
     .reverse()
     .find(
       (candidate) =>
-        candidate.pageNumber === row.pageNumber &&
+        pageIsLinked(candidate.pageNumber, row.pageNumber, context) &&
         candidate.itemCode !== null &&
         isPrefix(candidate.itemCode, code) &&
         hierarchicalDepth(candidate.itemCode) === depth - 1,
@@ -120,12 +162,13 @@ function parentForRecord(
   pageNumber: number,
   code: string | null,
   records: ReadonlyArray<ReconstructedBudgetRecord>,
+  context: RecordFormationContext,
 ): ReconstructedBudgetRecord | undefined {
   const headers = [...records]
     .reverse()
     .filter(
       (record) =>
-        record.pageNumber === pageNumber &&
+        pageIsLinked(record.pageNumber, pageNumber, context) &&
         (record.kind === "group" || record.kind === "subgroup"),
     );
   if (code !== null && hierarchicalDepth(code) !== null) {
@@ -151,7 +194,7 @@ export function classifyRecords(
 
   for (const [documentOrder, row] of recordRows.entries()) {
     const code = textForRole(row, "item_code", context);
-    const kind = recordKindForRow(row, code, records);
+    const kind = recordKindForRow(row, code, records, context);
     const continuations = rows.filter(
       (candidate) =>
         candidate.kind === "description_continuation" &&
@@ -164,7 +207,7 @@ export function classifyRecords(
     const parent =
       kind === "group"
         ? undefined
-        : parentForRecord(row.pageNumber, code, records);
+        : parentForRecord(row.pageNumber, code, records, context);
     const recordId = `record:${fingerprintCanonical({
       rowId: row.rowId,
       kind,

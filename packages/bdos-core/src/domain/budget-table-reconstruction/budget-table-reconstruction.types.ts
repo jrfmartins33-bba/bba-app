@@ -77,6 +77,8 @@ export interface SourceFragment {
   readonly textItemEvidenceId: string;
   readonly startOffset: number;
   readonly endOffset: number;
+  readonly sourceReferenceOrder: number | null;
+  readonly provenance: "structure" | "g1" | "semantic_partition";
 }
 
 export interface EvidenceSegment {
@@ -88,6 +90,9 @@ export interface EvidenceSegment {
   readonly fragmentIds: ReadonlyArray<string>;
   readonly rawText: string;
   readonly upstreamCellHypothesisIds: ReadonlyArray<string>;
+  readonly upstreamPhysicalColumnHypothesisIds: ReadonlyArray<string>;
+  readonly upstreamTextEvidenceStatus: string | null;
+  readonly upstreamItemDispositionStatuses: ReadonlyArray<string>;
   readonly runtimeReference: RuntimeSourceReference;
 }
 
@@ -129,6 +134,13 @@ export interface ResolvedColumn {
   readonly status: SemanticResolutionStatus;
   readonly headerLineIds: ReadonlyArray<string>;
   readonly evidenceLocatorIds: ReadonlyArray<string>;
+  readonly sourcePhysicalColumnHypothesisIds: ReadonlyArray<string>;
+  readonly contributingRegionIds: ReadonlyArray<string>;
+  readonly contributingLineIds: ReadonlyArray<string>;
+  readonly contributingSegmentIds: ReadonlyArray<string>;
+  readonly groupingRuleId: "overlap-semantic-noncooccupancy-components-v1" | "header-band-v1";
+  readonly representativePhysicalColumnHypothesisId: string | null;
+  readonly nonGroupingReasonCodes: ReadonlyArray<string>;
 }
 
 export type CellState = "present" | "missing" | "divergent" | "ambiguous" | "not_applicable";

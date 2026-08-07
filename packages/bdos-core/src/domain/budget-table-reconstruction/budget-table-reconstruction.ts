@@ -189,13 +189,17 @@ function failedResult(
 export function reconstructBudgetTable(
   input: BudgetTableReconstructionInput,
 ): BudgetTableReconstructionResult {
-  const validationIssues = validateBudgetTableReconstructionInput(input);
+  const normalizedInput: BudgetTableReconstructionInput = {
+    ...input,
+    pageSelection: normalizedPageSelection(input.pageSelection),
+  };
+  const validationIssues = validateBudgetTableReconstructionInput(normalizedInput);
   if (validationIssues.length > 0) {
-    return failedResult(input, validationIssues);
+    return failedResult(normalizedInput, validationIssues);
   }
 
-  const graph = buildEvidenceGraph(input);
-  const columns = resolveColumns(input, graph);
+  const graph = buildEvidenceGraph(normalizedInput);
+  const columns = resolveColumns(normalizedInput, graph);
   const cellFormation = formCells(graph, columns);
   const logicalRows = formLogicalRows(
     graph.lines,
@@ -207,8 +211,10 @@ export function reconstructBudgetTable(
     cells: cellFormation.cells,
     fragments: cellFormation.fragments,
     textItems: graph.textItems,
+    columns,
+    rows: logicalRows,
   });
-  const arithmeticEvaluations = evaluateArithmetic(records, columns);
+  const arithmeticEvaluations = evaluateArithmetic(records, columns, logicalRows);
   const conservation = conserveEvidence({
     textItems: graph.textItems,
     fragments: cellFormation.fragments,
@@ -221,9 +227,9 @@ export function reconstructBudgetTable(
   });
 
   const selectionIssues: ReconstructionIssue[] = [];
-  if (input.pageSelection !== "all") {
+  if (normalizedInput.pageSelection !== "all") {
     const reconstructedPages = new Set(graph.lines.map((line) => line.pageNumber));
-    for (const requestedPage of input.pageSelection) {
+    for (const requestedPage of normalizedInput.pageSelection) {
       if (!reconstructedPages.has(requestedPage)) {
         selectionIssues.push({
           code: "selected_page_not_in_structure_reconstruction",
@@ -273,8 +279,8 @@ export function reconstructBudgetTable(
     engineVersion: BUDGET_TABLE_RECONSTRUCTION_ENGINE_VERSION,
     profileId: BUDGET_TABLE_RECONSTRUCTION_PROFILE.profileId,
     profileVersion: BUDGET_TABLE_RECONSTRUCTION_PROFILE.profileVersion,
-    pageSelection: normalizedPageSelection(input.pageSelection),
-    sourceIdentity: sourceIdentity(input),
+    pageSelection: normalizedInput.pageSelection,
+    sourceIdentity: sourceIdentity(normalizedInput),
     status: hasFailure
       ? "failed"
       : records.length === 0 || selectionIssues.length > 0

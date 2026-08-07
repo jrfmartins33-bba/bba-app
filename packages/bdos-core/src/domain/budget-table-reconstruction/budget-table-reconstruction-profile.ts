@@ -21,3 +21,24 @@ export const BUDGET_TABLE_RECONSTRUCTION_PROFILE = Object.freeze({
     "half_away_from_zero",
   ]),
 } as const);
+
+export function normalizeBudgetHeaderText(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function headerVocabularyRoles(
+  text: string,
+): ReadonlyArray<keyof typeof BUDGET_TABLE_RECONSTRUCTION_PROFILE.headerVocabulary> {
+  const normalized = normalizeBudgetHeaderText(text);
+  return Object.entries(BUDGET_TABLE_RECONSTRUCTION_PROFILE.headerVocabulary)
+    .filter(([, terms]) =>
+      terms.some((term) => normalized === term || normalized.includes(term)),
+    )
+    .map(([role]) => role as keyof typeof BUDGET_TABLE_RECONSTRUCTION_PROFILE.headerVocabulary)
+    .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+}

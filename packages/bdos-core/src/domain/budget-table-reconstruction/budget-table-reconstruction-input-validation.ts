@@ -33,10 +33,8 @@ export function validateBudgetTableReconstructionInput(
     issues.push(failure("physical_lineage_mismatch"));
   }
   if (input.pageSelection !== "all") {
-    const uniquePages = new Set(input.pageSelection);
     if (
       input.pageSelection.length === 0 ||
-      uniquePages.size !== input.pageSelection.length ||
       input.pageSelection.some(
         (pageNumber) => !Number.isSafeInteger(pageNumber) || pageNumber <= 0,
       )

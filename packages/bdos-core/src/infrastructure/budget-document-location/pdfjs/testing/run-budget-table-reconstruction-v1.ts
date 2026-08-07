@@ -52,6 +52,10 @@ interface WrittenRun {
   readonly cellCount: number;
   readonly structuralIssueCounts: Readonly<Record<string, number>>;
   readonly arithmeticOutcomeCounts: Readonly<Record<string, number>>;
+  readonly columnRoleStatusCounts: Readonly<Record<string, number>>;
+  readonly recordKindStatusCounts: Readonly<Record<string, number>>;
+  readonly reconstructedEconomicFieldCounts: Readonly<Record<string, number>>;
+  readonly evidenceDispositionCounts: Readonly<Record<string, number>>;
 }
 
 function countBy(values: ReadonlyArray<string>): Readonly<Record<string, number>> {
@@ -192,7 +196,10 @@ async function writeRun(args: ExecutorArguments, temporaryPath: string): Promise
   const output = await buildReconstruction(args.input, args.expectedSha256, args.pages);
   const peakHeapBytes = process.memoryUsage().heapUsed;
   const stream = createWriteStream(temporaryPath, { encoding: "utf8" });
-  await writeCanonicalValue(output, stream);
+  await writeCanonicalValue(output, stream, {
+    omitCanonicalFingerprint: true,
+    omitRuntimeReferences: true,
+  });
   await finishWritable(stream);
   const fileStats = await stat(temporaryPath);
   return {
@@ -211,6 +218,29 @@ async function writeRun(args: ExecutorArguments, temporaryPath: string): Promise
     ),
     arithmeticOutcomeCounts: countBy(
       output.reconstruction.arithmeticEvaluations.map((evaluation) => evaluation.outcome),
+    ),
+    columnRoleStatusCounts: countBy(
+      output.reconstruction.columns.map((column) => `${column.role}:${column.status}`),
+    ),
+    recordKindStatusCounts: countBy(
+      output.reconstruction.records.map((record) => `${record.kind}:${record.status}`),
+    ),
+    reconstructedEconomicFieldCounts: countBy(
+      output.reconstruction.records.flatMap((record) => [
+        ...(record.itemCode === null ? [] : ["itemCode"]),
+        ...(record.description === null ? [] : ["description"]),
+        ...(record.unit === null ? [] : ["unit"]),
+        ...(record.quantity?.status === "resolved" ? ["quantity"] : []),
+        ...(record.unitCost?.status === "resolved" ? ["unitCost"] : []),
+        ...(record.bdiRate?.status === "resolved" ? ["bdiRate"] : []),
+        ...(record.unitPrice?.status === "resolved" ? ["unitPrice"] : []),
+        ...(record.totalPrice?.status === "resolved" ? ["totalPrice"] : []),
+      ]),
+    ),
+    evidenceDispositionCounts: countBy(
+      output.reconstruction.evidenceDispositions.map(
+        (disposition) => `${disposition.evidenceKind}:${disposition.disposition}`,
+      ),
     ),
   };
 }

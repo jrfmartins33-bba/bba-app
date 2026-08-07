@@ -28,37 +28,155 @@ function selectedPageNumbers(input: BudgetTableReconstructionInput): ReadonlySet
   return input.pageSelection === "all" ? null : new Set(input.pageSelection);
 }
 
-function upstreamCellHypothesesBySegment(
+interface UpstreamSegmentEvidence {
+  readonly cellHypothesisIds: ReadonlyArray<string>;
+  readonly physicalColumnHypothesisIds: ReadonlyArray<string>;
+  readonly textEvidenceStatus: string | null;
+  readonly itemDispositionStatuses: ReadonlyArray<string>;
+  readonly fragments: ReadonlyArray<{
+    readonly textItemIndex: number;
+    readonly sourceReferenceOrder: number;
+    readonly originalText: string;
+  }>;
+}
+
+function upstreamEvidenceBySegment(
   input: BudgetTableReconstructionInput,
-): ReadonlyMap<string, ReadonlyArray<string>> {
-  const result = new Map<string, string[]>();
+): ReadonlyMap<string, UpstreamSegmentEvidence> {
+  const result = new Map<string, UpstreamSegmentEvidence>();
   if (input.physicalCellEvidence.availability === "unavailable") {
     return result;
   }
 
+  const cellIdentityByKey = new Map<string, string>();
+  const columnIdentityByCellKey = new Map<string, string>();
+  const stableColumnIdentityByKey = new Map<string, string>();
+  if (input.columnEvidence.availability === "available") {
+    for (const group of input.columnEvidence.result.groups) {
+      for (const page of group.pages) {
+        for (const region of page.regions) {
+          for (const hypothesis of region.hypotheses) {
+            stableColumnIdentityByKey.set(
+              hypothesis.hypothesisKey,
+              `physical-column:${fingerprintCanonical({
+                pageNumber: page.pageNumber,
+                order: hypothesis.order,
+                leftPoints: hypothesis.leftPoints,
+                rightPoints: hypothesis.rightPoints,
+                lineCount: hypothesis.lineKeys.length,
+                segmentCount: hypothesis.segmentKeys.length,
+              })}`,
+            );
+          }
+        }
+      }
+    }
+  }
   for (const group of input.physicalCellEvidence.cellHypothesisFormation.groups) {
     for (const page of group.pages) {
       for (const region of page.regions) {
+        const columnByIntersection = new Map(
+          region.gridIntersections.map((intersection) => [
+            intersection.gridIntersectionKey,
+            intersection.sourcePhysicalColumnHypothesisKey,
+          ]),
+        );
         for (const hypothesis of region.cellHypotheses) {
           const canonicalHypothesisId = `upstream-cell:${fingerprintCanonical({
             pageNumber: page.pageNumber,
             observedContentBounds: hypothesis.observedContentBounds,
             segmentCount: hypothesis.segmentKeys.length,
           })}`;
+          cellIdentityByKey.set(hypothesis.cellHypothesisKey, canonicalHypothesisId);
+          const physicalColumnHypothesisId = stableColumnIdentityByKey.get(
+            columnByIntersection.get(hypothesis.gridIntersectionKey) ?? "",
+          );
+          if (physicalColumnHypothesisId !== undefined) {
+            columnIdentityByCellKey.set(
+              hypothesis.cellHypothesisKey,
+              physicalColumnHypothesisId,
+            );
+          }
           for (const segmentKey of hypothesis.segmentKeys) {
-            const existing = result.get(segmentKey) ?? [];
-            existing.push(canonicalHypothesisId);
-            result.set(segmentKey, existing);
+            const existing = result.get(segmentKey);
+            result.set(segmentKey, {
+              cellHypothesisIds: uniqueSorted([
+                ...(existing?.cellHypothesisIds ?? []),
+                canonicalHypothesisId,
+              ]),
+              physicalColumnHypothesisIds: uniqueSorted([
+                ...(existing?.physicalColumnHypothesisIds ?? []),
+                ...(physicalColumnHypothesisId === undefined
+                  ? []
+                  : [physicalColumnHypothesisId]),
+              ]),
+              textEvidenceStatus: existing?.textEvidenceStatus ?? null,
+              itemDispositionStatuses: existing?.itemDispositionStatuses ?? [],
+              fragments: existing?.fragments ?? [],
+            });
           }
         }
       }
     }
   }
 
-  for (const [segmentKey, hypothesisIds] of result) {
-    result.set(segmentKey, [...new Set(hypothesisIds)].sort(ordinalCompare));
+  for (const group of input.physicalCellEvidence.cellTextEvidenceFormation.groups) {
+    for (const page of group.pages) {
+      for (const region of page.regions) {
+        for (const cellEvidence of region.cellTextEvidences) {
+          const canonicalCellId = cellIdentityByKey.get(cellEvidence.cellHypothesisKey);
+          const physicalColumnId = columnIdentityByCellKey.get(
+            cellEvidence.cellHypothesisKey,
+          );
+          for (const outcome of cellEvidence.segmentOutcomes) {
+            const existing = result.get(outcome.segmentKey);
+            const resolvedFragments =
+              outcome.status === "resolved"
+                ? [...outcome.fragments]
+                    .sort(
+                      (left, right) =>
+                        left.sourceReferenceOrder - right.sourceReferenceOrder ||
+                        left.textItemIndex - right.textItemIndex,
+                    )
+                    .map((fragment) => ({
+                      textItemIndex: fragment.textItemIndex,
+                      sourceReferenceOrder: fragment.sourceReferenceOrder,
+                      originalText: fragment.originalText,
+                    }))
+                : [];
+            const dispositionStatuses =
+              outcome.status === "resolved"
+                ? outcome.itemDispositions.map((disposition) => disposition.status)
+                : [outcome.status];
+            result.set(outcome.segmentKey, {
+              cellHypothesisIds: uniqueSorted([
+                ...(existing?.cellHypothesisIds ?? []),
+                ...(canonicalCellId === undefined ? [] : [canonicalCellId]),
+              ]),
+              physicalColumnHypothesisIds: uniqueSorted([
+                ...(existing?.physicalColumnHypothesisIds ?? []),
+                ...(physicalColumnId === undefined ? [] : [physicalColumnId]),
+              ]),
+              textEvidenceStatus: cellEvidence.status,
+              itemDispositionStatuses: uniqueSorted([
+                ...(existing?.itemDispositionStatuses ?? []),
+                ...dispositionStatuses,
+              ]),
+              fragments:
+                resolvedFragments.length > 0
+                  ? resolvedFragments
+                  : (existing?.fragments ?? []),
+            });
+          }
+        }
+      }
+    }
   }
   return result;
+}
+
+function uniqueSorted(values: ReadonlyArray<string>): ReadonlyArray<string> {
+  return [...new Set(values)].sort(ordinalCompare);
 }
 
 export function buildEvidenceGraph(input: BudgetTableReconstructionInput): EvidenceGraph {
@@ -69,7 +187,7 @@ export function buildEvidenceGraph(input: BudgetTableReconstructionInput): Evide
   const lines: EvidenceLine[] = [];
   const segments: EvidenceSegment[] = [];
   const pageStatuses = new Map<number, string>();
-  const upstreamCellIds = upstreamCellHypothesesBySegment(input);
+  const upstreamEvidence = upstreamEvidenceBySegment(input);
 
   const structuralPages = input.structureReconstruction.groups
     .flatMap((group) => group.pages)
@@ -142,6 +260,8 @@ export function buildEvidenceGraph(input: BudgetTableReconstructionInput): Evide
         textItemEvidenceId: evidenceId,
         startOffset: 0,
         endOffset: item.text.length,
+        sourceReferenceOrder: null,
+        provenance: "structure",
       });
     }
 
@@ -191,13 +311,38 @@ export function buildEvidenceGraph(input: BudgetTableReconstructionInput): Evide
         ),
       );
       const segmentId = `segment:${fingerprintCanonical({ locatorId })}`;
-      const textItemEvidenceIds = sourceSegment.sourceTextItemIndices
+      const upstream = upstreamEvidence.get(sourceSegment.segmentKey);
+      const orderedSourceIndices =
+        upstream?.fragments.length
+          ? upstream.fragments.map((fragment) => fragment.textItemIndex)
+          : sourceSegment.sourceTextItemIndices;
+      const textItemEvidenceIds = orderedSourceIndices
         .map((index) => textItemIdByIndex.get(index))
         .filter((value): value is string => value !== undefined);
-      const fragmentIds = sourceSegment.sourceTextItemIndices
+      const fragmentIds = orderedSourceIndices
         .map((index) => fragmentIdByIndex.get(index))
         .filter((value): value is string => value !== undefined);
-      const rawText = sourceSegment.sourceTextItemIndices
+      if (upstream?.fragments.length) {
+        for (const fragment of upstream.fragments) {
+          const fragmentId = fragmentIdByIndex.get(fragment.textItemIndex);
+          const evidenceId = textItemIdByIndex.get(fragment.textItemIndex);
+          if (fragmentId === undefined || evidenceId === undefined) continue;
+          const existingIndex = fragments.findIndex(
+            (candidate) => candidate.fragmentId === fragmentId,
+          );
+          const g1Fragment: SourceFragment = {
+            fragmentId,
+            textItemEvidenceId: evidenceId,
+            startOffset: 0,
+            endOffset: fragment.originalText.length,
+            sourceReferenceOrder: fragment.sourceReferenceOrder,
+            provenance: "g1",
+          };
+          if (existingIndex >= 0) fragments[existingIndex] = g1Fragment;
+          else fragments.push(g1Fragment);
+        }
+      }
+      const rawText = orderedSourceIndices
         .map(
           (index) =>
             physicalPage?.textItems.find((candidate) => candidate.index === index)?.text ?? "",
@@ -212,7 +357,12 @@ export function buildEvidenceGraph(input: BudgetTableReconstructionInput): Evide
         textItemEvidenceIds,
         fragmentIds,
         rawText,
-        upstreamCellHypothesisIds: upstreamCellIds.get(sourceSegment.segmentKey) ?? [],
+        upstreamCellHypothesisIds: upstream?.cellHypothesisIds ?? [],
+        upstreamPhysicalColumnHypothesisIds:
+          upstream?.physicalColumnHypothesisIds ?? [],
+        upstreamTextEvidenceStatus: upstream?.textEvidenceStatus ?? null,
+        upstreamItemDispositionStatuses:
+          upstream?.itemDispositionStatuses ?? [],
         runtimeReference: {
           lineKey: sourceSegment.lineKey,
           segmentKey: sourceSegment.segmentKey,

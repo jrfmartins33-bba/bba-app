@@ -12,6 +12,7 @@ import type {
   ExactRational,
   ParsedNumericEvidence,
   ReconstructedBudgetRecord,
+  ReconstructedLogicalRow,
   ResolvedColumn,
 } from "./budget-table-reconstruction.types";
 
@@ -214,11 +215,36 @@ function bdiEvaluation(
 function summandsForTotal(
   target: ReconstructedBudgetRecord,
   records: ReadonlyArray<ReconstructedBudgetRecord>,
+  columns: ReadonlyArray<ResolvedColumn>,
+  rows: ReadonlyArray<ReconstructedLogicalRow>,
 ): ReadonlyArray<ReconstructedBudgetRecord> {
+  const previousPageContinues = (() => {
+    const originPage = target.pageNumber - 1;
+    if (rows.some((row) => row.pageNumber === target.pageNumber && row.kind === "header")) {
+      return false;
+    }
+    const origin = columns
+      .filter((column) => column.pageNumber === originPage && column.status === "resolved")
+      .sort((left, right) => left.horizontalOrder - right.horizontalOrder);
+    const current = columns
+      .filter((column) => column.pageNumber === target.pageNumber && column.status === "resolved")
+      .sort((left, right) => left.horizontalOrder - right.horizontalOrder);
+    return (
+      origin.length > 0 &&
+      origin.length === current.length &&
+      origin.every(
+        (column, index) =>
+          column.role === current[index]!.role &&
+          column.leftPoints === current[index]!.leftPoints &&
+          column.rightPoints === current[index]!.rightPoints,
+      )
+    );
+  })();
   const before = records.filter(
     (record) =>
       record.documentOrder < target.documentOrder &&
-      record.pageNumber === target.pageNumber,
+      (record.pageNumber === target.pageNumber ||
+        (previousPageContinues && record.pageNumber === target.pageNumber - 1)),
   );
   let boundaryIndex = -1;
   for (let index = before.length - 1; index >= 0; index -= 1) {
@@ -255,8 +281,10 @@ function summandsForTotal(
 function totalEvaluation(
   record: ReconstructedBudgetRecord,
   records: ReadonlyArray<ReconstructedBudgetRecord>,
+  columns: ReadonlyArray<ResolvedColumn>,
+  rows: ReadonlyArray<ReconstructedLogicalRow>,
 ): ArithmeticEvaluation {
-  const summands = summandsForTotal(record, records);
+  const summands = summandsForTotal(record, records, columns, rows);
   const applicable = summands.length > 0;
   let sum: ExactRational | null = applicable ? rational(0n, 1n) : null;
   for (const summand of summands) {
@@ -280,6 +308,7 @@ function totalEvaluation(
 export function evaluateArithmetic(
   records: ReadonlyArray<ReconstructedBudgetRecord>,
   columns: ReadonlyArray<ResolvedColumn>,
+  rows: ReadonlyArray<ReconstructedLogicalRow> = [],
 ): ReadonlyArray<ArithmeticEvaluation> {
   const evaluations: ArithmeticEvaluation[] = [];
   for (const record of records) {
@@ -288,7 +317,7 @@ export function evaluateArithmetic(
       evaluations.push(bdiEvaluation(record, columns));
     }
     if (record.kind === "subtotal" || record.kind === "total") {
-      evaluations.push(totalEvaluation(record, records));
+      evaluations.push(totalEvaluation(record, records, columns, rows));
     }
   }
   return evaluations;

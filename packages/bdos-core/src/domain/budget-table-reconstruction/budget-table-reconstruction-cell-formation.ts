@@ -20,6 +20,11 @@ interface TokenCandidate {
   readonly endOffset: number;
 }
 
+interface TokenPartition {
+  readonly startIndex: number;
+  readonly endIndex: number;
+}
+
 function ordinalCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -31,9 +36,7 @@ function segmentBounds(
   const locator = graph.locatorCatalog
     .entries()
     .find((entry) => entry.locatorId === segment.locatorId)?.locator;
-  return locator?.bounds === null || locator?.bounds === undefined
-    ? null
-    : [locator.bounds[0], locator.bounds[2]];
+  return locator?.bounds == null ? null : [locator.bounds[0], locator.bounds[2]];
 }
 
 function intersects(
@@ -52,9 +55,7 @@ function tokenCandidates(
   const tokens: TokenCandidate[] = [];
   for (const evidenceId of segment.textItemEvidenceIds) {
     const item = graph.textItems.find((candidate) => candidate.evidenceId === evidenceId);
-    if (item === undefined) {
-      continue;
-    }
+    if (item === undefined) continue;
     for (const match of item.rawText.matchAll(/\S+/g)) {
       const startOffset = match.index;
       tokens.push({
@@ -68,8 +69,17 @@ function tokenCandidates(
   return tokens;
 }
 
-function tokenSupportsRole(token: string, role: BudgetColumnRole): boolean {
-  const normalized = token.normalize("NFKC").trim();
+function tokenGroupSupportsRole(
+  tokens: ReadonlyArray<TokenCandidate>,
+  role: BudgetColumnRole,
+): boolean {
+  const normalized = tokens
+    .map((token) => token.text)
+    .join(" ")
+    .normalize("NFKC")
+    .trim()
+    .replace(/^R\$\s+(?=[+-]?\d)/, "R$")
+    .replace(/(?<=\d)\s+%$/, "%");
   switch (role) {
     case "quantity":
     case "unit_cost":
@@ -78,51 +88,47 @@ function tokenSupportsRole(token: string, role: BudgetColumnRole): boolean {
     case "total_price":
       return /^(?:R\$)?[+-]?\d[\d.,]*(?:%)?$/.test(normalized);
     case "unit":
-      return /^[\p{L}³²/.-]{1,12}$/u.test(normalized);
+      return /^(?:[\p{L}³²]+(?:[\s/.-][\p{L}\d³²]+)*)$/u.test(normalized);
     case "item_code":
       return /^[\p{L}\d][\p{L}\d._/-]*$/u.test(normalized);
     case "description":
-      return /\p{L}/u.test(normalized);
+      return (
+        /\p{L}/u.test(normalized) &&
+        tokens.every((token) => !/^(?:R\$|[+-]?\d[\d.,]*%?|%)$/.test(token.text))
+      );
     case "unknown":
       return true;
   }
 }
 
-function enumerateUniqueAssignments(
+function enumerateUniquePartitions(
   tokens: ReadonlyArray<TokenCandidate>,
   columns: ReadonlyArray<ResolvedColumn>,
-): ReadonlyArray<ReadonlyArray<number>> {
-  if (tokens.length !== columns.length || tokens.length > 8) {
-    return [];
-  }
-  const assignments: number[][] = [];
-  const used = new Set<number>();
+): ReadonlyArray<ReadonlyArray<TokenPartition>> {
+  if (tokens.length < columns.length || columns.length === 0) return [];
+  const solutions: TokenPartition[][] = [];
 
-  function visit(columnIndex: number, assignment: number[]): void {
-    if (assignments.length > 1) {
-      return;
-    }
+  function visit(columnIndex: number, tokenIndex: number, parts: TokenPartition[]): void {
+    if (solutions.length >= 2) return;
     if (columnIndex === columns.length) {
-      assignments.push([...assignment]);
+      if (tokenIndex === tokens.length) solutions.push([...parts]);
       return;
     }
-    for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex += 1) {
-      if (
-        used.has(tokenIndex) ||
-        !tokenSupportsRole(tokens[tokenIndex]!.text, columns[columnIndex]!.role)
-      ) {
+    const remainingColumns = columns.length - columnIndex - 1;
+    const latestEnd = tokens.length - remainingColumns;
+    for (let endIndex = tokenIndex + 1; endIndex <= latestEnd; endIndex += 1) {
+      if (!tokenGroupSupportsRole(tokens.slice(tokenIndex, endIndex), columns[columnIndex]!.role)) {
         continue;
       }
-      used.add(tokenIndex);
-      assignment.push(tokenIndex);
-      visit(columnIndex + 1, assignment);
-      assignment.pop();
-      used.delete(tokenIndex);
+      parts.push({ startIndex: tokenIndex, endIndex });
+      visit(columnIndex + 1, endIndex, parts);
+      parts.pop();
+      if (solutions.length >= 2) return;
     }
   }
 
-  visit(0, []);
-  return assignments;
+  visit(0, 0, []);
+  return solutions;
 }
 
 function createTokenFragment(token: TokenCandidate): SourceFragment {
@@ -136,6 +142,8 @@ function createTokenFragment(token: TokenCandidate): SourceFragment {
     textItemEvidenceId: token.textItemEvidenceId,
     startOffset: token.startOffset,
     endOffset: token.endOffset,
+    sourceReferenceOrder: null,
+    provenance: "semantic_partition",
   };
 }
 
@@ -149,6 +157,21 @@ function cellIdentity(
     segmentId: segment?.segmentId ?? null,
     columnId: column.columnId,
   })}`;
+}
+
+function preferredColumnsForSegment(
+  graph: EvidenceGraph,
+  segment: EvidenceSegment,
+  pageColumns: ReadonlyArray<ResolvedColumn>,
+): ReadonlyArray<ResolvedColumn> {
+  const upstreamColumns = pageColumns.filter((column) =>
+    column.sourcePhysicalColumnHypothesisIds.some((hypothesisId) =>
+      segment.upstreamPhysicalColumnHypothesisIds.includes(hypothesisId),
+    ),
+  );
+  return segment.upstreamTextEvidenceStatus !== null && upstreamColumns.length > 0
+    ? upstreamColumns
+    : pageColumns.filter((column) => intersects(graph, segment, column));
 }
 
 export function formCells(
@@ -166,14 +189,10 @@ export function formCells(
     const occupiedColumns = new Set<string>();
 
     for (const segment of lineSegments) {
-      const matchingColumns = pageColumns.filter((column) => intersects(graph, segment, column));
+      const matchingColumns = preferredColumnsForSegment(graph, segment, pageColumns);
       if (matchingColumns.length === 0) {
         cells.push({
-          cellId: `cell:${fingerprintCanonical({
-            lineId: line.lineId,
-            segmentId: segment.segmentId,
-            columnId: null,
-          })}`,
+          cellId: `cell:${fingerprintCanonical({ lineId: line.lineId, segmentId: segment.segmentId, columnId: null })}`,
           pageNumber: line.pageNumber,
           rowLocatorId: line.locatorId,
           lineId: line.lineId,
@@ -189,9 +208,7 @@ export function formCells(
         continue;
       }
 
-      for (const column of matchingColumns) {
-        occupiedColumns.add(column.columnId);
-      }
+      for (const column of matchingColumns) occupiedColumns.add(column.columnId);
 
       if (matchingColumns.length === 1) {
         const column = matchingColumns[0]!;
@@ -208,33 +225,35 @@ export function formCells(
           fragmentIds: segment.fragmentIds,
           upstreamCellHypothesisIds: segment.upstreamCellHypothesisIds,
           reasonCode:
-            segment.upstreamCellHypothesisIds.length > 0
-              ? "preferred_upstream_physical_cell_evidence"
-              : "unique_semantic_band_intersection",
+            segment.upstreamTextEvidenceStatus !== null
+              ? "preferred_g1_physical_cell_text_association"
+              : segment.upstreamCellHypothesisIds.length > 0
+                ? "preferred_upstream_physical_cell_evidence"
+                : "unique_semantic_band_intersection",
         });
         continue;
       }
 
       const tokens = tokenCandidates(graph, segment);
-      const assignments = enumerateUniqueAssignments(tokens, matchingColumns);
-      const uniqueAssignment = assignments.length === 1 ? assignments[0]! : null;
+      const partitions = enumerateUniquePartitions(tokens, matchingColumns);
+      const uniquePartition = partitions.length === 1 ? partitions[0]! : null;
 
       for (let columnIndex = 0; columnIndex < matchingColumns.length; columnIndex += 1) {
         const column = matchingColumns[columnIndex]!;
         let fragmentIds = segment.fragmentIds;
         let state: ReconstructedCell["state"] = "ambiguous";
         let reasonCode =
-          assignments.length > 1
+          partitions.length > 1
             ? "multiple_valid_token_role_decompositions"
             : "shared_evidence_not_uniquely_decomposable";
 
-        if (uniqueAssignment !== null) {
-          const token = tokens[uniqueAssignment[columnIndex]!]!;
-          const fragment = createTokenFragment(token);
-          derivedFragments.set(fragment.fragmentId, fragment);
-          fragmentIds = [fragment.fragmentId];
+        if (uniquePartition !== null) {
+          const part = uniquePartition[columnIndex]!;
+          const created = tokens.slice(part.startIndex, part.endIndex).map(createTokenFragment);
+          for (const fragment of created) derivedFragments.set(fragment.fragmentId, fragment);
+          fragmentIds = created.map((fragment) => fragment.fragmentId);
           state = column.status === "resolved" ? "present" : "ambiguous";
-          reasonCode = "unique_token_role_decomposition";
+          reasonCode = "unique_contiguous_token_role_partition";
         }
 
         cells.push({
@@ -255,9 +274,7 @@ export function formCells(
     }
 
     for (const column of pageColumns) {
-      if (occupiedColumns.has(column.columnId)) {
-        continue;
-      }
+      if (occupiedColumns.has(column.columnId)) continue;
       cells.push({
         cellId: cellIdentity(null, column, line.lineId),
         pageNumber: line.pageNumber,

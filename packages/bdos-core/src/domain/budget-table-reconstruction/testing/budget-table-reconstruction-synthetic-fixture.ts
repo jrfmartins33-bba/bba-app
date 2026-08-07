@@ -4,6 +4,10 @@ export interface SyntheticColumn {
   readonly header: string;
   readonly left: number;
   readonly right: number;
+  readonly observedBands?: ReadonlyArray<{
+    readonly left: number;
+    readonly right: number;
+  }>;
 }
 
 export interface SyntheticEntry {
@@ -59,6 +63,7 @@ export function buildSyntheticInput(
   const structurePages: any[] = [];
   const columnPages: any[] = [];
   const physicalCellPages: any[] = [];
+  const physicalCellTextPages: any[] = [];
 
   for (const pageSpec of pages) {
     const sourceRows: ReadonlyArray<SyntheticRow> = [
@@ -72,6 +77,8 @@ export function buildSyntheticInput(
     const segments: any[] = [];
     const sourceItemOutcomes: any[] = [];
     const cellHypotheses: any[] = [];
+    const gridIntersections: any[] = [];
+    const cellTextEvidences: any[] = [];
     let textItemIndex = 0;
 
     for (const [rowIndex, row] of sourceRows.entries()) {
@@ -122,15 +129,57 @@ export function buildSyntheticInput(
           lineKey,
           segmentKey,
         });
+        const cellHypothesisKey = `${keyPrefix}-cell-hypothesis-${pageSpec.pageNumber}-${rowIndex}-${segmentIndex}`;
+        const gridIntersectionKey = `${keyPrefix}-grid-${pageSpec.pageNumber}-${rowIndex}-${segmentIndex}`;
         cellHypotheses.push({
-          cellHypothesisKey: `${keyPrefix}-cell-hypothesis-${pageSpec.pageNumber}-${rowIndex}-${segmentIndex}`,
-          gridIntersectionKey: `${keyPrefix}-grid-${pageSpec.pageNumber}-${rowIndex}-${segmentIndex}`,
+          cellHypothesisKey,
+          gridIntersectionKey,
           observedContentBounds: geometry(left, right, top, bottom),
           segmentKeys: [segmentKey],
           cellFormationRuleId: "synthetic",
           cellFormationRuleVersion: 1,
           profileId: "synthetic",
           profileVersion: 1,
+        });
+        gridIntersections.push({
+          gridIntersectionKey,
+          sourceLineKey: lineKey,
+          sourcePhysicalColumnHypothesisKey: `${keyPrefix}-hypothesis-${pageSpec.pageNumber}-${sourceEntry.fromColumn}-0`,
+          sourceRegionKey: `${keyPrefix}-region-${pageSpec.pageNumber}`,
+          pageNumber: pageSpec.pageNumber,
+          rowOrder: rowIndex + 1,
+          columnOrder: sourceEntry.fromColumn + 1,
+          gridBounds: geometry(left, right, top, bottom),
+          status: "cell_hypothesis_formed",
+          cellHypothesisKey,
+        });
+        cellTextEvidences.push({
+          cellHypothesisKey,
+          gridIntersectionKey,
+          status: "formed",
+          segmentOutcomes: [
+            {
+              status: "resolved",
+              segmentKey,
+              lineKey,
+              fragments: [
+                {
+                  sourceReferenceOrder: 1,
+                  textItemIndex: index,
+                  originalText: sourceEntry.text,
+                  normalizedText: sourceEntry.text.normalize("NFKC"),
+                },
+              ],
+              itemDispositions: [
+                {
+                  status: "included_in_text_fragment",
+                  segmentKey,
+                  sourceReferenceOrder: 1,
+                  textItemIndex: index,
+                },
+              ],
+            },
+          ],
         });
       }
       const left = Math.min(...row.map((sourceEntry) => columns[sourceEntry.fromColumn]!.left));
@@ -201,8 +250,11 @@ export function buildSyntheticInput(
       pageNumber: pageSpec.pageNumber,
       regions: [
         {
-          hypotheses: columns.map((column, columnIndex) => ({
-            hypothesisKey: `${keyPrefix}-hypothesis-${pageSpec.pageNumber}-${columnIndex}`,
+          sourceRegionKey: `${keyPrefix}-region-${pageSpec.pageNumber}`,
+          hypotheses: columns.flatMap((column, columnIndex) =>
+            (column.observedBands ?? [{ left: column.left, right: column.right }]).map(
+              (observed, observationIndex) => ({
+            hypothesisKey: `${keyPrefix}-hypothesis-${pageSpec.pageNumber}-${columnIndex}-${observationIndex}`,
             pageNumber: pageSpec.pageNumber,
             order: columnIndex + 1,
             contributingAlignmentKeys: [],
@@ -213,18 +265,29 @@ export function buildSyntheticInput(
                   segment.leftPoints >= column.left && segment.rightPoints <= column.right,
               )
               .map((segment) => segment.segmentKey),
-            ...geometry(column.left, column.right, 0, sourceRows.length * 20),
+            ...geometry(observed.left, observed.right, 0, sourceRows.length * 20),
             formationRuleId: "synthetic",
             formationRuleVersion: 1,
             profileId: "synthetic",
             profileVersion: 1,
-          })),
+          }))),
         },
       ],
     });
     physicalCellPages.push({
       pageNumber: pageSpec.pageNumber,
-      regions: [{ cellHypotheses }],
+      regions: [{
+        sourceRegionKey: `${keyPrefix}-region-${pageSpec.pageNumber}`,
+        gridIntersections,
+        cellHypotheses,
+      }],
+    });
+    physicalCellTextPages.push({
+      pageNumber: pageSpec.pageNumber,
+      regions: [{
+        sourceRegionKey: `${keyPrefix}-region-${pageSpec.pageNumber}`,
+        cellTextEvidences,
+      }],
     });
   }
 
@@ -305,7 +368,7 @@ export function buildSyntheticInput(
     sourcePhysicalCellHypothesisFormationContextFingerprint:
       cellHypothesisFormation.formationContextFingerprint,
     formationContextFingerprint: "f".repeat(64),
-    groups: [],
+    groups: [{ pages: physicalCellTextPages }],
     status: "completed",
   };
 
