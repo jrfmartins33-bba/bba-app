@@ -8,12 +8,14 @@ import { reconstructBudgetTable } from "./budget-table-reconstruction";
 import type {
   BudgetColumnRole,
   CellState,
+  EvidenceTextItem,
   ParsedNumericEvidence,
   ReconstructedBudgetRecord,
   ReconstructedCell,
   ReconstructedLogicalRow,
   ReconstructedRecordKind,
   ResolvedColumn,
+  SourceFragment,
 } from "./budget-table-reconstruction.types";
 import {
   buildSyntheticInput,
@@ -117,6 +119,14 @@ const SPEC_SEMANTIC_ROLES_BY_KIND: Partial<Record<ReconstructedRecordKind, Reado
   total: new Set(["description", "total_price"]),
 };
 
+const NUMERIC_ROLE_FIELD: Partial<Record<BudgetColumnRole, keyof ReconstructedBudgetRecord>> = {
+  quantity: "quantity",
+  unit_cost: "unitCost",
+  bdi_rate: "bdiRate",
+  unit_price: "unitPrice",
+  total_price: "totalPrice",
+};
+
 function assertNoResolvedRecordHasApplicableEvidenceGap(
   result: ReturnType<typeof reconstructBudgetTable>,
 ): void {
@@ -142,6 +152,15 @@ function assertNoResolvedRecordHasApplicableEvidenceGap(
       assert(
         cell.state !== "missing" && cell.state !== "ambiguous" && cell.state !== "divergent",
         `resolved record ${record.recordId} has an applicable ${cell.role} cell in state ${cell.state}`,
+      );
+    }
+    for (const role of applicableRoles) {
+      const field = NUMERIC_ROLE_FIELD[role];
+      if (field === undefined) continue;
+      const value = record[field] as ParsedNumericEvidence | null;
+      assert(
+        value !== null && value.status === "resolved" && value.exactValue !== null,
+        `resolved record ${record.recordId} has an applicable ${role} numeric field that is not usably resolved (${JSON.stringify(value)})`,
       );
     }
   }
@@ -2536,4 +2555,302 @@ test("a monetary BDI column with no role in this version keeps its evidence pres
     arithmeticEvaluations: result.arithmeticEvaluations,
   });
   equal(conservation.issues.length, 0);
+});
+
+// Record status: numeric evidence propagation (this round)
+
+/** Builds a real (fragmentId, textItem) pair carrying actual text, for
+ * direct-construction tests that need `numericForRole` to genuinely parse a
+ * value (e.g. an ambiguous single-separator number) rather than see an
+ * empty-fragmentIds cell (which `fakeCell` deliberately produces, useful
+ * for the distinct "present but no usable text" scenario). */
+function fakeTextEvidence(
+  evidenceId: string,
+  fragmentId: string,
+  pageNumber: number,
+  text: string,
+): { readonly textItem: EvidenceTextItem; readonly fragment: SourceFragment } {
+  return {
+    textItem: {
+      evidenceId,
+      locatorId: `locator:${evidenceId}`,
+      pageNumber,
+      sourceTextItemIndex: 0,
+      rawText: text,
+      upstreamDisposition: "synthetic-direct-classifier-unit-test",
+      runtimeReference: { lineKey: null, segmentKey: null },
+    },
+    fragment: {
+      fragmentId,
+      textItemEvidenceId: evidenceId,
+      startOffset: 0,
+      endOffset: text.length,
+      sourceReferenceOrder: null,
+      provenance: "structure",
+    },
+  };
+}
+
+test("record status: a fully valid service_item with resolved numeric evidence in every applicable numeric role resolves", () => {
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(FULL_COLUMNS, [{ pageNumber: 1, rows: [FULL_ITEM] }]),
+  );
+  const record = result.records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item record");
+  for (const field of ["quantity", "unitCost", "bdiRate", "unitPrice", "totalPrice"] as const) {
+    assert(
+      record?.[field]?.status === "resolved" && record[field]?.exactValue !== null,
+      `expected ${field} to be a usable resolved numeric value`,
+    );
+  }
+  equal(record?.status, "resolved");
+});
+
+test("record status: an ambiguous (single-separator) quantity numeric evidence contaminates the record to ambiguous", () => {
+  const row = [
+    entry("A1", 0), entry("Serviço", 1), entry("m", 2), entry("2,565", 3),
+    entry("10,00", 4), entry("20,00", 5), entry("12,00", 6), entry("24,00", 7),
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(FULL_COLUMNS, [{ pageNumber: 1, rows: [row] }]),
+  );
+  const record = result.records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item record");
+  equal(record?.quantity?.status, "ambiguous");
+  equal(record?.status, "ambiguous");
+});
+
+test("record status: an ambiguous (single-separator) unit_price numeric evidence contaminates the record to ambiguous", () => {
+  const row = [
+    entry("A1", 0), entry("Serviço", 1), entry("m", 2), entry("2,00", 3),
+    entry("10,00", 4), entry("20,00", 5), entry("2,565", 6), entry("24,00", 7),
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(FULL_COLUMNS, [{ pageNumber: 1, rows: [row] }]),
+  );
+  const record = result.records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item record");
+  equal(record?.unitPrice?.status, "ambiguous");
+  equal(record?.status, "ambiguous");
+});
+
+test("record status: a divergent-source-cells total_price (two present cells, conflicting text) contaminates the record to ambiguous, not resolved", () => {
+  const row = [...FULL_ITEM, entry("999,00", 7)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(FULL_COLUMNS, [{ pageNumber: 1, rows: [row] }]),
+  );
+  const record = result.records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item record");
+  equal(record?.totalPrice?.status, "failed");
+  equal(record?.totalPrice?.grammarId, "divergent-source-cells-v1");
+  equal(record?.status, "ambiguous");
+});
+
+test("record status: a divergent-source-cells quantity (two present cells, conflicting text) contaminates the record to ambiguous", () => {
+  const row = [...FULL_ITEM, entry("999,00", 3)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(FULL_COLUMNS, [{ pageNumber: 1, rows: [row] }]),
+  );
+  const record = result.records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item record");
+  equal(record?.quantity?.status, "failed");
+  equal(record?.status, "ambiguous");
+});
+
+test("record status: an applicable numeric field that fails to parse (invalid) contaminates the record to insufficient_evidence", () => {
+  const row = [
+    entry("A1", 0), entry("Serviço", 1), entry("m", 2), entry("N/A", 3),
+    entry("10,00", 4), entry("20,00", 5), entry("12,00", 6), entry("24,00", 7),
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(FULL_COLUMNS, [{ pageNumber: 1, rows: [row] }]),
+  );
+  const record = result.records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item record");
+  equal(record?.quantity?.status, "invalid");
+  equal(record?.status, "insufficient_evidence");
+});
+
+test("record status: an applicable numeric role with a present cell but no usable text resolves to insufficient_evidence, not resolved (direct classifier unit)", () => {
+  const pageNumber = 1;
+  const columns = [
+    fakeColumn(pageNumber, "description", "column:description"),
+    fakeColumn(pageNumber, "quantity", "column:quantity"),
+  ];
+  const row: ReconstructedLogicalRow = {
+    rowId: "row:main",
+    pageNumber,
+    locatorId: "locator:main",
+    kind: "service_item",
+    status: "resolved",
+    cellIds: ["cell:description", "cell:quantity"],
+    description: "Serviço",
+    descriptionSourceRowIds: [],
+    continuationCandidateRowIds: [],
+  };
+  const cells: ReadonlyArray<ReconstructedCell> = [
+    fakeCell("cell:description", pageNumber, "locator:main", "line:main", "column:description", "description", "present"),
+    fakeCell("cell:quantity", pageNumber, "locator:main", "line:main", "column:quantity", "quantity", "present"),
+  ];
+  const rows = [row];
+  const records = classifyRecords(rows, { cells, fragments: [], textItems: [], columns, rows });
+  const record = records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item record");
+  equal(record?.quantity, null);
+  equal(record?.status, "insufficient_evidence");
+});
+
+test("record status: a role with no numeric column resolved on the page schema never contaminates via a numeric check", () => {
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows: [SIMPLE_ITEM] }]),
+  );
+  const record = result.records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item record");
+  equal(record?.unitCost, null);
+  equal(record?.bdiRate, null);
+  equal(record?.status, "resolved");
+});
+
+test("record status: a missing applicable cell and an ambiguous applicable numeric field together resolve to ambiguous (precedence)", () => {
+  const row = [
+    entry("A1", 0), entry("Serviço", 1), entry("m", 2),
+    entry("10,00", 4), entry("20,00", 5), entry("2,565", 6), entry("24,00", 7),
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(FULL_COLUMNS, [{ pageNumber: 1, rows: [row] }]),
+  );
+  const record = result.records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item record");
+  equal(record?.unitPrice?.status, "ambiguous");
+  equal(record?.status, "ambiguous");
+});
+
+test("record status: an ambiguous applicable numeric field and an insufficient_evidence continuation together resolve to ambiguous (precedence, direct classifier unit)", () => {
+  const pageNumber = 1;
+  const columns = [
+    fakeColumn(pageNumber, "description", "column:description"),
+    fakeColumn(pageNumber, "unit_price", "column:unit_price"),
+  ];
+  const mainRow: ReconstructedLogicalRow = {
+    rowId: "row:main",
+    pageNumber,
+    locatorId: "locator:main",
+    kind: "service_item",
+    status: "resolved",
+    cellIds: ["cell:description", "cell:unit_price"],
+    description: "Serviço",
+    descriptionSourceRowIds: [],
+    continuationCandidateRowIds: [],
+  };
+  const continuationRow: ReconstructedLogicalRow = {
+    rowId: "row:continuation",
+    pageNumber,
+    locatorId: "locator:continuation",
+    kind: "description_continuation",
+    status: "insufficient_evidence",
+    cellIds: [],
+    description: "continuação",
+    descriptionSourceRowIds: [mainRow.rowId],
+    continuationCandidateRowIds: [],
+  };
+  const { textItem, fragment } = fakeTextEvidence("text:unit_price", "fragment:unit_price", pageNumber, "2,565");
+  const cells: ReadonlyArray<ReconstructedCell> = [
+    fakeCell("cell:description", pageNumber, "locator:main", "line:main", "column:description", "description", "present"),
+    {
+      ...fakeCell("cell:unit_price", pageNumber, "locator:main", "line:main", "column:unit_price", "unit_price", "present"),
+      fragmentIds: [fragment.fragmentId],
+    },
+  ];
+  const rows = [mainRow, continuationRow];
+  const records = classifyRecords(rows, {
+    cells,
+    fragments: [fragment],
+    textItems: [textItem],
+    columns,
+    rows,
+  });
+  const record = records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item record");
+  equal(record?.unitPrice?.status, "ambiguous");
+  equal(record?.status, "ambiguous");
+});
+
+test("record status: group and subgroup kinds are unaffected by numeric evidence propagation (no numeric role in their contract)", () => {
+  const rows = [
+    [entry("1", 0), entry("Grupo sintético", 1)],
+    [entry("1.1", 0), entry("Subgrupo sintético", 1)],
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows }]),
+  );
+  const group = result.records.find((record) => record.kind === "group");
+  const subgroup = result.records.find((record) => record.kind === "subgroup");
+  assert(group !== undefined && subgroup !== undefined, "expected group and subgroup records");
+  equal(group?.status, "resolved");
+  equal(subgroup?.status, "resolved");
+});
+
+test("record status: a subtotal's own divergent-source-cells total_price contaminates it to ambiguous, not resolved", () => {
+  const subtotalRow = [entry("Subtotal", 1), entry("6,00", 5), entry("7,00", 5)];
+  const rows = [SIMPLE_ITEM, subtotalRow];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows }]),
+  );
+  const subtotal = result.records.find((record) => record.kind === "subtotal");
+  assert(subtotal !== undefined, "expected a subtotal record");
+  equal(subtotal?.totalPrice?.grammarId, "divergent-source-cells-v1");
+  equal(subtotal?.status, "ambiguous");
+});
+
+test("record status: numeric evidence propagation preserves determinism, runtime-key invariance, and conservation", () => {
+  const row = [...FULL_ITEM, entry("999,00", 7)];
+  const buildResult = (keyPrefix: string) =>
+    reconstructBudgetTable(
+      buildSyntheticInput(FULL_COLUMNS, [{ pageNumber: 1, rows: [row] }], { keyPrefix }),
+    );
+  const first = buildResult("alpha");
+  const second = buildResult("beta");
+  equal(first.canonicalFingerprint, second.canonicalFingerprint);
+  const record = first.records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item record");
+  equal(record?.status, "ambiguous");
+  const conservation = conserveEvidence({
+    textItems: first.textItems,
+    fragments: first.fragments,
+    segments: first.segments,
+    lines: first.lines,
+    cells: first.cells,
+    logicalRows: first.logicalRows,
+    records: first.records,
+    arithmeticEvaluations: first.arithmeticEvaluations,
+  });
+  equal(conservation.issues.length, 0);
+});
+
+test("record status invariant (numeric): no resolved record in a mixed synthetic reconstruction has an applicable numeric field that is not usably resolved", () => {
+  const rows = [
+    FULL_ITEM,
+    [...FULL_ITEM.map((sourceEntry, index) => (index === 0 ? entry("A2", 0) : sourceEntry)), entry("999,00", 7)],
+    [
+      entry("A3", 0), entry("Serviço ambíguo", 1), entry("m", 2), entry("2,565", 3),
+      entry("10,00", 4), entry("20,00", 5), entry("12,00", 6), entry("24,00", 7),
+    ],
+    [entry("02", 0), entry("Grupo dois", 1)],
+    [entry("Subtotal", 1), entry("24,00", 7)],
+    [entry("Total", 1), entry("24,00", 7)],
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(FULL_COLUMNS, [{ pageNumber: 1, rows }]),
+  );
+  assertNoResolvedRecordHasApplicableEvidenceGap(result);
+  assert(
+    result.records.some((record) => record.status === "resolved"),
+    "expected at least one resolved record to make the sweep meaningful",
+  );
+  assert(
+    result.records.some(
+      (record) => record.kind === "service_item" && record.status === "ambiguous",
+    ),
+    "expected the divergent/ambiguous rows to actually be excluded from resolved",
+  );
 });

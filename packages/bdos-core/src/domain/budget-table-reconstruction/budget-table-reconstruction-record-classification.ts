@@ -71,24 +71,71 @@ function applicableSemanticRoles(
   return new Set([...base].filter((role) => resolvedRolesOnPage.has(role)));
 }
 
+/** The five roles that carry a ParsedNumericEvidence field on a record,
+ * rather than a plain string (unit) or the identity fields. */
+const NUMERIC_ROLES: ReadonlySet<BudgetColumnRole> = new Set([
+  "quantity",
+  "unit_cost",
+  "bdi_rate",
+  "unit_price",
+  "total_price",
+]);
+
+/**
+ * A "resolved" applicable numeric cell can still carry an evidence-level
+ * interpretation that never became a usable number: `numericForRole` can
+ * mark it "failed" (grammarId "divergent-source-cells-v1") when two or more
+ * physically distinct, individually cell.state === "present" cells share
+ * the role but disagree on text -- a genuine conflict between documentary
+ * evidence, not a crash and not something to resolve by picking a side.
+ * `parseNumericEvidence` itself can separately mark a single, undisputed
+ * text "ambiguous" (a single-separator grammar collision) or "invalid" (no
+ * grammar parsed it at all). None of these are "resolved" in any sense a
+ * record's own status can honestly ignore.
+ *
+ * Verified by inspection: today there are exactly two producers of
+ * ParsedNumericEvidence in this domain -- `parseNumericEvidence` itself
+ * (statuses "resolved" | "ambiguous" | "invalid", never "not_applicable",
+ * never "failed") and `numericForRole` below (delegates to
+ * `parseNumericEvidence` for a single undisputed text, or produces "failed"
+ * itself for the divergent-source-cells-v1 case). "not_applicable" has no
+ * producer today, and "failed" has exactly one (divergent-source-cells-v1);
+ * this function still classifies both defensively, by their formal status
+ * value, rather than assuming they can never occur -- matching the
+ * ReconstructedCell.state === "divergent" precedent from the previous round
+ * (also formally possible, also unproduced today, also honored anyway).
+ */
+function numericFieldContamination(
+  value: ParsedNumericEvidence | null,
+): "ambiguous" | "insufficient_evidence" | null {
+  if (value === null) return "insufficient_evidence";
+  if (value.status === "ambiguous") return "ambiguous";
+  if (value.status === "failed") return "ambiguous";
+  if (value.status === "invalid") return "insufficient_evidence";
+  if (value.status === "not_applicable") return "insufficient_evidence";
+  if (value.exactValue === null) return "insufficient_evidence";
+  return null;
+}
+
 /**
  * A record's status reflects only cells feeding a role that is both part of
  * its kind's own semantic contract and actually resolved on its page --
  * never a cell whose role is "unknown" (an unresolved auxiliary column) and
  * never a role the kind was never expected to carry. Within that applicable
  * set, precedence is ambiguous > insufficient_evidence > resolved: an
- * ambiguous or divergent cell always contaminates first; absent that, a
- * missing cell under an applicable role means the record cannot honestly be
- * called "resolved" (evidence was expected and never observed), so it
- * downgrades to insufficient_evidence instead of resolved. A description
- * continuation carries its own already-computed status and is folded in at
- * the same precedence, rather than every non-resolved continuation status
- * collapsing to "ambiguous".
+ * ambiguous or divergent cell, an ambiguous/failed numeric interpretation,
+ * or an ambiguous continuation always contaminates first; absent that, a
+ * missing cell, a numeric field that is invalid/not_applicable/exactValue-
+ * less, or an insufficient_evidence continuation means the record cannot
+ * honestly be called "resolved" (evidence was expected and never usably
+ * observed), so it downgrades to insufficient_evidence instead. `resolved`
+ * itself never contaminates -- it is the absence of every case above.
  */
 function recordRelevantStatus(
   row: ReconstructedLogicalRow,
   continuations: ReadonlyArray<ReconstructedLogicalRow>,
   kind: ReconstructedRecordKind,
+  numericFields: ReadonlyMap<BudgetColumnRole, ParsedNumericEvidence | null>,
   context: RecordFormationContext,
 ): "resolved" | "ambiguous" | "insufficient_evidence" {
   const applicableRoles = applicableSemanticRoles(kind, row.pageNumber, context.columns);
@@ -106,10 +153,16 @@ function recordRelevantStatus(
   );
   const cellsMissing = semanticCells.some((cell) => cell.state === "missing");
 
-  if (continuationAmbiguous || cellsAmbiguousOrDivergent) {
+  const numericContaminations = [...applicableRoles]
+    .filter((role) => NUMERIC_ROLES.has(role))
+    .map((role) => numericFieldContamination(numericFields.get(role) ?? null));
+  const numericAmbiguous = numericContaminations.includes("ambiguous");
+  const numericInsufficient = numericContaminations.includes("insufficient_evidence");
+
+  if (continuationAmbiguous || cellsAmbiguousOrDivergent || numericAmbiguous) {
     return "ambiguous";
   }
-  if (continuationInsufficient || cellsMissing) {
+  if (continuationInsufficient || cellsMissing || numericInsufficient) {
     return "insufficient_evidence";
   }
   return "resolved";
@@ -308,6 +361,19 @@ export function classifyRecords(
       documentOrder,
     })}`;
 
+    const quantity = numericForRole(row, "quantity", context);
+    const unitCost = numericForRole(row, "unit_cost", context);
+    const bdiRate = numericForRole(row, "bdi_rate", context);
+    const unitPrice = numericForRole(row, "unit_price", context);
+    const totalPrice = numericForRole(row, "total_price", context);
+    const numericFields = new Map<BudgetColumnRole, ParsedNumericEvidence | null>([
+      ["quantity", quantity],
+      ["unit_cost", unitCost],
+      ["bdi_rate", bdiRate],
+      ["unit_price", unitPrice],
+      ["total_price", totalPrice],
+    ]);
+
     records.push({
       recordId,
       pageNumber: row.pageNumber,
@@ -316,17 +382,17 @@ export function classifyRecords(
       status:
         kind === "unclassified"
           ? "insufficient_evidence"
-          : recordRelevantStatus(row, continuations, kind, context),
+          : recordRelevantStatus(row, continuations, kind, numericFields, context),
       rowIds: [row.rowId, ...continuations.map((candidate) => candidate.rowId)],
       parentRecordId: parent?.recordId ?? null,
       itemCode: code,
       description: description.length === 0 ? null : description,
       unit: textForRole(row, "unit", context),
-      quantity: numericForRole(row, "quantity", context),
-      unitCost: numericForRole(row, "unit_cost", context),
-      bdiRate: numericForRole(row, "bdi_rate", context),
-      unitPrice: numericForRole(row, "unit_price", context),
-      totalPrice: numericForRole(row, "total_price", context),
+      quantity,
+      unitCost,
+      bdiRate,
+      unitPrice,
+      totalPrice,
     });
   }
 
