@@ -19,7 +19,7 @@ export const BUDGET_TABLE_RECONSTRUCTION_PROFILE = Object.freeze({
   presentationRules: Object.freeze([
     "truncate_to_displayed_scale",
     "half_away_from_zero",
-  ]),
+  ] as const),
 } as const);
 
 export function normalizeBudgetHeaderText(text: string): string {

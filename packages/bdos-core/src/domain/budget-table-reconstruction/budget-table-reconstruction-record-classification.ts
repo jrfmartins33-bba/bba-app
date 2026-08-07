@@ -21,6 +21,46 @@ interface RecordFormationContext {
   readonly rows: ReadonlyArray<ReconstructedLogicalRow>;
 }
 
+/** The eight fields a ReconstructedBudgetRecord actually carries. A cell with
+ * any other role -- most commonly "unknown" for an auxiliary/reference
+ * column the schema never resolved -- feeds none of them and must never by
+ * itself make an otherwise-complete record ambiguous. */
+const RECORD_SEMANTIC_ROLES: ReadonlySet<BudgetColumnRole> = new Set([
+  "item_code",
+  "description",
+  "unit",
+  "quantity",
+  "unit_cost",
+  "bdi_rate",
+  "unit_price",
+  "total_price",
+]);
+
+/**
+ * Correction D: a record's status reflects only evidence that feeds its own
+ * semantic fields -- never a cell whose role does not correspond to any of
+ * them. An ambiguous or divergent cell under a recognized role (quantity,
+ * unit_price, ...) still contaminates the record, exactly as before; an
+ * ambiguous cell under an unresolved auxiliary column ("unknown") does not.
+ * A description continuation that could not be uniquely attributed to this
+ * row still contaminates, since it directly affects the description field.
+ */
+function recordRelevantStatus(
+  row: ReconstructedLogicalRow,
+  continuations: ReadonlyArray<ReconstructedLogicalRow>,
+  context: RecordFormationContext,
+): "resolved" | "ambiguous" {
+  const continuationUnresolved = continuations.some((candidate) => candidate.status !== "resolved");
+  const rowCellIds = new Set([row, ...continuations].flatMap((candidate) => candidate.cellIds));
+  const semanticCells = context.cells.filter(
+    (cell) => rowCellIds.has(cell.cellId) && RECORD_SEMANTIC_ROLES.has(cell.role),
+  );
+  const semanticCellsContaminated = semanticCells.some(
+    (cell) => cell.state === "ambiguous" || cell.state === "divergent",
+  );
+  return continuationUnresolved || semanticCellsContaminated ? "ambiguous" : "resolved";
+}
+
 function pagesHavePositiveContinuity(
   originPage: number,
   targetPage: number,
@@ -219,7 +259,10 @@ export function classifyRecords(
       pageNumber: row.pageNumber,
       documentOrder,
       kind,
-      status: kind === "unclassified" ? "insufficient_evidence" : row.status,
+      status:
+        kind === "unclassified"
+          ? "insufficient_evidence"
+          : recordRelevantStatus(row, continuations, context),
       rowIds: [row.rowId, ...continuations.map((candidate) => candidate.rowId)],
       parentRecordId: parent?.recordId ?? null,
       itemCode: code,

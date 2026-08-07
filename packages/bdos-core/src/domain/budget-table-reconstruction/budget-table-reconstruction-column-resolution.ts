@@ -253,21 +253,32 @@ function atomsForLine(graph: EvidenceGraph, line: EvidenceLine): ReadonlyArray<H
   return atoms.sort((left, right) => left.leftPoints - right.leftPoints);
 }
 
-function coversHorizontally(parent: HeaderAtom, child: HeaderAtom): boolean {
-  return (
-    parent.leftPoints < parent.rightPoints &&
-    parent.leftPoints <= child.leftPoints &&
-    parent.rightPoints >= child.rightPoints
-  );
+function atomsPositivelyOverlap(left: HeaderAtom, right: HeaderAtom): boolean {
+  return rangesPositivelyOverlap(left.leftPoints, left.rightPoints, right.leftPoints, right.rightPoints);
 }
 
 /**
  * Builds one HeaderPath per leaf HeaderAtom on the page's header block.
- * Parent/child links are only created when a positively observed
- * (never invented, never epsilon-tolerant) horizontal-coverage relation
- * exists between an atom and an atom on the immediately preceding header
- * line. An atom that is itself covered by nothing is its own HeaderPath
- * root (single-line header, the common case, is unaffected).
+ *
+ * Parent/child linkage (Correction A) requires only a positively observed
+ * horizontal overlap between an atom and an atom on the immediately
+ * preceding header line -- never full containment, which real centered
+ * headers routinely fail even when the visual parent/child relation is
+ * unambiguous. A child is linked to a parent only when EXACTLY ONE parent
+ * candidate overlaps it: zero candidates leaves the atom parentless (it
+ * still resolves on its own text); more than one candidate is a genuine
+ * structural ambiguity and is never resolved by a nearest/narrowest/score
+ * tie-break -- the atom is left without an assigned parent rather than
+ * guessed.
+ *
+ * A parent atom is excluded from ever becoming its own leaf/column
+ * (Correction C) whenever ANY atom on the next line positively overlaps it
+ * -- independent of whether that specific child link was unique enough to
+ * be assigned above. A three-way overlap ambiguity still marks the parent
+ * as "has children" even though none of its children received a resolved
+ * parent link; otherwise the parent could wrongly fall back to being
+ * treated as its own independent column merely because none of its
+ * children could be uniquely linked to it.
  */
 function buildHeaderPaths(graph: EvidenceGraph, pageNumber: number): ReadonlyArray<HeaderPath> {
   const block = headerBlockLines(graph, pageNumber);
@@ -275,26 +286,21 @@ function buildHeaderPaths(graph: EvidenceGraph, pageNumber: number): ReadonlyArr
 
   const atomsByLine = block.map((line) => atomsForLine(graph, line));
   const parentOf = new Map<string, HeaderAtom>();
-  const hasChild = new Set<string>();
+  const hasOverlappingChild = new Set<string>();
 
   for (let lineIndex = 1; lineIndex < atomsByLine.length; lineIndex += 1) {
     const parentAtoms = atomsByLine[lineIndex - 1]!;
     const childAtoms = atomsByLine[lineIndex]!;
     for (const child of childAtoms) {
-      const covering = parentAtoms.filter((parent) => coversHorizontally(parent, child));
-      if (covering.length === 0) continue;
-      const immediateParent = covering.reduce((best, candidate) =>
-        candidate.rightPoints - candidate.leftPoints < best.rightPoints - best.leftPoints
-          ? candidate
-          : best,
-      );
-      parentOf.set(child.textItemEvidenceId, immediateParent);
-      hasChild.add(immediateParent.textItemEvidenceId);
+      const overlapping = parentAtoms.filter((parent) => atomsPositivelyOverlap(parent, child));
+      for (const parent of overlapping) hasOverlappingChild.add(parent.textItemEvidenceId);
+      if (overlapping.length !== 1) continue;
+      parentOf.set(child.textItemEvidenceId, overlapping[0]!);
     }
   }
 
   const allAtoms = atomsByLine.flat();
-  const leaves = allAtoms.filter((atom) => !hasChild.has(atom.textItemEvidenceId));
+  const leaves = allAtoms.filter((atom) => !hasOverlappingChild.has(atom.textItemEvidenceId));
 
   return leaves
     .map((leaf): HeaderPath => {
@@ -598,12 +604,25 @@ function groupRawBands(rawBands: ReadonlyArray<RawColumnBand>): ReadonlyArray<Ca
  * otherwise be ambiguous, each independently recurring on at least two data
  * rows. No epsilon, no width heuristic, no score -- the new boundaries are
  * exactly the observed leaf HeaderAtom bounds.
+ *
+ * Recurrence (Correction B) is proven at EvidenceTextItem granularity, not
+ * Segment granularity: a data line counts toward a header path's recurrence
+ * only when at least one of that line's own text items has geometry
+ * positively overlapping the header path's range. A segment's own reported
+ * bounds can be wider or narrower than the individual text items it
+ * contains (upstream sometimes merges tokens into one segment without
+ * widening its bounds to match, or reports a bounding box that does not
+ * tightly track a right-aligned value); the text item is the only unit
+ * whose geometry is directly observed for that specific value. Multiple
+ * text items on the same line still count as one recurrence for that line,
+ * never as multiple.
  */
 function refineWideBand(
   graph: EvidenceGraph,
   pageNumber: number,
   headerBlockLineIds: ReadonlySet<string>,
   headerPaths: ReadonlyArray<HeaderPath>,
+  textItemById: ReadonlyMap<string, EvidenceGraph["textItems"][number]>,
   band: CanonicalBand,
 ): ReadonlyArray<CanonicalBand> {
   const covering = headerPathsWithinBand(headerPaths, band);
@@ -631,16 +650,19 @@ function refineWideBand(
   const dataLines = graph.lines.filter(
     (line) => line.pageNumber === pageNumber && !headerBlockLineIds.has(line.lineId),
   );
-  const recurrence = (leftPoints: number, rightPoints: number): number => {
-    let count = 0;
-    for (const line of dataLines) {
-      const segments = graph.segments.filter((segment) => segment.lineId === line.lineId);
-      if (segments.some((segment) => segmentIntersects(graph, segment, leftPoints, rightPoints))) {
-        count += 1;
-      }
-    }
-    return count;
-  };
+  const lineHasIntersectingTextItem = (
+    line: EvidenceLine,
+    leftPoints: number,
+    rightPoints: number,
+  ): boolean =>
+    line.textItemEvidenceIds.some((id) => {
+      const item = textItemById.get(id);
+      if (item === undefined) return false;
+      const bounds = boundsForLocatorId(graph, item.locatorId);
+      return bounds !== null && bounds[0] < rightPoints && bounds[1] > leftPoints;
+    });
+  const recurrence = (leftPoints: number, rightPoints: number): number =>
+    dataLines.filter((line) => lineHasIntersectingTextItem(line, leftPoints, rightPoints)).length;
   const minimumRecurrence = Math.min(2, dataLines.length);
   if (minimumRecurrence === 0) return [band];
   for (const path of sorted) {
@@ -836,11 +858,12 @@ function resolvePageColumns(
   const headers = headerCandidates(graph, pageNumber);
   const headerPaths = buildHeaderPaths(graph, pageNumber);
   const headerBlockLineIds = new Set(headerBlockLines(graph, pageNumber).map((line) => line.lineId));
+  const textItemById = new Map(graph.textItems.map((item) => [item.evidenceId, item]));
 
   const rawBands = rawBandsFromUpstream(input, graph, pageNumber, headerPaths);
   const grouped = rawBands.length > 0 ? groupRawBands(rawBands) : [];
   const refined = grouped.flatMap((band) =>
-    refineWideBand(graph, pageNumber, headerBlockLineIds, headerPaths, band),
+    refineWideBand(graph, pageNumber, headerBlockLineIds, headerPaths, textItemById, band),
   );
 
   const coveredHeaderPathIds = new Set(

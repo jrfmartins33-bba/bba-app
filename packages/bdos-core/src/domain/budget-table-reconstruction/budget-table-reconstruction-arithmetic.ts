@@ -5,6 +5,7 @@ import {
   rational,
 } from "./budget-table-reconstruction-exact-rational";
 import { fingerprintCanonical } from "./budget-table-reconstruction-fingerprint";
+import { BUDGET_TABLE_RECONSTRUCTION_PROFILE } from "./budget-table-reconstruction-profile";
 import type {
   ArithmeticEvaluation,
   ArithmeticEvaluationOutcome,
@@ -61,25 +62,28 @@ function presentedValue(
   return rational(quotient, powerOfTen(scale));
 }
 
+/**
+ * Correction E1. The exact computed value can carry more decimal digits
+ * than any operand's own displayed scale even when every operand has the
+ * same scale as the result -- multiplication does not preserve scale
+ * (19,24 x 45,59 = 877,1516 from two scale-2 operands). Requiring some
+ * operand to individually exceed the displayed scale was never a valid
+ * precondition and is dropped entirely. The only question is whether the
+ * displayed value is an exact presentation of the computed value under one
+ * of the profile's own declared rounding rules -- ANY one of them, not all
+ * simultaneously, since a source only ever applies one presentation
+ * convention to a given figure.
+ */
 function provesUndisplayedPrecision(
   computed: ExactRational,
   displayed: ParsedNumericEvidence,
-  operands: ReadonlyArray<ParsedNumericEvidence | null>,
 ): boolean {
   if (displayed.exactValue === null) {
     return false;
   }
-  const hasHigherPrecisionSource = operands.some(
-    (operand) => operand !== null && operand.displayedScale > displayed.displayedScale,
+  return BUDGET_TABLE_RECONSTRUCTION_PROFILE.presentationRules.some((rule) =>
+    equalExact(presentedValue(computed, displayed.displayedScale, rule), displayed.exactValue!),
   );
-  if (!hasHigherPrecisionSource) {
-    return false;
-  }
-  const presentations = [
-    presentedValue(computed, displayed.displayedScale, "truncate_to_displayed_scale"),
-    presentedValue(computed, displayed.displayedScale, "half_away_from_zero"),
-  ];
-  return presentations.every((candidate) => equalExact(candidate, displayed.exactValue!));
 }
 
 function outcomeForRelation(
@@ -121,7 +125,7 @@ function outcomeForRelation(
   if (equalExact(computed, displayed.exactValue)) {
     return "direct_correspondence";
   }
-  if (provesUndisplayedPrecision(computed, displayed, operands)) {
+  if (provesUndisplayedPrecision(computed, displayed)) {
     return "undisplayed_precision";
   }
   return "source_arithmetic_inconsistency";
@@ -212,12 +216,17 @@ function bdiEvaluation(
   );
 }
 
+interface SummandsForTotal {
+  readonly summands: ReadonlyArray<ReconstructedBudgetRecord>;
+  readonly scopeProven: boolean;
+}
+
 function summandsForTotal(
   target: ReconstructedBudgetRecord,
   records: ReadonlyArray<ReconstructedBudgetRecord>,
   columns: ReadonlyArray<ResolvedColumn>,
   rows: ReadonlyArray<ReconstructedLogicalRow>,
-): ReadonlyArray<ReconstructedBudgetRecord> {
+): SummandsForTotal {
   const previousPageContinues = (() => {
     const originPage = target.pageNumber - 1;
     if (rows.some((row) => row.pageNumber === target.pageNumber && row.kind === "header")) {
@@ -260,6 +269,22 @@ function summandsForTotal(
   }
   const window = before.slice(boundaryIndex + 1);
 
+  /**
+   * Correction E2: an explicit prior total/subtotal boundary found inside
+   * `before` proves this window is bounded by real evidence on both sides.
+   * Absent that boundary, the window is only provably complete when there
+   * is no earlier page by definition -- i.e. `target` (or the earliest
+   * record actually pulled into `before`) sits on page 1. Any other page
+   * number could have earlier summands sitting on a page the current page
+   * selection never reconstructed (a non-consecutive page selection skips
+   * pages that may hold unreconstructed content); in that case only an
+   * explicit boundary record counts as proof, never an assumption that
+   * "nothing came before what we saw".
+   */
+  const earliestBeforePage =
+    before.length > 0 ? Math.min(...before.map((record) => record.pageNumber)) : target.pageNumber;
+  const scopeProven = boundaryIndex !== -1 || earliestBeforePage <= 1;
+
   if (target.kind === "subtotal") {
     const reversedItems: ReconstructedBudgetRecord[] = [];
     for (const candidate of [...window].reverse()) {
@@ -268,14 +293,17 @@ function summandsForTotal(
       }
       reversedItems.push(candidate);
     }
-    return reversedItems.reverse();
+    return { summands: reversedItems.reverse(), scopeProven };
   }
 
   const subtotals = window.filter((candidate) => candidate.kind === "subtotal");
   if (subtotals.length > 0) {
-    return subtotals;
+    return { summands: subtotals, scopeProven };
   }
-  return window.filter((candidate) => candidate.kind === "service_item");
+  return {
+    summands: window.filter((candidate) => candidate.kind === "service_item"),
+    scopeProven,
+  };
 }
 
 function totalEvaluation(
@@ -284,7 +312,7 @@ function totalEvaluation(
   columns: ReadonlyArray<ResolvedColumn>,
   rows: ReadonlyArray<ReconstructedLogicalRow>,
 ): ArithmeticEvaluation {
-  const summands = summandsForTotal(record, records, columns, rows);
+  const { summands, scopeProven } = summandsForTotal(record, records, columns, rows);
   const applicable = summands.length > 0;
   let sum: ExactRational | null = applicable ? rational(0n, 1n) : null;
   for (const summand of summands) {
@@ -294,7 +322,7 @@ function totalEvaluation(
     }
     sum = addExact(sum!, summand.totalPrice.exactValue);
   }
-  return evaluation(
+  const evaluated = evaluation(
     record,
     "descendant_sum",
     summands.map((summand) => summand.totalPrice),
@@ -303,6 +331,15 @@ function totalEvaluation(
     applicable,
     summands.map((summand) => summand.recordId),
   );
+  if (
+    !scopeProven &&
+    (evaluated.outcome === "direct_correspondence" ||
+      evaluated.outcome === "undisplayed_precision" ||
+      evaluated.outcome === "source_arithmetic_inconsistency")
+  ) {
+    return { ...evaluated, outcome: "insufficient_evidence" };
+  }
+  return evaluated;
 }
 
 export function evaluateArithmetic(

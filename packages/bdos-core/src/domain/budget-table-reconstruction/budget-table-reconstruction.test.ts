@@ -1121,3 +1121,459 @@ test("geometric text-item partition prefers real per-text-item geometry over lex
   });
   assert(conservation.issues.length === 0, "geometric partition must not introduce conservation failures");
 });
+
+// ---------------------------------------------------------------------------
+// Surgical corrections A-E (this round): unique-positive-overlap parent/child
+// linkage instead of full containment; recurrence proof by EvidenceTextItem
+// instead of Segment; grouping-label parents never becoming false columns;
+// record status scoped to the record's own semantic fields instead of any
+// cell in the row; undisplayed-precision presentation via any one declared
+// profile rule instead of a scale precondition that is false for
+// multiplication; and descendant_sum requiring a proven scope before it can
+// claim a source inconsistency. All fixtures below are synthetic and
+// generic -- none of it encodes any real document's pages, text,
+// coordinates, or codes.
+// ---------------------------------------------------------------------------
+
+test("parent fully containing child continues to link (regression)", () => {
+  const columns = [
+    { header: "", left: 400, right: 500 },
+    { header: "", left: 420, right: 480 },
+    { header: "", left: 600, right: 660 },
+  ];
+  const headerParent = [entry("Preço", 0)];
+  const headerChild = [entry("Unitário", 1), entry("Total", 2)];
+  const dataRow = [entry("100,00", 1), entry("200,00", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      {
+        pageNumber: 1,
+        includeHeader: false,
+        rows: [headerParent, headerChild, dataRow],
+        // upstream provides bands for the real data columns only -- a header
+        // label's own text box is not itself a physical column hypothesis.
+        columnHypothesisOverride: [
+          { left: 420, right: 480 },
+          { left: 600, right: 660 },
+        ],
+      },
+    ]),
+  );
+  equal(result.columns.find((column) => column.leftPoints === 420)?.role, "unit_price");
+});
+
+test("parent partially overlapping child links when overlap is unique even without full containment", () => {
+  const columns = [
+    { header: "", left: 400, right: 460 },
+    { header: "", left: 420, right: 480 },
+    { header: "", left: 600, right: 660 },
+  ];
+  const headerParent = [entry("Preço", 0)];
+  const headerChild = [entry("Unitário", 1), entry("Total", 2)];
+  const dataRow = [entry("100,00", 1), entry("200,00", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      {
+        pageNumber: 1,
+        includeHeader: false,
+        rows: [headerParent, headerChild, dataRow],
+        columnHypothesisOverride: [
+          { left: 420, right: 480 },
+          { left: 600, right: 660 },
+        ],
+      },
+    ]),
+  );
+  equal(result.columns.find((column) => column.leftPoints === 420)?.role, "unit_price");
+});
+
+test("child intersecting two parents is not linked to either", () => {
+  const columns = [
+    { header: "", left: 400, right: 450 },
+    { header: "", left: 450, right: 500 },
+    { header: "", left: 430, right: 470 },
+  ];
+  const headerParents = [entry("Preço", 0), entry("Custo", 1)];
+  const headerChild = [entry("Unitário", 2)];
+  const dataRow = [entry("100,00", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      { pageNumber: 1, includeHeader: false, rows: [headerParents, headerChild, dataRow] },
+    ]),
+  );
+  equal(result.columns.find((column) => column.leftPoints === 430)?.role, "unknown");
+});
+
+test("child with no overlapping parent remains a root leaf", () => {
+  const columns = [
+    { header: "", left: 100, right: 150 },
+    { header: "", left: 400, right: 460 },
+    { header: "", left: 500, right: 560 },
+  ];
+  const headerParent = [entry("Preço", 0)];
+  const headerChild = [entry("Item", 1)];
+  // a companion decimal value is required so the data row itself carries a
+  // recognizable economic literal and correctly terminates the header block
+  // -- a bare alphanumeric code alone ("A1") does not.
+  const dataRow = [entry("A1", 1), entry("5,00", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      { pageNumber: 1, includeHeader: false, rows: [headerParent, headerChild, dataRow] },
+    ]),
+  );
+  equal(result.columns.find((column) => column.leftPoints === 400)?.role, "item_code");
+});
+
+test("CUSTO parent with UNITARIO and BDI children produces only two leaf columns", () => {
+  const columns = [
+    { header: "", left: 430, right: 480 },
+    { header: "", left: 480, right: 530 },
+  ];
+  const headerParent = [entry("Custo", 0, 1)];
+  const headerChildren = [entry("Unitário", 0), entry("BDI", 1)];
+  const dataRow = [entry("80,00", 0), entry("25,00", 1)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      { pageNumber: 1, includeHeader: false, rows: [headerParent, headerChildren, dataRow] },
+    ]),
+  );
+  equal(result.columns.length, 2);
+  equal(result.columns.map((column) => column.role).sort(), ["bdi_rate", "unit_cost"]);
+});
+
+test("PRECO parent with UNITARIO and TOTAL children produces only two leaf columns", () => {
+  const columns = [
+    { header: "", left: 550, right: 610 },
+    { header: "", left: 610, right: 670 },
+  ];
+  const headerParent = [entry("Preço", 0, 1)];
+  const headerChildren = [entry("Unitário", 0), entry("Total", 1)];
+  const dataRow = [entry("100,00", 0), entry("200,00", 1)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      { pageNumber: 1, includeHeader: false, rows: [headerParent, headerChildren, dataRow] },
+    ]),
+  );
+  equal(result.columns.length, 2);
+  equal(result.columns.map((column) => column.role).sort(), ["total_price", "unit_price"]);
+});
+
+test("a generic grouping parent atom never becomes a false standalone column", () => {
+  const columns = [
+    { header: "", left: 700, right: 750 },
+    { header: "", left: 750, right: 800 },
+  ];
+  const headerParent = [entry("Faixa Genérica", 0, 1)];
+  const headerChildren = [entry("Quantidade", 0), entry("Unidade", 1)];
+  const dataRow = [entry("2,00", 0), entry("m", 1)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      { pageNumber: 1, includeHeader: false, rows: [headerParent, headerChildren, dataRow] },
+    ]),
+  );
+  equal(result.columns.length, 2);
+});
+
+test("wide-band recurrence is proven by real text-item geometry even when a segment's own bounds are corrupted", () => {
+  const columns = [
+    { header: "", left: 430, right: 480 },
+    { header: "", left: 480, right: 530 },
+  ];
+  const headerParent = [entry("Custo", 0, 1)];
+  const headerChildren = [entry("Unitário", 0), entry("BDI", 1)];
+  const dataRow1 = [entry("80,00", 0), entry("25,00", 1)];
+  const dataRow2 = [entry("90,00", 0), entry("20,00", 1)];
+  const input = buildSyntheticInput(columns, [
+    {
+      pageNumber: 1,
+      includeHeader: false,
+      rows: [headerParent, headerChildren, dataRow1, dataRow2],
+      columnHypothesisOverride: [{ left: 430, right: 530 }],
+    },
+  ]);
+  const structurePage: any = (input.structureReconstruction as any).groups[0].pages[0];
+  const dataLines = structurePage.lines.slice(2);
+  const corrupted = structurePage.segments.find(
+    (segment: any) => segment.lineKey === dataLines[0].lineKey && segment.leftPoints === 480,
+  );
+  corrupted.leftPoints = 0;
+  corrupted.rightPoints = 10;
+  corrupted.widthPoints = 10;
+  corrupted.centerXPoints = 5;
+
+  const result = reconstructBudgetTable(input);
+  const bdiColumn = result.columns.find((column) => column.role === "bdi_rate");
+  assert(
+    bdiColumn !== undefined,
+    "recurrence must be proven from the text item's own geometry, not the corrupted segment bounds",
+  );
+});
+
+test("wide-band split does not happen when text-item recurrence is not actually proven, even if a segment's bounds would misleadingly suggest it", () => {
+  const columns = [
+    { header: "", left: 430, right: 480 },
+    { header: "", left: 480, right: 530 },
+  ];
+  const headerParent = [entry("Custo", 0, 1)];
+  const headerChildren = [entry("Unitário", 0), entry("BDI", 1)];
+  const dataRow1 = [entry("80,00", 0), entry("25,00", 1)];
+  const dataRow2 = [entry("90,00", 0)];
+  const input = buildSyntheticInput(columns, [
+    {
+      pageNumber: 1,
+      includeHeader: false,
+      rows: [headerParent, headerChildren, dataRow1, dataRow2],
+      columnHypothesisOverride: [{ left: 430, right: 530 }],
+    },
+  ]);
+  const structurePage: any = (input.structureReconstruction as any).groups[0].pages[0];
+  const dataLines = structurePage.lines.slice(2);
+  const row2Segment = structurePage.segments.find(
+    (segment: any) => segment.lineKey === dataLines[1].lineKey,
+  );
+  row2Segment.rightPoints = 530;
+  row2Segment.widthPoints = row2Segment.rightPoints - row2Segment.leftPoints;
+  row2Segment.centerXPoints = (row2Segment.leftPoints + row2Segment.rightPoints) / 2;
+
+  const result = reconstructBudgetTable(input);
+  const bdiColumn = result.columns.find((column) => column.role === "bdi_rate");
+  assert(bdiColumn === undefined, "a widened segment must not substitute for genuine text-item recurrence");
+});
+
+test("an ambiguous auxiliary unknown column does not contaminate an otherwise complete service_item", () => {
+  const columns = [
+    { header: "Código", left: 0, right: 60 },
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Unidade", left: 320, right: 360 },
+    { header: "Quantidade", left: 380, right: 430 },
+    { header: "Preço Unitário", left: 450, right: 520 },
+    { header: "Preço Total", left: 540, right: 600 },
+    { header: "BDI", left: 620, right: 660 },
+    { header: "BDI", left: 680, right: 720 },
+  ];
+  const dataRow = [
+    entry("A1", 0), entry("Serviço", 1), entry("m", 2), entry("2,00", 3),
+    entry("50,00", 4), entry("100,00", 5), entry("10", 6), entry("20", 7),
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  const auxiliaryColumns = result.columns.filter((column) => column.leftPoints === 620 || column.leftPoints === 680);
+  assert(
+    auxiliaryColumns.every((column) => column.role === "unknown" && column.status === "ambiguous"),
+    "expected the duplicate BDI columns to collide into an ambiguous auxiliary pair",
+  );
+  const record = result.records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item record");
+  equal(record?.status, "resolved");
+});
+
+test("an ambiguous quantity cell still contaminates the service_item's status", () => {
+  const columns = [
+    { header: "", left: 80, right: 300 },
+    { header: "", left: 320, right: 380 },
+    { header: "", left: 380, right: 440 },
+  ];
+  const header = [entry("Descrição", 0), entry("Quantidade", 1), entry("Preço Unitário", 2)];
+  const dataRow = [entry("Serviço", 0), entry("2,0 3,0 4,0", 1, 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(
+      columns,
+      [{ pageNumber: 1, includeHeader: false, rows: [header, dataRow] }],
+      { physicalCellEvidence: "unavailable" },
+    ),
+  );
+  const quantityCell = result.cells.find(
+    (cell) => cell.role === "quantity" && cell.state === "ambiguous",
+  );
+  assert(
+    quantityCell !== undefined,
+    "expected the shared quantity cell to remain ambiguous",
+  );
+  const record = result.records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item classification");
+  equal(record?.status, "ambiguous");
+});
+
+test("an ambiguous unit_price cell still contaminates the service_item's status", () => {
+  const columns = [
+    { header: "", left: 80, right: 300 },
+    { header: "", left: 320, right: 380 },
+    { header: "", left: 380, right: 440 },
+  ];
+  const header = [entry("Descrição", 0), entry("Preço Unitário", 1), entry("Preço Total", 2)];
+  const dataRow = [entry("Serviço", 0), entry("2,0 3,0 4,0", 1, 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(
+      columns,
+      [{ pageNumber: 1, includeHeader: false, rows: [header, dataRow] }],
+      { physicalCellEvidence: "unavailable" },
+    ),
+  );
+  const unitPriceCell = result.cells.find(
+    (cell) => cell.role === "unit_price" && cell.state === "ambiguous",
+  );
+  assert(
+    unitPriceCell !== undefined,
+    "expected the shared unit_price cell to remain ambiguous",
+  );
+  const record = result.records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item classification");
+  equal(record?.status, "ambiguous");
+});
+
+test("an ambiguous item_code cell still contaminates the service_item's status", () => {
+  const columns = [
+    { header: "", left: 0, right: 60 },
+    { header: "", left: 60, right: 120 },
+    { header: "", left: 140, right: 360 },
+  ];
+  const header = [entry("Item", 0), entry("Quantidade", 1), entry("Descrição", 2)];
+  const dataRow = [entry("1 2,0 3", 0, 1), entry("Serviço", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(
+      columns,
+      [{ pageNumber: 1, includeHeader: false, rows: [header, dataRow] }],
+      { physicalCellEvidence: "unavailable" },
+    ),
+  );
+  const itemCodeCell = result.cells.find(
+    (cell) => cell.role === "item_code" && cell.state === "ambiguous",
+  );
+  assert(
+    itemCodeCell !== undefined,
+    "expected the shared item_code cell to remain ambiguous",
+  );
+  const record = result.records.find((candidate) => candidate.kind === "service_item");
+  assert(record !== undefined, "expected a service_item classification");
+  equal(record?.status, "ambiguous");
+});
+
+test("multiplication producing more decimals than either operand can still prove undisplayed_precision", () => {
+  const row = [
+    entry("A1", 0), entry("Serviço sintético", 1), entry("m", 2),
+    entry("19,24", 3), entry("45,59", 4), entry("877,15", 5),
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows: [row] }]),
+  );
+  equal(
+    result.arithmeticEvaluations.find((evaluation) => evaluation.relation === "quantity_times_unit_price")
+      ?.outcome,
+    "undisplayed_precision",
+  );
+});
+
+test("truncation alone explains an undisplayed-precision result", () => {
+  const row = [
+    entry("A1", 0), entry("Serviço sintético", 1), entry("m", 2),
+    entry("1,00", 3), entry("2,5651", 4), entry("2,56", 5),
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows: [row] }]),
+  );
+  equal(
+    result.arithmeticEvaluations.find((evaluation) => evaluation.relation === "quantity_times_unit_price")
+      ?.outcome,
+    "undisplayed_precision",
+  );
+});
+
+test("half-away-from-zero rounding alone explains an undisplayed-precision result", () => {
+  const row = [
+    entry("A1", 0), entry("Serviço sintético", 1), entry("m", 2),
+    entry("1,00", 3), entry("2,5679", 4), entry("2,57", 5),
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows: [row] }]),
+  );
+  equal(
+    result.arithmeticEvaluations.find((evaluation) => evaluation.relation === "quantity_times_unit_price")
+      ?.outcome,
+    "undisplayed_precision",
+  );
+});
+
+test("no declared presentation rule explains a mismatched result", () => {
+  const row = [
+    entry("A1", 0), entry("Serviço sintético", 1), entry("m", 2),
+    entry("19,24", 3), entry("45,59", 4), entry("999,00", 5),
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows: [row] }]),
+  );
+  equal(
+    result.arithmeticEvaluations.find((evaluation) => evaluation.relation === "quantity_times_unit_price")
+      ?.outcome,
+    "source_arithmetic_inconsistency",
+  );
+});
+
+test("a total following an explicit prior total boundary can be evaluated normally", () => {
+  const itemA = [
+    entry("A1", 0), entry("Item A", 1), entry("m", 2), entry("1,00", 3), entry("10,00", 4), entry("10,00", 5),
+  ];
+  const totalA = [entry("Total", 1), entry("10,00", 5)];
+  const itemB = [
+    entry("A2", 0), entry("Item B", 1), entry("m", 2), entry("1,00", 3), entry("20,00", 4), entry("20,00", 5),
+  ];
+  const totalB = [entry("Total", 1), entry("20,00", 5)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows: [itemA, totalA, itemB, totalB] }]),
+  );
+  const totals = result.arithmeticEvaluations.filter((evaluation) => evaluation.relation === "descendant_sum");
+  equal(totals.length, 2);
+  equal(totals[0]?.outcome, "direct_correspondence");
+  equal(totals[1]?.outcome, "direct_correspondence");
+});
+
+test("a total whose scope is not provably complete after a page-selection gap is not misclassified as inconsistent", () => {
+  const item = [
+    entry("A1", 0), entry("Item A", 1), entry("m", 2), entry("1,00", 3), entry("10,00", 4), entry("10,00", 5),
+  ];
+  const total = [entry("Total", 1), entry("999,00", 5)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 5, rows: [item, total] }]),
+  );
+  equal(
+    result.arithmeticEvaluations.find((evaluation) => evaluation.relation === "descendant_sum")?.outcome,
+    "insufficient_evidence",
+  );
+});
+
+test("corrections A-E preserve determinism, runtime-key invariance, conservation, and evidence integrity together", () => {
+  const columns = [
+    { header: "", left: 0, right: 50 },
+    { header: "", left: 70, right: 300 },
+    { header: "", left: 320, right: 380 },
+    { header: "", left: 400, right: 460 },
+    { header: "", left: 480, right: 540 },
+  ];
+  const headerRow = [
+    entry("Item", 0), entry("Descrição", 1), entry("Quantidade", 2), entry("Preço Unitário", 3), entry("Fonte", 4),
+  ];
+  const dataRow = [entry("A1", 0), entry("Serviço sintético", 1), entry("2,00", 2), entry("10,00", 3), entry("X", 4)];
+  const buildResult = (keyPrefix: string) =>
+    reconstructBudgetTable(
+      buildSyntheticInput(columns, [{ pageNumber: 1, rows: [headerRow, dataRow] }], { keyPrefix }),
+    );
+  const first = buildResult("alpha");
+  const second = buildResult("beta");
+  equal(first.canonicalFingerprint, second.canonicalFingerprint);
+  assert(
+    first.arithmeticEvaluations.every((evaluation) => evaluation.outcome !== "invented_evidence"),
+    "no invented evidence",
+  );
+  assert(first.structuralIssues.length === 0, "no structural issues");
+  const conservation = conserveEvidence({
+    textItems: first.textItems,
+    fragments: first.fragments,
+    segments: first.segments,
+    lines: first.lines,
+    cells: first.cells,
+    logicalRows: first.logicalRows,
+    records: first.records,
+    arithmeticEvaluations: first.arithmeticEvaluations,
+  });
+  equal(conservation.issues.length, 0);
+});
