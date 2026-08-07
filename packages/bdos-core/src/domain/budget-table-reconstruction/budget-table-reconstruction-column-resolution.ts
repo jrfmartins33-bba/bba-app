@@ -184,27 +184,50 @@ function headerCandidates(graph: EvidenceGraph, pageNumber: number): ReadonlyArr
   return candidates;
 }
 
+function lineHasVocabularyHit(graph: EvidenceGraph, line: EvidenceLine): boolean {
+  const segments = graph.segments.filter((segment) => segment.lineId === line.lineId);
+  return segments.some((segment) => headerVocabularyRoles(segment.rawText).length > 0);
+}
+
+function lineHasEconomicLiteral(graph: EvidenceGraph, line: EvidenceLine): boolean {
+  const items = line.textItemEvidenceIds
+    .map((id) => graph.textItems.find((candidate) => candidate.evidenceId === id))
+    .filter((item): item is NonNullable<typeof item> => item !== undefined);
+  return items.length === 0 || items.some((item) => hasEconomicLiteral(item.rawText));
+}
+
 /**
- * The maximal run of leading lines on a page with no economic literal in any
- * of their own text items. This is the same "first real number marks the
- * first data row" boundary the engine already used for line-level header
- * detection, just re-derived per text item instead of per concatenated
- * segment (Diagnostic A).
+ * Real documents carry front matter above the table -- running headers,
+ * page numbers, report titles -- that is not itself part of any economic
+ * column and can contain bare numbers (a page number, a date, a percentage
+ * caption unrelated to the table). Assuming the header starts at the first
+ * line of the page truncates the block before the real table header is ever
+ * reached. Instead: partition the page into maximal contiguous runs of
+ * lines with no economic literal, then take the first such run in which at
+ * least one line carries a recognized header-vocabulary term. A run
+ * qualifies as a whole (not line by line) so a parent line that itself
+ * matches no vocabulary term (e.g. a bare "Preço" spanning two children)
+ * is still included whenever any other line in the same run does.
  */
 function headerBlockLines(graph: EvidenceGraph, pageNumber: number): ReadonlyArray<EvidenceLine> {
   const pageLines = [...graph.lines.filter((line) => line.pageNumber === pageNumber)].sort(
     (left, right) => lineVerticalOrder(graph, left) - lineVerticalOrder(graph, right),
   );
-  const block: EvidenceLine[] = [];
+
+  const runs: EvidenceLine[][] = [];
+  let current: EvidenceLine[] = [];
   for (const line of pageLines) {
-    const items = line.textItemEvidenceIds
-      .map((id) => graph.textItems.find((candidate) => candidate.evidenceId === id))
-      .filter((item): item is NonNullable<typeof item> => item !== undefined);
-    if (items.length === 0) break;
-    if (items.some((item) => hasEconomicLiteral(item.rawText))) break;
-    block.push(line);
+    if (lineHasEconomicLiteral(graph, line)) {
+      if (current.length > 0) runs.push(current);
+      current = [];
+      continue;
+    }
+    current.push(line);
   }
-  return block;
+  if (current.length > 0) runs.push(current);
+
+  const qualifying = runs.find((run) => run.some((line) => lineHasVocabularyHit(graph, line)));
+  return qualifying ?? [];
 }
 
 function atomsForLine(graph: EvidenceGraph, line: EvidenceLine): ReadonlyArray<HeaderAtom> {
