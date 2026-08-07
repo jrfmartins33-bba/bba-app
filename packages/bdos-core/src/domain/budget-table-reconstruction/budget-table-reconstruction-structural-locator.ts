@@ -53,6 +53,11 @@ export class LocatorCatalog {
     return id;
   }
 
+  /** O(1) lookup by id -- prefer this over entries().find(...) on any hot path. */
+  get(id: string): StructuralLocator | null {
+    return this.#entries.get(id)?.locator ?? null;
+  }
+
   entries(): ReadonlyArray<CanonicalLocatorEntry> {
     return [...this.#entries.values()].sort((left, right) =>
       left.locatorId < right.locatorId ? -1 : left.locatorId > right.locatorId ? 1 : 0,

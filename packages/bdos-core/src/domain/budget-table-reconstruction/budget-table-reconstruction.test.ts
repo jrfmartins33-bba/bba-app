@@ -1,7 +1,7 @@
 import { evaluateArithmetic } from "./budget-table-reconstruction-arithmetic";
 import { conserveEvidence } from "./budget-table-reconstruction-conservation";
 import { canonicalChunks, fingerprintCanonical } from "./budget-table-reconstruction-fingerprint";
-import { headerVocabularyRoles } from "./budget-table-reconstruction-profile";
+import { headerPathRoles, headerVocabularyRoles } from "./budget-table-reconstruction-profile";
 import { reconstructBudgetTable } from "./budget-table-reconstruction";
 import type {
   ParsedNumericEvidence,
@@ -231,17 +231,17 @@ test("invented operand is classified and traceable by arithmetic helper", () => 
       candidateRoles: ["quantity"], role: "quantity", status: "resolved", headerLineIds: [], evidenceLocatorIds: [],
       sourcePhysicalColumnHypothesisIds: [], contributingRegionIds: [], contributingLineIds: [],
       contributingSegmentIds: [], groupingRuleId: "header-band-v1", representativePhysicalColumnHypothesisId: null,
-      nonGroupingReasonCodes: [] },
+      nonGroupingReasonCodes: [], bandProvenance: "header-derived", headerAtomIds: [], splitReasonCode: null },
     { columnId: "u", pageNumber: 1, horizontalOrder: 2, leftPoints: 1, rightPoints: 2,
       candidateRoles: ["unit_price"], role: "unit_price", status: "resolved", headerLineIds: [], evidenceLocatorIds: [],
       sourcePhysicalColumnHypothesisIds: [], contributingRegionIds: [], contributingLineIds: [],
       contributingSegmentIds: [], groupingRuleId: "header-band-v1", representativePhysicalColumnHypothesisId: null,
-      nonGroupingReasonCodes: [] },
+      nonGroupingReasonCodes: [], bandProvenance: "header-derived", headerAtomIds: [], splitReasonCode: null },
     { columnId: "t", pageNumber: 1, horizontalOrder: 3, leftPoints: 2, rightPoints: 3,
       candidateRoles: ["total_price"], role: "total_price", status: "resolved", headerLineIds: [], evidenceLocatorIds: [],
       sourcePhysicalColumnHypothesisIds: [], contributingRegionIds: [], contributingLineIds: [],
       contributingSegmentIds: [], groupingRuleId: "header-band-v1", representativePhysicalColumnHypothesisId: null,
-      nonGroupingReasonCodes: [] },
+      nonGroupingReasonCodes: [], bandProvenance: "header-derived", headerAtomIds: [], splitReasonCode: null },
   ]);
   equal(evaluations[0]?.outcome, "invented_evidence");
 });
@@ -773,4 +773,351 @@ test("runtime references are omitted from both semantic fingerprint and canonica
   equal(first.canonicalFingerprint, second.canonicalFingerprint);
   equal(firstBytes, secondBytes);
   equal(fingerprintCanonical(firstBytes), fingerprintCanonical(secondBytes));
+});
+
+// ---------------------------------------------------------------------------
+// Hierarchical economic column semantics (fix: HeaderAtom/HeaderPath model,
+// wide-band splitting, upstream+header complementarity, arithmetic as a
+// disambiguation constraint). Every fixture below is synthetic and generic --
+// none of it encodes any real document's pages, text, coordinates, or codes.
+// ---------------------------------------------------------------------------
+
+test("header path classifier: bare BDI resolves to bdi_rate directly", () => {
+  equal(headerPathRoles(["bdi"]), ["bdi_rate"]);
+  equal(headerPathRoles(["bdi (%)"]), ["bdi_rate"]);
+});
+
+test("header path classifier: unit price and total price with BDI never collapse to bdi_rate", () => {
+  equal(headerPathRoles(["preco", "unit. c/ bdi"]), ["unit_price"]);
+  equal(headerPathRoles(["preco", "total c/bdi"]), ["total_price"]);
+});
+
+test("header path classifier: nested item_code is demoted under an unrelated parent group", () => {
+  equal(headerPathRoles(["item"]), ["item_code"]);
+  equal(headerPathRoles(["fonte de pesquisa", "codigo"]), []);
+});
+
+test("hierarchical two-line header resolves parent-qualified unit and total price", () => {
+  const columns = [
+    { header: "", left: 0, right: 50 },
+    { header: "", left: 100, right: 150 },
+    { header: "", left: 150, right: 200 },
+  ];
+  const headerParent = [entry("Preço", 1, 2)];
+  const headerChildren = [entry("Unitário", 1), entry("Total", 2)];
+  const dataRow = [entry("A1", 0), entry("100,00", 1), entry("200,00", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      { pageNumber: 1, includeHeader: false, rows: [headerParent, headerChildren, dataRow] },
+    ]),
+  );
+  const unitPriceColumn = result.columns.find((column) => column.leftPoints === 100);
+  const totalPriceColumn = result.columns.find((column) => column.leftPoints === 150);
+  equal(unitPriceColumn?.role, "unit_price");
+  equal(unitPriceColumn?.status, "resolved");
+  equal(totalPriceColumn?.role, "total_price");
+  equal(totalPriceColumn?.status, "resolved");
+});
+
+test("CUSTO hierarchy resolves unit cost without BDI and BDI rate distinctly", () => {
+  const columns = [
+    { header: "", left: 0, right: 50 },
+    { header: "", left: 300, right: 350 },
+    { header: "", left: 350, right: 400 },
+  ];
+  const headerParent = [entry("Custo", 1, 2)];
+  const headerChildren = [entry("Unit.S/BDI", 1), entry("BDI (%)", 2)];
+  const dataRow = [entry("A1", 0), entry("80,00", 1), entry("25,00", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      { pageNumber: 1, includeHeader: false, rows: [headerParent, headerChildren, dataRow] },
+    ]),
+  );
+  const unitCostColumn = result.columns.find((column) => column.leftPoints === 300);
+  const bdiColumn = result.columns.find((column) => column.leftPoints === 350);
+  equal(unitCostColumn?.role, "unit_cost");
+  equal(unitCostColumn?.status, "resolved");
+  equal(bdiColumn?.role, "bdi_rate");
+  equal(bdiColumn?.status, "resolved");
+});
+
+test("PRECO hierarchy resolves unit and total price with BDI without becoming bdi_rate", () => {
+  const columns = [
+    { header: "", left: 0, right: 50 },
+    { header: "", left: 500, right: 560 },
+    { header: "", left: 560, right: 620 },
+  ];
+  const headerParent = [entry("Preço", 1, 2)];
+  const headerChildren = [entry("Unit. C/ BDI", 1), entry("Total C/BDI", 2)];
+  const dataRow = [entry("A1", 0), entry("100,00", 1), entry("200,00", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      { pageNumber: 1, includeHeader: false, rows: [headerParent, headerChildren, dataRow] },
+    ]),
+  );
+  const unitPriceWithBdi = result.columns.find((column) => column.leftPoints === 500);
+  const totalPriceWithBdi = result.columns.find((column) => column.leftPoints === 560);
+  equal(unitPriceWithBdi?.role, "unit_price");
+  assert(unitPriceWithBdi?.role !== "bdi_rate", "unit price with BDI must not collapse into bdi_rate");
+  equal(totalPriceWithBdi?.role, "total_price");
+  assert(totalPriceWithBdi?.role !== "bdi_rate", "total price with BDI must not collapse into bdi_rate");
+});
+
+test("item_code is confirmed at header root but demoted when nested under an unrelated group", () => {
+  const columns = [
+    { header: "", left: 0, right: 50 },
+    { header: "", left: 100, right: 150 },
+    { header: "", left: 150, right: 200 },
+    { header: "", left: 250, right: 300 },
+  ];
+  const headerParent = [entry("Item", 0), entry("Fonte", 1, 2)];
+  const headerChild = [entry("Código", 1)];
+  const dataRow = [entry("A1", 0), entry("X1", 1), entry("5,00", 3)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      { pageNumber: 1, includeHeader: false, rows: [headerParent, headerChild, dataRow] },
+    ]),
+  );
+  const itemColumn = result.columns.find((column) => column.leftPoints === 0);
+  const nestedCodeColumn = result.columns.find((column) => column.leftPoints === 100);
+  equal(itemColumn?.role, "item_code");
+  equal(itemColumn?.status, "resolved");
+  assert(
+    nestedCodeColumn?.role !== "item_code",
+    "code nested under an unrelated group must not become item_code",
+  );
+});
+
+test("wide upstream band spanning two incompatible header paths is split by observed geometry", () => {
+  const columns = [
+    { header: "", left: 0, right: 50 },
+    { header: "", left: 300, right: 350 },
+    { header: "", left: 350, right: 400 },
+  ];
+  const headerParent = [entry("Custo", 1, 2)];
+  const headerChildren = [entry("Unitário", 1), entry("BDI", 2)];
+  const dataRow1 = [entry("A1", 0), entry("80,00", 1), entry("25,00", 2)];
+  const dataRow2 = [entry("A2", 0), entry("90,00", 1), entry("20,00", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      {
+        pageNumber: 1,
+        includeHeader: false,
+        rows: [headerParent, headerChildren, dataRow1, dataRow2],
+        columnHypothesisOverride: [{ left: 300, right: 400 }],
+      },
+    ]),
+  );
+  const unitCostColumn = result.columns.find((column) => column.role === "unit_cost");
+  const bdiColumn = result.columns.find((column) => column.role === "bdi_rate");
+  assert(unitCostColumn !== undefined, "wide band must split off a resolved unit_cost column");
+  assert(bdiColumn !== undefined, "wide band must split off a resolved bdi_rate column");
+  equal(unitCostColumn?.leftPoints, 300);
+  equal(unitCostColumn?.rightPoints, 350);
+  equal(bdiColumn?.leftPoints, 350);
+  equal(bdiColumn?.rightPoints, 400);
+  equal(unitCostColumn?.groupingRuleId, "wide-band-geometric-split-v1");
+  equal(unitCostColumn?.bandProvenance, "upstream-refined");
+});
+
+test("a band matching exactly one header path is never split even when upstream is present", () => {
+  const columns = [{ header: "", left: 400, right: 460 }];
+  const header = [entry("Quantidade", 0)];
+  const dataRow = [entry("2,00", 0)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      {
+        pageNumber: 1,
+        includeHeader: false,
+        rows: [header, dataRow],
+        columnHypothesisOverride: [{ left: 400, right: 460 }],
+      },
+    ]),
+  );
+  equal(result.columns.length, 1);
+  equal(result.columns[0]?.role, "quantity");
+  equal(result.columns[0]?.status, "resolved");
+  assert(
+    result.columns[0]?.groupingRuleId !== "wide-band-geometric-split-v1",
+    "a genuinely single column must never be split",
+  );
+});
+
+test("header geometry complements a partial upstream schema without duplicating covered columns", () => {
+  const columns = [
+    { header: "Código", left: 0, right: 60 },
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Quantidade", left: 320, right: 380 },
+    { header: "Preço Unitário", left: 400, right: 470 },
+  ];
+  const dataRow = [entry("A1", 0), entry("Serviço", 1), entry("2,00", 2), entry("50,00", 3)];
+  const input = buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]);
+  const page = (input.columnEvidence as any).result.groups[0].pages[0];
+  page.regions[0].hypotheses = page.regions[0].hypotheses.filter(
+    (hypothesis: any) => !(hypothesis.leftPoints === 320 && hypothesis.rightPoints === 380),
+  );
+  const result = reconstructBudgetTable(input);
+  const quantityColumns = result.columns.filter((column) => column.role === "quantity");
+  equal(quantityColumns.length, 1);
+  equal(quantityColumns[0]?.bandProvenance, "header-derived");
+  equal(quantityColumns[0]?.leftPoints, 320);
+  const codeColumns = result.columns.filter((column) => column.role === "item_code");
+  equal(codeColumns.length, 1);
+  equal(codeColumns[0]?.bandProvenance, "upstream");
+});
+
+test("economic column reconstructs from header geometry alone when upstream column evidence is entirely unavailable", () => {
+  const columns = [
+    { header: "", left: 0, right: 50 },
+    { header: "", left: 100, right: 170 },
+  ];
+  const header = [entry("Código", 0), entry("Preço Unitário", 1)];
+  const dataRow = [entry("A1", 0), entry("50,00", 1)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(
+      columns,
+      [{ pageNumber: 1, includeHeader: false, rows: [header, dataRow] }],
+      { columnEvidence: "unavailable" },
+    ),
+  );
+  const priceColumn = result.columns.find((column) => column.leftPoints === 100);
+  equal(priceColumn?.role, "unit_price");
+  equal(priceColumn?.status, "resolved");
+  equal(priceColumn?.bandProvenance, "header-derived");
+});
+
+test("ambiguous economic column stays ambiguous when no unique arithmetic bijection is consistent", () => {
+  const columns = [
+    { header: "Quantidade", left: 0, right: 60 },
+    { header: "Custo Total", left: 80, right: 150 },
+    { header: "Preço Unitário", left: 170, right: 240 },
+  ];
+  const dataRow = [entry("2", 0), entry("999,00", 1), entry("100,00", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  const ambiguousColumn = result.columns.find((column) => column.leftPoints === 80);
+  equal(ambiguousColumn?.status, "ambiguous");
+  assert(
+    (ambiguousColumn?.candidateRoles ?? []).includes("unit_cost") &&
+      (ambiguousColumn?.candidateRoles ?? []).includes("total_price"),
+    "column must retain both economically plausible roles when no bijection is uniquely consistent",
+  );
+});
+
+test("ambiguous economic column resolves when exactly one arithmetic bijection is consistent", () => {
+  const columns = [
+    { header: "Quantidade", left: 0, right: 60 },
+    { header: "Custo Total", left: 80, right: 150 },
+    { header: "BDI", left: 170, right: 220 },
+    { header: "Preço Unitário", left: 240, right: 310 },
+  ];
+  const dataRow = [entry("2", 0), entry("80,00", 1), entry("25", 2), entry("100,00", 3)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  const resolvedColumn = result.columns.find((column) => column.leftPoints === 80);
+  equal(resolvedColumn?.role, "unit_cost");
+  equal(resolvedColumn?.status, "resolved");
+});
+
+test("an auxiliary column with no economic role stays unknown without causing failure", () => {
+  const columns = [
+    { header: "Código", left: 0, right: 60 },
+    { header: "Fonte de Pesquisa", left: 80, right: 200 },
+    { header: "Descrição", left: 220, right: 400 },
+    { header: "Quantidade", left: 420, right: 480 },
+  ];
+  const dataRow = [entry("A1", 0), entry("SINAPI", 1), entry("Serviço", 2), entry("2,00", 3)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  const auxiliaryColumn = result.columns.find((column) => column.leftPoints === 80);
+  equal(auxiliaryColumn?.role, "unknown");
+  equal(auxiliaryColumn?.status, "insufficient_evidence");
+  assert(result.status !== "failed", "an unresolved auxiliary column must not fail the reconstruction");
+});
+
+test("header path resolution is invariant to synthetic runtime key naming", () => {
+  const columns = [
+    { header: "", left: 0, right: 50 },
+    { header: "", left: 100, right: 150 },
+    { header: "", left: 150, right: 200 },
+  ];
+  const headerParent = [entry("Preço", 1, 2)];
+  const headerChildren = [entry("Unitário", 1), entry("Total", 2)];
+  const dataRow = [entry("A1", 0), entry("10,00", 1), entry("20,00", 2)];
+  const rows = [headerParent, headerChildren, dataRow];
+  const first = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, includeHeader: false, rows }], {
+      keyPrefix: "alpha",
+    }),
+  );
+  const second = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, includeHeader: false, rows }], {
+      keyPrefix: "beta",
+    }),
+  );
+  equal(first.canonicalFingerprint, second.canonicalFingerprint);
+  equal(first.columns.find((column) => column.leftPoints === 100)?.role, "unit_price");
+  equal(second.columns.find((column) => column.leftPoints === 100)?.role, "unit_price");
+});
+
+test("geometric text-item partition prefers real per-text-item geometry over lexical token splitting", () => {
+  const columns = [
+    { header: "Custo", left: 300, right: 350 },
+    { header: "BDI", left: 350, right: 400 },
+  ];
+  const dataRow = [entry("80,00", 0), entry("25,00", 1)];
+  const input = buildSyntheticInput(
+    columns,
+    [{ pageNumber: 1, rows: [dataRow] }],
+    { physicalCellEvidence: "unavailable" },
+  );
+  const structurePage: any = (input.structureReconstruction as any).groups[0].pages[0];
+  const dataLine = structurePage.lines[structurePage.lines.length - 1];
+  const [firstSegment, secondSegment] = structurePage.segments.filter(
+    (segment: any) => segment.lineKey === dataLine.lineKey,
+  );
+  firstSegment.sourceTextItemIndices = [
+    ...firstSegment.sourceTextItemIndices,
+    ...secondSegment.sourceTextItemIndices,
+  ];
+  firstSegment.rightPoints = secondSegment.rightPoints;
+  firstSegment.widthPoints = firstSegment.rightPoints - firstSegment.leftPoints;
+  firstSegment.centerXPoints = (firstSegment.leftPoints + firstSegment.rightPoints) / 2;
+  structurePage.segments = structurePage.segments.filter(
+    (segment: any) => segment.segmentKey !== secondSegment.segmentKey,
+  );
+  for (const outcome of structurePage.sourceItemOutcomes) {
+    if (outcome.segmentKey === secondSegment.segmentKey) outcome.segmentKey = firstSegment.segmentKey;
+  }
+  dataLine.segmentKeys = dataLine.segmentKeys.filter(
+    (key: string) => key !== secondSegment.segmentKey,
+  );
+
+  const result = reconstructBudgetTable(input);
+  const geometricCells = result.cells.filter(
+    (cell) => cell.reasonCode === "unique_textitem_geometry_partition",
+  );
+  equal(geometricCells.length, 2);
+  const custoCell = geometricCells.find((cell) => cell.role === "unit_cost");
+  const bdiCell = geometricCells.find((cell) => cell.role === "bdi_rate");
+  assert(
+    custoCell !== undefined && bdiCell !== undefined,
+    "each merged text item must land in its own real column",
+  );
+  equal(new Set(geometricCells.flatMap((cell) => cell.fragmentIds)).size, 2);
+
+  const conservation = conserveEvidence({
+    textItems: result.textItems,
+    fragments: result.fragments,
+    segments: result.segments,
+    lines: result.lines,
+    cells: result.cells,
+    logicalRows: result.logicalRows,
+    records: result.records,
+    arithmeticEvaluations: result.arithmeticEvaluations,
+  });
+  assert(conservation.issues.length === 0, "geometric partition must not introduce conservation failures");
 });

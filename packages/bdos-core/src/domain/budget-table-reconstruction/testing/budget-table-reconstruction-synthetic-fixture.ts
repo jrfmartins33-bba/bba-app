@@ -22,6 +22,18 @@ export interface SyntheticPage {
   readonly pageNumber: number;
   readonly includeHeader?: boolean;
   readonly rows: ReadonlyArray<SyntheticRow>;
+  /**
+   * Replaces the per-SyntheticColumn upstream hypothesis generation for this
+   * page with an explicit list of raw hypothesis bands (segment membership
+   * still derived from real positive geometric overlap, never invented).
+   * Used only to construct a single upstream band that is wider than one
+   * real column, so wide-band-splitting tests do not need to fabricate a
+   * one-to-one column-to-hypothesis mapping.
+   */
+  readonly columnHypothesisOverride?: ReadonlyArray<{
+    readonly left: number;
+    readonly right: number;
+  }>;
 }
 
 export interface SyntheticFixtureOptions {
@@ -251,26 +263,45 @@ export function buildSyntheticInput(
       regions: [
         {
           sourceRegionKey: `${keyPrefix}-region-${pageSpec.pageNumber}`,
-          hypotheses: columns.flatMap((column, columnIndex) =>
-            (column.observedBands ?? [{ left: column.left, right: column.right }]).map(
-              (observed, observationIndex) => ({
-            hypothesisKey: `${keyPrefix}-hypothesis-${pageSpec.pageNumber}-${columnIndex}-${observationIndex}`,
-            pageNumber: pageSpec.pageNumber,
-            order: columnIndex + 1,
-            contributingAlignmentKeys: [],
-            lineKeys: lines.map((line) => line.lineKey),
-            segmentKeys: segments
-              .filter(
-                (segment) =>
-                  segment.leftPoints >= column.left && segment.rightPoints <= column.right,
-              )
-              .map((segment) => segment.segmentKey),
-            ...geometry(observed.left, observed.right, 0, sourceRows.length * 20),
-            formationRuleId: "synthetic",
-            formationRuleVersion: 1,
-            profileId: "synthetic",
-            profileVersion: 1,
-          }))),
+          hypotheses: pageSpec.columnHypothesisOverride
+            ? pageSpec.columnHypothesisOverride.map((observed, index) => ({
+                hypothesisKey: `${keyPrefix}-override-hypothesis-${pageSpec.pageNumber}-${index}`,
+                pageNumber: pageSpec.pageNumber,
+                order: index + 1,
+                contributingAlignmentKeys: [],
+                lineKeys: lines.map((line) => line.lineKey),
+                segmentKeys: segments
+                  .filter(
+                    (segment) =>
+                      segment.leftPoints < observed.right && segment.rightPoints > observed.left,
+                  )
+                  .map((segment) => segment.segmentKey),
+                ...geometry(observed.left, observed.right, 0, sourceRows.length * 20),
+                formationRuleId: "synthetic",
+                formationRuleVersion: 1,
+                profileId: "synthetic",
+                profileVersion: 1,
+              }))
+            : columns.flatMap((column, columnIndex) =>
+                (column.observedBands ?? [{ left: column.left, right: column.right }]).map(
+                  (observed, observationIndex) => ({
+                hypothesisKey: `${keyPrefix}-hypothesis-${pageSpec.pageNumber}-${columnIndex}-${observationIndex}`,
+                pageNumber: pageSpec.pageNumber,
+                order: columnIndex + 1,
+                contributingAlignmentKeys: [],
+                lineKeys: lines.map((line) => line.lineKey),
+                segmentKeys: segments
+                  .filter(
+                    (segment) =>
+                      segment.leftPoints >= column.left && segment.rightPoints <= column.right,
+                  )
+                  .map((segment) => segment.segmentKey),
+                ...geometry(observed.left, observed.right, 0, sourceRows.length * 20),
+                formationRuleId: "synthetic",
+                formationRuleVersion: 1,
+                profileId: "synthetic",
+                profileVersion: 1,
+              }))),
         },
       ],
     });

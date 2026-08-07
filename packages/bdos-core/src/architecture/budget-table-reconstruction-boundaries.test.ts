@@ -60,6 +60,19 @@ const CASE_SPECIFIC_PATTERNS: ReadonlyArray<RegExp> = [
   /\.localeCompare\s*\(/,
 ];
 
+/**
+ * Column/band disambiguation must stay evidence-based: real observed
+ * geometry, header-path structure, and exact-rational arithmetic only.
+ * These patterns target actual declarations, not prose -- doc comments are
+ * free to explain that no epsilon/threshold/score exists.
+ */
+const ARBITRARY_TOLERANCE_PATTERNS: ReadonlyArray<RegExp> = [
+  /\b(?:const|let)\s+\w*epsilon\w*\s*=/i,
+  /\b(?:const|let)\s+\w*threshold\w*\s*=/i,
+  /\b(?:const|let)\s+\w*score\w*\s*=/i,
+  /\b(?:const|let)\s+\w*tolerance\w*\s*=/i,
+];
+
 function productiveTypeScriptFiles(root: string): ReadonlyArray<string> {
   const output: string[] = [];
 
@@ -131,6 +144,21 @@ test("productive engine has no case-specific or nondeterministic shortcuts", () 
   for (const file of productiveTypeScriptFiles(ENGINE_DIRECTORY)) {
     const content = readFileSync(file, "utf8");
     for (const pattern of CASE_SPECIFIC_PATTERNS) {
+      if (pattern.test(content)) {
+        violations.push(`${relative(SOURCE_DIRECTORY, file)} matches ${pattern}`);
+      }
+    }
+  }
+
+  assertNoViolations(violations);
+});
+
+test("column and band disambiguation introduces no arbitrary epsilon, threshold, score, or tolerance", () => {
+  const violations: string[] = [];
+
+  for (const file of productiveTypeScriptFiles(ENGINE_DIRECTORY)) {
+    const content = readFileSync(file, "utf8");
+    for (const pattern of ARBITRARY_TOLERANCE_PATTERNS) {
       if (pattern.test(content)) {
         violations.push(`${relative(SOURCE_DIRECTORY, file)} matches ${pattern}`);
       }

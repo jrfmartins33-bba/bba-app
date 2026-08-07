@@ -138,9 +138,15 @@ export interface ResolvedColumn {
   readonly contributingRegionIds: ReadonlyArray<string>;
   readonly contributingLineIds: ReadonlyArray<string>;
   readonly contributingSegmentIds: ReadonlyArray<string>;
-  readonly groupingRuleId: "overlap-semantic-noncooccupancy-components-v1" | "header-band-v1";
+  readonly groupingRuleId:
+    | "overlap-semantic-noncooccupancy-components-v1"
+    | "header-band-v1"
+    | "wide-band-geometric-split-v1";
   readonly representativePhysicalColumnHypothesisId: string | null;
   readonly nonGroupingReasonCodes: ReadonlyArray<string>;
+  readonly bandProvenance: "upstream" | "header-derived" | "upstream-refined";
+  readonly headerAtomIds: ReadonlyArray<string>;
+  readonly splitReasonCode: string | null;
 }
 
 export type CellState = "present" | "missing" | "divergent" | "ambiguous" | "not_applicable";

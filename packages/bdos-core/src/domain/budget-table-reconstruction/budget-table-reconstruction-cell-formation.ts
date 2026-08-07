@@ -33,9 +33,7 @@ function segmentBounds(
   graph: EvidenceGraph,
   segment: EvidenceSegment,
 ): readonly [number, number] | null {
-  const locator = graph.locatorCatalog
-    .entries()
-    .find((entry) => entry.locatorId === segment.locatorId)?.locator;
+  const locator = graph.locatorCatalog.get(segment.locatorId);
   return locator?.bounds == null ? null : [locator.bounds[0], locator.bounds[2]];
 }
 
@@ -48,13 +46,67 @@ function intersects(
   return bounds !== null && bounds[0] < column.rightPoints && bounds[1] > column.leftPoints;
 }
 
-function tokenCandidates(
+function textItemBounds(
+  graph: EvidenceGraph,
+  textItemEvidenceId: string,
+  textItemById: ReadonlyMap<string, EvidenceGraph["textItems"][number]>,
+): readonly [number, number] | null {
+  const item = textItemById.get(textItemEvidenceId);
+  if (item === undefined) return null;
+  const locator = graph.locatorCatalog.get(item.locatorId);
+  return locator?.bounds == null ? null : [locator.bounds[0], locator.bounds[2]];
+}
+
+function columnForTextItem(
+  graph: EvidenceGraph,
+  textItemEvidenceId: string,
+  columns: ReadonlyArray<ResolvedColumn>,
+  textItemById: ReadonlyMap<string, EvidenceGraph["textItems"][number]>,
+): ResolvedColumn | null {
+  const bounds = textItemBounds(graph, textItemEvidenceId, textItemById);
+  if (bounds === null) return null;
+  const matches = columns.filter((column) => bounds[0] < column.rightPoints && bounds[1] > column.leftPoints);
+  return matches.length === 1 ? matches[0]! : null;
+}
+
+/**
+ * When a segment merges several text items that upstream structure
+ * reconstruction did not separate, but each individual text item's own
+ * geometry falls unambiguously inside exactly one of the matching columns,
+ * use that real per-text-item geometry directly instead of the lexical
+ * token-boundary heuristic below. Returns null (never a partial map) when
+ * any text item straddles two columns or any matching column would be left
+ * without evidence -- in that case the lexical fallback still applies.
+ */
+function geometricTextItemPartition(
   graph: EvidenceGraph,
   segment: EvidenceSegment,
+  matchingColumns: ReadonlyArray<ResolvedColumn>,
+  textItemById: ReadonlyMap<string, EvidenceGraph["textItems"][number]>,
+): ReadonlyMap<string, ReadonlyArray<string>> | null {
+  if (segment.textItemEvidenceIds.length < 2) return null;
+  const assignment = new Map<string, string[]>();
+  for (let index = 0; index < segment.textItemEvidenceIds.length; index += 1) {
+    const textItemId = segment.textItemEvidenceIds[index]!;
+    const fragmentId = segment.fragmentIds[index];
+    if (fragmentId === undefined) return null;
+    const column = columnForTextItem(graph, textItemId, matchingColumns, textItemById);
+    if (column === null) return null;
+    const existing = assignment.get(column.columnId) ?? [];
+    existing.push(fragmentId);
+    assignment.set(column.columnId, existing);
+  }
+  if (!matchingColumns.every((column) => assignment.has(column.columnId))) return null;
+  return assignment;
+}
+
+function tokenCandidates(
+  segment: EvidenceSegment,
+  textItemById: ReadonlyMap<string, EvidenceGraph["textItems"][number]>,
 ): ReadonlyArray<TokenCandidate> {
   const tokens: TokenCandidate[] = [];
   for (const evidenceId of segment.textItemEvidenceIds) {
-    const item = graph.textItems.find((candidate) => candidate.evidenceId === evidenceId);
+    const item = textItemById.get(evidenceId);
     if (item === undefined) continue;
     for (const match of item.rawText.matchAll(/\S+/g)) {
       const startOffset = match.index;
@@ -180,12 +232,25 @@ export function formCells(
 ): CellFormationResult {
   const cells: ReconstructedCell[] = [];
   const derivedFragments = new Map<string, SourceFragment>();
+  const textItemById = new Map(graph.textItems.map((item) => [item.evidenceId, item]));
+  const segmentsByLineId = new Map<string, EvidenceSegment[]>();
+  for (const segment of graph.segments) {
+    const existing = segmentsByLineId.get(segment.lineId);
+    if (existing === undefined) segmentsByLineId.set(segment.lineId, [segment]);
+    else existing.push(segment);
+  }
+  const columnsByPage = new Map<number, ResolvedColumn[]>();
+  for (const column of columns) {
+    const existing = columnsByPage.get(column.pageNumber);
+    if (existing === undefined) columnsByPage.set(column.pageNumber, [column]);
+    else existing.push(column);
+  }
 
   for (const line of graph.lines) {
-    const pageColumns = columns
-      .filter((column) => column.pageNumber === line.pageNumber)
-      .sort((left, right) => left.horizontalOrder - right.horizontalOrder);
-    const lineSegments = graph.segments.filter((segment) => segment.lineId === line.lineId);
+    const pageColumns = (columnsByPage.get(line.pageNumber) ?? []).slice().sort(
+      (left, right) => left.horizontalOrder - right.horizontalOrder,
+    );
+    const lineSegments = segmentsByLineId.get(line.lineId) ?? [];
     const occupiedColumns = new Set<string>();
 
     for (const segment of lineSegments) {
@@ -234,8 +299,15 @@ export function formCells(
         continue;
       }
 
-      const tokens = tokenCandidates(graph, segment);
-      const partitions = enumerateUniquePartitions(tokens, matchingColumns);
+      const geometricPartition = geometricTextItemPartition(
+        graph,
+        segment,
+        matchingColumns,
+        textItemById,
+      );
+      const tokens = geometricPartition === null ? tokenCandidates(segment, textItemById) : [];
+      const partitions =
+        geometricPartition === null ? enumerateUniquePartitions(tokens, matchingColumns) : [];
       const uniquePartition = partitions.length === 1 ? partitions[0]! : null;
 
       for (let columnIndex = 0; columnIndex < matchingColumns.length; columnIndex += 1) {
@@ -247,7 +319,11 @@ export function formCells(
             ? "multiple_valid_token_role_decompositions"
             : "shared_evidence_not_uniquely_decomposable";
 
-        if (uniquePartition !== null) {
+        if (geometricPartition !== null) {
+          fragmentIds = geometricPartition.get(column.columnId) ?? [];
+          state = column.status === "resolved" ? "present" : "ambiguous";
+          reasonCode = "unique_textitem_geometry_partition";
+        } else if (uniquePartition !== null) {
           const part = uniquePartition[columnIndex]!;
           const created = tokens.slice(part.startIndex, part.endIndex).map(createTokenFragment);
           for (const fragment of created) derivedFragments.set(fragment.fragmentId, fragment);
