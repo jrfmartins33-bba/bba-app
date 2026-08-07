@@ -196,20 +196,99 @@ function lineHasEconomicLiteral(graph: EvidenceGraph, line: EvidenceLine): boole
   return items.length === 0 || items.some((item) => hasEconomicLiteral(item.rawText));
 }
 
+const IDENTITY_ROLES: ReadonlySet<BudgetColumnRole> = new Set(["item_code", "description"]);
+const CONTENT_ROLES: ReadonlySet<BudgetColumnRole> = new Set([
+  "unit",
+  "quantity",
+  "unit_cost",
+  "bdi_rate",
+  "unit_price",
+  "total_price",
+]);
+
+interface HeaderBlockCandidate {
+  readonly lines: ReadonlyArray<EvidenceLine>;
+  readonly paths: ReadonlyArray<HeaderPath>;
+  readonly roleSet: ReadonlySet<BudgetColumnRole>;
+}
+
+function hasTwoNonOverlappingPaths(paths: ReadonlyArray<HeaderPath>): boolean {
+  for (let left = 0; left < paths.length; left += 1) {
+    for (let right = left + 1; right < paths.length; right += 1) {
+      if (
+        !rangesPositivelyOverlap(
+          paths[left]!.leftPoints,
+          paths[left]!.rightPoints,
+          paths[right]!.leftPoints,
+          paths[right]!.rightPoints,
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * A candidate run only counts as a genuine tabular budget header -- not a
+ * document metadata/title block that happens to reuse a vocabulary word as
+ * a field label (e.g. "Descrição:" naming the project) -- when it
+ * demonstrates, via physically distinct EvidenceTextItems, at least two
+ * horizontally non-overlapping leaf paths, at least two distinct semantic
+ * roles, and a combination of at least one IDENTITY role (item_code or
+ * description) with at least one CONTENT role (unit/quantity/unit_cost/
+ * bdi_rate/unit_price/total_price). This is a discrete structural
+ * condition -- set membership and counting -- never a score or threshold.
+ */
+function qualifiesAsBudgetHeaderBlock(candidate: HeaderBlockCandidate): boolean {
+  if (candidate.roleSet.size < 2) return false;
+  if (!hasTwoNonOverlappingPaths(candidate.paths)) return false;
+  let hasIdentity = false;
+  let hasContent = false;
+  for (const role of candidate.roleSet) {
+    if (IDENTITY_ROLES.has(role)) hasIdentity = true;
+    if (CONTENT_ROLES.has(role)) hasContent = true;
+  }
+  return hasIdentity && hasContent;
+}
+
+function isStrictSuperset(
+  left: ReadonlySet<BudgetColumnRole>,
+  right: ReadonlySet<BudgetColumnRole>,
+): boolean {
+  if (left.size <= right.size) return false;
+  for (const role of right) {
+    if (!left.has(role)) return false;
+  }
+  return true;
+}
+
 /**
  * Real documents carry front matter above the table -- running headers,
- * page numbers, report titles -- that is not itself part of any economic
- * column and can contain bare numbers (a page number, a date, a percentage
- * caption unrelated to the table). Assuming the header starts at the first
- * line of the page truncates the block before the real table header is ever
- * reached. Instead: partition the page into maximal contiguous runs of
- * lines with no economic literal, then take the first such run in which at
- * least one line carries a recognized header-vocabulary term. A run
- * qualifies as a whole (not line by line) so a parent line that itself
- * matches no vocabulary term (e.g. a bare "Preço" spanning two children)
- * is still included whenever any other line in the same run does.
+ * page numbers, report titles, or a metadata block naming the project --
+ * that is not itself part of any economic column and can contain bare
+ * numbers (a page number, a date, a percentage caption unrelated to the
+ * table). Assuming the header starts at the first line of the page, or
+ * accepting the first run that merely contains any vocabulary word, both
+ * truncate the block before the real table header is reached: a metadata
+ * label like "Descrição:" naming the project satisfies a bare
+ * vocabulary-hit check without being a table header at all.
+ *
+ * Instead: partition the page into maximal contiguous runs of lines with no
+ * economic literal (unchanged), but qualify each run using the structural
+ * signature in `qualifiesAsBudgetHeaderBlock` rather than a bare
+ * vocabulary-hit check. If exactly one run qualifies, select it. If several
+ * qualify, select the one whose role set is a strict superset of every
+ * other qualifying run's role set (unambiguous semantic dominance); if no
+ * single run dominates all the others, the candidates are genuinely
+ * incomparable and no block is selected -- never resolved by position,
+ * width, atom count, or any other tie-break.
  */
-function headerBlockLines(graph: EvidenceGraph, pageNumber: number): ReadonlyArray<EvidenceLine> {
+function headerBlockCandidates(
+  graph: EvidenceGraph,
+  pageNumber: number,
+): ReadonlyArray<HeaderBlockCandidate> {
   const pageLines = [...graph.lines.filter((line) => line.pageNumber === pageNumber)].sort(
     (left, right) => lineVerticalOrder(graph, left) - lineVerticalOrder(graph, right),
   );
@@ -226,8 +305,34 @@ function headerBlockLines(graph: EvidenceGraph, pageNumber: number): ReadonlyArr
   }
   if (current.length > 0) runs.push(current);
 
-  const qualifying = runs.find((run) => run.some((line) => lineHasVocabularyHit(graph, line)));
-  return qualifying ?? [];
+  return runs
+    .filter((run) => run.some((line) => lineHasVocabularyHit(graph, line)))
+    .map((run) => {
+      const paths = buildHeaderPathsForLines(graph, pageNumber, run);
+      const roleSet = new Set(
+        paths.flatMap((path) => path.candidateRoles).filter((role) => role !== "unknown"),
+      );
+      return { lines: run, paths, roleSet };
+    });
+}
+
+function selectBudgetHeaderBlock(
+  candidates: ReadonlyArray<HeaderBlockCandidate>,
+): ReadonlyArray<EvidenceLine> {
+  const qualifying = candidates.filter(qualifiesAsBudgetHeaderBlock);
+  if (qualifying.length === 0) return [];
+  if (qualifying.length === 1) return qualifying[0]!.lines;
+
+  const dominant = qualifying.filter((candidate) =>
+    qualifying
+      .filter((other) => other !== candidate)
+      .every((other) => isStrictSuperset(candidate.roleSet, other.roleSet)),
+  );
+  return dominant.length === 1 ? dominant[0]!.lines : [];
+}
+
+function headerBlockLines(graph: EvidenceGraph, pageNumber: number): ReadonlyArray<EvidenceLine> {
+  return selectBudgetHeaderBlock(headerBlockCandidates(graph, pageNumber));
 }
 
 function atomsForLine(graph: EvidenceGraph, line: EvidenceLine): ReadonlyArray<HeaderAtom> {
@@ -280,8 +385,11 @@ function atomsPositivelyOverlap(left: HeaderAtom, right: HeaderAtom): boolean {
  * treated as its own independent column merely because none of its
  * children could be uniquely linked to it.
  */
-function buildHeaderPaths(graph: EvidenceGraph, pageNumber: number): ReadonlyArray<HeaderPath> {
-  const block = headerBlockLines(graph, pageNumber);
+function buildHeaderPathsForLines(
+  graph: EvidenceGraph,
+  pageNumber: number,
+  block: ReadonlyArray<EvidenceLine>,
+): ReadonlyArray<HeaderPath> {
   if (block.length === 0) return [];
 
   const atomsByLine = block.map((line) => atomsForLine(graph, line));
@@ -330,6 +438,10 @@ function buildHeaderPaths(graph: EvidenceGraph, pageNumber: number): ReadonlyArr
       };
     })
     .sort((left, right) => left.leftPoints - right.leftPoints);
+}
+
+function buildHeaderPaths(graph: EvidenceGraph, pageNumber: number): ReadonlyArray<HeaderPath> {
+  return buildHeaderPathsForLines(graph, pageNumber, headerBlockLines(graph, pageNumber));
 }
 
 function headerPathsWithinBand(
@@ -850,13 +962,58 @@ function resolveEconomicAmbiguityByArithmetic(
   });
 }
 
+/**
+ * Correction C: "ITEM" and "CÓDIGO" both independently satisfy the flat
+ * item_code vocabulary, which is correct when a document uses only one of
+ * them but wrong when both appear as distinct columns (the duplicate-role
+ * guard then demotes both to unknown, destroying an identity a human reader
+ * would read unambiguously from "ITEM" alone). A header path demonstrates
+ * EXPLICIT item identity when the literal word "item" appears anywhere in
+ * its path text (the leaf, or an ancestor, e.g. "ITEM" alone or "CÓDIGO DO
+ * ITEM"); a path that only matches through "codigo" without the word
+ * "item" anywhere is a GENERIC auxiliary identifier. When exactly one path
+ * on the page has explicit item identity, every other item_code-candidate
+ * path has item_code removed from its candidate roles -- it does not
+ * compete for the role and does not trigger the duplicate-role guard,
+ * falling back to "unknown" if it has no other role. When there is no
+ * explicit path (0) or more than one (2+, an unresolved ambiguity in its
+ * own right), nothing is touched here: a lone generic "codigo" path still
+ * resolves to item_code as before (fallback compatibility for documents
+ * that only ever call it "Código"), and multiple equally-generic
+ * candidates continue to collide through the existing duplicate-role guard
+ * -- never chosen by position.
+ */
+function hasExplicitItemIdentity(path: HeaderPath): boolean {
+  const fullPath = [...path.parentTexts, normalizeBudgetHeaderText(path.leafText)].join(" ");
+  return /\bitem\b/.test(fullPath);
+}
+
+function resolveItemIdentitySpecificity(
+  headerPaths: ReadonlyArray<HeaderPath>,
+): ReadonlyArray<HeaderPath> {
+  const itemCodePaths = headerPaths.filter((path) => path.candidateRoles.includes("item_code"));
+  const explicit = itemCodePaths.filter(hasExplicitItemIdentity);
+  if (explicit.length !== 1) return headerPaths;
+
+  const explicitPathId = explicit[0]!.headerPathId;
+  return headerPaths.map((path) => {
+    if (path.headerPathId === explicitPathId || !path.candidateRoles.includes("item_code")) {
+      return path;
+    }
+    return {
+      ...path,
+      candidateRoles: path.candidateRoles.filter((role) => role !== "item_code"),
+    };
+  });
+}
+
 function resolvePageColumns(
   input: BudgetTableReconstructionInput,
   graph: EvidenceGraph,
   pageNumber: number,
 ): ReadonlyArray<ResolvedColumn> {
   const headers = headerCandidates(graph, pageNumber);
-  const headerPaths = buildHeaderPaths(graph, pageNumber);
+  const headerPaths = resolveItemIdentitySpecificity(buildHeaderPaths(graph, pageNumber));
   const headerBlockLineIds = new Set(headerBlockLines(graph, pageNumber).map((line) => line.lineId));
   const textItemById = new Map(graph.textItems.map((item) => [item.evidenceId, item]));
 
