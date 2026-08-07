@@ -21,44 +21,98 @@ interface RecordFormationContext {
   readonly rows: ReadonlyArray<ReconstructedLogicalRow>;
 }
 
-/** The eight fields a ReconstructedBudgetRecord actually carries. A cell with
- * any other role -- most commonly "unknown" for an auxiliary/reference
- * column the schema never resolved -- feeds none of them and must never by
- * itself make an otherwise-complete record ambiguous. */
-const RECORD_SEMANTIC_ROLES: ReadonlySet<BudgetColumnRole> = new Set([
-  "item_code",
-  "description",
-  "unit",
-  "quantity",
-  "unit_cost",
-  "bdi_rate",
-  "unit_price",
-  "total_price",
-]);
+/** The semantic fields each record kind's own structural contract actually
+ * expects it to carry -- never a universal eight-field requirement. A group
+ * or subgroup header is only identity (item_code, description); a subtotal
+ * or total is only description and the aggregated total_price. Requiring
+ * the full economic set from every kind would wrongly treat a legitimate
+ * grouping/aggregation line as missing evidence it was never expected to
+ * carry in the first place. */
+const SEMANTIC_ROLES_BY_KIND: Partial<Record<ReconstructedRecordKind, ReadonlySet<BudgetColumnRole>>> = {
+  service_item: new Set([
+    "item_code",
+    "description",
+    "unit",
+    "quantity",
+    "unit_cost",
+    "bdi_rate",
+    "unit_price",
+    "total_price",
+  ]),
+  group: new Set(["item_code", "description"]),
+  subgroup: new Set(["item_code", "description"]),
+  subtotal: new Set(["description", "total_price"]),
+  total: new Set(["description", "total_price"]),
+};
 
 /**
- * Correction D: a record's status reflects only evidence that feeds its own
- * semantic fields -- never a cell whose role does not correspond to any of
- * them. An ambiguous or divergent cell under a recognized role (quantity,
- * unit_price, ...) still contaminates the record, exactly as before; an
- * ambiguous cell under an unresolved auxiliary column ("unknown") does not.
- * A description continuation that could not be uniquely attributed to this
- * row still contaminates, since it directly affects the description field.
+ * A role only counts toward a record's status when the page's own schema
+ * actually resolved a column for it -- kind-membership in
+ * SEMANTIC_ROLES_BY_KIND is necessary but not sufficient. A page whose
+ * schema never resolved unit_cost/bdi_rate at all (a budget with no
+ * cost-breakdown columns) must not treat every service_item on that page as
+ * missing those fields: the field was never structurally present to begin
+ * with, so it is not applicable rather than absent.
+ */
+function applicableSemanticRoles(
+  kind: ReconstructedRecordKind,
+  pageNumber: number,
+  columns: ReadonlyArray<ResolvedColumn>,
+): ReadonlySet<BudgetColumnRole> {
+  const base = SEMANTIC_ROLES_BY_KIND[kind];
+  if (base === undefined) {
+    return new Set();
+  }
+  const resolvedRolesOnPage = new Set(
+    columns
+      .filter((column) => column.pageNumber === pageNumber && column.status === "resolved")
+      .map((column) => column.role),
+  );
+  return new Set([...base].filter((role) => resolvedRolesOnPage.has(role)));
+}
+
+/**
+ * A record's status reflects only cells feeding a role that is both part of
+ * its kind's own semantic contract and actually resolved on its page --
+ * never a cell whose role is "unknown" (an unresolved auxiliary column) and
+ * never a role the kind was never expected to carry. Within that applicable
+ * set, precedence is ambiguous > insufficient_evidence > resolved: an
+ * ambiguous or divergent cell always contaminates first; absent that, a
+ * missing cell under an applicable role means the record cannot honestly be
+ * called "resolved" (evidence was expected and never observed), so it
+ * downgrades to insufficient_evidence instead of resolved. A description
+ * continuation carries its own already-computed status and is folded in at
+ * the same precedence, rather than every non-resolved continuation status
+ * collapsing to "ambiguous".
  */
 function recordRelevantStatus(
   row: ReconstructedLogicalRow,
   continuations: ReadonlyArray<ReconstructedLogicalRow>,
+  kind: ReconstructedRecordKind,
   context: RecordFormationContext,
-): "resolved" | "ambiguous" {
-  const continuationUnresolved = continuations.some((candidate) => candidate.status !== "resolved");
+): "resolved" | "ambiguous" | "insufficient_evidence" {
+  const applicableRoles = applicableSemanticRoles(kind, row.pageNumber, context.columns);
   const rowCellIds = new Set([row, ...continuations].flatMap((candidate) => candidate.cellIds));
   const semanticCells = context.cells.filter(
-    (cell) => rowCellIds.has(cell.cellId) && RECORD_SEMANTIC_ROLES.has(cell.role),
+    (cell) => rowCellIds.has(cell.cellId) && applicableRoles.has(cell.role),
   );
-  const semanticCellsContaminated = semanticCells.some(
+
+  const continuationAmbiguous = continuations.some((candidate) => candidate.status === "ambiguous");
+  const continuationInsufficient = continuations.some(
+    (candidate) => candidate.status === "insufficient_evidence",
+  );
+  const cellsAmbiguousOrDivergent = semanticCells.some(
     (cell) => cell.state === "ambiguous" || cell.state === "divergent",
   );
-  return continuationUnresolved || semanticCellsContaminated ? "ambiguous" : "resolved";
+  const cellsMissing = semanticCells.some((cell) => cell.state === "missing");
+
+  if (continuationAmbiguous || cellsAmbiguousOrDivergent) {
+    return "ambiguous";
+  }
+  if (continuationInsufficient || cellsMissing) {
+    return "insufficient_evidence";
+  }
+  return "resolved";
 }
 
 function pagesHavePositiveContinuity(
@@ -262,7 +316,7 @@ export function classifyRecords(
       status:
         kind === "unclassified"
           ? "insufficient_evidence"
-          : recordRelevantStatus(row, continuations, context),
+          : recordRelevantStatus(row, continuations, kind, context),
       rowIds: [row.rowId, ...continuations.map((candidate) => candidate.rowId)],
       parentRecordId: parent?.recordId ?? null,
       itemCode: code,
