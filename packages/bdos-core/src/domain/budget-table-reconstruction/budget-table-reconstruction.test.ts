@@ -1,6 +1,7 @@
 import { evaluateArithmetic } from "./budget-table-reconstruction-arithmetic";
 import { conserveEvidence } from "./budget-table-reconstruction-conservation";
 import { canonicalChunks, fingerprintCanonical } from "./budget-table-reconstruction-fingerprint";
+import { hasPositiveServiceItemMembership } from "./budget-table-reconstruction-logical-row-formation";
 import { headerPathRoles, headerVocabularyRoles } from "./budget-table-reconstruction-profile";
 import { classifyRecords } from "./budget-table-reconstruction-record-classification";
 import { cellText } from "./budget-table-reconstruction-text";
@@ -1579,7 +1580,15 @@ test("an ambiguous quantity cell still contaminates the service_item's status", 
     { header: "", left: 380, right: 440 },
   ];
   const header = [entry("Descrição", 0), entry("Quantidade", 1), entry("Preço Unitário", 2)];
-  const dataRow = [entry("Serviço", 0), entry("2,0 3,0 4,0", 1, 2)];
+  // "2,00" (not the old multi-number "2,0 3,0 4,0"): the shared span is
+  // realized as two candidate cells, one per role, both carrying this
+  // same fragment text -- both must independently parse as a genuine
+  // economic anchor (quantity + unit_price, two distinct roles, Path C)
+  // for the row to still count as positive budget-row membership evidence
+  // under the post-Concretisa-review rule, while the geometric sharing
+  // itself still leaves both cells "ambiguous", which is what this test
+  // actually exercises (see the assertion below).
+  const dataRow = [entry("Serviço", 0), entry("2,00", 1, 2)];
   const result = reconstructBudgetTable(
     buildSyntheticInput(
       columns,
@@ -1606,7 +1615,11 @@ test("an ambiguous unit_price cell still contaminates the service_item's status"
     { header: "", left: 380, right: 440 },
   ];
   const header = [entry("Descrição", 0), entry("Preço Unitário", 1), entry("Preço Total", 2)];
-  const dataRow = [entry("Serviço", 0), entry("2,0 3,0 4,0", 1, 2)];
+  // See the analogous comment in the quantity variant above: "2,00" lets
+  // both role candidates (unit_price + total_price) independently parse
+  // as economic anchors (Path C), while the shared span still leaves both
+  // cells "ambiguous" -- which is what this test actually exercises.
+  const dataRow = [entry("Serviço", 0), entry("2,00", 1, 2)];
   const result = reconstructBudgetTable(
     buildSyntheticInput(
       columns,
@@ -1631,9 +1644,25 @@ test("an ambiguous item_code cell still contaminates the service_item's status",
     { header: "", left: 0, right: 60 },
     { header: "", left: 60, right: 120 },
     { header: "", left: 140, right: 360 },
+    { header: "", left: 380, right: 440 },
+    { header: "", left: 460, right: 520 },
   ];
-  const header = [entry("Item", 0), entry("Quantidade", 1), entry("Descrição", 2)];
-  const dataRow = [entry("1 2,0 3", 0, 1), entry("Serviço", 2)];
+  // The shared item_code/quantity span stays exactly as before (still
+  // exercises the ambiguous-cell mechanism this test is about), but the
+  // ambiguous span alone is not positive budget-row membership evidence
+  // (the merged text isn't a plausible compact item identity, and there
+  // is no separate unit column) -- two genuinely independent, unambiguous
+  // economic anchors (unit_price + total_price, Path C) are added so the
+  // row still qualifies as service_item under the post-Concretisa-review
+  // rule, while the ambiguous item_code cell still contaminates status.
+  const header = [
+    entry("Item", 0),
+    entry("Quantidade", 1),
+    entry("Descrição", 2),
+    entry("Preço Unitário", 3),
+    entry("Preço Total", 4),
+  ];
+  const dataRow = [entry("1 2,0 3", 0, 1), entry("Serviço", 2), entry("50,00", 3), entry("100,00", 4)];
   const result = reconstructBudgetTable(
     buildSyntheticInput(
       columns,
@@ -2853,4 +2882,274 @@ test("record status invariant (numeric): no resolved record in a mixed synthetic
     ),
     "expected the divergent/ambiguous rows to actually be excluded from resolved",
   );
+});
+
+// ============================================================================
+// Positive budget-row membership (Epic 21 -- Concretisa visual review):
+// narrative/legal text with a digit landing in an economic-role column must
+// not be promoted to service_item. All fixtures below are synthetic and
+// generic -- none reproduce any real document's actual text -- exercising
+// only the *shape* of the false positives observed (a reference number, a
+// hierarchical section number, a narrative time span, a narrative quantity
+// phrase, a paragraph in item_code), never literal keywords from any
+// document. See budget-table-reconstruction-logical-row-formation.ts for
+// the rule itself (isPlausibleItemIdentity / isEconomicAnchor /
+// hasPositiveServiceItemMembership).
+// ============================================================================
+
+test("false positive: a legal/reference number in an economic column is not enough to become service_item", () => {
+  const columns = [
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Quantidade", left: 370, right: 430 },
+  ];
+  const dataRow = [entry("Adequação conforme norma vigente", 0), entry("1234/2020", 1)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  equal(result.records[0]?.kind, "unclassified");
+});
+
+test("false positive: a hierarchical section reference in an economic column is not enough to become service_item", () => {
+  const columns = [
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Preço Unitário", left: 440, right: 510 },
+  ];
+  const dataRow = [entry("Vide item específico do documento de referência", 0), entry("9.3.2.2", 1)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  equal(result.records[0]?.kind, "unclassified");
+});
+
+test("false positive: a narrative time span in the quantity column is not enough to become service_item", () => {
+  const columns = [
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Quantidade", left: 370, right: 430 },
+  ];
+  const dataRow = [entry("Administração local durante toda a obra", 0), entry("prazo de 8 meses", 1)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  equal(result.records[0]?.kind, "unclassified");
+});
+
+test("false positive: a narrative quantity phrase in an economic column is not enough to become service_item", () => {
+  const columns = [
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Preço Total", left: 520, right: 600 },
+  ];
+  const dataRow = [entry("O valor mensal será apurado conforme critério próprio", 0), entry("dividido em 100 unidades", 1)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  equal(result.records[0]?.kind, "unclassified");
+});
+
+test("false positive: a paragraph in the item_code column does not manufacture a group", () => {
+  const columns = [
+    { header: "Item", left: 0, right: 70 },
+    { header: "Descrição", left: 80, right: 300 },
+  ];
+  const dataRow = [
+    entry("Considerando o disposto no documento de referência aplica-se o critério a seguir descrito", 0),
+    entry("Texto narrativo complementar", 1),
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  equal(result.records[0]?.kind, "unclassified");
+});
+
+test("false positive: narrative text spanning multiple physical columns is not service_item by geometry alone", () => {
+  const columns = [
+    { header: "", left: 80, right: 300 },
+    { header: "", left: 320, right: 380 },
+    { header: "", left: 380, right: 440 },
+  ];
+  const header = [entry("Descrição", 0), entry("Quantidade", 1), entry("Preço Unitário", 2)];
+  const dataRow = [entry("Serviço", 0), entry("conforme critério de medição vigente", 1, 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(
+      columns,
+      [{ pageNumber: 1, includeHeader: false, rows: [header, dataRow] }],
+      { physicalCellEvidence: "unavailable" },
+    ),
+  );
+  equal(result.records[0]?.kind, "unclassified");
+});
+
+test("false positive: several invalid numeric-looking cells across distinct economic roles still do not add up to service_item", () => {
+  const columns = [
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Quantidade", left: 370, right: 430 },
+    { header: "Preço Unitário", left: 440, right: 510 },
+  ];
+  const dataRow = [
+    entry("Nos termos do item específico do documento de referência", 0),
+    entry("9.3.2.2", 1),
+    entry("2622/2013", 2),
+  ];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  equal(result.records[0]?.kind, "unclassified");
+});
+
+test("true positive: description + compact item_code + numeric quantity is service_item (Path A)", () => {
+  const columns = [
+    { header: "Item", left: 0, right: 70 },
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Quantidade", left: 370, right: 430 },
+  ];
+  const dataRow = [entry("01.02.003", 0), entry("Escavação manual", 1), entry("12,50", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  equal(result.records[0]?.kind, "service_item");
+});
+
+test("true positive: description + compact item_code + numeric total_price is service_item (Path A)", () => {
+  const columns = [
+    { header: "Item", left: 0, right: 70 },
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Preço Total", left: 520, right: 600 },
+  ];
+  const dataRow = [entry("A-10", 0), entry("Fornecimento e instalação", 1), entry("1.500,00", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  equal(result.records[0]?.kind, "service_item");
+});
+
+test("true positive: description + unit + numeric quantity is service_item even without item_code (Path B)", () => {
+  const columns = [
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Unidade", left: 310, right: 360 },
+    { header: "Quantidade", left: 370, right: 430 },
+  ];
+  const dataRow = [entry("Serviço avulso", 0), entry("m2", 1), entry("45,00", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  equal(result.records[0]?.kind, "service_item");
+});
+
+test("true positive: description + unit + numeric unit_price is service_item even without item_code (Path B)", () => {
+  const columns = [
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Unidade", left: 310, right: 360 },
+    { header: "Preço Unitário", left: 440, right: 510 },
+  ];
+  const dataRow = [entry("Outro serviço avulso", 0), entry("kg", 1), entry("7,80", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  equal(result.records[0]?.kind, "service_item");
+});
+
+test("true positive: description + two distinct numeric economic anchors is service_item without code or unit (Path C)", () => {
+  const columns = [
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Quantidade", left: 370, right: 430 },
+    { header: "Preço Total", left: 520, right: 600 },
+  ];
+  const dataRow = [entry("Serviço avulso genérico", 0), entry("3,00", 1), entry("90,00", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  equal(result.records[0]?.kind, "service_item");
+});
+
+test("true positive: an ambiguous-grammar quantity is still a positive economic anchor, but the record is not falsely resolved", () => {
+  const columns = [
+    { header: "Item", left: 0, right: 70 },
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Quantidade", left: 370, right: 430 },
+  ];
+  const dataRow = [entry("B-02", 0), entry("Serviço com valor numérico ambíguo", 1), entry("1.234", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  equal(result.records[0]?.kind, "service_item");
+  equal(result.records[0]?.quantity?.status, "ambiguous");
+  assert(result.records[0]?.status !== "resolved", "an ambiguous numeric grammar must not be reported as resolved");
+});
+
+test("true positive: a divergent-source-cells conflict between two individually-valid cells does not demote the row from service_item", () => {
+  const row = [...FULL_ITEM, entry("999,00", 7)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(FULL_COLUMNS, [{ pageNumber: 1, rows: [row] }]),
+  );
+  const record = result.records.find(
+    (candidate) => candidate.totalPrice?.grammarId === "divergent-source-cells-v1",
+  );
+  assert(record !== undefined, "expected the divergent total_price record");
+  equal(record?.kind, "service_item");
+});
+
+test("true positive: description + compact code with no economic anchors is still group", () => {
+  const dataRow = [entry("02", 0), entry("Instalações provisórias", 1)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  equal(result.records[0]?.kind, "group");
+});
+
+test("true positive: an isolated description-only row after a service_item is still a continuation", () => {
+  const rows = [SIMPLE_ITEM, [entry("continuação da descrição do serviço", 1)]];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows }]),
+  );
+  const continuation = result.logicalRows.find((row) => row.kind === "description_continuation");
+  assert(continuation !== undefined, "expected a description_continuation row");
+  equal(continuation?.status, "resolved");
+});
+
+test("membership invariant: every service_item logical row in a mixed reconstruction satisfies Path A, B or C", () => {
+  const narrativeColumns = [
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Quantidade", left: 370, right: 430 },
+    { header: "Preço Unitário", left: 440, right: 510 },
+  ];
+  const results = [
+    reconstructBudgetTable(buildSyntheticInput(SIMPLE_COLUMNS, [{ pageNumber: 1, rows: [SIMPLE_ITEM] }])),
+    reconstructBudgetTable(buildSyntheticInput(FULL_COLUMNS, [{ pageNumber: 1, rows: [FULL_ITEM] }])),
+    reconstructBudgetTable(
+      buildSyntheticInput(narrativeColumns, [
+        {
+          pageNumber: 1,
+          rows: [[entry("Adequação conforme norma vigente", 0), entry("1234/2020", 1), entry("9.3.2.2", 2)]],
+        },
+      ]),
+    ),
+    reconstructBudgetTable(
+      buildSyntheticInput(
+        [
+          { header: "Descrição", left: 80, right: 300 },
+          { header: "Quantidade", left: 370, right: 430 },
+          { header: "Preço Total", left: 520, right: 600 },
+        ],
+        [{ pageNumber: 1, rows: [[entry("Serviço avulso genérico", 0), entry("3,00", 1), entry("90,00", 2)]] }],
+      ),
+    ),
+  ];
+
+  let serviceItemCount = 0;
+  for (const result of results) {
+    for (const row of result.logicalRows) {
+      if (row.kind !== "service_item") {
+        continue;
+      }
+      serviceItemCount += 1;
+      assert(row.description !== null, "every service_item must have a description");
+      const rowCells = result.cells.filter(
+        (cell) => row.cellIds.includes(cell.cellId) && cell.state !== "missing",
+      );
+      assert(
+        hasPositiveServiceItemMembership(rowCells, result.fragments, result.textItems),
+        `service_item row ${row.rowId} lacks positive membership evidence (Path A/B/C)`,
+      );
+    }
+  }
+  assert(serviceItemCount >= 2, "expected the mixed reconstruction to actually contain service_item rows to check");
 });

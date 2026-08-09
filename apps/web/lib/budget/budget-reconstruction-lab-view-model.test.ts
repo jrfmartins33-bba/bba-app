@@ -428,6 +428,30 @@ async function main(): Promise<void> {
     assertEqual(reasons[0], "Este registro não possui evidência suficiente para ser considerado resolvido.");
   });
 
+  await runTest("\"por que este status?\" usa mensagem específica de ambiguous quando o campo de origem não é identificável", () => {
+    const viewModel = buildBudgetReconstructionLabViewModel(
+      buildFixtureResult({
+        records: [
+          record({
+            recordId: "r1",
+            status: "ambiguous",
+            quantity: null,
+            unitCost: null,
+            bdiRate: null,
+            unitPrice: null,
+            totalPrice: null,
+          }),
+        ],
+      }),
+    );
+    const reasons = explainRecordStatus(viewModel.records[0]!);
+    assertEqual(reasons.length, 1);
+    assertEqual(
+      reasons[0],
+      "Há conflito ou ambiguidade neste registro, mas o campo de origem não pôde ser identificado com segurança.",
+    );
+  });
+
   await runTest("\"por que este status?\" nunca inventa um motivo para Unidade (sem status estruturado no domínio)", () => {
     const viewModel = buildBudgetReconstructionLabViewModel(
       buildFixtureResult({
