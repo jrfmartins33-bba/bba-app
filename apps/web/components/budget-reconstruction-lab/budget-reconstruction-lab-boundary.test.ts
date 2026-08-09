@@ -100,6 +100,34 @@ async function main(): Promise<void> {
       "o Lab não pode hardcodar nomes de documentos reais -- o nome exibido é sempre o nome do arquivo escolhido pelo usuário",
     );
   });
+
+  await runTest("a rota é protegida por profile.role === \"bba_admin\" (gate local, sem API nova)", () => {
+    const pageSource = readFileSync(PAGE_FILES[0]!, "utf8");
+    assertTrue(
+      /from\s+["']@bba\/lib["']/.test(pageSource) && /useBbaStore/.test(pageSource),
+      "a página deve ler o perfil autenticado do store existente (@bba/lib), sem inventar um novo mecanismo de auth",
+    );
+    assertTrue(
+      /profile\.role\s*===\s*["']bba_admin["']/.test(pageSource),
+      "esperava um teste explícito de profile.role === \"bba_admin\" na página do Lab",
+    );
+    assertTrue(
+      pageSource.includes("Acesso restrito ao Admin BBA"),
+      "usuário autenticado não-admin deve ver o estado \"Acesso restrito ao Admin BBA\"",
+    );
+
+    const guardIndex = pageSource.indexOf("Acesso restrito ao Admin BBA");
+    const fileInputCardIndex = pageSource.indexOf("Carregar resultado do motor");
+    const summaryRenderIndex = pageSource.indexOf("<ReconstructionSummary");
+    assertTrue(
+      guardIndex >= 0 && fileInputCardIndex >= 0 && summaryRenderIndex >= 0,
+      "não foi possível localizar o guard e o conteúdo do Lab na página para comparar a ordem",
+    );
+    assertTrue(
+      guardIndex < fileInputCardIndex && guardIndex < summaryRenderIndex,
+      "o guard de admin deve ser um retorno antecipado antes do conteúdo do Lab, para nunca expor o Lab a um não-admin",
+    );
+  });
 }
 
 async function runTest(name: string, testCase: () => void): Promise<void> {

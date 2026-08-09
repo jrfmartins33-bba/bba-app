@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useBbaStore } from "@bba/lib";
 import { Card, StatusBadge } from "@bba/ui";
 import {
   buildBudgetReconstructionLabViewModel,
@@ -32,6 +33,9 @@ import { ReconstructionDiagnostics } from "@/components/budget-reconstruction-la
 // final do produto) -- não substitui nem altera /orcamentos.
 
 export default function BudgetReconstructionLabPage() {
+  const profile = useBbaStore((state) => state.profile);
+  const isAdmin = profile.role === "bba_admin";
+
   const [fileName, setFileName] = useState<string | null>(null);
   const [viewModel, setViewModel] = useState<BudgetReconstructionLabViewModel | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +101,24 @@ export default function BudgetReconstructionLabPage() {
     viewModel !== null && selectedRecordId !== null
       ? viewModel.records.find((record) => record.recordId === selectedRecordId) ?? null
       : null;
+
+  // profile.role defaults to "client" (both the signed-out and demo store
+  // states) until a real bba_admin session hydrates, so this check fails
+  // closed by default -- the Lab body below never renders on the same pass
+  // that could show it to a non-admin. No new API route: this is the same
+  // client-only gate shape the rest of this Studio-less admin area uses
+  // (BbaDashboardShell only authenticates the session, it doesn't gate by
+  // role), so route-level enforcement stays local to this page.
+  if (!isAdmin) {
+    return (
+      <section className="page-header">
+        <div>
+          <h1>Laboratório de Reconstrução Orçamentária</h1>
+          <p>Acesso restrito ao Admin BBA.</p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <>
