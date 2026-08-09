@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./decision-brief": "./src/decision-brief/index.ts",
+    "./domain/budget-table-reconstruction.types": "./src/domain/budget-table-reconstruction/budget-table-reconstruction.types.ts",
     "./services/geospatial-product-integration": "./src/services/geospatial-product-integration/index.ts",
     "./services/bba-project-import": "./src/services/bba-project-import/index.ts",
     "./services/execution-management": "./src/services/execution-management/index.ts",
