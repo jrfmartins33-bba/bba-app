@@ -11,6 +11,8 @@ import type {
 } from "@bba/bdos-core/domain/budget-table-reconstruction.types";
 import {
   buildBudgetReconstructionLabViewModel,
+  explainRecordStatus,
+  RECORD_STATUS_EXPLANATIONS,
   validateBudgetReconstructionLabInput,
 } from "./budget-reconstruction-lab-view-model";
 
@@ -360,6 +362,94 @@ async function main(): Promise<void> {
     );
     assertEqual(viewModel.summary.serviceItemCount, 0);
     assertEqual(viewModel.summary.totalRecordCount, 4);
+  });
+
+  await runTest("1. legenda/admin helper para Resolvido", () => {
+    assertEqual(RECORD_STATUS_EXPLANATIONS.resolved, "Campos aplicáveis identificados com segurança.");
+  });
+
+  await runTest("2. legenda/admin helper para Precisa de revisão", () => {
+    assertEqual(RECORD_STATUS_EXPLANATIONS.ambiguous, "Há conflito ou ambiguidade em um ou mais campos.");
+  });
+
+  await runTest("3. legenda/admin helper para Evidência insuficiente", () => {
+    assertEqual(
+      RECORD_STATUS_EXPLANATIONS.insufficient_evidence,
+      "Faltam dados ou evidência suficiente para concluir este registro.",
+    );
+  });
+
+  await runTest("registro resolvido: \"por que este status?\" não polui a interface", () => {
+    const viewModel = buildBudgetReconstructionLabViewModel(
+      buildFixtureResult({ records: [record({ recordId: "r1", status: "resolved" })] }),
+    );
+    const reasons = explainRecordStatus(viewModel.records[0]!);
+    assertEqual(reasons.length, 1);
+    assertEqual(reasons[0], "Campos aplicáveis identificados com segurança.");
+  });
+
+  await runTest("\"por que este status?\" aponta o campo numérico com conflito, usando status já existente", () => {
+    const viewModel = buildBudgetReconstructionLabViewModel(
+      buildFixtureResult({
+        records: [
+          record({
+            recordId: "r1",
+            status: "ambiguous",
+            totalPrice: numericField("R$ 156,00 | 624,00", { grammarId: "divergent-source-cells-v1" }),
+          }),
+        ],
+      }),
+    );
+    const reasons = explainRecordStatus(viewModel.records[0]!);
+    assertTrue(
+      reasons.some((reason) => reason.startsWith("Total →") && reason.includes("conflitantes")),
+      `esperava um motivo mencionando "Total" e conflito, recebi: ${JSON.stringify(reasons)}`,
+    );
+  });
+
+  await runTest("\"por que este status?\" cai no genérico quando nenhum campo numérico explica o motivo", () => {
+    const viewModel = buildBudgetReconstructionLabViewModel(
+      buildFixtureResult({
+        records: [
+          record({
+            recordId: "r1",
+            status: "insufficient_evidence",
+            quantity: null,
+            unitCost: null,
+            bdiRate: null,
+            unitPrice: null,
+            totalPrice: null,
+          }),
+        ],
+      }),
+    );
+    const reasons = explainRecordStatus(viewModel.records[0]!);
+    assertEqual(reasons.length, 1);
+    assertEqual(reasons[0], "Este registro não possui evidência suficiente para ser considerado resolvido.");
+  });
+
+  await runTest("\"por que este status?\" nunca inventa um motivo para Unidade (sem status estruturado no domínio)", () => {
+    const viewModel = buildBudgetReconstructionLabViewModel(
+      buildFixtureResult({
+        records: [
+          record({
+            recordId: "r1",
+            status: "ambiguous",
+            unit: "um texto de unidade incomumente longo e estranho",
+            quantity: null,
+            unitCost: null,
+            bdiRate: null,
+            unitPrice: null,
+            totalPrice: null,
+          }),
+        ],
+      }),
+    );
+    const reasons = explainRecordStatus(viewModel.records[0]!);
+    assertTrue(
+      !reasons.some((reason) => reason.toLowerCase().startsWith("unidade")),
+      "Unidade não deve aparecer nos motivos -- o domínio não anexa ParsedNumericEvidence/status a este campo",
+    );
   });
 }
 

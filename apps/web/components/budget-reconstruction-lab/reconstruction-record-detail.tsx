@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button, Card, StatusBadge } from "@bba/ui";
 import type { BudgetReconstructionLabRecord, LabNumericField, LabRecordStatusTone } from "@/lib/budget/budget-reconstruction-lab-view-model";
-import { NUMERIC_FIELD_STATUS_LABELS } from "@/lib/budget/budget-reconstruction-lab-view-model";
+import { explainRecordStatus, NUMERIC_FIELD_STATUS_LABELS } from "@/lib/budget/budget-reconstruction-lab-view-model";
 
 const EMPTY_DISPLAY = "—";
 
@@ -93,6 +93,22 @@ export function ReconstructionRecordDetail({ record, onClose }: ReconstructionRe
       <div style={{ marginBottom: "16px" }}>
         <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Descrição</span>
         <p style={{ margin: "2px 0" }}>{record.description ?? EMPTY_DISPLAY}</p>
+      </div>
+
+      <div
+        style={{
+          marginBottom: "16px",
+          padding: "10px 12px",
+          borderRadius: "8px",
+          background: "var(--app-card-hover)",
+        }}
+      >
+        <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Por que este status?</span>
+        {explainRecordStatus(record).map((reason) => (
+          <p key={reason} style={{ margin: "4px 0 0" }}>
+            {reason}
+          </p>
+        ))}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0 24px" }}>

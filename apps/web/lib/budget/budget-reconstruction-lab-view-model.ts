@@ -130,6 +130,26 @@ export const NUMERIC_FIELD_STATUS_LABELS: Readonly<Record<ParsedNumericEvidence[
   failed: "Falha",
 };
 
+/** Human-first explanation of what each status means, for the Admin-only
+ * legend above the reconstructed worksheet (§7 of the Lab UX brief). Not
+ * shown to the client -- this vocabulary only exists inside
+ * budget-reconstruction-lab/. */
+export const RECORD_STATUS_EXPLANATIONS: Readonly<Record<SemanticResolutionStatus, string>> = {
+  resolved: "Campos aplicáveis identificados com segurança.",
+  ambiguous: "Há conflito ou ambiguidade em um ou mais campos.",
+  insufficient_evidence: "Faltam dados ou evidência suficiente para concluir este registro.",
+  not_applicable: "Este registro não representa um item avaliável (ex.: grupo, subtotal).",
+  failed: "O motor não conseguiu processar este registro.",
+};
+
+/** Order and subset shown in the legend -- the three statuses that
+ * actually appear as badges on service_item rows in the worksheet. */
+export const RECORD_STATUS_LEGEND_ORDER: readonly ["resolved", "ambiguous", "insufficient_evidence"] = [
+  "resolved",
+  "ambiguous",
+  "insufficient_evidence",
+];
+
 const RECORD_STATUS_TONE: Readonly<Record<SemanticResolutionStatus, LabRecordStatusTone>> = {
   resolved: "green",
   ambiguous: "amber",
@@ -205,6 +225,71 @@ function projectRecord(
       (field) => field?.hasConflict === true,
     ),
   };
+}
+
+const NUMERIC_FIELD_ENTRY_LABELS: ReadonlyArray<
+  readonly [string, (record: BudgetReconstructionLabRecord) => LabNumericField | null]
+> = [
+  ["Quantidade", (record) => record.quantity],
+  ["Custo unitário", (record) => record.unitCost],
+  ["BDI", (record) => record.bdiRate],
+  ["Preço unitário", (record) => record.unitPrice],
+  ["Total", (record) => record.totalPrice],
+];
+
+const GENERIC_UNRESOLVED_EXPLANATION = "Este registro não possui evidência suficiente para ser considerado resolvido.";
+
+/** Explains why a single numeric field is not resolved, using only its
+ * own already-computed status/grammarId -- never re-derived from
+ * rawText/ExactRational. Returns null when the field itself is not the
+ * source of the record's non-resolved status (resolved or not_applicable
+ * fields are not "reasons"). */
+function explainNumericField(field: LabNumericField): string | null {
+  if (field.hasConflict) {
+    return "Valores conflitantes no documento para este campo.";
+  }
+  switch (field.status) {
+    case "invalid":
+      return "Valor não pôde ser interpretado.";
+    case "failed":
+      return "Falha ao processar a evidência deste campo.";
+    case "ambiguous":
+      return "Há ambiguidade não resolvida neste campo.";
+    case "resolved":
+    case "not_applicable":
+    default:
+      return null;
+  }
+}
+
+/**
+ * Human-first "por que este status?" explanation for the record detail
+ * panel (§8 of the Lab UX brief). Built entirely from fields the motor
+ * already computed (LabNumericField.status/hasConflict) -- never
+ * reinterprets rawText, never reruns classification. `unit` is
+ * deliberately excluded: the domain model carries it as a plain
+ * `string | null` with no attached ParsedNumericEvidence/status, so there
+ * is no structural signal to explain it from without inferring a problem
+ * from the text's shape, which the brief explicitly forbids.
+ */
+export function explainRecordStatus(record: BudgetReconstructionLabRecord): ReadonlyArray<string> {
+  if (record.status === "resolved") {
+    return [RECORD_STATUS_EXPLANATIONS.resolved];
+  }
+
+  const reasons: string[] = [];
+  for (const [label, getField] of NUMERIC_FIELD_ENTRY_LABELS) {
+    const field = getField(record);
+    if (field === null) {
+      continue;
+    }
+    const reason = explainNumericField(field);
+    if (reason !== null) {
+      reasons.push(`${label} → ${reason}`);
+    }
+  }
+
+  return reasons.length > 0 ? reasons : [GENERIC_UNRESOLVED_EXPLANATION];
 }
 
 function pageSelectionDisplay(pageSelection: BudgetTableReconstructionResult["pageSelection"]): string {

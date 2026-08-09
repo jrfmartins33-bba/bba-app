@@ -3927,6 +3927,56 @@ button {
   font-weight: 700;
 }
 
+/* Laboratório de Reconstrução Orçamentária (Admin-only, /admin/
+   budget-reconstruction-lab) -- classes exclusivas desta ferramenta
+   interna, nunca aplicadas pela planilha do cliente em /orcamentos
+   (que usa somente .budget-worksheet-table* acima, sem estas). */
+
+/* Cabeçalho fixo durante o scroll vertical da tabela. `.bba-card` (o Card
+   que envolve esta tabela) usa `backdrop-filter`, que cria um novo
+   containing block e quebra "sticky no viewport" -- o header ficaria
+   "grudado" na posição do Card, não da tela, e rolaria junto com a
+   página. `position: sticky` também não gruda de forma confiável em
+   <th>/<thead> (verificado nesta sprint: funciona num <div> comum no
+   mesmo container, mas não em elementos de tabela, mesmo com
+   border-collapse: separate; forçar `display: table` no <thead>
+   "resolve" a sticky mas desalinha as colunas do cabeçalho em relação
+   ao corpo -- pior que o problema original). Por isso
+   ReconstructionTable aplica um translateY via JS no <thead> real
+   (nunca um clone) igual ao scroll do container -- ver o comentário lá.
+   Estas regras só cuidam da aparência: fundo sólido (não
+   var(--app-card), que é translúcido) para que o texto das linhas não
+   apareça por baixo, e um stacking context com z-index acima do corpo
+   da tabela (o próprio `transform` já promove o <thead> a um contexto
+   de empilhamento -- CSS Transforms §Stacking Context -- então o
+   z-index abaixo passa a valer, sem custo, a partir do primeiro
+   scroll). */
+.budget-reconstruction-lab-table thead {
+  z-index: 2;
+}
+
+.budget-reconstruction-lab-table thead th {
+  background: var(--app-sidebar);
+}
+
+/* Unidade e campos econômicos: o motor às vezes produz rawText
+   incomumente longo (evidência anômala) ou uma junção de valores
+   conflitantes (grammarId divergent-source-cells-v1, ex. "R$ 156,00 |
+   624,00"). Sem isto o texto quebrava por caractere e inflava a altura
+   da linha inteira. Tratamento puramente apresentacional: uma linha,
+   reticências, valor completo continua em `title` (tooltip nativo) e no
+   painel de detalhe -- nenhuma informação é descartada. */
+.budget-reconstruction-lab-table__unit,
+.budget-reconstruction-lab-table__numeric {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.budget-reconstruction-lab-table__unit {
+  text-align: center;
+}
+
 /* Etapas do orçamento -- grade de 5 colunas no desktop (nunca lista
    vertical de linhas largas: era essa a origem do grande espaço vazio
    à direita). Altura alvo ~150–220px incluindo o título do Card. */

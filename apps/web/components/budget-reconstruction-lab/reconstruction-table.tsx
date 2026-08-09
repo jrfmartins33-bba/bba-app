@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { StatusBadge } from "@bba/ui";
 import type { BudgetReconstructionLabRecord, LabRecordStatusTone } from "@/lib/budget/budget-reconstruction-lab-view-model";
 
@@ -14,14 +15,6 @@ function numericDisplay(field: BudgetReconstructionLabRecord["quantity"]): strin
   return field?.rawText ?? EMPTY_DISPLAY;
 }
 
-// budget-worksheet-table__numeric sets white-space: nowrap, correct for a
-// normal short currency value but not for a divergent-source-cells-v1
-// rawText (the motor's own evidence can join two conflicting source texts
-// into one string, e.g. "R$ 156,00 | 624,00" or "24,18% | BDI :", which is
-// unbounded in length) -- so the class is used only for right-alignment,
-// with wrapping restored via inline style.
-const numericCellStyle = { whiteSpace: "normal", overflowWrap: "anywhere" } as const;
-
 interface ReconstructionTableProps {
   readonly records: ReadonlyArray<BudgetReconstructionLabRecord>;
   readonly onSelectRecord: (recordId: string) => void;
@@ -35,14 +28,56 @@ interface ReconstructionTableProps {
 // sem <colgroup> explícito as colunas ficam com largura igual, o que
 // espreme o badge de status contra a coluna seguinte quando a descrição é
 // longa; por isso a largura de cada coluna é declarada aqui.
+//
+// .budget-reconstruction-lab-table (classe adicional, só do Lab -- ver
+// bba-globals.css) dá a Unidade/aos campos econômicos uma apresentação de
+// uma linha só com reticências: o texto completo nunca é perdido (continua
+// em `title` e no painel de detalhe), é só a linha da tabela que para de
+// esticar quando a evidência bruta do motor vem incomumente longa ou
+// conflitante.
+//
+// Cabeçalho fixo: `position: sticky` não gruda de forma confiável em
+// <th>/<thead> dentro de <table> em nenhum motor de renderização testado
+// (verificado nesta sprint -- funciona num <div> comum no mesmo
+// container, mas não em elementos de tabela, mesmo com
+// border-collapse: separate; forçar `display: table` no <thead> "resolve"
+// a sticky mas desalinha as colunas do cabeçalho em relação ao corpo, o
+// que é pior). Por isso o cabeçalho usa um reforço mínimo em JS: o mesmo
+// <thead> (nunca um clone) recebe um `translateY` igual ao scroll do
+// container, cancelando visualmente o scroll -- zero duplicação de
+// marcação, alinhamento de coluna sempre correto porque é o thead real.
 export function ReconstructionTable({ records, onSelectRecord }: ReconstructionTableProps) {
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const theadRef = useRef<HTMLTableSectionElement | null>(null);
+
+  useEffect(() => {
+    const scrollEl = scrollContainerRef.current;
+    const theadEl = theadRef.current;
+    if (!scrollEl || !theadEl) return;
+
+    let frame = 0;
+    const syncHeaderPosition = () => {
+      if (frame !== 0) return;
+      frame = requestAnimationFrame(() => {
+        theadEl.style.transform = `translateY(${scrollEl.scrollTop}px)`;
+        frame = 0;
+      });
+    };
+
+    scrollEl.addEventListener("scroll", syncHeaderPosition, { passive: true });
+    return () => {
+      scrollEl.removeEventListener("scroll", syncHeaderPosition);
+      if (frame !== 0) cancelAnimationFrame(frame);
+    };
+  }, [records]);
+
   if (records.length === 0) {
     return <p style={{ color: "var(--text-muted)" }}>Nenhum registro corresponde aos filtros atuais.</p>;
   }
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table className="budget-worksheet-table">
+    <div ref={scrollContainerRef} style={{ overflow: "auto", maxHeight: "70vh" }}>
+      <table className="budget-worksheet-table budget-reconstruction-lab-table">
         <colgroup>
           <col style={{ width: "13%" }} />
           <col style={{ width: "9%" }} />
@@ -55,7 +90,7 @@ export function ReconstructionTable({ records, onSelectRecord }: ReconstructionT
           <col style={{ width: "9%" }} />
           <col style={{ width: "9%" }} />
         </colgroup>
-        <thead>
+        <thead ref={theadRef}>
           <tr>
             <th>Status</th>
             <th>Tipo</th>
@@ -90,22 +125,46 @@ export function ReconstructionTable({ records, onSelectRecord }: ReconstructionT
               <td data-label="Descrição" className="budget-worksheet-table__description">
                 {record.description ?? EMPTY_DISPLAY}
               </td>
-              <td data-label="Unidade" style={{ overflowWrap: "anywhere" }}>
+              <td
+                data-label="Unidade"
+                className="budget-reconstruction-lab-table__unit"
+                title={record.unit ?? undefined}
+              >
                 {record.unit ?? EMPTY_DISPLAY}
               </td>
-              <td data-label="Quantidade" className="budget-worksheet-table__numeric" style={numericCellStyle}>
+              <td
+                data-label="Quantidade"
+                className="budget-worksheet-table__numeric budget-reconstruction-lab-table__numeric"
+                title={record.quantity?.rawText}
+              >
                 {numericDisplay(record.quantity)}
               </td>
-              <td data-label="Custo unitário" className="budget-worksheet-table__numeric" style={numericCellStyle}>
+              <td
+                data-label="Custo unitário"
+                className="budget-worksheet-table__numeric budget-reconstruction-lab-table__numeric"
+                title={record.unitCost?.rawText}
+              >
                 {numericDisplay(record.unitCost)}
               </td>
-              <td data-label="BDI" className="budget-worksheet-table__numeric" style={numericCellStyle}>
+              <td
+                data-label="BDI"
+                className="budget-worksheet-table__numeric budget-reconstruction-lab-table__numeric"
+                title={record.bdiRate?.rawText}
+              >
                 {numericDisplay(record.bdiRate)}
               </td>
-              <td data-label="Preço unitário" className="budget-worksheet-table__numeric" style={numericCellStyle}>
+              <td
+                data-label="Preço unitário"
+                className="budget-worksheet-table__numeric budget-reconstruction-lab-table__numeric"
+                title={record.unitPrice?.rawText}
+              >
                 {numericDisplay(record.unitPrice)}
               </td>
-              <td data-label="Total" className="budget-worksheet-table__numeric" style={numericCellStyle}>
+              <td
+                data-label="Total"
+                className="budget-worksheet-table__numeric budget-reconstruction-lab-table__numeric"
+                title={record.totalPrice?.rawText}
+              >
                 {numericDisplay(record.totalPrice)}
               </td>
             </tr>
