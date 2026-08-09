@@ -1,10 +1,10 @@
 "use client";
 
-import { LockKeyhole, LogIn, Mail } from "lucide-react";
+import { LockKeyhole, LogIn } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { useBbaStore } from "@bba/lib";
+import { isSupabaseConfigured, useBbaStore } from "@bba/lib";
 import { Button } from "@bba/ui";
 
 const readErrorMessage = (caught: unknown) => {
@@ -24,7 +24,7 @@ const getLoginErrorMessage = (caught: unknown) => {
   const message = readErrorMessage(caught);
 
   if (message.toLowerCase().includes("invalid login credentials")) {
-    return "Email ou senha invalidos. Contas demo usam a senha Teste123!.";
+    return "Email ou senha invalidos.";
   }
 
   return message || "Nao foi possivel entrar.";
@@ -33,10 +33,19 @@ const getLoginErrorMessage = (caught: unknown) => {
 export default function LoginPage() {
   const router = useRouter();
   const signIn = useBbaStore((state) => state.signIn);
-  const [email, setEmail] = useState("carlos@carlosmendes.com.br");
-  const [password, setPassword] = useState("Teste123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="auth-form">
+        <h2>Entrar</h2>
+        <p className="form-error">Ambiente do BBA App nao configurado para autenticacao.</p>
+      </div>
+    );
+  }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -45,7 +54,8 @@ export default function LoginPage() {
 
     try {
       await signIn(email, password);
-      router.push("/hoje");
+      const role = useBbaStore.getState().profile.role;
+      router.push(role === "bba_admin" ? "/admin" : "/hoje");
     } catch (caught) {
       setBusy(false);
       setError(getLoginErrorMessage(caught));
@@ -91,11 +101,6 @@ export default function LoginPage() {
 
       <p className="auth-form__footer">
         Ainda nao tem cadastro? <Link href="/cadastro">Criar acesso</Link>
-      </p>
-
-      <p className="auth-form__footer">
-        <Mail size={14} /> O MVP abre com dados de demonstracao ate o Supabase
-        ser configurado.
       </p>
     </form>
   );

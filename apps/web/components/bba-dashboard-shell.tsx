@@ -46,6 +46,29 @@ export function BbaDashboardShell({ children }: { children: ReactNode }) {
     };
   }, [hydrateSession, router, signOut]);
 
+  // Without Supabase configured, the store falls back to its local
+  // demoState (Maria Oliveira, role "client", no real session) so the
+  // hydrateSession effect above never even runs. That fallback exists for
+  // isolated package/unit work, not for a deployed environment: a
+  // misconfigured deployment must show a clear configuration error, never
+  // let a visitor land on a "logged in" dashboard with no real login.
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="bba-layout">
+        <main className="bba-main">
+          <div className="bba-main__content bba-main__content--standard">
+            <section className="page-header">
+              <div>
+                <h1>BBA Platform</h1>
+                <p>Ambiente do BBA App nao configurado para autenticacao.</p>
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="bba-layout">
       <Sidebar
