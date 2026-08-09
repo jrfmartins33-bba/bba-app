@@ -17,9 +17,11 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 const componentsDir = currentDir;
 const libDir = join(currentDir, "..", "..", "lib", "budget");
 const pageDir = join(currentDir, "..", "..", "app", "(dashboard)", "admin", "budget-reconstruction-lab");
+const cssFile = join(currentDir, "..", "..", "app", "bba-globals.css");
 
 const COMPONENT_FILES = [
   "reconstruction-summary.tsx",
+  "reconstruction-status-legend.tsx",
   "reconstruction-filters.tsx",
   "reconstruction-table.tsx",
   "reconstruction-record-detail.tsx",
@@ -32,6 +34,9 @@ const PAGE_FILES = ["page.tsx"].map((fileName) => join(pageDir, fileName));
 const ALL_SOURCE = [...COMPONENT_FILES, ...LIB_FILES, ...PAGE_FILES]
   .map((path) => readFileSync(path, "utf8"))
   .join("\n");
+
+const TABLE_SOURCE = readFileSync(join(componentsDir, "reconstruction-table.tsx"), "utf8");
+const CSS_SOURCE = readFileSync(cssFile, "utf8");
 
 async function main(): Promise<void> {
   await runTest("não importa reconstructBudgetTable nem classifyRecords (nunca executa o motor)", () => {
@@ -127,6 +132,81 @@ async function main(): Promise<void> {
       guardIndex < fileInputCardIndex && guardIndex < summaryRenderIndex,
       "o guard de admin deve ser um retorno antecipado antes do conteúdo do Lab, para nunca expor o Lab a um não-admin",
     );
+  });
+
+  await runTest("Unidade curta permanece visível integralmente (sem truncamento em JS)", () => {
+    assertTrue(
+      TABLE_SOURCE.includes("{record.unit ?? EMPTY_DISPLAY}"),
+      "a célula de Unidade deve renderizar record.unit diretamente -- nenhum corte de string em JS",
+    );
+    assertTrue(
+      !/record\.unit[^,;]*\.(slice|substring|substr)\(/.test(TABLE_SOURCE),
+      "nenhum truncamento manual de record.unit deve existir -- a apresentação de uma linha é responsabilidade só do CSS",
+    );
+  });
+
+  await runTest("Unidade longa não é despejada sem controle na tabela (classe de reticências aplicada)", () => {
+    assertTrue(
+      /className="budget-reconstruction-lab-table__unit"/.test(TABLE_SOURCE),
+      "a célula de Unidade deve usar a classe budget-reconstruction-lab-table__unit",
+    );
+    assertTrue(
+      /\.budget-reconstruction-lab-table__unit[\s\S]{0,400}?text-overflow:\s*ellipsis/.test(CSS_SOURCE) ||
+        /\.budget-reconstruction-lab-table__unit,\s*\n\.budget-reconstruction-lab-table__numeric\s*{[\s\S]{0,200}?text-overflow:\s*ellipsis/.test(
+          CSS_SOURCE,
+        ),
+      "a classe de Unidade do Lab deve aplicar text-overflow: ellipsis (uma linha, sem despejar texto bruto)",
+    );
+  });
+
+  await runTest("conteúdo completo da Unidade continua disponível (title na tabela + detalhe)", () => {
+    assertTrue(
+      /data-label="Unidade"[\s\S]{0,200}title=\{record\.unit/.test(TABLE_SOURCE),
+      "a célula de Unidade na tabela deve expor o texto completo via atributo title",
+    );
+    const detailSource = readFileSync(join(componentsDir, "reconstruction-record-detail.tsx"), "utf8");
+    assertTrue(
+      detailSource.includes("{record.unit ?? EMPTY_DISPLAY}"),
+      "o painel de detalhe deve continuar mostrando o valor completo de Unidade",
+    );
+  });
+
+  await runTest("nenhum conflito de Unidade é inferido pelo comprimento do texto", () => {
+    assertTrue(
+      !/record\.unit[^,;\n]*\.length/.test(ALL_SOURCE) && !/unit[^,;\n]*\.length\s*[<>]/i.test(TABLE_SOURCE),
+      "a apresentação de Unidade não deve decidir nada a partir do comprimento do texto -- o domínio não carrega status estruturado para este campo",
+    );
+  });
+
+  await runTest("cabeçalho da planilha reconstruída acompanha o scroll (translateY via JS no <thead> real)", () => {
+    assertTrue(
+      /theadRef/.test(TABLE_SOURCE) && /scrollContainerRef/.test(TABLE_SOURCE),
+      "esperava refs para o <thead> e para o container de scroll em reconstruction-table.tsx",
+    );
+    assertTrue(
+      /addEventListener\(\s*["']scroll["']/.test(TABLE_SOURCE),
+      "esperava um listener de scroll no container da tabela",
+    );
+    assertTrue(
+      /theadEl\.style\.transform\s*=\s*`translateY\(\$\{scrollEl\.scrollTop\}px\)`/.test(TABLE_SOURCE),
+      "esperava que o próprio <thead> (nunca um clone) recebesse translateY igual ao scrollTop do container",
+    );
+    assertTrue(
+      !/<thead[^>]*>[\s\S]*?<thead/.test(TABLE_SOURCE.replace(/\/\/.*$/gm, "")),
+      "não deve existir um segundo <thead> clonado -- um único cabeçalho, sempre alinhado às colunas do corpo",
+    );
+  });
+
+  await runTest("cabeçalho da planilha tem fundo opaco e z-index (evita linhas aparecendo por baixo)", () => {
+    const match = CSS_SOURCE.match(/\.budget-reconstruction-lab-table thead th\s*{([\s\S]{0,200}?)}/);
+    assertTrue(match !== null, "não foi possível localizar o bloco de regra do cabeçalho");
+    const block = match![1]!;
+    assertTrue(/background:\s*var\(--app-/.test(block), "o cabeçalho deve declarar um fundo opaco (não a superfície translúcida do Card)");
+    assertTrue(!/--app-card\)/.test(block), "o fundo do cabeçalho não deve usar --app-card (translúcido) -- linhas rolando por baixo apareceriam");
+
+    const theadMatch = CSS_SOURCE.match(/\.budget-reconstruction-lab-table thead\s*{([\s\S]{0,100}?)}/);
+    assertTrue(theadMatch !== null, "não foi possível localizar o bloco de regra do <thead>");
+    assertTrue(/z-index:\s*\d/.test(theadMatch![1]!), "o <thead> deve declarar z-index para pintar acima do corpo da tabela ao ganhar o transform");
   });
 }
 

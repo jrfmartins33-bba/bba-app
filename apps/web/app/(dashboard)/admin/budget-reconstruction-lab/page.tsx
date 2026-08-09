@@ -14,6 +14,7 @@ import {
 } from "@/components/budget-reconstruction-lab/reconstruction-filters";
 import type { ReconstructionFiltersState } from "@/components/budget-reconstruction-lab/reconstruction-filters";
 import { ReconstructionSummary } from "@/components/budget-reconstruction-lab/reconstruction-summary";
+import { ReconstructionStatusLegend } from "@/components/budget-reconstruction-lab/reconstruction-status-legend";
 import { ReconstructionTable } from "@/components/budget-reconstruction-lab/reconstruction-table";
 import { ReconstructionRecordDetail } from "@/components/budget-reconstruction-lab/reconstruction-record-detail";
 import { ReconstructionDiagnostics } from "@/components/budget-reconstruction-lab/reconstruction-diagnostics";
@@ -172,6 +173,7 @@ export default function BudgetReconstructionLabPage() {
 
           <section className="section-grid">
             <Card className="span-12" title={`Planilha reconstruída (${filteredRecords.length})`}>
+              <ReconstructionStatusLegend />
               <ReconstructionFilters
                 filters={filters}
                 onChange={setFilters}
