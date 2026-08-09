@@ -19,3 +19,4 @@ coverage
 *.xlsx
 *.xls
 *.xlsm
+.env*
