@@ -118,6 +118,12 @@ const NAV_STUDIOS = [
     icon: FlaskConical,
     description: 'Diagnóstico, auditoria e calibração do Advisor',
   },
+  {
+    href: '/admin/budget-reconstruction-lab',
+    label: 'Laboratório de Reconstrução Orçamentária',
+    icon: FlaskConical,
+    description: 'Visualizar e auditar resultados do Motor Determinístico',
+  },
 ]
 
 const NAV_SECONDARY = [
