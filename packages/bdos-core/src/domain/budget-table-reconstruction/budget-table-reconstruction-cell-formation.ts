@@ -57,56 +57,114 @@ function textItemBounds(
   return locator?.bounds == null ? null : [locator.bounds[0], locator.bounds[2]];
 }
 
-function columnForTextItem(
-  graph: EvidenceGraph,
-  textItemEvidenceId: string,
-  columns: ReadonlyArray<ResolvedColumn>,
-  textItemById: ReadonlyMap<string, EvidenceGraph["textItems"][number]>,
-): ResolvedColumn | null {
-  const bounds = textItemBounds(graph, textItemEvidenceId, textItemById);
-  if (bounds === null) return null;
-  const matches = columns.filter((column) => bounds[0] < column.rightPoints && bounds[1] > column.leftPoints);
-  return matches.length === 1 ? matches[0]! : null;
+interface GeometricPartition {
+  readonly fragmentIdsByColumnId: ReadonlyMap<string, ReadonlyArray<string>>;
+  /** Columns every one of whose fragments came from a text item that
+   * positively overlapped that column and no other: the placement is
+   * exclusive, not a shared reading. */
+  readonly exclusiveColumnIds: ReadonlySet<string>;
 }
 
 /**
  * When a segment merges several text items that upstream structure
- * reconstruction did not separate, but each individual text item's own
- * geometry falls unambiguously inside exactly one of the matching columns,
- * use that real per-text-item geometry directly instead of the lexical
- * token-boundary heuristic below. Returns null when any text item straddles
- * two columns -- in that case the lexical fallback still applies.
+ * reconstruction did not separate, each text item still carries its own
+ * geometry, and that geometry is the best evidence available for which
+ * column its text belongs to. Every text item's fragment goes to exactly the
+ * columns it positively overlaps: one column when the item sits inside a
+ * single band (an exclusive placement), several when the item genuinely
+ * straddles them (a shared reading, reported as such and never silently
+ * split).
  *
- * A matching column that receives no text item is simply absent on this
- * row and is reported as such, rather than voiding the whole partition.
- * Requiring every matching column to be fed was the difference between
- * reading a merged economic row correctly and giving up on it: one column
- * legitimately empty on that row (a rate that does not apply, an optional
- * source reference) forced every value in the segment to be duplicated into
- * every sibling column as shared, undecomposable evidence -- which is how a
- * single total_price column came to hold three sibling leaves' values at
- * once. Precise per-text-item geometry is available here and is strictly
- * better evidence than the lexical guess it replaces.
+ * A matching column that receives no text item is simply absent on this row
+ * and is reported as such, rather than voiding the whole partition -- one
+ * column legitimately empty on that row (a rate that does not apply, an
+ * optional source reference) used to force every value in the segment to be
+ * duplicated into every sibling column, which is how a single total_price
+ * column came to hold three sibling leaves' values at once.
+ *
+ * Nor does a single straddling text item void it any more. It used to, and
+ * the lexical token fallback that then took over would happily split a
+ * merged run of three sibling amounts at whatever token boundary happened to
+ * type-check, or hand the whole run -- label and amount together -- to one
+ * column. Real per-text-item geometry is strictly better evidence than that
+ * guess: it can say "this amount is in the COM BDI band and nothing else is"
+ * even when its neighbour on the same segment straddles two bands.
+ *
+ * Returns null only when the segment carries a single text item (there is
+ * nothing to partition) or when some text item has no geometry at all or
+ * overlaps none of the matching columns -- in those cases the lexical
+ * fallback still applies, and no fragment is ever dropped.
  */
 function geometricTextItemPartition(
   graph: EvidenceGraph,
   segment: EvidenceSegment,
   matchingColumns: ReadonlyArray<ResolvedColumn>,
   textItemById: ReadonlyMap<string, EvidenceGraph["textItems"][number]>,
-): ReadonlyMap<string, ReadonlyArray<string>> | null {
+): GeometricPartition | null {
   if (segment.textItemEvidenceIds.length < 2) return null;
-  const assignment = new Map<string, string[]>();
+
+  const exclusivePlacements: Array<{ readonly columnId: string; readonly fragmentId: string }> = [];
+  const sharedPlacements: Array<{
+    readonly fragmentId: string;
+    readonly columnIds: ReadonlyArray<string>;
+  }> = [];
   for (let index = 0; index < segment.textItemEvidenceIds.length; index += 1) {
     const textItemId = segment.textItemEvidenceIds[index]!;
     const fragmentId = segment.fragmentIds[index];
     if (fragmentId === undefined) return null;
-    const column = columnForTextItem(graph, textItemId, matchingColumns, textItemById);
-    if (column === null) return null;
-    const existing = assignment.get(column.columnId) ?? [];
-    existing.push(fragmentId);
-    assignment.set(column.columnId, existing);
+    const bounds = textItemBounds(graph, textItemId, textItemById);
+    if (bounds === null) return null;
+    const overlapping = matchingColumns.filter(
+      (column) => bounds[0] < column.rightPoints && bounds[1] > column.leftPoints,
+    );
+    if (overlapping.length === 0) return null;
+    if (overlapping.length === 1) {
+      exclusivePlacements.push({ columnId: overlapping[0]!.columnId, fragmentId });
+    } else {
+      sharedPlacements.push({ fragmentId, columnIds: overlapping.map((column) => column.columnId) });
+    }
   }
-  return assignment;
+
+  /**
+   * A column that some text item claims EXCLUSIVELY has already been told,
+   * by the document's own geometry, what belongs to it. A neighbouring text
+   * item that merely bleeds across the band boundary -- a right-aligned
+   * amount whose box clips the column to its left by a hair, a caption
+   * spanning two bands -- is weaker evidence about that column than the
+   * exclusive placement is, so it does not join it. It is not discarded
+   * either: it stays with the columns that have no exclusive claim of their
+   * own, and if every column it touches has one, it stays with all of them
+   * rather than being lost.
+   */
+  const columnIdsWithExclusivePlacement = new Set(
+    exclusivePlacements.map((placement) => placement.columnId),
+  );
+  const fragmentIdsByColumnId = new Map<string, string[]>();
+  const sharedColumnIds = new Set<string>();
+  const append = (columnId: string, fragmentId: string): void => {
+    const existing = fragmentIdsByColumnId.get(columnId) ?? [];
+    existing.push(fragmentId);
+    fragmentIdsByColumnId.set(columnId, existing);
+  };
+  for (const placement of exclusivePlacements) append(placement.columnId, placement.fragmentId);
+  for (const placement of sharedPlacements) {
+    const withoutExclusiveClaim = placement.columnIds.filter(
+      (columnId) => !columnIdsWithExclusivePlacement.has(columnId),
+    );
+    const retainers =
+      withoutExclusiveClaim.length > 0 ? withoutExclusiveClaim : placement.columnIds;
+    for (const columnId of retainers) {
+      append(columnId, placement.fragmentId);
+      sharedColumnIds.add(columnId);
+    }
+  }
+
+  return {
+    fragmentIdsByColumnId,
+    exclusiveColumnIds: new Set(
+      [...fragmentIdsByColumnId.keys()].filter((columnId) => !sharedColumnIds.has(columnId)),
+    ),
+  };
 }
 
 function tokenCandidates(
@@ -313,14 +371,27 @@ export function formCells(
         matchingColumns,
         textItemById,
       );
+      /**
+       * A column the page's own header never named makes no semantic claim
+       * on this text (see the auxiliary/semantic distinction in column
+       * resolution), so it must not be able to force a lexical split of a
+       * run that belongs to a documented column. Letting it compete turned a
+       * two-word grouping caption straddling an auxiliary band and the
+       * description band into one word in each -- a "unique" partition that
+       * simply cut a real description in half. Auxiliary columns still
+       * receive the segment's evidence, as shared and undecomposed.
+       */
+      const partitionColumns = matchingColumns.filter((column) => column.role !== "unknown");
       const tokens = geometricPartition === null ? tokenCandidates(segment, textItemById) : [];
       const partitions =
-        geometricPartition === null ? enumerateUniquePartitions(tokens, matchingColumns) : [];
+        geometricPartition === null ? enumerateUniquePartitions(tokens, partitionColumns) : [];
       const uniquePartition = partitions.length === 1 ? partitions[0]! : null;
 
-      for (let columnIndex = 0; columnIndex < matchingColumns.length; columnIndex += 1) {
-        const column = matchingColumns[columnIndex]!;
-        if (geometricPartition !== null && !geometricPartition.has(column.columnId)) {
+      for (const column of matchingColumns) {
+        if (
+          geometricPartition !== null &&
+          !geometricPartition.fragmentIdsByColumnId.has(column.columnId)
+        ) {
           // This column's band contains none of the segment's text items:
           // the row is genuinely empty here. Leaving it unoccupied lets the
           // absent-cell pass below record it as missing, instead of copying
@@ -335,12 +406,16 @@ export function formCells(
             ? "multiple_valid_token_role_decompositions"
             : "shared_evidence_not_uniquely_decomposable";
 
+        const partitionIndex = partitionColumns.indexOf(column);
         if (geometricPartition !== null) {
-          fragmentIds = geometricPartition.get(column.columnId) ?? [];
-          state = column.status === "resolved" ? "present" : "ambiguous";
-          reasonCode = "unique_textitem_geometry_partition";
-        } else if (uniquePartition !== null) {
-          const part = uniquePartition[columnIndex]!;
+          fragmentIds = geometricPartition.fragmentIdsByColumnId.get(column.columnId) ?? [];
+          const exclusive = geometricPartition.exclusiveColumnIds.has(column.columnId);
+          state = exclusive && column.status === "resolved" ? "present" : "ambiguous";
+          reasonCode = exclusive
+            ? "unique_textitem_geometry_partition"
+            : "shared_textitem_geometry_overlap";
+        } else if (uniquePartition !== null && partitionIndex >= 0) {
+          const part = uniquePartition[partitionIndex]!;
           const created = tokens.slice(part.startIndex, part.endIndex).map(createTokenFragment);
           for (const fragment of created) derivedFragments.set(fragment.fragmentId, fragment);
           fragmentIds = created.map((fragment) => fragment.fragmentId);

@@ -149,6 +149,22 @@ function buildFixtureResult(overrides: Partial<BudgetTableReconstructionResult> 
       exactFraction: null,
       status: "complete",
     },
+    schemaCompleteness: {
+      status: "complete",
+      pagesWithDemonstratedSchema: 1,
+      pagesWithCompleteSchema: 1,
+      recordsMissingExpectedRoleCount: 0,
+      resolvedRecordsMissingExpectedRoleCount: 0,
+      pages: [
+        {
+          pageNumber: 1,
+          schemaFamilyId: "header-family:synthetic",
+          expectedRoles: ["description"],
+          resolvedRoles: ["description"],
+          unresolvedExpectedRoles: [],
+        },
+      ],
+    },
     canonicalFingerprint: "d".repeat(64),
     ...overrides,
   };
@@ -284,6 +300,73 @@ async function main(): Promise<void> {
     assertEqual(viewModel.structuralIssues.length, 1);
     assertEqual(viewModel.structuralIssues[0]?.code, "synthetic-issue");
     assertEqual(viewModel.summary.structuralIssueCount, 1);
+  });
+
+  // D7 — completude não é a ausência de violações internas. Estes três casos
+  // são exatamente os estados que a Lab Admin precisa distinguir.
+  await runTest("13a. structuralIssues vazio + esquema incompleto não vira mensagem verde", () => {
+    const viewModel = buildBudgetReconstructionLabViewModel(
+      buildFixtureResult({
+        structuralIssues: [],
+        schemaCompleteness: {
+          status: "incomplete",
+          pagesWithDemonstratedSchema: 2,
+          pagesWithCompleteSchema: 1,
+          recordsMissingExpectedRoleCount: 3,
+          resolvedRecordsMissingExpectedRoleCount: 0,
+          pages: [
+            {
+              pageNumber: 1,
+              schemaFamilyId: "header-family:synthetic",
+              expectedRoles: ["description", "total_price"],
+              resolvedRoles: ["description", "total_price"],
+              unresolvedExpectedRoles: [],
+            },
+            {
+              pageNumber: 2,
+              schemaFamilyId: "header-family:synthetic",
+              expectedRoles: ["description", "total_price"],
+              resolvedRoles: ["description"],
+              unresolvedExpectedRoles: ["total_price"],
+            },
+          ],
+        },
+      }),
+    );
+    assertEqual(viewModel.summary.structuralIssueCount, 0);
+    assertEqual(viewModel.summary.schemaCompletenessStatus, "incomplete");
+    assertEqual(viewModel.summary.schemaCompletenessTone, "red");
+    assertTrue(
+      viewModel.summary.schemaCompletenessLabel.includes("incompleta"),
+      "a Lab precisa dizer que a reconstrução está incompleta",
+    );
+    assertEqual(viewModel.summary.pagesWithUnresolvedExpectedRoles.length, 1);
+    assertEqual(viewModel.summary.pagesWithUnresolvedExpectedRoles[0]?.pageNumber, 2);
+  });
+
+  await runTest("13b. structuralIssues vazio + esquema completo pode afirmar completude", () => {
+    const viewModel = buildBudgetReconstructionLabViewModel(buildFixtureResult({}));
+    assertEqual(viewModel.summary.structuralIssueCount, 0);
+    assertEqual(viewModel.summary.schemaCompletenessStatus, "complete");
+    assertEqual(viewModel.summary.schemaCompletenessTone, "green");
+    assertEqual(viewModel.summary.pagesWithUnresolvedExpectedRoles.length, 0);
+  });
+
+  await runTest("13c. estrutura tabular não comprovada é sinalizada, não celebrada", () => {
+    const viewModel = buildBudgetReconstructionLabViewModel(
+      buildFixtureResult({
+        schemaCompleteness: {
+          status: "not_demonstrated",
+          pagesWithDemonstratedSchema: 0,
+          pagesWithCompleteSchema: 0,
+          recordsMissingExpectedRoleCount: 0,
+          resolvedRecordsMissingExpectedRoleCount: 0,
+          pages: [],
+        },
+      }),
+    );
+    assertEqual(viewModel.summary.schemaCompletenessStatus, "not_demonstrated");
+    assertEqual(viewModel.summary.schemaCompletenessTone, "amber");
   });
 
   await runTest("14. arithmetic outcomes são somente agrupados/contados", () => {

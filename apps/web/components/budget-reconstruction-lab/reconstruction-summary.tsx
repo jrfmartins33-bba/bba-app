@@ -6,6 +6,13 @@ interface ReconstructionSummaryProps {
   readonly fileName: string;
 }
 
+const TONE_COLORS = {
+  green: "var(--status-green, #22c55e)",
+  amber: "var(--status-amber, #f59e0b)",
+  red: "var(--status-red, #ef4444)",
+  neutral: "var(--text-muted)",
+} as const;
+
 function StatTile({ label, value }: { readonly label: string; readonly value: string | number }) {
   return (
     <div>
@@ -40,9 +47,34 @@ export function ReconstructionSummary({ summary, fileName }: ReconstructionSumma
         </p>
         <p style={{ fontSize: "13px", color: summary.structuralIssueCount === 0 ? "var(--status-green, #22c55e)" : "var(--status-red, #ef4444)" }}>
           {summary.structuralIssueCount === 0
-            ? "Nenhum problema estrutural detectado"
-            : `${summary.structuralIssueCount} problema(s) estrutural(is) — veja o Diagnóstico do motor`}
+            ? "Nenhuma violação de invariante interna"
+            : `${summary.structuralIssueCount} violação(ões) de invariante interna — veja o Diagnóstico do motor`}
         </p>
+      </div>
+      {/*
+        Completude ≠ ausência de violações internas. A ausência de violações
+        diz apenas que o motor não se contradisse; ela nunca pode ser exibida
+        como sinônimo de "a planilha que entrou saiu". O veredito abaixo vem
+        pronto do Motor (result.schemaCompleteness) e é apenas traduzido.
+      */}
+      <div style={{ marginTop: "12px" }}>
+        <p style={{ fontSize: "13px", color: TONE_COLORS[summary.schemaCompletenessTone] }}>
+          {summary.schemaCompletenessLabel}
+        </p>
+        {summary.pagesWithUnresolvedExpectedRoles.length > 0 ? (
+          <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
+            Colunas esperadas não recuperadas:{" "}
+            {summary.pagesWithUnresolvedExpectedRoles
+              .map((page) => `pág. ${page.pageNumber} (${page.unresolvedExpectedRoles.join(", ")})`)
+              .join(" · ")}
+          </p>
+        ) : null}
+        {summary.resolvedRecordsMissingExpectedRoleCount > 0 ? (
+          <p style={{ fontSize: "12px", color: "var(--status-red, #ef4444)", marginTop: "4px" }}>
+            {summary.resolvedRecordsMissingExpectedRoleCount} registro(s) marcados como resolvidos
+            estão sem um campo esperado pelo esquema da planilha.
+          </p>
+        ) : null}
       </div>
       {summary.unclassifiedCount > 0 ? (
         <p style={{ fontSize: "13px", color: "var(--text-muted)", marginTop: "8px" }}>

@@ -15,8 +15,26 @@ export const BUDGET_TABLE_RECONSTRUCTION_ENGINE_NAME =
 // byte-for-byte unchanged -- every role above is produced by the existing
 // headerPathRoles rules once the ancestry reaching them is correct -- so
 // profileVersion stays at 3.
+//
+// v6: repeated table schema and honest expectation. Pages whose selected
+// header block repeats the same structural signature now form a proven
+// SCHEMA FAMILY: parent/child ancestry demonstrated on one page of the family
+// is shared with the others (semantics travel, geometry never does), so a
+// centered parent title no longer loses its outer children on whichever page
+// happens to carry short values. A collision between two widened header bands
+// is resolved locally -- the auxiliary side of the collision falls back to its
+// own label box instead of the entire header line reverting. A record's
+// applicable roles come from the family's EXPECTED role set rather than from
+// the roles a page happened to resolve, so a resolution failure can never
+// silently redefine a documented field as inapplicable. A description
+// continuation contributes only the role it continues. A grouping row that
+// positively documents a consolidated total is held to it. The result now
+// carries a schemaCompleteness diagnostic, distinct from structuralIssues.
+//
+// The header vocabulary and the header-path role contract in this file remain
+// byte-for-byte unchanged, so profileVersion stays at 3.
 export const BUDGET_TABLE_RECONSTRUCTION_ENGINE_VERSION =
-  "budget-table-reconstruction-engine-v5" as const;
+  "budget-table-reconstruction-engine-v6" as const;
 
 export const BUDGET_TABLE_RECONSTRUCTION_PROFILE = Object.freeze({
   profileId: "generic-budget-table-reconstruction-profile",

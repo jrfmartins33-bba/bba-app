@@ -1,8 +1,10 @@
 import { fingerprintCanonical } from "./budget-table-reconstruction-fingerprint";
+import { isEconomicAnchor } from "./budget-table-reconstruction-logical-row-formation";
 import { parseNumericEvidence } from "./budget-table-reconstruction-numeric-evidence";
 import { cellText } from "./budget-table-reconstruction-text";
 import type {
   BudgetColumnRole,
+  BudgetTableSchemaExpectation,
   EvidenceTextItem,
   ParsedNumericEvidence,
   ReconstructedBudgetRecord,
@@ -19,6 +21,11 @@ interface RecordFormationContext {
   readonly textItems: ReadonlyArray<EvidenceTextItem>;
   readonly columns: ReadonlyArray<ResolvedColumn>;
   readonly rows: ReadonlyArray<ReconstructedLogicalRow>;
+  /** What each page's proven table schema was expected to carry. Absent when
+   * the caller has no schema evidence to offer -- in which case expectation
+   * can only be what the page itself resolved, which is exactly the pre-schema
+   * behaviour. */
+  readonly schemaExpectations?: ReadonlyArray<BudgetTableSchemaExpectation>;
 }
 
 /** The semantic fields each record kind's own structural contract actually
@@ -46,29 +53,100 @@ const SEMANTIC_ROLES_BY_KIND: Partial<Record<ReconstructedRecordKind, ReadonlySe
 };
 
 /**
- * A role only counts toward a record's status when the page's own schema
- * actually resolved a column for it -- kind-membership in
- * SEMANTIC_ROLES_BY_KIND is necessary but not sufficient. A page whose
- * schema never resolved unit_cost/bdi_rate at all (a budget with no
- * cost-breakdown columns) must not treat every service_item on that page as
- * missing those fields: the field was never structurally present to begin
- * with, so it is not applicable rather than absent.
+ * A role counts toward a record's status when it is part of its kind's own
+ * contract AND the table schema this page belongs to was proven to carry it.
+ *
+ * The distinction matters enormously and used to be got wrong. Previously
+ * this intersected the kind contract with the roles RESOLVED ON THAT PAGE,
+ * which quietly conflated two opposite situations:
+ *
+ *   - the document genuinely has no such column (a budget with no separate
+ *     BDI rate) -- the field is not applicable, and a record must not be
+ *     penalised for it; and
+ *   - the document has the column and this page failed to resolve it -- the
+ *     field is EXPECTED AND UNRESOLVED, which is structural insufficiency.
+ *
+ * Under the old rule the second case silently became the first: the engine's
+ * own failure removed the role from the applicable set, nothing was reported
+ * missing, and a record carrying none of its economic evidence could be
+ * published as "resolved". Expectation therefore comes from the proven
+ * header schema family (see BudgetTableSchemaExpectation), never from this
+ * page's success at reading it. Where no schema was ever demonstrated for a
+ * page, expectation and resolution coincide and behaviour is unchanged.
  */
 function applicableSemanticRoles(
   kind: ReconstructedRecordKind,
   pageNumber: number,
-  columns: ReadonlyArray<ResolvedColumn>,
+  context: RecordFormationContext,
 ): ReadonlySet<BudgetColumnRole> {
   const base = SEMANTIC_ROLES_BY_KIND[kind];
   if (base === undefined) {
     return new Set();
   }
-  const resolvedRolesOnPage = new Set(
-    columns
-      .filter((column) => column.pageNumber === pageNumber && column.status === "resolved")
-      .map((column) => column.role),
+  const expectation = context.schemaExpectations?.find(
+    (candidate) => candidate.pageNumber === pageNumber,
   );
-  return new Set([...base].filter((role) => resolvedRolesOnPage.has(role)));
+  const expectedRoles = new Set(
+    expectation === undefined
+      ? context.columns
+          .filter((column) => column.pageNumber === pageNumber && column.status === "resolved")
+          .map((column) => column.role)
+      : expectation.expectedRoles,
+  );
+  return new Set([...base].filter((role) => expectedRoles.has(role)));
+}
+
+/**
+ * A grouping row is normally only identity: a group header names a section,
+ * it does not price it. But when the grouping row itself carries a
+ * consolidated amount in the page's own total_price column, that amount is
+ * part of what the document says about THAT record, and losing it would be
+ * losing budget. Applicability is therefore extended by positive evidence on
+ * the record's own row -- never by a universal rule that every group must
+ * show a total, which would invent an obligation the source never made.
+ */
+function positivelyApplicableAggregateRoles(
+  row: ReconstructedLogicalRow,
+  kind: ReconstructedRecordKind,
+  context: RecordFormationContext,
+): ReadonlySet<BudgetColumnRole> {
+  if (kind !== "group" && kind !== "subgroup") {
+    return new Set();
+  }
+  /**
+   * Positive evidence is that the row's own total_price cell CARRIES A
+   * DOCUMENTED AMOUNT -- numeric content, not merely a currency marker on an
+   * otherwise blank cell. Keying this on whether the amount successfully
+   * parsed would be exactly backwards: a cell holding two sibling amounts the
+   * engine failed to separate would drop out of the applicable set and the
+   * record would be published as resolved with no total at all. A cell that
+   * genuinely shows nothing but "R$" is a blank in the source and stays
+   * honestly missing rather than becoming an obligation the document never
+   * made.
+   */
+  const hasDocumentedTotal = cellsForRole(row, "total_price", context).some((cell) =>
+    /\d/.test(cellText(cell, context.fragments, context.textItems) ?? ""),
+  );
+  return hasDocumentedTotal ? new Set<BudgetColumnRole>(["total_price"]) : new Set();
+}
+
+/** The single semantic role a description continuation continues. A
+ * continuation carries more description text and nothing else; it is not a
+ * second economic line. */
+const CONTINUED_ROLE: BudgetColumnRole = "description";
+
+/** The roles a record's status must answer for: its kind's contract
+ * intersected with the roles its table schema was proven to have, plus any
+ * role the record's own row positively documents beyond that contract. */
+function recordApplicableRoles(
+  row: ReconstructedLogicalRow,
+  kind: ReconstructedRecordKind,
+  context: RecordFormationContext,
+): ReadonlySet<BudgetColumnRole> {
+  return new Set([
+    ...applicableSemanticRoles(kind, row.pageNumber, context),
+    ...positivelyApplicableAggregateRoles(row, kind, context),
+  ]);
 }
 
 /** The five roles that carry a ParsedNumericEvidence field on a record,
@@ -138,10 +216,23 @@ function recordRelevantStatus(
   numericFields: ReadonlyMap<BudgetColumnRole, ParsedNumericEvidence | null>,
   context: RecordFormationContext,
 ): "resolved" | "ambiguous" | "insufficient_evidence" {
-  const applicableRoles = applicableSemanticRoles(kind, row.pageNumber, context.columns);
-  const rowCellIds = new Set([row, ...continuations].flatMap((candidate) => candidate.cellIds));
+  const applicableRoles = recordApplicableRoles(row, kind, context);
+  const baseCellIds = new Set(row.cellIds);
+  const continuationCellIds = new Set(continuations.flatMap((candidate) => candidate.cellIds));
+  /**
+   * A description continuation continues exactly one thing -- the
+   * description -- and opens no new obligation of its own. Its cells for
+   * every other role are structurally absent because a continuation line has
+   * no economic content to show, not because the item failed to state it:
+   * the base row already answered for those roles. Folding the continuation's
+   * whole cell set into the record's status (as this used to) meant every
+   * multi-line description made its own complete item look incomplete.
+   */
   const semanticCells = context.cells.filter(
-    (cell) => rowCellIds.has(cell.cellId) && applicableRoles.has(cell.role),
+    (cell) =>
+      applicableRoles.has(cell.role) &&
+      (baseCellIds.has(cell.cellId) ||
+        (continuationCellIds.has(cell.cellId) && cell.role === CONTINUED_ROLE)),
   );
 
   const continuationAmbiguous = continuations.some((candidate) => candidate.status === "ambiguous");
@@ -168,12 +259,34 @@ function recordRelevantStatus(
   return "resolved";
 }
 
+function schemaFamilyIdFor(
+  pageNumber: number,
+  context: RecordFormationContext,
+): string | null {
+  return (
+    context.schemaExpectations?.find((candidate) => candidate.pageNumber === pageNumber)
+      ?.schemaFamilyId ?? null
+  );
+}
+
 function pagesHavePositiveContinuity(
   originPage: number,
   targetPage: number,
   context: RecordFormationContext,
 ): boolean {
   if (targetPage !== originPage + 1) return false;
+  /**
+   * A repeated header is not a new table. Two consecutive pages that were
+   * proven to reconstruct the SAME header schema family are the same table
+   * continued, so a group opened on the first page still owns the items that
+   * follow on the second. Treating the reprinted header as a boundary broke
+   * every hierarchy at every page break: sub-groups of a section became
+   * top-level groups of their own the moment the section spilled over.
+   */
+  const originFamilyId = schemaFamilyIdFor(originPage, context);
+  if (originFamilyId !== null && originFamilyId === schemaFamilyIdFor(targetPage, context)) {
+    return true;
+  }
   if (context.rows.some((row) => row.pageNumber === targetPage && row.kind === "header")) {
     return false;
   }
@@ -330,6 +443,41 @@ function parentForRecord(
   return headers[0];
 }
 
+/**
+ * The roles a finished record was EXPECTED to carry: its kind's own contract
+ * intersected with the roles its page's proven table schema has. Published so
+ * completeness can be audited against the schema rather than against whatever
+ * the engine happened to manage on the day.
+ */
+export function expectedRolesForRecord(
+  record: ReconstructedBudgetRecord,
+  schemaExpectations: ReadonlyArray<BudgetTableSchemaExpectation>,
+): ReadonlyArray<BudgetColumnRole> {
+  const base = SEMANTIC_ROLES_BY_KIND[record.kind];
+  if (base === undefined) return [];
+  const expectation = schemaExpectations.find(
+    (candidate) => candidate.pageNumber === record.pageNumber,
+  );
+  if (expectation === undefined) return [];
+  return [...base].filter((role) => expectation.expectedRoles.includes(role));
+}
+
+/** The roles a finished record actually carries a usable value for. */
+export function reconstructedRolesForRecord(
+  record: ReconstructedBudgetRecord,
+): ReadonlySet<BudgetColumnRole> {
+  const roles = new Set<BudgetColumnRole>();
+  if (record.itemCode !== null) roles.add("item_code");
+  if (record.description !== null) roles.add("description");
+  if (record.unit !== null) roles.add("unit");
+  if (record.quantity?.status === "resolved") roles.add("quantity");
+  if (record.unitCost?.status === "resolved") roles.add("unit_cost");
+  if (record.bdiRate?.status === "resolved") roles.add("bdi_rate");
+  if (record.unitPrice?.status === "resolved") roles.add("unit_price");
+  if (record.totalPrice?.status === "resolved") roles.add("total_price");
+  return roles;
+}
+
 export function classifyRecords(
   rows: ReadonlyArray<ReconstructedLogicalRow>,
   context: RecordFormationContext,
@@ -342,10 +490,23 @@ export function classifyRecords(
   for (const [documentOrder, row] of recordRows.entries()) {
     const code = textForRole(row, "item_code", context);
     const kind = recordKindForRow(row, code, records, context);
+    /** Continuations whose attribution to THIS row was positively resolved:
+     * only these contribute their text to the record's description. */
     const continuations = rows.filter(
       (candidate) =>
         candidate.kind === "description_continuation" &&
         candidate.descriptionSourceRowIds.includes(row.rowId),
+    );
+    /** Every continuation whose own evidence bears on this record: those
+     * attributed to it, plus those that merely NAME it as a possible
+     * receiver. When a continuation could belong to two rows, neither row may
+     * claim its text -- but neither may pretend the ambiguity does not exist
+     * either, so it still contaminates both records' status. */
+    const bearingContinuations = rows.filter(
+      (candidate) =>
+        candidate.kind === "description_continuation" &&
+        (candidate.descriptionSourceRowIds.includes(row.rowId) ||
+          candidate.continuationCandidateRowIds.includes(row.rowId)),
     );
     const description = [row.description, ...continuations.map((candidate) => candidate.description)]
       .filter((value): value is string => value !== null)
@@ -382,7 +543,7 @@ export function classifyRecords(
       status:
         kind === "unclassified"
           ? "insufficient_evidence"
-          : recordRelevantStatus(row, continuations, kind, numericFields, context),
+          : recordRelevantStatus(row, bearingContinuations, kind, numericFields, context),
       rowIds: [row.rowId, ...continuations.map((candidate) => candidate.rowId)],
       parentRecordId: parent?.recordId ?? null,
       itemCode: code,
