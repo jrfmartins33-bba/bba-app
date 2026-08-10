@@ -237,7 +237,10 @@ const NUMERIC_FIELD_ENTRY_LABELS: ReadonlyArray<
   ["Total", (record) => record.totalPrice],
 ];
 
-const GENERIC_UNRESOLVED_EXPLANATION = "Este registro não possui evidência suficiente para ser considerado resolvido.";
+const GENERIC_INSUFFICIENT_EVIDENCE_EXPLANATION =
+  "Este registro não possui evidência suficiente para ser considerado resolvido.";
+const GENERIC_AMBIGUOUS_EXPLANATION =
+  "Há conflito ou ambiguidade neste registro, mas o campo de origem não pôde ser identificado com segurança.";
 
 /** Explains why a single numeric field is not resolved, using only its
  * own already-computed status/grammarId -- never re-derived from
@@ -289,7 +292,10 @@ export function explainRecordStatus(record: BudgetReconstructionLabRecord): Read
     }
   }
 
-  return reasons.length > 0 ? reasons : [GENERIC_UNRESOLVED_EXPLANATION];
+  if (reasons.length > 0) {
+    return reasons;
+  }
+  return [record.status === "ambiguous" ? GENERIC_AMBIGUOUS_EXPLANATION : GENERIC_INSUFFICIENT_EVIDENCE_EXPLANATION];
 }
 
 function pageSelectionDisplay(pageSelection: BudgetTableReconstructionResult["pageSelection"]): string {

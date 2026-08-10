@@ -1,7 +1,16 @@
 export const BUDGET_TABLE_RECONSTRUCTION_ENGINE_NAME =
   "budget-table-reconstruction-engine" as const;
+// v4: budget-table-reconstruction-logical-row-formation.ts now requires
+// positive budget-row membership evidence (item identity + economic
+// anchor, structural unit + economic anchor, or >=2 distinct economic
+// anchors) before classifying a row as service_item -- previously
+// "description + any digit in an economic-role cell" was enough, which
+// let narrative/legal text (norm references, hierarchical section
+// numbers, prose mentioning a time span or quantity) be misclassified.
+// The header vocabulary and column-role profile themselves are
+// unchanged, so profileVersion does not move.
 export const BUDGET_TABLE_RECONSTRUCTION_ENGINE_VERSION =
-  "budget-table-reconstruction-engine-v3" as const;
+  "budget-table-reconstruction-engine-v4" as const;
 
 export const BUDGET_TABLE_RECONSTRUCTION_PROFILE = Object.freeze({
   profileId: "generic-budget-table-reconstruction-profile",
