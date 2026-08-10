@@ -1,16 +1,22 @@
 export const BUDGET_TABLE_RECONSTRUCTION_ENGINE_NAME =
   "budget-table-reconstruction-engine" as const;
-// v4: budget-table-reconstruction-logical-row-formation.ts now requires
-// positive budget-row membership evidence (item identity + economic
-// anchor, structural unit + economic anchor, or >=2 distinct economic
-// anchors) before classifying a row as service_item -- previously
-// "description + any digit in an economic-role cell" was enough, which
-// let narrative/legal text (norm references, hierarchical section
-// numbers, prose mentioning a time span or quantity) be misclassified.
-// The header vocabulary and column-role profile themselves are
-// unchanged, so profileVersion does not move.
+// v5: hierarchical header reconstruction. A header block is now the
+// maximal contiguous run of lines that each make a positive header
+// statement (no body line is absorbed into it, so no data text can become
+// a HeaderAtom); a leaf's band is the data column it governs rather than
+// the width of its own label; parent/child ancestry is proven by observed
+// containment, so sibling qualifier leaves ("... SEM BDI | BDI | COM BDI")
+// stay physically separate instead of collapsing into whichever sibling
+// resolved a role; a proven header line can no longer become a business
+// record; and total/subtotal now require a compact aggregate label plus an
+// interpretable amount in the page's own total_price column.
+//
+// The header vocabulary and the header-path role contract in this file are
+// byte-for-byte unchanged -- every role above is produced by the existing
+// headerPathRoles rules once the ancestry reaching them is correct -- so
+// profileVersion stays at 3.
 export const BUDGET_TABLE_RECONSTRUCTION_ENGINE_VERSION =
-  "budget-table-reconstruction-engine-v4" as const;
+  "budget-table-reconstruction-engine-v5" as const;
 
 export const BUDGET_TABLE_RECONSTRUCTION_PROFILE = Object.freeze({
   profileId: "generic-budget-table-reconstruction-profile",

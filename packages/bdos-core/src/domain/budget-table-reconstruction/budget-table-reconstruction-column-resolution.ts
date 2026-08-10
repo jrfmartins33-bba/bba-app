@@ -46,11 +46,24 @@ interface HeaderPath {
   readonly atomIds: ReadonlyArray<string>;
   readonly atomLocatorIds: ReadonlyArray<string>;
   readonly atomLineIds: ReadonlyArray<string>;
+  /** The leaf's semantic band: the horizontal extent of the data column this
+   * leaf governs, never merely the width of its own label. */
   readonly leftPoints: number;
   readonly rightPoints: number;
+  /** The leaf label's own observed text box, kept separately so band
+   * widening can always be audited against the raw evidence it started
+   * from. */
+  readonly labelLeftPoints: number;
+  readonly labelRightPoints: number;
+  readonly bandWidened: boolean;
   readonly leafText: string;
   readonly parentTexts: ReadonlyArray<string>;
   readonly candidateRoles: ReadonlyArray<BudgetColumnRole>;
+}
+
+interface HorizontalRange {
+  readonly leftPoints: number;
+  readonly rightPoints: number;
 }
 
 interface RawColumnBand {
@@ -306,7 +319,7 @@ function headerBlockCandidates(
   if (current.length > 0) runs.push(current);
 
   return runs
-    .filter((run) => run.some((line) => lineHasVocabularyHit(graph, line)))
+    .flatMap((run) => headerSignatureSubRuns(graph, run))
     .map((run) => {
       const paths = buildHeaderPathsForLines(graph, pageNumber, run);
       const roleSet = new Set(
@@ -314,6 +327,43 @@ function headerBlockCandidates(
       );
       return { lines: run, paths, roleSet };
     });
+}
+
+/**
+ * "No economic literal on the line" is necessary to be inside a header block
+ * but nowhere near sufficient: a service description carries no currency or
+ * percentage of its own, a bare auxiliary reference code carries no decimal
+ * separator, and a one-word metadata caption carries nothing at all.
+ * Every one of those sits immediately above or below a real multi-line
+ * header and was therefore being absorbed into the same run, which is how
+ * body text became header evidence: its text items turned into HeaderAtoms,
+ * widened the block's apparent vocabulary, and (worse) inserted a spurious
+ * generation between a parent label and its real qualifier row.
+ *
+ * A line only belongs to a header block when it makes a positive header
+ * statement of its own -- at least one of its segments carries a header
+ * vocabulary term. Runs are therefore split into their maximal contiguous
+ * sub-runs of such lines. This is set membership over the profile
+ * vocabulary, not a score, a position, or a text blacklist: a data line is
+ * excluded because it says nothing about the schema, never because of what
+ * it happens to say.
+ */
+function headerSignatureSubRuns(
+  graph: EvidenceGraph,
+  run: ReadonlyArray<EvidenceLine>,
+): ReadonlyArray<ReadonlyArray<EvidenceLine>> {
+  const subRuns: EvidenceLine[][] = [];
+  let current: EvidenceLine[] = [];
+  for (const line of run) {
+    if (lineHasVocabularyHit(graph, line)) {
+      current.push(line);
+      continue;
+    }
+    if (current.length > 0) subRuns.push(current);
+    current = [];
+  }
+  if (current.length > 0) subRuns.push(current);
+  return subRuns;
 }
 
 function selectBudgetHeaderBlock(
@@ -363,27 +413,166 @@ function atomsPositivelyOverlap(left: HeaderAtom, right: HeaderAtom): boolean {
 }
 
 /**
+ * The horizontal intervals of every EvidenceTextItem that belongs to the
+ * page's BODY: a line that is not part of the header block and that follows
+ * it in document order (§ document order, never a fixed coordinate and never
+ * a fraction of the page). Body text is used here purely as GEOMETRIC
+ * evidence of where the document's columns physically are. It never becomes
+ * a HeaderAtom, never joins a HeaderPath, and never contributes a single
+ * vocabulary term -- header semantics stay sealed inside the header block.
+ */
+function bodyTextIntervals(
+  graph: EvidenceGraph,
+  pageNumber: number,
+  block: ReadonlyArray<EvidenceLine>,
+  textItemById: ReadonlyMap<string, EvidenceGraph["textItems"][number]>,
+): ReadonlyArray<HorizontalRange> {
+  if (block.length === 0) return [];
+  const blockLineIds = new Set(block.map((line) => line.lineId));
+  const lastHeaderOrder = block.reduce(
+    (highest, line) => Math.max(highest, lineVerticalOrder(graph, line)),
+    Number.NEGATIVE_INFINITY,
+  );
+
+  const intervals: HorizontalRange[] = [];
+  for (const line of graph.lines) {
+    if (line.pageNumber !== pageNumber) continue;
+    if (blockLineIds.has(line.lineId)) continue;
+    if (lineVerticalOrder(graph, line) <= lastHeaderOrder) continue;
+    for (const textItemId of line.textItemEvidenceIds) {
+      const item = textItemById.get(textItemId);
+      if (item === undefined || item.rawText.trim().length === 0) continue;
+      const bounds = boundsForLocatorId(graph, item.locatorId);
+      if (bounds === null || !(bounds[0] < bounds[1])) continue;
+      intervals.push({ leftPoints: bounds[0], rightPoints: bounds[1] });
+    }
+  }
+  return intervals;
+}
+
+/**
+ * A header atom's OBSERVED BAND: its own label box, extended over every body
+ * text item that positively overlaps it and overlaps none of its siblings on
+ * the same header line.
+ *
+ * Two independent defects are fixed by this single construction.
+ *
+ * First, a label is almost never as wide as the column it names: the word
+ * "DESCRIÇÃO" occupies a fraction of the description column, and a
+ * right-aligned "QTD" sits to the left of the digits beneath it. Treating
+ * the label box as the semantic band silently drops every value whose own
+ * box happens to start past the label's right edge -- the value is not
+ * ambiguous, it is simply never seen.
+ *
+ * Second, a hierarchical parent label ("PREÇO TOTAL R$" centered over three
+ * sub-columns) frequently fails to overlap its own outer children, so
+ * parent/child linkage by label overlap cannot see the relation that a human
+ * reader takes for granted. The parent's observed band does reach them,
+ * because the parent's band is the union of the data it governs.
+ *
+ * The sibling-exclusivity condition is what keeps this honest. A full-width
+ * narrative paragraph beneath the table overlaps every atom on the line, so
+ * it is excluded from all of them and cannot collapse the page into one
+ * band. Nothing here is a tolerance, a margin, or a proportion: an interval
+ * either positively overlaps exactly one atom of the line or it is not
+ * evidence for that line at all.
+ *
+ * Finally, the bands of one header line must be mutually disjoint -- that is
+ * what makes them columns. If any two collide, that line's atoms all fall
+ * back to their raw label boxes rather than being reconciled by a
+ * preference: a collision means the geometry did not in fact demonstrate a
+ * partition, and inventing one would be guessing.
+ */
+function observedAtomBands(
+  atoms: ReadonlyArray<HeaderAtom>,
+  bodyIntervals: ReadonlyArray<HorizontalRange>,
+): ReadonlyMap<string, HorizontalRange> {
+  const bands = new Map<string, HorizontalRange>();
+  for (const atom of atoms) {
+    let leftPoints = atom.leftPoints;
+    let rightPoints = atom.rightPoints;
+    for (const interval of bodyIntervals) {
+      if (!rangesPositivelyOverlap(atom.leftPoints, atom.rightPoints, interval.leftPoints, interval.rightPoints)) {
+        continue;
+      }
+      const claimedBySibling = atoms.some(
+        (sibling) =>
+          sibling.textItemEvidenceId !== atom.textItemEvidenceId &&
+          rangesPositivelyOverlap(
+            sibling.leftPoints,
+            sibling.rightPoints,
+            interval.leftPoints,
+            interval.rightPoints,
+          ),
+      );
+      if (claimedBySibling) continue;
+      leftPoints = Math.min(leftPoints, interval.leftPoints);
+      rightPoints = Math.max(rightPoints, interval.rightPoints);
+    }
+    bands.set(atom.textItemEvidenceId, { leftPoints, rightPoints });
+  }
+
+  for (const left of atoms) {
+    for (const right of atoms) {
+      if (left.textItemEvidenceId >= right.textItemEvidenceId) continue;
+      const leftBand = bands.get(left.textItemEvidenceId)!;
+      const rightBand = bands.get(right.textItemEvidenceId)!;
+      if (
+        rangesPositivelyOverlap(
+          leftBand.leftPoints,
+          leftBand.rightPoints,
+          rightBand.leftPoints,
+          rightBand.rightPoints,
+        )
+      ) {
+        return new Map(
+          atoms.map((atom) => [
+            atom.textItemEvidenceId,
+            { leftPoints: atom.leftPoints, rightPoints: atom.rightPoints },
+          ]),
+        );
+      }
+    }
+  }
+  return bands;
+}
+
+function rangeContains(outer: HorizontalRange, inner: HorizontalRange): boolean {
+  return outer.leftPoints <= inner.leftPoints && outer.rightPoints >= inner.rightPoints;
+}
+
+/**
  * Builds one HeaderPath per leaf HeaderAtom on the page's header block.
  *
- * Parent/child linkage (Correction A) requires only a positively observed
- * horizontal overlap between an atom and an atom on the immediately
- * preceding header line -- never full containment, which real centered
- * headers routinely fail even when the visual parent/child relation is
- * unambiguous. A child is linked to a parent only when EXACTLY ONE parent
- * candidate overlaps it: zero candidates leaves the atom parentless (it
- * still resolves on its own text); more than one candidate is a genuine
- * structural ambiguity and is never resolved by a nearest/narrowest/score
- * tie-break -- the atom is left without an assigned parent rather than
- * guessed.
+ * Ancestry is established in two ordered passes, both positive, neither
+ * resolved by a nearest/narrowest/score tie-break.
  *
- * A parent atom is excluded from ever becoming its own leaf/column
- * (Correction C) whenever ANY atom on the next line positively overlaps it
- * -- independent of whether that specific child link was unique enough to
- * be assigned above. A three-way overlap ambiguity still marks the parent
- * as "has children" even though none of its children received a resolved
- * parent link; otherwise the parent could wrongly fall back to being
- * treated as its own independent column merely because none of its
- * children could be uniquely linked to it.
+ * Pass 1 -- observed containment. A child belongs to a parent when the
+ * child's own label box lies inside the parent's OBSERVED band (see
+ * observedAtomBands) and the parent sits on a strictly higher header line.
+ * When several ancestors contain it, the innermost one wins -- the candidate
+ * whose band is contained in every other candidate's band -- which is
+ * ordinary tree nesting, not a preference; if no single candidate is
+ * innermost, the atom is left for pass 2. This pass sees relations that
+ * label overlap cannot: parents two or more lines above their qualifier
+ * row, and centered parents narrower than their own outer children.
+ *
+ * Pass 2 -- label overlap on the immediately preceding line, the original
+ * rule, applied only to atoms pass 1 left unparented. It still resolves the
+ * stacked-label case ("PREÇO" over "TOTAL" over one column), where parent
+ * and child govern exactly the same data and containment therefore proves
+ * nothing. Exactly one overlapping candidate is required, as before.
+ *
+ * A parent atom never becomes a column of its own: it is excluded from the
+ * leaf set both when some atom was actually linked to it and when any atom
+ * on the next line merely overlaps it (an unresolved three-way overlap must
+ * not let a parent fall back to being treated as its own column).
+ *
+ * Each surviving leaf carries its observed band as its geometry, so a leaf
+ * spans the data it governs rather than the width of its label. If two
+ * leaves' bands positively overlap -- which would mean one documented value
+ * could be claimed by two different semantic columns at once -- both revert
+ * to their raw label boxes instead of one being preferred.
  */
 function buildHeaderPathsForLines(
   graph: EvidenceGraph,
@@ -392,10 +581,49 @@ function buildHeaderPathsForLines(
 ): ReadonlyArray<HeaderPath> {
   if (block.length === 0) return [];
 
+  const textItemById = new Map(graph.textItems.map((item) => [item.evidenceId, item]));
+  const bodyIntervals = bodyTextIntervals(graph, pageNumber, block, textItemById);
   const atomsByLine = block.map((line) => atomsForLine(graph, line));
-  const parentOf = new Map<string, HeaderAtom>();
-  const hasOverlappingChild = new Set<string>();
+  const allAtoms = atomsByLine.flat();
 
+  const lineIndexByAtomId = new Map<string, number>();
+  const bandByAtomId = new Map<string, HorizontalRange>();
+  for (const [lineIndex, atoms] of atomsByLine.entries()) {
+    for (const atom of atoms) lineIndexByAtomId.set(atom.textItemEvidenceId, lineIndex);
+    for (const [atomId, band] of observedAtomBands(atoms, bodyIntervals)) {
+      bandByAtomId.set(atomId, band);
+    }
+  }
+  const labelRange = (atom: HeaderAtom): HorizontalRange => ({
+    leftPoints: atom.leftPoints,
+    rightPoints: atom.rightPoints,
+  });
+  const bandOf = (atom: HeaderAtom): HorizontalRange =>
+    bandByAtomId.get(atom.textItemEvidenceId) ?? labelRange(atom);
+
+  const parentOf = new Map<string, HeaderAtom>();
+  for (const child of allAtoms) {
+    const childLineIndex = lineIndexByAtomId.get(child.textItemEvidenceId)!;
+    if (childLineIndex === 0) continue;
+    const containing = allAtoms.filter(
+      (candidate) =>
+        lineIndexByAtomId.get(candidate.textItemEvidenceId)! < childLineIndex &&
+        rangeContains(bandOf(candidate), labelRange(child)),
+    );
+    if (containing.length === 0) continue;
+    const innermost = containing.filter(
+      (candidate) =>
+        !containing.some(
+          (other) =>
+            other.textItemEvidenceId !== candidate.textItemEvidenceId &&
+            rangeContains(bandOf(candidate), bandOf(other)) &&
+            !rangeContains(bandOf(other), bandOf(candidate)),
+        ),
+    );
+    if (innermost.length === 1) parentOf.set(child.textItemEvidenceId, innermost[0]!);
+  }
+
+  const hasOverlappingChild = new Set<string>();
   for (let lineIndex = 1; lineIndex < atomsByLine.length; lineIndex += 1) {
     const parentAtoms = atomsByLine[lineIndex - 1]!;
     const childAtoms = atomsByLine[lineIndex]!;
@@ -403,12 +631,39 @@ function buildHeaderPathsForLines(
       const overlapping = parentAtoms.filter((parent) => atomsPositivelyOverlap(parent, child));
       for (const parent of overlapping) hasOverlappingChild.add(parent.textItemEvidenceId);
       if (overlapping.length !== 1) continue;
+      if (parentOf.has(child.textItemEvidenceId)) continue;
       parentOf.set(child.textItemEvidenceId, overlapping[0]!);
     }
   }
 
-  const allAtoms = atomsByLine.flat();
-  const leaves = allAtoms.filter((atom) => !hasOverlappingChild.has(atom.textItemEvidenceId));
+  const assignedParentIds = new Set(
+    [...parentOf.values()].map((atom) => atom.textItemEvidenceId),
+  );
+  const leaves = allAtoms.filter(
+    (atom) =>
+      !assignedParentIds.has(atom.textItemEvidenceId) &&
+      !hasOverlappingChild.has(atom.textItemEvidenceId),
+  );
+
+  const collidingLeafIds = new Set<string>();
+  for (const left of leaves) {
+    for (const right of leaves) {
+      if (left.textItemEvidenceId >= right.textItemEvidenceId) continue;
+      const leftBand = bandOf(left);
+      const rightBand = bandOf(right);
+      if (
+        rangesPositivelyOverlap(
+          leftBand.leftPoints,
+          leftBand.rightPoints,
+          rightBand.leftPoints,
+          rightBand.rightPoints,
+        )
+      ) {
+        collidingLeafIds.add(left.textItemEvidenceId);
+        collidingLeafIds.add(right.textItemEvidenceId);
+      }
+    }
+  }
 
   return leaves
     .map((leaf): HeaderPath => {
@@ -421,6 +676,7 @@ function buildHeaderPathsForLines(
         cursor = parent;
       }
       const parentTexts = chain.slice(0, -1).map((atom) => atom.normalizedText);
+      const band = collidingLeafIds.has(leaf.textItemEvidenceId) ? labelRange(leaf) : bandOf(leaf);
       return {
         headerPathId: `header-path:${fingerprintCanonical({
           pageNumber,
@@ -430,14 +686,23 @@ function buildHeaderPathsForLines(
         atomIds: chain.map((atom) => atom.textItemEvidenceId),
         atomLocatorIds: uniqueSorted(chain.map((atom) => atom.locatorId)),
         atomLineIds: uniqueSorted(chain.map((atom) => atom.lineId)),
-        leftPoints: leaf.leftPoints,
-        rightPoints: leaf.rightPoints,
+        leftPoints: band.leftPoints,
+        rightPoints: band.rightPoints,
+        labelLeftPoints: leaf.leftPoints,
+        labelRightPoints: leaf.rightPoints,
+        bandWidened:
+          band.leftPoints !== leaf.leftPoints || band.rightPoints !== leaf.rightPoints,
         leafText: leaf.rawText,
         parentTexts,
         candidateRoles: headerPathRoles([...parentTexts, leaf.normalizedText]),
       };
     })
-    .sort((left, right) => left.leftPoints - right.leftPoints);
+    .sort(
+      (left, right) =>
+        left.leftPoints - right.leftPoints ||
+        left.rightPoints - right.rightPoints ||
+        ordinalCompare(left.headerPathId, right.headerPathId),
+    );
 }
 
 function buildHeaderPaths(graph: EvidenceGraph, pageNumber: number): ReadonlyArray<HeaderPath> {
@@ -453,24 +718,64 @@ function headerPathsWithinBand(
   );
 }
 
-function canonicalBandFromHeaderPath(pageNumber: number, path: HeaderPath): CanonicalBand {
+function canonicalBandFromHeaderPath(
+  pageNumber: number,
+  path: HeaderPath,
+  upstreamBands: ReadonlyArray<RawColumnBand>,
+  siblingBands: ReadonlyArray<HorizontalRange>,
+): CanonicalBand {
+  /**
+   * Upstream physical column hypotheses stay positive evidence (they are
+   * never an exclusion gate): every hypothesis that positively overlaps this
+   * leaf and no other leaf is recorded as this column's provenance, so
+   * several jittered observations of one physical column all attach to the
+   * single semantic column they describe, downstream g.1 / f.2c
+   * physical-cell preference keeps working, and the column stays traceable
+   * to the physical read. A hypothesis straddling two leaves is deliberately
+   * attributed to neither -- it does not demonstrate either column on its
+   * own, so claiming it would be inventing support and would let one
+   * sibling's values be preferred into the other.
+   */
+  const contained = upstreamBands.filter(
+    (band) =>
+      rangesPositivelyOverlap(band.leftPoints, band.rightPoints, path.leftPoints, path.rightPoints) &&
+      !siblingBands.some((sibling) =>
+        rangesPositivelyOverlap(
+          band.leftPoints,
+          band.rightPoints,
+          sibling.leftPoints,
+          sibling.rightPoints,
+        ),
+      ),
+  );
   return {
     pageNumber,
     horizontalOrder: 0,
     leftPoints: path.leftPoints,
     rightPoints: path.rightPoints,
     candidateRoles: path.candidateRoles,
-    evidenceLocatorIds: path.atomLocatorIds,
-    sourcePhysicalColumnHypothesisIds: [],
-    contributingRegionIds: [],
-    contributingLineIds: path.atomLineIds,
-    contributingSegmentIds: [],
+    evidenceLocatorIds: uniqueSorted([
+      ...path.atomLocatorIds,
+      ...contained.flatMap((band) => band.evidenceLocatorIds),
+    ]),
+    sourcePhysicalColumnHypothesisIds: uniqueSorted(
+      contained.map((band) => band.physicalColumnHypothesisId),
+    ),
+    contributingRegionIds: uniqueSorted(contained.map((band) => band.regionId)),
+    contributingLineIds: uniqueSorted([
+      ...path.atomLineIds,
+      ...contained.flatMap((band) => band.lineIds),
+    ]),
+    contributingSegmentIds: uniqueSorted(contained.flatMap((band) => band.segmentIds)),
     groupingRuleId: "header-band-v1",
-    representativePhysicalColumnHypothesisId: null,
+    representativePhysicalColumnHypothesisId:
+      contained.length === 1 ? contained[0]!.physicalColumnHypothesisId : null,
     nonGroupingReasonCodes: [],
     bandProvenance: "header-derived",
     headerAtomIds: path.atomIds,
-    splitReasonCode: null,
+    splitReasonCode: path.bandWidened
+      ? "leaf_band_widened_to_sibling_exclusive_observed_body_geometry"
+      : null,
   };
 }
 
@@ -709,92 +1014,6 @@ function groupRawBands(rawBands: ReadonlyArray<RawColumnBand>): ReadonlyArray<Ca
   );
 }
 
-/**
- * A grouped upstream band is only split when there is positive structural
- * proof it contains more than one real column: at least two mutually
- * non-overlapping HeaderPaths inside it, whose combined roles would
- * otherwise be ambiguous, each independently recurring on at least two data
- * rows. No epsilon, no width heuristic, no score -- the new boundaries are
- * exactly the observed leaf HeaderAtom bounds.
- *
- * Recurrence (Correction B) is proven at EvidenceTextItem granularity, not
- * Segment granularity: a data line counts toward a header path's recurrence
- * only when at least one of that line's own text items has geometry
- * positively overlapping the header path's range. A segment's own reported
- * bounds can be wider or narrower than the individual text items it
- * contains (upstream sometimes merges tokens into one segment without
- * widening its bounds to match, or reports a bounding box that does not
- * tightly track a right-aligned value); the text item is the only unit
- * whose geometry is directly observed for that specific value. Multiple
- * text items on the same line still count as one recurrence for that line,
- * never as multiple.
- */
-function refineWideBand(
-  graph: EvidenceGraph,
-  pageNumber: number,
-  headerBlockLineIds: ReadonlySet<string>,
-  headerPaths: ReadonlyArray<HeaderPath>,
-  textItemById: ReadonlyMap<string, EvidenceGraph["textItems"][number]>,
-  band: CanonicalBand,
-): ReadonlyArray<CanonicalBand> {
-  const covering = headerPathsWithinBand(headerPaths, band);
-  if (covering.length < 2) return [band];
-
-  const sorted = [...covering].sort((left, right) => left.leftPoints - right.leftPoints);
-  for (let index = 1; index < sorted.length; index += 1) {
-    if (
-      rangesPositivelyOverlap(
-        sorted[index - 1]!.leftPoints,
-        sorted[index - 1]!.rightPoints,
-        sorted[index]!.leftPoints,
-        sorted[index]!.rightPoints,
-      )
-    ) {
-      return [band];
-    }
-  }
-
-  const unionRoles = uniqueSortedRoles(sorted.flatMap((path) => path.candidateRoles)).filter(
-    (role) => role !== "unknown",
-  );
-  if (unionRoles.length < 2) return [band];
-
-  const dataLines = graph.lines.filter(
-    (line) => line.pageNumber === pageNumber && !headerBlockLineIds.has(line.lineId),
-  );
-  const lineHasIntersectingTextItem = (
-    line: EvidenceLine,
-    leftPoints: number,
-    rightPoints: number,
-  ): boolean =>
-    line.textItemEvidenceIds.some((id) => {
-      const item = textItemById.get(id);
-      if (item === undefined) return false;
-      const bounds = boundsForLocatorId(graph, item.locatorId);
-      return bounds !== null && bounds[0] < rightPoints && bounds[1] > leftPoints;
-    });
-  const recurrence = (leftPoints: number, rightPoints: number): number =>
-    dataLines.filter((line) => lineHasIntersectingTextItem(line, leftPoints, rightPoints)).length;
-  const minimumRecurrence = Math.min(2, dataLines.length);
-  if (minimumRecurrence === 0) return [band];
-  for (const path of sorted) {
-    if (recurrence(path.leftPoints, path.rightPoints) < minimumRecurrence) return [band];
-  }
-
-  return sorted.map((path) => ({
-    ...band,
-    leftPoints: path.leftPoints,
-    rightPoints: path.rightPoints,
-    candidateRoles: path.candidateRoles,
-    evidenceLocatorIds: uniqueSorted([...band.evidenceLocatorIds, ...path.atomLocatorIds]),
-    groupingRuleId: "wide-band-geometric-split-v1" as const,
-    bandProvenance: "upstream-refined" as const,
-    headerAtomIds: uniqueSorted([...band.headerAtomIds, ...path.atomIds]),
-    splitReasonCode:
-      "distinct_non_overlapping_header_paths_with_incompatible_roles_and_data_recurrence",
-  }));
-}
-
 function assembleResolvedColumn(
   pageNumber: number,
   band: CanonicalBand,
@@ -1007,34 +1226,71 @@ function resolveItemIdentitySpecificity(
   });
 }
 
+/**
+ * When a page proves it has a real tabular header, that header IS the page's
+ * semantic schema: one column per leaf, each with its own identity, its own
+ * ancestry, its own evidence and -- critically -- its own band. Deriving the
+ * semantic columns from grouped upstream hypotheses instead lets a single
+ * coarse hypothesis swallow several documented leaves, and whichever leaf
+ * happened to resolve a role then collected the values of its siblings as
+ * if the source had contradicted itself. Sibling leaves of a hierarchical
+ * header ("... SEM BDI | BDI | COM BDI") are exactly the case that breaks.
+ *
+ * Upstream evidence is not discarded: hypotheses inside a leaf band become
+ * that column's provenance, and any grouped hypothesis that overlaps no leaf
+ * at all is still emitted as an auxiliary column so evidence outside the
+ * header's schema keeps a home. Pages that prove no header keep the previous
+ * upstream-only construction unchanged -- no header gate is invented where
+ * no header was demonstrated.
+ */
 function resolvePageColumns(
   input: BudgetTableReconstructionInput,
   graph: EvidenceGraph,
   pageNumber: number,
 ): ReadonlyArray<ResolvedColumn> {
   const headers = headerCandidates(graph, pageNumber);
-  const headerPaths = resolveItemIdentitySpecificity(buildHeaderPaths(graph, pageNumber));
-  const headerBlockLineIds = new Set(headerBlockLines(graph, pageNumber).map((line) => line.lineId));
-  const textItemById = new Map(graph.textItems.map((item) => [item.evidenceId, item]));
+  const headerBlock = headerBlockLines(graph, pageNumber);
+  const headerPaths = resolveItemIdentitySpecificity(
+    buildHeaderPathsForLines(graph, pageNumber, headerBlock),
+  );
+  const headerBlockLineIds = new Set(headerBlock.map((line) => line.lineId));
 
   const rawBands = rawBandsFromUpstream(input, graph, pageNumber, headerPaths);
   const grouped = rawBands.length > 0 ? groupRawBands(rawBands) : [];
-  const refined = grouped.flatMap((band) =>
-    refineWideBand(graph, pageNumber, headerBlockLineIds, headerPaths, textItemById, band),
-  );
 
-  const coveredHeaderPathIds = new Set(
-    refined.flatMap((band) => headerPathsWithinBand(headerPaths, band).map((path) => path.headerPathId)),
-  );
-  const structural = headerPaths
-    .filter((path) => !coveredHeaderPathIds.has(path.headerPathId))
-    .map((path) => canonicalBandFromHeaderPath(pageNumber, path));
+  let bands: ReadonlyArray<CanonicalBand>;
+  if (headerPaths.length > 0) {
+    const leafBands = headerPaths.map((path, index) =>
+      canonicalBandFromHeaderPath(
+        pageNumber,
+        path,
+        rawBands,
+        headerPaths
+          .filter((_, otherIndex) => otherIndex !== index)
+          .map((other) => ({ leftPoints: other.leftPoints, rightPoints: other.rightPoints })),
+      ),
+    );
+    const auxiliary = grouped.filter(
+      (band) =>
+        !leafBands.some((leaf) =>
+          rangesPositivelyOverlap(
+            leaf.leftPoints,
+            leaf.rightPoints,
+            band.leftPoints,
+            band.rightPoints,
+          ),
+        ),
+    );
+    bands = [...leafBands, ...auxiliary];
+  } else {
+    bands = grouped;
+  }
 
-  const bands = [...refined, ...structural]
+  const orderedBands = [...bands]
     .sort((left, right) => left.leftPoints - right.leftPoints || left.rightPoints - right.rightPoints)
     .map((band, index) => ({ ...band, horizontalOrder: index + 1 }));
 
-  const preliminary = bands.map((band) => assembleResolvedColumn(pageNumber, band, headers));
+  const preliminary = orderedBands.map((band) => assembleResolvedColumn(pageNumber, band, headers));
   const arithmeticRefined = resolveEconomicAmbiguityByArithmetic(
     graph,
     pageNumber,
@@ -1109,6 +1365,38 @@ export function resolveColumns(
   }
 
   return pageNumbers.flatMap((pageNumber) => resolvedByPage.get(pageNumber) ?? []);
+}
+
+export interface SelectedHeaderProvenance {
+  /** Lines proven to belong to a page's selected header block. */
+  readonly lineIds: ReadonlySet<string>;
+  /** Pages that proved a header block at all. On any other page the absence
+   * of this evidence must not be read as "no line here is a header" -- it
+   * means the question was never positively answered, and downstream
+   * classification keeps its previous per-line reasoning there. */
+  readonly pageNumbers: ReadonlySet<number>;
+}
+
+/**
+ * The header block selected by exactly the same routine column resolution
+ * uses, so header provenance can never drift from the schema it produced.
+ * A line proven to be part of the header is a header line whatever its text
+ * happens to say -- a lone "PREÇO TOTAL R$" spanning three sub-columns is a
+ * column title, not an aggregation of the budget, and no amount of literal
+ * text matching can tell the difference.
+ */
+export function selectBudgetHeaderProvenance(graph: EvidenceGraph): SelectedHeaderProvenance {
+  const lineIds = new Set<string>();
+  const pageNumbers = new Set<number>();
+  for (const pageNumber of [...new Set(graph.lines.map((line) => line.pageNumber))].sort(
+    (left, right) => left - right,
+  )) {
+    const block = headerBlockLines(graph, pageNumber);
+    if (block.length === 0) continue;
+    pageNumbers.add(pageNumber);
+    for (const line of block) lineIds.add(line.lineId);
+  }
+  return { lineIds, pageNumbers };
 }
 
 export { headerCandidates as detectBudgetHeaderCandidates };

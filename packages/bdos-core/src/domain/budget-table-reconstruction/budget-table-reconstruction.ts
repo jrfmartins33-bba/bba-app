@@ -1,6 +1,9 @@
 import { evaluateArithmetic } from "./budget-table-reconstruction-arithmetic";
 import { formCells } from "./budget-table-reconstruction-cell-formation";
-import { resolveColumns } from "./budget-table-reconstruction-column-resolution";
+import {
+  resolveColumns,
+  selectBudgetHeaderProvenance,
+} from "./budget-table-reconstruction-column-resolution";
 import { conserveEvidence } from "./budget-table-reconstruction-conservation";
 import { buildEvidenceGraph } from "./budget-table-reconstruction-evidence-graph";
 import { exactFraction } from "./budget-table-reconstruction-exact-rational";
@@ -206,6 +209,7 @@ export function reconstructBudgetTable(
     cellFormation.cells,
     cellFormation.fragments,
     graph.textItems,
+    selectBudgetHeaderProvenance(graph),
   );
   const records = classifyRecords(logicalRows, {
     cells: cellFormation.cells,

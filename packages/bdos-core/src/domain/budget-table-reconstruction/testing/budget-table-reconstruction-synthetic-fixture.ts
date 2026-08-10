@@ -10,10 +10,32 @@ export interface SyntheticColumn {
   }>;
 }
 
+export interface SyntheticTextPart {
+  readonly text: string;
+  readonly left: number;
+  readonly right: number;
+}
+
 export interface SyntheticEntry {
   readonly text: string;
   readonly fromColumn: number;
   readonly toColumn?: number;
+  /**
+   * Explicit horizontal bounds for this entry's text box, overriding the
+   * column-derived ones. Real headers routinely have labels narrower than,
+   * or offset from, the column they name -- a centered parent title can even
+   * fail to reach its own outer children -- and a fixture that always draws
+   * a label exactly as wide as its column cannot represent that at all.
+   */
+  readonly left?: number;
+  readonly right?: number;
+  /**
+   * Several text items inside ONE segment, each with its own geometry. This
+   * is how upstream structure reconstruction frequently reports a run of
+   * adjacent economic values: one merged segment whose individual text items
+   * are the only per-value geometry available.
+   */
+  readonly parts?: ReadonlyArray<SyntheticTextPart>;
 }
 
 export type SyntheticRow = ReadonlyArray<SyntheticEntry>;
@@ -43,6 +65,20 @@ export interface SyntheticFixtureOptions {
   readonly pageSelection?: ReadonlyArray<number> | "all";
 }
 
+function entryLeft(
+  sourceEntry: SyntheticEntry,
+  columns: ReadonlyArray<SyntheticColumn>,
+): number {
+  return sourceEntry.left ?? columns[sourceEntry.fromColumn]!.left;
+}
+
+function entryRight(
+  sourceEntry: SyntheticEntry,
+  columns: ReadonlyArray<SyntheticColumn>,
+): number {
+  return sourceEntry.right ?? columns[sourceEntry.toColumn ?? sourceEntry.fromColumn]!.right;
+}
+
 function geometry(left: number, right: number, top: number, bottom: number) {
   return {
     leftPoints: left,
@@ -62,6 +98,32 @@ export function entry(
   toColumn = fromColumn,
 ): SyntheticEntry {
   return { text, fromColumn, toColumn };
+}
+
+/** An entry whose text box is given directly rather than derived from a
+ * column, for headers whose labels do not span their own column. */
+export function placedEntry(
+  text: string,
+  left: number,
+  right: number,
+  anchorColumn = 0,
+): SyntheticEntry {
+  return { text, fromColumn: anchorColumn, toColumn: anchorColumn, left, right };
+}
+
+/** One segment holding several independently placed text items. */
+export function mergedEntry(
+  parts: ReadonlyArray<SyntheticTextPart>,
+  anchorColumn = 0,
+): SyntheticEntry {
+  return {
+    text: parts.map((part) => part.text).join(""),
+    fromColumn: anchorColumn,
+    toColumn: anchorColumn,
+    left: Math.min(...parts.map((part) => part.left)),
+    right: Math.max(...parts.map((part) => part.right)),
+    parts,
+  };
 }
 
 export function buildSyntheticInput(
@@ -98,48 +160,53 @@ export function buildSyntheticInput(
       const sourceTextItemIndices: number[] = [];
       const segmentKeys: string[] = [];
       for (const [segmentIndex, sourceEntry] of row.entries()) {
-        const toColumn = sourceEntry.toColumn ?? sourceEntry.fromColumn;
-        const left = columns[sourceEntry.fromColumn]!.left;
-        const right = columns[toColumn]!.right;
+        const left = entryLeft(sourceEntry, columns);
+        const right = entryRight(sourceEntry, columns);
         const top = rowIndex * 20;
         const bottom = top + 10;
         const segmentKey = `${keyPrefix}-p${pageSpec.pageNumber}-segment-${rowIndex}-${segmentIndex}`;
-        const index = textItemIndex;
-        textItemIndex += 1;
-        sourceTextItemIndices.push(index);
-        segmentKeys.push(segmentKey);
-        textItems.push({
-          index,
-          text: sourceEntry.text,
-          placement: {
-            status: "placed",
-            reasonCode: null,
-            geometry: {
-              ...geometry(left, right, top, bottom),
-              pageBoundsRelation: "inside",
-              coordinateSpaceVersion: "physical-document-text-item-coordinate-space-v1",
-              geometryProfileVersion: "physical-document-text-item-geometry-profile-v1",
+        const parts: ReadonlyArray<SyntheticTextPart> =
+          sourceEntry.parts ?? [{ text: sourceEntry.text, left, right }];
+        const partIndices: number[] = [];
+        for (const part of parts) {
+          const index = textItemIndex;
+          textItemIndex += 1;
+          partIndices.push(index);
+          sourceTextItemIndices.push(index);
+          textItems.push({
+            index,
+            text: part.text,
+            placement: {
+              status: "placed",
+              reasonCode: null,
+              geometry: {
+                ...geometry(part.left, part.right, top, bottom),
+                pageBoundsRelation: "inside",
+                coordinateSpaceVersion: "physical-document-text-item-coordinate-space-v1",
+                geometryProfileVersion: "physical-document-text-item-geometry-profile-v1",
+              },
             },
-          },
-        });
+          });
+          sourceItemOutcomes.push({
+            status: "placed",
+            sourceTextItemIndex: index,
+            lineKey,
+            segmentKey,
+          });
+        }
+        segmentKeys.push(segmentKey);
         segments.push({
           segmentKey,
           lineKey,
           pageNumber: pageSpec.pageNumber,
           horizontalOrder: segmentIndex + 1,
           ...geometry(left, right, top, bottom),
-          sourceTextItemIndices: [index],
+          sourceTextItemIndices: partIndices,
           observedInternalGaps: [],
           formationRuleId: "synthetic",
           formationRuleVersion: 1,
           profileId: "synthetic",
           profileVersion: 1,
-        });
-        sourceItemOutcomes.push({
-          status: "placed",
-          sourceTextItemIndex: index,
-          lineKey,
-          segmentKey,
         });
         const cellHypothesisKey = `${keyPrefix}-cell-hypothesis-${pageSpec.pageNumber}-${rowIndex}-${segmentIndex}`;
         const gridIntersectionKey = `${keyPrefix}-grid-${pageSpec.pageNumber}-${rowIndex}-${segmentIndex}`;
@@ -156,7 +223,15 @@ export function buildSyntheticInput(
         gridIntersections.push({
           gridIntersectionKey,
           sourceLineKey: lineKey,
-          sourcePhysicalColumnHypothesisKey: `${keyPrefix}-hypothesis-${pageSpec.pageNumber}-${sourceEntry.fromColumn}-0`,
+          // A segment that merges several columns' text has no single
+          // physical column hypothesis upstream; modelling it as belonging to
+          // one would hand the whole run to that column before geometry is
+          // ever consulted, which is not what upstream reports for a merged
+          // run.
+          sourcePhysicalColumnHypothesisKey:
+            parts.length > 1
+              ? `${keyPrefix}-merged-run-${pageSpec.pageNumber}-${rowIndex}-${segmentIndex}`
+              : `${keyPrefix}-hypothesis-${pageSpec.pageNumber}-${sourceEntry.fromColumn}-0`,
           sourceRegionKey: `${keyPrefix}-region-${pageSpec.pageNumber}`,
           pageNumber: pageSpec.pageNumber,
           rowOrder: rowIndex + 1,
@@ -174,32 +249,24 @@ export function buildSyntheticInput(
               status: "resolved",
               segmentKey,
               lineKey,
-              fragments: [
-                {
-                  sourceReferenceOrder: 1,
-                  textItemIndex: index,
-                  originalText: sourceEntry.text,
-                  normalizedText: sourceEntry.text.normalize("NFKC"),
-                },
-              ],
-              itemDispositions: [
-                {
-                  status: "included_in_text_fragment",
-                  segmentKey,
-                  sourceReferenceOrder: 1,
-                  textItemIndex: index,
-                },
-              ],
+              fragments: parts.map((part, partIndex) => ({
+                sourceReferenceOrder: partIndex + 1,
+                textItemIndex: partIndices[partIndex]!,
+                originalText: part.text,
+                normalizedText: part.text.normalize("NFKC"),
+              })),
+              itemDispositions: parts.map((_, partIndex) => ({
+                status: "included_in_text_fragment",
+                segmentKey,
+                sourceReferenceOrder: partIndex + 1,
+                textItemIndex: partIndices[partIndex]!,
+              })),
             },
           ],
         });
       }
-      const left = Math.min(...row.map((sourceEntry) => columns[sourceEntry.fromColumn]!.left));
-      const right = Math.max(
-        ...row.map(
-          (sourceEntry) => columns[sourceEntry.toColumn ?? sourceEntry.fromColumn]!.right,
-        ),
-      );
+      const left = Math.min(...row.map((sourceEntry) => entryLeft(sourceEntry, columns)));
+      const right = Math.max(...row.map((sourceEntry) => entryRight(sourceEntry, columns)));
       lines.push({
         lineKey,
         pageNumber: pageSpec.pageNumber,

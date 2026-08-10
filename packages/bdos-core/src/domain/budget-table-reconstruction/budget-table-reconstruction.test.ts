@@ -21,6 +21,8 @@ import type {
 import {
   buildSyntheticInput,
   entry,
+  mergedEntry,
+  placedEntry,
 } from "./testing/budget-table-reconstruction-synthetic-fixture";
 
 function test(name: string, body: () => void): void {
@@ -1093,8 +1095,16 @@ test("wide upstream band spanning two incompatible header paths is split by obse
   equal(unitCostColumn?.rightPoints, 350);
   equal(bdiColumn?.leftPoints, 350);
   equal(bdiColumn?.rightPoints, 400);
-  equal(unitCostColumn?.groupingRuleId, "wide-band-geometric-split-v1");
-  equal(unitCostColumn?.bandProvenance, "upstream-refined");
+  // The assertion above -- one wide upstream hypothesis [300,400] must not
+  // be allowed to stand as a single semantic column when the header proves
+  // two -- is unchanged and is the whole point of this case. Only the
+  // provenance labels move: the two columns are now produced directly as
+  // header leaves (each with its own band), rather than by refining the
+  // upstream band after the fact. The wide hypothesis straddles both leaves,
+  // so it is correctly attributed to neither.
+  equal(unitCostColumn?.groupingRuleId, "header-band-v1");
+  equal(unitCostColumn?.bandProvenance, "header-derived");
+  equal(unitCostColumn?.sourcePhysicalColumnHypothesisIds, []);
 });
 
 test("a band matching exactly one header path is never split even when upstream is present", () => {
@@ -1144,7 +1154,15 @@ test("header geometry complements a partial upstream schema without duplicating 
   equal(quantityColumns[0]?.leftPoints, 320);
   const codeColumns = result.columns.filter((column) => column.role === "item_code");
   equal(codeColumns.length, 1);
-  equal(codeColumns[0]?.bandProvenance, "upstream");
+  // Unchanged intent: the column that DOES have upstream support must not be
+  // duplicated, and that support must not be thrown away. The header leaf is
+  // now the single carrier of both, so the upstream hypothesis appears as the
+  // column's provenance instead of as a separate band of its own.
+  equal(codeColumns[0]?.sourcePhysicalColumnHypothesisIds.length, 1);
+  assert(
+    codeColumns[0]!.headerAtomIds.length > 0,
+    "the surviving column must still carry its header evidence",
+  );
 });
 
 test("economic column reconstructs from header geometry alone when upstream column evidence is entirely unavailable", () => {
@@ -1513,7 +1531,7 @@ test("wide-band recurrence is proven by real text-item geometry even when a segm
   );
 });
 
-test("wide-band split does not happen when text-item recurrence is not actually proven, even if a segment's bounds would misleadingly suggest it", () => {
+test("a misleadingly widened segment never shapes a column band, even when a data row leaves that column empty", () => {
   const columns = [
     { header: "", left: 0, right: 60 },
     { header: "", left: 430, right: 480 },
@@ -1542,7 +1560,21 @@ test("wide-band split does not happen when text-item recurrence is not actually 
 
   const result = reconstructBudgetTable(input);
   const bdiColumn = result.columns.find((column) => column.role === "bdi_rate");
-  assert(bdiColumn === undefined, "a widened segment must not substitute for genuine text-item recurrence");
+  // Preserved intention: a segment whose reported bounds are wider than the
+  // text it actually contains must never be what defines a column. What has
+  // changed is where the column comes from at all -- the header itself
+  // proves "Custo > Unitário | BDI" are two leaves, so the column exists
+  // even though only one data row fills it (a column empty on one row is
+  // still a column; requiring it to recur was an artefact of inferring
+  // columns from upstream bands rather than from the header). The check that
+  // matters is therefore that the band is the leaf's own observed extent and
+  // has NOT been stretched to the corrupted segment's [430,530].
+  assert(bdiColumn !== undefined, "the header itself proves a distinct BDI leaf");
+  equal(bdiColumn?.leftPoints, 480);
+  equal(bdiColumn?.rightPoints, 530);
+  const unitCostColumn = result.columns.find((column) => column.role === "unit_cost");
+  equal(unitCostColumn?.leftPoints, 430);
+  equal(unitCostColumn?.rightPoints, 480);
 });
 
 test("an ambiguous auxiliary unknown column does not contaminate an otherwise complete service_item", () => {
@@ -3008,13 +3040,47 @@ test("true positive: description + compact item_code + numeric quantity is servi
   equal(result.records[0]?.kind, "service_item");
 });
 
-test("true positive: description + compact item_code + numeric total_price is service_item (Path A)", () => {
+/**
+ * Adjusted fixture, preserved intent. This case used to assert that
+ * identity + description + a rolled-up total is a service_item. It is not:
+ * that is precisely the shape of a GROUPING row, which legitimately shows
+ * its subtree's total and nothing else, and treating it as an item is what
+ * made hierarchy headings compete with the items underneath them. Path A now
+ * asks for identity plus DETAILED pricing evidence (quantity, unit cost, BDI
+ * rate or unit price) -- evidence only a real line can produce.
+ *
+ * The intent worth keeping is that identity + description + economic
+ * evidence must still be classified positively and never dropped, so both
+ * halves are asserted here: the aggregate-only row is a group, and the same
+ * row with detailed pricing is an item.
+ */
+test("identity + description + a rolled-up total alone is a grouping row, not an item", () => {
   const columns = [
     { header: "Item", left: 0, right: 70 },
     { header: "Descrição", left: 80, right: 300 },
     { header: "Preço Total", left: 520, right: 600 },
   ];
-  const dataRow = [entry("A-10", 0), entry("Fornecimento e instalação", 1), entry("1.500,00", 2)];
+  const dataRow = [entry("4.10", 0), entry("Fornecimento e instalação", 1), entry("1.500,00", 2)];
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
+  );
+  equal(result.records[0]?.kind, "group");
+  equal(result.records[0]?.totalPrice?.status, "resolved");
+});
+
+test("true positive: the same identity with detailed pricing evidence is service_item (Path A)", () => {
+  const columns = [
+    { header: "Item", left: 0, right: 70 },
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Preço Unitário", left: 440, right: 510 },
+    { header: "Preço Total", left: 520, right: 600 },
+  ];
+  const dataRow = [
+    entry("4.10", 0),
+    entry("Fornecimento e instalação", 1),
+    entry("750,00", 2),
+    entry("1.500,00", 3),
+  ];
   const result = reconstructBudgetTable(
     buildSyntheticInput(columns, [{ pageNumber: 1, rows: [dataRow] }]),
   );
@@ -3152,4 +3218,518 @@ test("membership invariant: every service_item logical row in a mixed reconstruc
     }
   }
   assert(serviceItemCount >= 2, "expected the mixed reconstruction to actually contain service_item rows to check");
+});
+
+// ===========================================================================
+// Hierarchical multi-line header: the structural class in which a parent
+// title spans several qualifier leaves ("... > SEM BDI | BDI | COM BDI").
+//
+// Everything below is synthetic. The header labels are the generic Portuguese
+// budget-table vocabulary this engine already targets; every code,
+// description, unit, amount and coordinate is invented for the fixture. The
+// geometry deliberately reproduces the STRUCTURAL difficulty of the class,
+// not any particular document:
+//
+//   - each parent title is narrower than the span of its own children and is
+//     centered over them, so it physically overlaps only the middle child and
+//     neither outer one;
+//   - the parents sit two lines above those children, not one;
+//   - several labels ("DESCRICAO", "QTD") are narrower than, or offset from,
+//     the data beneath them;
+//   - the row's economic values arrive as ONE merged segment whose individual
+//     text items carry the only per-value geometry.
+// ===========================================================================
+
+const HIERARCHICAL_COLUMNS = [
+  { header: "", left: 0, right: 40 },
+  { header: "", left: 60, right: 120 },
+  { header: "", left: 140, right: 400 },
+  { header: "", left: 420, right: 470 },
+  { header: "", left: 490, right: 540 },
+  { header: "", left: 560, right: 610 },
+  { header: "", left: 630, right: 680 },
+  { header: "", left: 700, right: 760 },
+  { header: "", left: 780, right: 840 },
+  { header: "", left: 860, right: 920 },
+  { header: "", left: 940, right: 1000 },
+  { header: "", left: 1020, right: 1080 },
+  { header: "", left: 1100, right: 1160 },
+];
+
+const HIERARCHICAL_PARENT_LINE = [
+  placedEntry("VALOR UNITÁRIO", 752, 866, 8),
+  placedEntry("PREÇO TOTAL", 996, 1104, 11),
+];
+
+const HIERARCHICAL_FLAT_LINE = [
+  placedEntry("ITEM", 5, 35, 0),
+  placedEntry("CÓDIGO", 70, 110, 1),
+  placedEntry("DESCRIÇÃO", 230, 310, 2),
+  placedEntry("FONTE", 425, 465, 3),
+  placedEntry("UNIDADE", 492, 538, 4),
+  placedEntry("QTD", 560, 585, 5),
+  placedEntry("BDI %", 632, 668, 6),
+];
+
+const HIERARCHICAL_QUALIFIER_LINE = [
+  placedEntry("SEM BDI", 705, 750, 7),
+  placedEntry("BDI", 795, 825, 8),
+  placedEntry("COM BDI", 870, 912, 9),
+  placedEntry("SEM BDI", 948, 992, 10),
+  placedEntry("BDI", 1038, 1062, 11),
+  placedEntry("COM BDI", 1108, 1152, 12),
+];
+
+const HIERARCHICAL_HEADER_ROWS = [
+  HIERARCHICAL_PARENT_LINE,
+  HIERARCHICAL_FLAT_LINE,
+  HIERARCHICAL_QUALIFIER_LINE,
+];
+
+/**
+ * quantity x unit_price = total_price and unit_cost x (1 + bdi/100) =
+ * unit_price hold exactly, so the reconstruction can be checked against the
+ * document's own arithmetic rather than only against literal expectations.
+ */
+function hierarchicalDataRow(code: string, quantity: number, unitCost: number) {
+  const bdiRate = 12.5;
+  const unitBdi = (unitCost * bdiRate) / 100;
+  const unitPrice = unitCost + unitBdi;
+  const money = (value: number) => `R$ ${value.toFixed(2).replace(".", ",")}`;
+  return [
+    placedEntry(code, 2, 38, 0),
+    placedEntry(`AX-${code.replace(/\D/g, "")}`, 62, 118, 1),
+    placedEntry(`Composição sintética ${code}`, 140, 395, 2),
+    placedEntry("REF", 428, 462, 3),
+    placedEntry("m³", 500, 530, 4),
+    mergedEntry([
+      { text: quantity.toFixed(2).replace(".", ","), left: 572, right: 608 },
+      { text: "12,50%", left: 634, right: 678 },
+      { text: money(unitCost), left: 702, right: 758 },
+      { text: money(unitBdi), left: 784, right: 838 },
+      { text: money(unitPrice), left: 862, right: 918 },
+      { text: money(unitCost * quantity), left: 942, right: 998 },
+      { text: money(unitBdi * quantity), left: 1024, right: 1078 },
+      { text: money(unitPrice * quantity), left: 1102, right: 1158 },
+    ]),
+  ];
+}
+
+const HIERARCHICAL_DATA_ROWS = [
+  hierarchicalDataRow("2.4.7", 3, 100),
+  hierarchicalDataRow("2.4.8", 4, 250),
+];
+
+function hierarchicalResult(extraRows: ReadonlyArray<ReadonlyArray<any>> = []) {
+  return reconstructBudgetTable(
+    buildSyntheticInput(HIERARCHICAL_COLUMNS, [
+      {
+        pageNumber: 1,
+        includeHeader: false,
+        rows: [...HIERARCHICAL_HEADER_ROWS, ...HIERARCHICAL_DATA_ROWS, ...extraRows],
+      },
+    ]),
+  );
+}
+
+function columnByRole(
+  result: ReturnType<typeof reconstructBudgetTable>,
+  role: BudgetColumnRole,
+): ResolvedColumn | undefined {
+  return result.columns.find(
+    (column) => column.role === role && column.status === "resolved",
+  );
+}
+
+function headerAtomTexts(
+  result: ReturnType<typeof reconstructBudgetTable>,
+  column: ResolvedColumn | undefined,
+): ReadonlyArray<string> {
+  const byId = new Map(result.textItems.map((item) => [item.evidenceId, item.rawText]));
+  return (column?.headerAtomIds ?? []).map((id) => byId.get(id) ?? "");
+}
+
+test("hierarchical header: every semantic role resolves exactly once", () => {
+  const result = hierarchicalResult();
+  for (const role of [
+    "item_code",
+    "description",
+    "unit",
+    "quantity",
+    "bdi_rate",
+    "unit_cost",
+    "unit_price",
+    "total_price",
+  ] as const) {
+    const resolved = result.columns.filter(
+      (column) => column.role === role && column.status === "resolved",
+    );
+    equal(resolved.length, 1, `exactly one resolved column for ${role}`);
+  }
+});
+
+test("hierarchical header: auxiliary leaves stay unknown but keep their own evidence", () => {
+  const result = hierarchicalResult();
+  const unknown = result.columns.filter((column) => column.role === "unknown");
+  // CÓDIGO, FONTE, unit BDI amount, total without BDI, total BDI amount.
+  equal(unknown.length, 5);
+  assert(
+    unknown.every((column) => column.headerAtomIds.length > 0),
+    "every auxiliary column must retain its own header evidence",
+  );
+  assert(
+    unknown.every((column) => column.rightPoints > column.leftPoints),
+    "every auxiliary column must retain a band of its own",
+  );
+});
+
+test("hierarchical header: sibling leaves are physically isolated from one another", () => {
+  const result = hierarchicalResult();
+  const unitCost = columnByRole(result, "unit_cost");
+  const unitPrice = columnByRole(result, "unit_price");
+  const totalPrice = columnByRole(result, "total_price");
+
+  assert(
+    !headerAtomTexts(result, unitCost).includes("COM BDI"),
+    "the unit_cost leaf must not carry a COM BDI atom",
+  );
+  assert(
+    !headerAtomTexts(result, unitPrice).includes("SEM BDI"),
+    "the unit_price leaf must not carry a SEM BDI atom",
+  );
+  assert(
+    !headerAtomTexts(result, totalPrice).includes("SEM BDI"),
+    "the total_price leaf must not carry a SEM BDI atom",
+  );
+  equal(headerAtomTexts(result, totalPrice).slice().sort(), ["COM BDI", "PREÇO TOTAL"]);
+  equal(headerAtomTexts(result, unitCost).slice().sort(), ["SEM BDI", "VALOR UNITÁRIO"]);
+});
+
+test("hierarchical header: no leaf path mixes incompatible sibling qualifiers", () => {
+  const result = hierarchicalResult();
+  const byId = new Map(result.textItems.map((item) => [item.evidenceId, item.rawText]));
+  for (const column of result.columns) {
+    const texts = column.headerAtomIds.map((id) => byId.get(id) ?? "");
+    const qualifiers = texts.filter(
+      (text) => text === "COM BDI" || text === "SEM BDI" || text === "BDI",
+    );
+    assert(
+      qualifiers.length <= 1,
+      `a leaf path must not contain incompatible sibling qualifiers: ${JSON.stringify(texts)}`,
+    );
+  }
+});
+
+test("hierarchical header: resolved semantic leaf bands never overlap", () => {
+  const result = hierarchicalResult();
+  const resolved = result.columns.filter(
+    (column) => column.status === "resolved" && column.role !== "unknown",
+  );
+  for (const left of resolved) {
+    for (const right of resolved) {
+      if (left.columnId >= right.columnId || left.pageNumber !== right.pageNumber) continue;
+      assert(
+        !(left.leftPoints < right.rightPoints && right.leftPoints < left.rightPoints),
+        `resolved bands ${left.role} and ${right.role} must not overlap`,
+      );
+    }
+  }
+});
+
+test("hierarchical header: no header atom ever comes from a data row", () => {
+  const result = hierarchicalResult();
+  const headerLineIds = new Set(
+    result.logicalRows.filter((row) => row.kind === "header").map((row) => row.locatorId),
+  );
+  const headerTextItemIds = new Set(
+    result.lines
+      .filter((line) => headerLineIds.has(line.locatorId))
+      .flatMap((line) => line.textItemEvidenceIds),
+  );
+  const contaminated = result.columns.flatMap((column) =>
+    column.headerAtomIds.filter((id) => !headerTextItemIds.has(id)),
+  );
+  equal(contaminated, [], "header atoms must come only from the selected header block");
+});
+
+test("hierarchical header: a leaf band spans its data column, not the width of its label", () => {
+  const result = hierarchicalResult();
+  const description = columnByRole(result, "description");
+  const quantity = columnByRole(result, "quantity");
+  // The label "DESCRIÇÃO" occupies [230,310] and "QTD" occupies [560,585];
+  // the data beneath them occupies [140,395] and [572,608]. The band must be
+  // the data column, otherwise a value starting past the label's right edge
+  // is never seen at all.
+  equal(description?.leftPoints, 140);
+  equal(description?.rightPoints, 395);
+  equal(quantity?.leftPoints, 560);
+  equal(quantity?.rightPoints, 608);
+});
+
+test("hierarchical header: a complete economic row fills every role from its own leaf", () => {
+  const result = hierarchicalResult();
+  const record = result.records.find((candidate) => candidate.itemCode === "2.4.7");
+  assert(record !== undefined, "expected the synthetic item to be reconstructed");
+  equal(record?.kind, "service_item");
+  equal(record?.unit, "m³");
+  equal(record?.quantity?.rawText, "3,00");
+  equal(record?.bdiRate?.rawText, "12,50%");
+  equal(record?.unitCost?.rawText, "R$ 100,00");
+  equal(record?.unitPrice?.rawText, "R$ 112,50");
+  equal(record?.totalPrice?.rawText, "R$ 337,50");
+  assert(
+    (record?.description ?? "").startsWith("Composição sintética"),
+    "the description must be reconstructed from the description band",
+  );
+});
+
+test("hierarchical header: sibling amounts never manufacture a divergent total_price", () => {
+  const result = hierarchicalResult();
+  for (const record of result.records.filter((candidate) => candidate.kind === "service_item")) {
+    for (const field of [
+      record.quantity,
+      record.unitCost,
+      record.bdiRate,
+      record.unitPrice,
+      record.totalPrice,
+    ]) {
+      assert(
+        field?.grammarId !== "divergent-source-cells-v1",
+        `no economic field may be divergent purely because sibling leaves hold other legitimate values: ${JSON.stringify(field?.rawText)}`,
+      );
+    }
+    equal(
+      record.totalPrice?.sourceCellIds.length,
+      1,
+      "total_price must have exactly one source cell",
+    );
+  }
+});
+
+test("hierarchical header: the document's own arithmetic confirms the reconstruction", () => {
+  const result = hierarchicalResult();
+  const outcomes = new Set(
+    result.arithmeticEvaluations
+      .filter((evaluation) => evaluation.relation !== "descendant_sum")
+      .map((evaluation) => evaluation.outcome),
+  );
+  assert(
+    outcomes.has("direct_correspondence"),
+    `expected the reconstructed economic fields to satisfy the source's own relations, saw ${JSON.stringify([...outcomes])}`,
+  );
+  assert(
+    !outcomes.has("source_arithmetic_inconsistency") && !outcomes.has("invented_evidence"),
+    `no relation may fail on a correctly reconstructed row, saw ${JSON.stringify([...outcomes])}`,
+  );
+});
+
+test("hierarchical header: a repeated header stays a header on every page and never becomes a total", () => {
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(HIERARCHICAL_COLUMNS, [
+      {
+        pageNumber: 1,
+        includeHeader: false,
+        rows: [...HIERARCHICAL_HEADER_ROWS, ...HIERARCHICAL_DATA_ROWS],
+      },
+      {
+        pageNumber: 2,
+        includeHeader: false,
+        rows: [...HIERARCHICAL_HEADER_ROWS, ...HIERARCHICAL_DATA_ROWS],
+      },
+    ]),
+  );
+  for (const pageNumber of [1, 2]) {
+    const headerRows = result.logicalRows.filter(
+      (row) => row.pageNumber === pageNumber && row.kind === "header",
+    );
+    equal(headerRows.length, 3, `page ${pageNumber} must classify all three header lines as header`);
+  }
+  // The parent title line contains an aggregate-looking caption; it must
+  // never become a Total record on any page.
+  equal(
+    result.records.filter((record) => record.kind === "total").length,
+    0,
+    "a header title must never produce a total record",
+  );
+  const headerRowIds = new Set(
+    result.logicalRows.filter((row) => row.kind === "header").map((row) => row.rowId),
+  );
+  assert(
+    result.records.every((record) => record.rowIds.every((id) => !headerRowIds.has(id))),
+    "a selected header line must never generate a business record",
+  );
+});
+
+test("hierarchical header: metadata above the table never becomes an item", () => {
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(HIERARCHICAL_COLUMNS, [
+      {
+        pageNumber: 1,
+        includeHeader: false,
+        rows: [
+          [
+            placedEntry("OBRA:", 140, 190, 2),
+            placedEntry("Empreendimento sintético de referência regional", 200, 690, 2),
+            placedEntry("BDI :", 1020, 1060, 11),
+            placedEntry("12,50%", 1100, 1150, 12),
+          ],
+          ...HIERARCHICAL_HEADER_ROWS,
+          ...HIERARCHICAL_DATA_ROWS,
+        ],
+      },
+    ]),
+  );
+  const metadataRow = result.logicalRows[0]!;
+  assert(
+    metadataRow.kind !== "service_item" &&
+      metadataRow.kind !== "group" &&
+      metadataRow.kind !== "subgroup" &&
+      metadataRow.kind !== "total" &&
+      metadataRow.kind !== "subtotal",
+    `a title/metadata block must not become a budget row, got ${metadataRow.kind}`,
+  );
+  const metadataCells = new Set(metadataRow.cellIds);
+  assert(
+    result.cells.some((cell) => metadataCells.has(cell.cellId) && cell.state !== "missing"),
+    "the metadata block's evidence must still be conserved",
+  );
+});
+
+test("plausible unit evidence: a long descriptive phrase in the unit band is not a unit anchor", () => {
+  const columns = [
+    { header: "Descrição", left: 80, right: 300 },
+    { header: "Unidade", left: 310, right: 360 },
+    { header: "Preço Total", left: 520, right: 600 },
+  ];
+  const longUnit = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      {
+        pageNumber: 1,
+        rows: [
+          [
+            entry("Bloco de identificação", 0),
+            entry("Denominação institucional extensa", 1),
+            entry("1.500,00", 2),
+          ],
+        ],
+      },
+    ]),
+  );
+  equal(longUnit.records[0]?.kind, "unclassified");
+  assert(
+    longUnit.records[0]?.unit !== null,
+    "the text must still be conserved in the unit field as observed evidence",
+  );
+
+  const compactUnit = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      {
+        pageNumber: 1,
+        rows: [[entry("Serviço avulso", 0), entry("m³", 1), entry("1.500,00", 2)]],
+      },
+    ]),
+  );
+  equal(compactUnit.records[0]?.kind, "service_item");
+});
+
+test("aggregate evidence: narrative mentioning a total is never an aggregate, a real caption is", () => {
+  const columns = [
+    { header: "Descrição", left: 0, right: 900 },
+    { header: "Preço Total", left: 1000, right: 1100 },
+  ];
+  const narrative = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      {
+        pageNumber: 1,
+        rows: [
+          [
+            placedEntry(
+              "Observação: o desembolso acompanha o percentual do total do contrato medido no período",
+              0,
+              1090,
+            ),
+          ],
+        ],
+      },
+    ]),
+  );
+  assert(
+    narrative.records.every((record) => record.kind !== "total" && record.kind !== "subtotal"),
+    "prose containing the word total must not become an aggregate",
+  );
+
+  const aggregate = reconstructBudgetTable(
+    buildSyntheticInput(columns, [
+      {
+        pageNumber: 1,
+        rows: [
+          [entry("Serviço avulso", 0), entry("500,00", 1)],
+          [placedEntry("TOTAL GERAL", 700, 800, 0), placedEntry("500,00", 1010, 1090, 1)],
+        ],
+      },
+    ]),
+  );
+  const total = aggregate.records.find((record) => record.kind === "total");
+  assert(total !== undefined, "a compact aggregate caption with an amount is still an aggregate");
+  equal(total?.totalPrice?.rawText, "500,00");
+});
+
+test("group versus item: only detailed pricing evidence makes a row an item", () => {
+  const result = hierarchicalResult([
+    [
+      placedEntry("2.5", 2, 38, 0),
+      placedEntry("Agrupamento sintético", 140, 395, 2),
+      mergedEntry([
+        { text: "R$ 1.000,00", left: 942, right: 998 },
+        { text: "R$ 125,00", left: 1024, right: 1078 },
+        { text: "R$ 1.125,00", left: 1102, right: 1158 },
+      ]),
+    ],
+  ]);
+  const grouping = result.records.find((record) => record.itemCode === "2.5");
+  assert(grouping !== undefined, "the grouping row must be reconstructed");
+  assert(
+    grouping?.kind === "group" || grouping?.kind === "subgroup",
+    `a code + description + rolled-up total row is a grouping row, got ${grouping?.kind}`,
+  );
+  equal(grouping?.totalPrice?.rawText, "R$ 1.125,00");
+  const item = result.records.find((record) => record.itemCode === "2.4.7");
+  equal(item?.kind, "service_item", "a row with detailed pricing stays an item");
+});
+
+test("hierarchical header: conservation holds and nothing is invented", () => {
+  const result = hierarchicalResult();
+  equal(result.structuralIssues, []);
+  assert(
+    result.arithmeticEvaluations.every(
+      (evaluation) => evaluation.outcome !== "invented_evidence",
+    ),
+    "no invented evidence",
+  );
+  const disposed = new Set(
+    result.evidenceDispositions
+      .filter((disposition) => disposition.evidenceKind === "text_item")
+      .map((disposition) => disposition.evidenceId),
+  );
+  assert(
+    result.textItems.every((item) => disposed.has(item.evidenceId)),
+    "every text item must receive an explicit disposition",
+  );
+});
+
+test("hierarchical header: reconstruction is deterministic and runtime-key invariant", () => {
+  const pages = [
+    {
+      pageNumber: 1,
+      includeHeader: false as const,
+      rows: [...HIERARCHICAL_HEADER_ROWS, ...HIERARCHICAL_DATA_ROWS],
+    },
+  ];
+  const first = reconstructBudgetTable(
+    buildSyntheticInput(HIERARCHICAL_COLUMNS, pages, { keyPrefix: "alpha" }),
+  );
+  const second = reconstructBudgetTable(
+    buildSyntheticInput(HIERARCHICAL_COLUMNS, pages, { keyPrefix: "omega" }),
+  );
+  equal(first.canonicalFingerprint, second.canonicalFingerprint);
 });

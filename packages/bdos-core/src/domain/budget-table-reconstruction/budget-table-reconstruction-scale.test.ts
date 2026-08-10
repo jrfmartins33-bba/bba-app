@@ -222,9 +222,28 @@ if (
 ) {
   throw new Error("expected every economic scale service item to carry a full economic field set");
 }
-const economicWideBandSplit = economicFirst.columns.some(
-  (column) => column.groupingRuleId === "wide-band-geometric-split-v1",
-);
+// The deliberately wide upstream CUSTO band [430,530] spans two real leaves.
+// What must hold at scale is that it never stands as one semantic column:
+// unit_cost and bdi_rate keep separate, non-overlapping bands on every page,
+// so neither can absorb the other's values. (The separation is now produced
+// directly by the header leaves rather than by refining the upstream band
+// afterwards, so the assertion is on the bands themselves rather than on the
+// name of the rule that produced them.)
+const economicWideBandSplit = economicFirst.pages.every((page) => {
+  const unitCost = economicFirst.columns.find(
+    (column) => column.pageNumber === page.pageNumber && column.role === "unit_cost",
+  );
+  const bdiRate = economicFirst.columns.find(
+    (column) => column.pageNumber === page.pageNumber && column.role === "bdi_rate",
+  );
+  return (
+    unitCost !== undefined &&
+    bdiRate !== undefined &&
+    unitCost.rightPoints <= bdiRate.leftPoints &&
+    unitCost.leftPoints === ECONOMIC_COLUMN_BOUNDS.unitCost.left &&
+    bdiRate.rightPoints === ECONOMIC_COLUMN_BOUNDS.bdiRate.right
+  );
+});
 if (!economicWideBandSplit) {
   throw new Error("expected the deliberately wide CUSTO band to be split at scale");
 }
