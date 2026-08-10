@@ -6,8 +6,32 @@ import type {
   ReconstructedRecordKind,
   ReconstructionCompleteness,
   ReconstructionIssue,
+  ReconstructionSchemaCompleteness,
   SemanticResolutionStatus,
 } from "@bba/bdos-core/domain/budget-table-reconstruction.types";
+
+// Rótulos human-first dos três estados de completude que o Motor distingue.
+// A UI apenas escolhe o texto correspondente ao estado recebido; a decisão
+// é inteiramente do domínio.
+const SCHEMA_COMPLETENESS_LABELS: Record<
+  ReconstructionSchemaCompleteness["status"],
+  string
+> = {
+  complete: "Reconstrução estrutural completa",
+  incomplete:
+    "Reconstrução incompleta — há colunas/campos que não puderam ser recuperados",
+  not_demonstrated:
+    "Estrutura tabular não comprovada — nenhuma página demonstrou um cabeçalho de planilha",
+};
+
+const SCHEMA_COMPLETENESS_TONES: Record<
+  ReconstructionSchemaCompleteness["status"],
+  "green" | "amber" | "red" | "neutral"
+> = {
+  complete: "green",
+  incomplete: "red",
+  not_demonstrated: "amber",
+};
 
 // Epic 21 — Laboratório de Reconstrução Orçamentária. Este módulo é a
 // ÚNICA camada que olha para o formato bruto do Motor Determinístico
@@ -83,6 +107,23 @@ export interface BudgetReconstructionLabSummary {
   readonly unclassifiedCount: number;
   readonly investedEvidenceCount: number;
   readonly structuralIssueCount: number;
+  /**
+   * Completude da reconstrução, decidida pelo Motor (result.schemaCompleteness)
+   * e apenas traduzida aqui. É uma pergunta DIFERENTE de structuralIssueCount:
+   * "o motor não se contradisse" não significa "a planilha que entrou saiu".
+   * Nunca recalculado nesta camada.
+   */
+  readonly schemaCompletenessStatus: ReconstructionSchemaCompleteness["status"] | null;
+  readonly schemaCompletenessLabel: string;
+  readonly schemaCompletenessTone: LabRecordStatusTone;
+  readonly pagesWithDemonstratedSchema: number;
+  readonly pagesWithCompleteSchema: number;
+  readonly pagesWithUnresolvedExpectedRoles: ReadonlyArray<{
+    readonly pageNumber: number;
+    readonly unresolvedExpectedRoles: ReadonlyArray<BudgetColumnRole>;
+  }>;
+  readonly recordsMissingExpectedRoleCount: number;
+  readonly resolvedRecordsMissingExpectedRoleCount: number;
   readonly textItemCount: number;
   readonly fragmentCount: number;
   readonly segmentCount: number;
@@ -365,6 +406,30 @@ export function buildBudgetReconstructionLabViewModel(
     unclassifiedCount,
     investedEvidenceCount: outcomeCounts.get("invented_evidence") ?? 0,
     structuralIssueCount: result.structuralIssues.length,
+    // Arquivos gravados por motores anteriores ao diagnóstico de completude
+    // simplesmente não trazem o campo; nesse caso a Lab não inventa um
+    // veredito, ela informa que o dado não existe naquele arquivo.
+    schemaCompletenessStatus: result.schemaCompleteness?.status ?? null,
+    schemaCompletenessLabel:
+      result.schemaCompleteness === undefined
+        ? "Completude estrutural não informada por esta versão do motor"
+        : SCHEMA_COMPLETENESS_LABELS[result.schemaCompleteness.status],
+    schemaCompletenessTone:
+      result.schemaCompleteness === undefined
+        ? "neutral"
+        : SCHEMA_COMPLETENESS_TONES[result.schemaCompleteness.status],
+    pagesWithDemonstratedSchema: result.schemaCompleteness?.pagesWithDemonstratedSchema ?? 0,
+    pagesWithCompleteSchema: result.schemaCompleteness?.pagesWithCompleteSchema ?? 0,
+    pagesWithUnresolvedExpectedRoles: (result.schemaCompleteness?.pages ?? [])
+      .filter((page) => page.unresolvedExpectedRoles.length > 0)
+      .map((page) => ({
+        pageNumber: page.pageNumber,
+        unresolvedExpectedRoles: page.unresolvedExpectedRoles,
+      })),
+    recordsMissingExpectedRoleCount:
+      result.schemaCompleteness?.recordsMissingExpectedRoleCount ?? 0,
+    resolvedRecordsMissingExpectedRoleCount:
+      result.schemaCompleteness?.resolvedRecordsMissingExpectedRoleCount ?? 0,
     textItemCount: result.textItems.length,
     fragmentCount: result.fragments.length,
     segmentCount: result.segments.length,

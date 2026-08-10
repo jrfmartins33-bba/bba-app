@@ -1,9 +1,6 @@
 import { evaluateArithmetic } from "./budget-table-reconstruction-arithmetic";
 import { formCells } from "./budget-table-reconstruction-cell-formation";
-import {
-  resolveColumns,
-  selectBudgetHeaderProvenance,
-} from "./budget-table-reconstruction-column-resolution";
+import { resolveBudgetTableColumns } from "./budget-table-reconstruction-column-resolution";
 import { conserveEvidence } from "./budget-table-reconstruction-conservation";
 import { buildEvidenceGraph } from "./budget-table-reconstruction-evidence-graph";
 import { exactFraction } from "./budget-table-reconstruction-exact-rational";
@@ -15,15 +12,21 @@ import {
   BUDGET_TABLE_RECONSTRUCTION_ENGINE_VERSION,
   BUDGET_TABLE_RECONSTRUCTION_PROFILE,
 } from "./budget-table-reconstruction-profile";
-import { classifyRecords } from "./budget-table-reconstruction-record-classification";
+import {
+  classifyRecords,
+  expectedRolesForRecord,
+  reconstructedRolesForRecord,
+} from "./budget-table-reconstruction-record-classification";
 import type {
   BudgetColumnRole,
   BudgetTableReconstructionInput,
   BudgetTableReconstructionResult,
+  BudgetTableSchemaExpectation,
   ParsedNumericEvidence,
   ReconstructedBudgetRecord,
   ReconstructionCompleteness,
   ReconstructionIssue,
+  ReconstructionSchemaCompleteness,
   ReconstructionSourceIdentity,
 } from "./budget-table-reconstruction.types";
 
@@ -157,6 +160,52 @@ function completeness(
   };
 }
 
+/**
+ * The completeness question `structuralIssues` cannot answer. An empty issue
+ * list only proves the engine never contradicted itself; a budget can be half
+ * unreadable with zero invariant violations, and reporting that as "no
+ * structural problem" is a misleading diagnosis, not a passing one. This
+ * projects, deterministically and without recomputing any domain rule, what
+ * each page's proven schema expected against what it resolved, and whether
+ * any record was published as resolved while an expected role was absent.
+ */
+function schemaCompleteness(
+  records: BudgetTableReconstructionResult["records"],
+  schemaExpectations: ReadonlyArray<BudgetTableSchemaExpectation>,
+): ReconstructionSchemaCompleteness {
+  const demonstrated = schemaExpectations.filter(
+    (expectation) => expectation.schemaFamilyId !== null,
+  );
+  const complete = demonstrated.filter(
+    (expectation) => expectation.unresolvedExpectedRoles.length === 0,
+  );
+
+  let recordsMissingExpectedRoleCount = 0;
+  let resolvedRecordsMissingExpectedRoleCount = 0;
+  for (const record of records) {
+    const expected = expectedRolesForRecord(record, schemaExpectations);
+    if (expected.length === 0) continue;
+    const reconstructed = reconstructedRolesForRecord(record);
+    if (expected.every((role) => reconstructed.has(role))) continue;
+    recordsMissingExpectedRoleCount += 1;
+    if (record.status === "resolved") resolvedRecordsMissingExpectedRoleCount += 1;
+  }
+
+  return {
+    status:
+      demonstrated.length === 0
+        ? "not_demonstrated"
+        : complete.length === demonstrated.length && resolvedRecordsMissingExpectedRoleCount === 0
+          ? "complete"
+          : "incomplete",
+    pagesWithDemonstratedSchema: demonstrated.length,
+    pagesWithCompleteSchema: complete.length,
+    recordsMissingExpectedRoleCount,
+    resolvedRecordsMissingExpectedRoleCount,
+    pages: schemaExpectations,
+  };
+}
+
 function failedResult(
   input: BudgetTableReconstructionInput,
   issues: ReadonlyArray<ReconstructionIssue>,
@@ -184,6 +233,7 @@ function failedResult(
     evidenceDispositions: [],
     structuralIssues: issues,
     completeness: completeness([], [], true),
+    schemaCompleteness: schemaCompleteness([], []),
     canonicalFingerprint: "",
   };
   return { ...base, canonicalFingerprint: fingerprintCanonical(base) };
@@ -202,14 +252,15 @@ export function reconstructBudgetTable(
   }
 
   const graph = buildEvidenceGraph(normalizedInput);
-  const columns = resolveColumns(normalizedInput, graph);
+  const columnResolution = resolveBudgetTableColumns(normalizedInput, graph);
+  const columns = columnResolution.columns;
   const cellFormation = formCells(graph, columns);
   const logicalRows = formLogicalRows(
     graph.lines,
     cellFormation.cells,
     cellFormation.fragments,
     graph.textItems,
-    selectBudgetHeaderProvenance(graph),
+    columnResolution.headerProvenance,
   );
   const records = classifyRecords(logicalRows, {
     cells: cellFormation.cells,
@@ -217,6 +268,7 @@ export function reconstructBudgetTable(
     textItems: graph.textItems,
     columns,
     rows: logicalRows,
+    schemaExpectations: columnResolution.schemaExpectations,
   });
   const arithmeticEvaluations = evaluateArithmetic(records, columns, logicalRows);
   const conservation = conserveEvidence({
@@ -307,6 +359,7 @@ export function reconstructBudgetTable(
     evidenceDispositions: conservation.dispositions,
     structuralIssues,
     completeness: resultCompleteness,
+    schemaCompleteness: schemaCompleteness(records, columnResolution.schemaExpectations),
     canonicalFingerprint: "",
   };
   return { ...base, canonicalFingerprint: fingerprintCanonical(base) };

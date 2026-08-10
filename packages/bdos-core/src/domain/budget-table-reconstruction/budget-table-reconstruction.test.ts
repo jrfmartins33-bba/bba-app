@@ -813,13 +813,34 @@ test("total can consume a subtotal on the immediately continuous page", () => {
   equal(evaluation?.summandRecordIds.length, 1);
 });
 
+/**
+ * Fixture note (r11): this test previously gave page 2 the SAME header as
+ * page 1 and asserted the boundary broke the hierarchy. That fixture became
+ * structurally invalid once repeated table schemas are recognised: two pages
+ * reprinting an identical header are one table continued, which is what the
+ * following test now asserts, so the old fixture no longer expressed "a NEW
+ * header appears". The intent is preserved exactly -- page 2 now genuinely
+ * introduces a DIFFERENT header schema, and both original assertions
+ * (no parent across the boundary, no totalization across the boundary) are
+ * unchanged.
+ */
 test("new header prevents hierarchy and totalization across a page boundary", () => {
+  const differentHeader = [
+    placedEntry("Item", 0, 70, 0),
+    placedEntry("Serviço", 80, 300, 1),
+    placedEntry("Unidade", 310, 360, 2),
+    placedEntry("Quant.", 370, 430, 3),
+    placedEntry("Custo Unitário", 440, 510, 4),
+    placedEntry("Preço Total", 520, 600, 5),
+  ];
   const result = reconstructBudgetTable(
     buildSyntheticInput(SIMPLE_COLUMNS, [
       { pageNumber: 1, rows: [[entry("1", 0), entry("Grupo", 1)], SIMPLE_ITEM] },
       {
         pageNumber: 2,
+        includeHeader: false,
         rows: [
+          differentHeader,
           [entry("1.1", 0), entry("Subgrupo", 1)],
           [entry("Subtotal", 1), entry("20", 5)],
         ],
@@ -833,6 +854,23 @@ test("new header prevents hierarchy and totalization across a page boundary", ()
   );
   equal(subgroup?.parentRecordId, null);
   equal(evaluation?.summandRecordIds.length, 0);
+});
+
+test("a reprinted identical header continues the same table's hierarchy across the boundary", () => {
+  const result = reconstructBudgetTable(
+    buildSyntheticInput(SIMPLE_COLUMNS, [
+      { pageNumber: 1, rows: [[entry("1", 0), entry("Grupo", 1)], SIMPLE_ITEM] },
+      {
+        pageNumber: 2,
+        rows: [[entry("1.1", 0), entry("Subgrupo", 1)], SIMPLE_ITEM],
+      },
+    ]),
+  );
+  const group = result.records.find((record) => record.itemCode === "1");
+  const subgroup = result.records.find((record) => record.itemCode === "1.1");
+  assert(group !== undefined, "expected the group on page 1");
+  equal(subgroup?.kind, "subgroup");
+  equal(subgroup?.parentRecordId, group?.recordId);
 });
 
 test("g.1 association overrides a conflicting simplified geometry intersection", () => {

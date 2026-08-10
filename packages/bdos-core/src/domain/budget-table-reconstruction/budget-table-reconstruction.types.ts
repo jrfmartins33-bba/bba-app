@@ -149,6 +149,42 @@ export interface ResolvedColumn {
   readonly splitReasonCode: string | null;
 }
 
+/**
+ * What one page's table schema was proven to HAVE, next to what that page
+ * actually resolved. `expectedRoles` comes from the repeated header schema
+ * family the page belongs to -- the header itself, not this page's success at
+ * reading it -- so a role the document demonstrably carries stays expected on
+ * every page of the family even where local resolution failed. On a page that
+ * never demonstrated a schema at all, expectation and resolution coincide:
+ * nothing was ever proven there, so nothing beyond what was read can honestly
+ * be demanded.
+ */
+export interface BudgetTableSchemaExpectation {
+  readonly pageNumber: number;
+  readonly schemaFamilyId: string | null;
+  readonly expectedRoles: ReadonlyArray<BudgetColumnRole>;
+  readonly resolvedRoles: ReadonlyArray<BudgetColumnRole>;
+  readonly unresolvedExpectedRoles: ReadonlyArray<BudgetColumnRole>;
+}
+
+/**
+ * Reconstruction COMPLETENESS, which is a different question from
+ * `structuralIssues` (internal invariant violations). An empty issue list
+ * only says the engine never contradicted itself; it says nothing about
+ * whether the table that went in came out. `status` is "not_demonstrated"
+ * when no page ever proved a table schema, "incomplete" when a proven schema
+ * has roles no page resolved or a record reported as resolved is missing an
+ * expected role, and "complete" only when neither is true.
+ */
+export interface ReconstructionSchemaCompleteness {
+  readonly status: "complete" | "incomplete" | "not_demonstrated";
+  readonly pagesWithDemonstratedSchema: number;
+  readonly pagesWithCompleteSchema: number;
+  readonly recordsMissingExpectedRoleCount: number;
+  readonly resolvedRecordsMissingExpectedRoleCount: number;
+  readonly pages: ReadonlyArray<BudgetTableSchemaExpectation>;
+}
+
 export type CellState = "present" | "missing" | "divergent" | "ambiguous" | "not_applicable";
 
 export interface ReconstructedCell {
@@ -334,5 +370,6 @@ export interface BudgetTableReconstructionResult {
   readonly evidenceDispositions: ReadonlyArray<EvidenceDisposition>;
   readonly structuralIssues: ReadonlyArray<ReconstructionIssue>;
   readonly completeness: ReconstructionCompleteness;
+  readonly schemaCompleteness: ReconstructionSchemaCompleteness;
   readonly canonicalFingerprint: string;
 }

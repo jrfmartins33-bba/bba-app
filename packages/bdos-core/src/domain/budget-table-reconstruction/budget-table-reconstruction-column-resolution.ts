@@ -12,9 +12,11 @@ import {
   headerVocabularyRoles,
   normalizeBudgetHeaderText,
 } from "./budget-table-reconstruction-profile";
+import { isCompactCaption } from "./budget-table-reconstruction-text";
 import type {
   BudgetColumnRole,
   BudgetTableReconstructionInput,
+  BudgetTableSchemaExpectation,
   EvidenceLine,
   EvidenceSegment,
   ResolvedColumn,
@@ -197,9 +199,30 @@ function headerCandidates(graph: EvidenceGraph, pageNumber: number): ReadonlyArr
   return candidates;
 }
 
-function lineHasVocabularyHit(graph: EvidenceGraph, line: EvidenceLine): boolean {
-  const segments = graph.segments.filter((segment) => segment.lineId === line.lineId);
-  return segments.some((segment) => headerVocabularyRoles(segment.rawText).length > 0);
+/**
+ * A line makes a positive HEADER statement only when one of its own physical
+ * text boxes is a compact caption that carries a header vocabulary term.
+ *
+ * The compactness requirement is what separates a column title from prose
+ * that merely reuses a schema word. A service description ending in a rate
+ * annotation carries no digits of its own, sits directly under the real
+ * header, and satisfied a bare vocabulary test -- so it was absorbed into the
+ * header block as an extra generation, turned the description caption above
+ * it into its "parent", and cost that page both its description column and
+ * its rate column. Testing the individual text box rather than the merged
+ * segment matters for the same reason: captioning happens per box, and a
+ * segment that merges several captions is not itself prose.
+ */
+function lineHasVocabularyHit(
+  graph: EvidenceGraph,
+  line: EvidenceLine,
+  textItemById: ReadonlyMap<string, EvidenceGraph["textItems"][number]>,
+): boolean {
+  return line.textItemEvidenceIds.some((textItemId) => {
+    const item = textItemById.get(textItemId);
+    if (item === undefined) return false;
+    return isCompactCaption(item.rawText) && headerVocabularyRoles(item.rawText).length > 0;
+  });
 }
 
 function lineHasEconomicLiteral(graph: EvidenceGraph, line: EvidenceLine): boolean {
@@ -318,8 +341,9 @@ function headerBlockCandidates(
   }
   if (current.length > 0) runs.push(current);
 
+  const textItemById = new Map(graph.textItems.map((item) => [item.evidenceId, item]));
   return runs
-    .flatMap((run) => headerSignatureSubRuns(graph, run))
+    .flatMap((run) => headerSignatureSubRuns(graph, run, textItemById))
     .map((run) => {
       const paths = buildHeaderPathsForLines(graph, pageNumber, run);
       const roleSet = new Set(
@@ -351,11 +375,12 @@ function headerBlockCandidates(
 function headerSignatureSubRuns(
   graph: EvidenceGraph,
   run: ReadonlyArray<EvidenceLine>,
+  textItemById: ReadonlyMap<string, EvidenceGraph["textItems"][number]>,
 ): ReadonlyArray<ReadonlyArray<EvidenceLine>> {
   const subRuns: EvidenceLine[][] = [];
   let current: EvidenceLine[] = [];
   for (const line of run) {
-    if (lineHasVocabularyHit(graph, line)) {
+    if (lineHasVocabularyHit(graph, line, textItemById)) {
       current.push(line);
       continue;
     }
@@ -478,16 +503,35 @@ function bodyTextIntervals(
  * evidence for that line at all.
  *
  * Finally, the bands of one header line must be mutually disjoint -- that is
- * what makes them columns. If any two collide, that line's atoms all fall
- * back to their raw label boxes rather than being reconciled by a
- * preference: a collision means the geometry did not in fact demonstrate a
- * partition, and inventing one would be guessing.
+ * what makes them columns. A collision means the geometry did not in fact
+ * demonstrate a partition THERE, so the widening that produced it is
+ * withdrawn -- but only for the atoms actually involved. Reverting the whole
+ * line, as this used to, let one auxiliary column's accidental reach destroy
+ * every other column on the line, including the description band, and with
+ * it every row whose description happened to start left of the label.
+ *
+ * Which side withdraws is decided structurally, never by preference: an
+ * atom that the profile positively identifies with a semantic role (see
+ * semanticallyIdentifiedAtomIds) is making a documented claim about a
+ * column; an atom it does not identify is auxiliary evidence making no such
+ * claim. When exactly one side of a collision is semantic, the auxiliary
+ * side falls back to its own label box -- its evidence is preserved, never
+ * discarded, it simply stops asserting an extent the header never named.
+ * When both sides are semantic, or neither is, there is nothing to
+ * distinguish them and both fall back, exactly as before. The loop runs to a
+ * fixpoint so a fallback that exposes a further collision is resolved too.
  */
 function observedAtomBands(
   atoms: ReadonlyArray<HeaderAtom>,
   bodyIntervals: ReadonlyArray<HorizontalRange>,
+  semanticAtomIds: ReadonlySet<string>,
 ): ReadonlyMap<string, HorizontalRange> {
-  const bands = new Map<string, HorizontalRange>();
+  const labelRangeOf = (atom: HeaderAtom): HorizontalRange => ({
+    leftPoints: atom.leftPoints,
+    rightPoints: atom.rightPoints,
+  });
+
+  const widenedBands = new Map<string, HorizontalRange>();
   for (const atom of atoms) {
     let leftPoints = atom.leftPoints;
     let rightPoints = atom.rightPoints;
@@ -509,32 +553,91 @@ function observedAtomBands(
       leftPoints = Math.min(leftPoints, interval.leftPoints);
       rightPoints = Math.max(rightPoints, interval.rightPoints);
     }
-    bands.set(atom.textItemEvidenceId, { leftPoints, rightPoints });
+    widenedBands.set(atom.textItemEvidenceId, { leftPoints, rightPoints });
   }
 
-  for (const left of atoms) {
-    for (const right of atoms) {
-      if (left.textItemEvidenceId >= right.textItemEvidenceId) continue;
-      const leftBand = bands.get(left.textItemEvidenceId)!;
-      const rightBand = bands.get(right.textItemEvidenceId)!;
-      if (
-        rangesPositivelyOverlap(
-          leftBand.leftPoints,
-          leftBand.rightPoints,
-          rightBand.leftPoints,
-          rightBand.rightPoints,
-        )
-      ) {
-        return new Map(
-          atoms.map((atom) => [
-            atom.textItemEvidenceId,
-            { leftPoints: atom.leftPoints, rightPoints: atom.rightPoints },
-          ]),
-        );
+  const withdrawnAtomIds = new Set<string>();
+  const bandOf = (atom: HeaderAtom): HorizontalRange =>
+    withdrawnAtomIds.has(atom.textItemEvidenceId)
+      ? labelRangeOf(atom)
+      : widenedBands.get(atom.textItemEvidenceId) ?? labelRangeOf(atom);
+
+  for (let round = 0; round <= atoms.length; round += 1) {
+    let withdrewThisRound = false;
+    for (const left of atoms) {
+      for (const right of atoms) {
+        if (left.textItemEvidenceId >= right.textItemEvidenceId) continue;
+        const leftBand = bandOf(left);
+        const rightBand = bandOf(right);
+        if (
+          !rangesPositivelyOverlap(
+            leftBand.leftPoints,
+            leftBand.rightPoints,
+            rightBand.leftPoints,
+            rightBand.rightPoints,
+          )
+        ) {
+          continue;
+        }
+        const leftIsSemantic = semanticAtomIds.has(left.textItemEvidenceId);
+        const rightIsSemantic = semanticAtomIds.has(right.textItemEvidenceId);
+        const withdrawing =
+          leftIsSemantic === rightIsSemantic ? [left, right] : leftIsSemantic ? [right] : [left];
+        for (const atom of withdrawing) {
+          if (withdrawnAtomIds.has(atom.textItemEvidenceId)) continue;
+          withdrawnAtomIds.add(atom.textItemEvidenceId);
+          withdrewThisRound = true;
+        }
       }
     }
+    if (!withdrewThisRound) break;
   }
-  return bands;
+
+  return new Map(atoms.map((atom) => [atom.textItemEvidenceId, bandOf(atom)]));
+}
+
+/**
+ * The atoms of a header block that the profile positively identifies with a
+ * semantic role, read atom by atom, after the same explicit-item-identity
+ * specificity rule page-level resolution already applies (see
+ * resolveItemIdentitySpecificity): when exactly one atom of the block spells
+ * out item identity explicitly, every other generic identifier atom stops
+ * competing for item_code and, having no other role of its own, makes no
+ * semantic claim at all.
+ *
+ * This is the structural difference between AUXILIARY WIDE EVIDENCE and a
+ * SEMANTIC BODY BAND. It is decided from profile vocabulary membership only
+ * -- never from a particular column name, never from a position, a width, or
+ * a count.
+ */
+function semanticallyIdentifiedAtomIds(atoms: ReadonlyArray<HeaderAtom>): ReadonlySet<string> {
+  const rolesByAtomId = new Map<string, ReadonlyArray<BudgetColumnRole>>(
+    atoms.map((atom) => [
+      atom.textItemEvidenceId,
+      headerPathRoles([atom.normalizedText]) as ReadonlyArray<BudgetColumnRole>,
+    ]),
+  );
+  const identifierAtoms = atoms.filter((atom) =>
+    rolesByAtomId.get(atom.textItemEvidenceId)!.includes("item_code"),
+  );
+  const explicitIdentifierAtoms = identifierAtoms.filter((atom) =>
+    /\bitem\b/.test(atom.normalizedText),
+  );
+  if (explicitIdentifierAtoms.length === 1) {
+    const explicitAtomId = explicitIdentifierAtoms[0]!.textItemEvidenceId;
+    for (const atom of identifierAtoms) {
+      if (atom.textItemEvidenceId === explicitAtomId) continue;
+      rolesByAtomId.set(
+        atom.textItemEvidenceId,
+        rolesByAtomId.get(atom.textItemEvidenceId)!.filter((role) => role !== "item_code"),
+      );
+    }
+  }
+  return new Set(
+    atoms
+      .filter((atom) => rolesByAtomId.get(atom.textItemEvidenceId)!.length > 0)
+      .map((atom) => atom.textItemEvidenceId),
+  );
 }
 
 function rangeContains(outer: HorizontalRange, inner: HorizontalRange): boolean {
@@ -574,41 +677,108 @@ function rangeContains(outer: HorizontalRange, inner: HorizontalRange): boolean 
  * could be claimed by two different semantic columns at once -- both revert
  * to their raw label boxes instead of one being preferred.
  */
-function buildHeaderPathsForLines(
+type HeaderAtomPosition = string;
+
+/** A header atom's STRUCTURAL identity inside its block: which header line it
+ * sits on and its left-to-right rank on that line. Two pages that repeat the
+ * same table header repeat these positions exactly, whatever their page
+ * numbers or their absolute coordinates happen to be. */
+function headerAtomPosition(lineIndex: number, atomIndex: number): HeaderAtomPosition {
+  return `${lineIndex}:${atomIndex}`;
+}
+
+interface HeaderBlockGeometry {
+  readonly pageNumber: number;
+  readonly atomsByLine: ReadonlyArray<ReadonlyArray<HeaderAtom>>;
+  readonly allAtoms: ReadonlyArray<HeaderAtom>;
+  readonly positionByAtomId: ReadonlyMap<string, HeaderAtomPosition>;
+  readonly atomByPosition: ReadonlyMap<HeaderAtomPosition, HeaderAtom>;
+  readonly bandByAtomId: ReadonlyMap<string, HorizontalRange>;
+  /** The structural signature of the block: per line, left to right, the
+   * normalized text of each atom. Text and ordering only -- never a
+   * coordinate, never a page number. */
+  readonly signature: ReadonlyArray<ReadonlyArray<string>>;
+}
+
+function labelRangeOfAtom(atom: HeaderAtom): HorizontalRange {
+  return { leftPoints: atom.leftPoints, rightPoints: atom.rightPoints };
+}
+
+function buildHeaderBlockGeometry(
   graph: EvidenceGraph,
   pageNumber: number,
   block: ReadonlyArray<EvidenceLine>,
-): ReadonlyArray<HeaderPath> {
-  if (block.length === 0) return [];
-
+): HeaderBlockGeometry | null {
+  if (block.length === 0) return null;
   const textItemById = new Map(graph.textItems.map((item) => [item.evidenceId, item]));
   const bodyIntervals = bodyTextIntervals(graph, pageNumber, block, textItemById);
   const atomsByLine = block.map((line) => atomsForLine(graph, line));
   const allAtoms = atomsByLine.flat();
+  const semanticAtomIds = semanticallyIdentifiedAtomIds(allAtoms);
 
-  const lineIndexByAtomId = new Map<string, number>();
+  const positionByAtomId = new Map<string, HeaderAtomPosition>();
+  const atomByPosition = new Map<HeaderAtomPosition, HeaderAtom>();
   const bandByAtomId = new Map<string, HorizontalRange>();
   for (const [lineIndex, atoms] of atomsByLine.entries()) {
-    for (const atom of atoms) lineIndexByAtomId.set(atom.textItemEvidenceId, lineIndex);
-    for (const [atomId, band] of observedAtomBands(atoms, bodyIntervals)) {
+    for (const [atomIndex, atom] of atoms.entries()) {
+      const position = headerAtomPosition(lineIndex, atomIndex);
+      positionByAtomId.set(atom.textItemEvidenceId, position);
+      atomByPosition.set(position, atom);
+    }
+    for (const [atomId, band] of observedAtomBands(atoms, bodyIntervals, semanticAtomIds)) {
       bandByAtomId.set(atomId, band);
     }
   }
-  const labelRange = (atom: HeaderAtom): HorizontalRange => ({
-    leftPoints: atom.leftPoints,
-    rightPoints: atom.rightPoints,
-  });
-  const bandOf = (atom: HeaderAtom): HorizontalRange =>
-    bandByAtomId.get(atom.textItemEvidenceId) ?? labelRange(atom);
 
-  const parentOf = new Map<string, HeaderAtom>();
+  return {
+    pageNumber,
+    atomsByLine,
+    allAtoms,
+    positionByAtomId,
+    atomByPosition,
+    bandByAtomId,
+    signature: atomsByLine.map((atoms) => atoms.map((atom) => atom.normalizedText)),
+  };
+}
+
+interface HeaderBlockAncestry {
+  readonly parentByPosition: ReadonlyMap<HeaderAtomPosition, HeaderAtomPosition>;
+  readonly positionsWithOverlappingChild: ReadonlySet<HeaderAtomPosition>;
+}
+
+/**
+ * Ancestry OBSERVED on one page, in two ordered passes, both positive,
+ * neither resolved by a nearest/narrowest/score tie-break.
+ *
+ * Pass 1 -- observed containment. A child belongs to a parent when the
+ * child's own label box lies inside the parent's OBSERVED band (see
+ * observedAtomBands) and the parent sits on a strictly higher header line.
+ * When several ancestors contain it, the innermost one wins -- the candidate
+ * whose band is contained in every other candidate's band -- which is
+ * ordinary tree nesting, not a preference; if no single candidate is
+ * innermost, the atom is left for pass 2.
+ *
+ * Pass 2 -- label overlap on the immediately preceding line, applied only to
+ * atoms pass 1 left unparented. It resolves the stacked-label case ("PREÇO"
+ * over "TOTAL" over one column), where parent and child govern exactly the
+ * same data and containment therefore proves nothing. Exactly one
+ * overlapping candidate is required.
+ */
+function observeHeaderBlockAncestry(geometry: HeaderBlockGeometry): HeaderBlockAncestry {
+  const { atomsByLine, allAtoms, positionByAtomId, bandByAtomId } = geometry;
+  const bandOf = (atom: HeaderAtom): HorizontalRange =>
+    bandByAtomId.get(atom.textItemEvidenceId) ?? labelRangeOfAtom(atom);
+  const lineIndexOf = (atom: HeaderAtom): number =>
+    Number(positionByAtomId.get(atom.textItemEvidenceId)!.split(":")[0]);
+
+  const parentByPosition = new Map<HeaderAtomPosition, HeaderAtomPosition>();
   for (const child of allAtoms) {
-    const childLineIndex = lineIndexByAtomId.get(child.textItemEvidenceId)!;
+    const childLineIndex = lineIndexOf(child);
     if (childLineIndex === 0) continue;
     const containing = allAtoms.filter(
       (candidate) =>
-        lineIndexByAtomId.get(candidate.textItemEvidenceId)! < childLineIndex &&
-        rangeContains(bandOf(candidate), labelRange(child)),
+        lineIndexOf(candidate) < childLineIndex &&
+        rangeContains(bandOf(candidate), labelRangeOfAtom(child)),
     );
     if (containing.length === 0) continue;
     const innermost = containing.filter(
@@ -620,30 +790,70 @@ function buildHeaderPathsForLines(
             !rangeContains(bandOf(other), bandOf(candidate)),
         ),
     );
-    if (innermost.length === 1) parentOf.set(child.textItemEvidenceId, innermost[0]!);
+    if (innermost.length === 1) {
+      parentByPosition.set(
+        positionByAtomId.get(child.textItemEvidenceId)!,
+        positionByAtomId.get(innermost[0]!.textItemEvidenceId)!,
+      );
+    }
   }
 
-  const hasOverlappingChild = new Set<string>();
+  const positionsWithOverlappingChild = new Set<HeaderAtomPosition>();
   for (let lineIndex = 1; lineIndex < atomsByLine.length; lineIndex += 1) {
     const parentAtoms = atomsByLine[lineIndex - 1]!;
     const childAtoms = atomsByLine[lineIndex]!;
     for (const child of childAtoms) {
       const overlapping = parentAtoms.filter((parent) => atomsPositivelyOverlap(parent, child));
-      for (const parent of overlapping) hasOverlappingChild.add(parent.textItemEvidenceId);
+      for (const parent of overlapping) {
+        positionsWithOverlappingChild.add(positionByAtomId.get(parent.textItemEvidenceId)!);
+      }
       if (overlapping.length !== 1) continue;
-      if (parentOf.has(child.textItemEvidenceId)) continue;
-      parentOf.set(child.textItemEvidenceId, overlapping[0]!);
+      const childPosition = positionByAtomId.get(child.textItemEvidenceId)!;
+      if (parentByPosition.has(childPosition)) continue;
+      parentByPosition.set(
+        childPosition,
+        positionByAtomId.get(overlapping[0]!.textItemEvidenceId)!,
+      );
     }
   }
 
-  const assignedParentIds = new Set(
-    [...parentOf.values()].map((atom) => atom.textItemEvidenceId),
-  );
-  const leaves = allAtoms.filter(
-    (atom) =>
-      !assignedParentIds.has(atom.textItemEvidenceId) &&
-      !hasOverlappingChild.has(atom.textItemEvidenceId),
-  );
+  return { parentByPosition, positionsWithOverlappingChild };
+}
+
+function buildHeaderPathsForLines(
+  graph: EvidenceGraph,
+  pageNumber: number,
+  block: ReadonlyArray<EvidenceLine>,
+  family?: HeaderSchemaFamily,
+): ReadonlyArray<HeaderPath> {
+  const geometry = buildHeaderBlockGeometry(graph, pageNumber, block);
+  if (geometry === null) return [];
+  return headerPathsFromGeometry(geometry, family);
+}
+
+function headerPathsFromGeometry(
+  geometry: HeaderBlockGeometry,
+  family?: HeaderSchemaFamily,
+): ReadonlyArray<HeaderPath> {
+  const { pageNumber, allAtoms, positionByAtomId, atomByPosition, bandByAtomId } = geometry;
+  const observed = observeHeaderBlockAncestry(geometry);
+  const ancestry = family?.ancestry ?? observed.parentByPosition;
+  const excludedParentPositions =
+    family?.positionsWithOverlappingChild ?? observed.positionsWithOverlappingChild;
+
+  const labelRange = labelRangeOfAtom;
+  const bandOf = (atom: HeaderAtom): HorizontalRange =>
+    bandByAtomId.get(atom.textItemEvidenceId) ?? labelRange(atom);
+  const parentOf = (atom: HeaderAtom): HeaderAtom | undefined => {
+    const parentPosition = ancestry.get(positionByAtomId.get(atom.textItemEvidenceId)!);
+    return parentPosition === undefined ? undefined : atomByPosition.get(parentPosition);
+  };
+
+  const assignedParentPositions = new Set(ancestry.values());
+  const leaves = allAtoms.filter((atom) => {
+    const position = positionByAtomId.get(atom.textItemEvidenceId)!;
+    return !assignedParentPositions.has(position) && !excludedParentPositions.has(position);
+  });
 
   const collidingLeafIds = new Set<string>();
   for (const left of leaves) {
@@ -670,7 +880,7 @@ function buildHeaderPathsForLines(
       const chain: HeaderAtom[] = [leaf];
       let cursor: HeaderAtom | undefined = leaf;
       while (cursor !== undefined) {
-        const parent = parentOf.get(cursor.textItemEvidenceId);
+        const parent = parentOf(cursor);
         if (parent === undefined) break;
         chain.unshift(parent);
         cursor = parent;
@@ -705,8 +915,157 @@ function buildHeaderPathsForLines(
     );
 }
 
-function buildHeaderPaths(graph: EvidenceGraph, pageNumber: number): ReadonlyArray<HeaderPath> {
-  return buildHeaderPathsForLines(graph, pageNumber, headerBlockLines(graph, pageNumber));
+/**
+ * A REPEATED TABLE SCHEMA, proven positively and structurally: every page
+ * whose selected header block has the same signature -- the same lines, each
+ * carrying the same normalized atom texts in the same left-to-right order --
+ * is reconstructing the same table header. Nothing here uses a page number, a
+ * document name, a score, a percentage or a threshold; the proof is textual
+ * identity plus ordering, and it fails closed (a page whose header differs in
+ * any atom simply forms its own family).
+ *
+ * A multi-page budget must not be reconstructed as N unrelated tables when
+ * the document itself demonstrates it is one table repeated. Where one page's
+ * geometry proves a parent/child relation that another page's geometry leaves
+ * unproven -- the ordinary case, because a centered parent title only reaches
+ * its outer children through whatever body values that particular page
+ * happens to contain -- the relation belongs to the SCHEMA and is shared.
+ * Disagreement is never resolved: a structural position whose observed
+ * parents differ between pages gets no family ancestry at all.
+ *
+ * Only SCHEMA SEMANTICS travel between pages: ancestry, and the expected role
+ * set derived from it. PAGE GEOMETRY never does -- every page keeps its own
+ * observed bands, so a shifted or rescaled repeat of the same header is still
+ * measured where it actually is.
+ */
+export interface HeaderSchemaFamily {
+  readonly familyId: string;
+  readonly signature: ReadonlyArray<ReadonlyArray<string>>;
+  readonly pageNumbers: ReadonlyArray<number>;
+  readonly ancestry: ReadonlyMap<HeaderAtomPosition, HeaderAtomPosition>;
+  readonly positionsWithOverlappingChild: ReadonlySet<HeaderAtomPosition>;
+  /** The roles this table schema demonstrably HAS, independent of whether any
+   * particular page succeeded in resolving them. A page's local failure to
+   * resolve a column can therefore never be mistaken for the document not
+   * having that column. */
+  readonly expectedRoles: ReadonlyArray<BudgetColumnRole>;
+}
+
+function familyExpectedRoles(
+  signature: ReadonlyArray<ReadonlyArray<string>>,
+  ancestry: ReadonlyMap<HeaderAtomPosition, HeaderAtomPosition>,
+  positionsWithOverlappingChild: ReadonlySet<HeaderAtomPosition>,
+): ReadonlyArray<BudgetColumnRole> {
+  const allPositions: HeaderAtomPosition[] = [];
+  const textByPosition = new Map<HeaderAtomPosition, string>();
+  signature.forEach((line, lineIndex) =>
+    line.forEach((text, atomIndex) => {
+      const position = headerAtomPosition(lineIndex, atomIndex);
+      allPositions.push(position);
+      textByPosition.set(position, text);
+    }),
+  );
+
+  const parentPositions = new Set(ancestry.values());
+  const leafPositions = allPositions.filter(
+    (position) =>
+      !parentPositions.has(position) && !positionsWithOverlappingChild.has(position),
+  );
+
+  const rolesByLeaf = new Map<HeaderAtomPosition, ReadonlyArray<BudgetColumnRole>>();
+  const pathTextByLeaf = new Map<HeaderAtomPosition, string>();
+  for (const leafPosition of leafPositions) {
+    const chain: string[] = [];
+    const visited = new Set<HeaderAtomPosition>();
+    let cursor: HeaderAtomPosition | undefined = leafPosition;
+    while (cursor !== undefined && !visited.has(cursor)) {
+      visited.add(cursor);
+      chain.unshift(textByPosition.get(cursor)!);
+      cursor = ancestry.get(cursor);
+    }
+    pathTextByLeaf.set(leafPosition, chain.join(" "));
+    rolesByLeaf.set(leafPosition, headerPathRoles(chain) as ReadonlyArray<BudgetColumnRole>);
+  }
+
+  const identifierLeaves = leafPositions.filter((position) =>
+    rolesByLeaf.get(position)!.includes("item_code"),
+  );
+  const explicitIdentifierLeaves = identifierLeaves.filter((position) =>
+    /\bitem\b/.test(pathTextByLeaf.get(position)!),
+  );
+  if (explicitIdentifierLeaves.length === 1) {
+    for (const position of identifierLeaves) {
+      if (position === explicitIdentifierLeaves[0]!) continue;
+      rolesByLeaf.set(
+        position,
+        rolesByLeaf.get(position)!.filter((role) => role !== "item_code"),
+      );
+    }
+  }
+
+  const leafCountByRole = new Map<BudgetColumnRole, number>();
+  for (const leafPosition of leafPositions) {
+    const roles = rolesByLeaf.get(leafPosition)!;
+    if (roles.length !== 1) continue;
+    leafCountByRole.set(roles[0]!, (leafCountByRole.get(roles[0]!) ?? 0) + 1);
+  }
+  return [...leafCountByRole.entries()]
+    .filter(([, count]) => count === 1)
+    .map(([role]) => role)
+    .sort(ordinalCompare);
+}
+
+function buildHeaderSchemaFamilies(
+  geometries: ReadonlyArray<HeaderBlockGeometry>,
+): ReadonlyMap<number, HeaderSchemaFamily> {
+  const geometriesBySignature = new Map<string, HeaderBlockGeometry[]>();
+  for (const geometry of geometries) {
+    const key = fingerprintCanonical(geometry.signature);
+    const existing = geometriesBySignature.get(key);
+    if (existing === undefined) geometriesBySignature.set(key, [geometry]);
+    else existing.push(geometry);
+  }
+
+  const familyByPage = new Map<number, HeaderSchemaFamily>();
+  for (const [key, members] of geometriesBySignature) {
+    const observations = members.map((geometry) => observeHeaderBlockAncestry(geometry));
+
+    const observedParentsByChild = new Map<HeaderAtomPosition, Set<HeaderAtomPosition>>();
+    const positionsWithOverlappingChild = new Set<HeaderAtomPosition>();
+    for (const observation of observations) {
+      for (const [childPosition, parentPosition] of observation.parentByPosition) {
+        const existing = observedParentsByChild.get(childPosition);
+        if (existing === undefined) {
+          observedParentsByChild.set(childPosition, new Set([parentPosition]));
+        } else {
+          existing.add(parentPosition);
+        }
+      }
+      for (const position of observation.positionsWithOverlappingChild) {
+        positionsWithOverlappingChild.add(position);
+      }
+    }
+
+    const ancestry = new Map<HeaderAtomPosition, HeaderAtomPosition>();
+    for (const [childPosition, parentPositions] of [...observedParentsByChild].sort(
+      ([left], [right]) => ordinalCompare(left, right),
+    )) {
+      if (parentPositions.size !== 1) continue;
+      ancestry.set(childPosition, [...parentPositions][0]!);
+    }
+
+    const signature = members[0]!.signature;
+    const family: HeaderSchemaFamily = {
+      familyId: `header-family:${key}`,
+      signature,
+      pageNumbers: members.map((geometry) => geometry.pageNumber).sort((a, b) => a - b),
+      ancestry,
+      positionsWithOverlappingChild,
+      expectedRoles: familyExpectedRoles(signature, ancestry, positionsWithOverlappingChild),
+    };
+    for (const geometry of members) familyByPage.set(geometry.pageNumber, family);
+  }
+  return familyByPage;
 }
 
 function headerPathsWithinBand(
@@ -1247,11 +1606,13 @@ function resolvePageColumns(
   input: BudgetTableReconstructionInput,
   graph: EvidenceGraph,
   pageNumber: number,
+  headerBlock: ReadonlyArray<EvidenceLine>,
+  headerGeometry: HeaderBlockGeometry | null,
+  family: HeaderSchemaFamily | undefined,
 ): ReadonlyArray<ResolvedColumn> {
   const headers = headerCandidates(graph, pageNumber);
-  const headerBlock = headerBlockLines(graph, pageNumber);
   const headerPaths = resolveItemIdentitySpecificity(
-    buildHeaderPathsForLines(graph, pageNumber, headerBlock),
+    headerGeometry === null ? [] : headerPathsFromGeometry(headerGeometry, family),
   );
   const headerBlockLineIds = new Set(headerBlock.map((line) => line.lineId));
 
@@ -1328,17 +1689,52 @@ function schemasAreExactlyCompatible(
   );
 }
 
-export function resolveColumns(
+export interface BudgetTableColumnResolution {
+  readonly columns: ReadonlyArray<ResolvedColumn>;
+  readonly schemaExpectations: ReadonlyArray<BudgetTableSchemaExpectation>;
+  readonly headerProvenance: SelectedHeaderProvenance;
+}
+
+/**
+ * Resolves every page's columns once, against the document's proven header
+ * schema families, and publishes -- alongside the columns -- what each page's
+ * schema was EXPECTED to carry. The two are deliberately separate answers:
+ * "which columns did this page resolve" and "which columns does this table
+ * have" are different questions, and conflating them is what let a page's own
+ * resolution failure silently redefine a documented field as inapplicable.
+ */
+export function resolveBudgetTableColumns(
   input: BudgetTableReconstructionInput,
   graph: EvidenceGraph,
-): ReadonlyArray<ResolvedColumn> {
+): BudgetTableColumnResolution {
   const pageNumbers = [...new Set(graph.lines.map((line) => line.pageNumber))].sort(
     (left, right) => left - right,
   );
+
+  const blockByPage = new Map<number, ReadonlyArray<EvidenceLine>>();
+  const geometryByPage = new Map<number, HeaderBlockGeometry>();
+  for (const pageNumber of pageNumbers) {
+    const block = headerBlockLines(graph, pageNumber);
+    blockByPage.set(pageNumber, block);
+    const geometry = buildHeaderBlockGeometry(graph, pageNumber, block);
+    if (geometry !== null) geometryByPage.set(pageNumber, geometry);
+  }
+  const familyByPage = buildHeaderSchemaFamilies([...geometryByPage.values()]);
+
   const resolvedByPage = new Map<number, ReadonlyArray<ResolvedColumn>>();
+  const expectationSourceByPage = new Map<number, HeaderSchemaFamily>();
 
   for (const pageNumber of pageNumbers) {
-    const current = resolvePageColumns(input, graph, pageNumber);
+    const family = familyByPage.get(pageNumber);
+    if (family !== undefined) expectationSourceByPage.set(pageNumber, family);
+    const current = resolvePageColumns(
+      input,
+      graph,
+      pageNumber,
+      blockByPage.get(pageNumber) ?? [],
+      geometryByPage.get(pageNumber) ?? null,
+      family,
+    );
     const previousPageNumber = pageNumber - 1;
     const previous = resolvedByPage.get(previousPageNumber);
     const currentIntroducesHeader = current.some((column) => column.headerLineIds.length > 0);
@@ -1359,12 +1755,59 @@ export function resolveColumns(
           status: "resolved",
         })),
       );
+      // A page that proved no header of its own but continues the previous
+      // page's exact schema continues its EXPECTATIONS too -- otherwise the
+      // continuation page would be held to nothing at all.
+      const inherited = expectationSourceByPage.get(previousPageNumber);
+      if (family === undefined && inherited !== undefined) {
+        expectationSourceByPage.set(pageNumber, inherited);
+      }
     } else {
       resolvedByPage.set(pageNumber, current);
     }
   }
 
-  return pageNumbers.flatMap((pageNumber) => resolvedByPage.get(pageNumber) ?? []);
+  const columns = pageNumbers.flatMap((pageNumber) => resolvedByPage.get(pageNumber) ?? []);
+  const schemaExpectations = pageNumbers.map((pageNumber): BudgetTableSchemaExpectation => {
+    const pageColumns = resolvedByPage.get(pageNumber) ?? [];
+    const resolvedRoles = uniqueSortedRoles(
+      pageColumns
+        .filter((column) => column.status === "resolved" && column.role !== "unknown")
+        .map((column) => column.role),
+    );
+    const source = expectationSourceByPage.get(pageNumber);
+    const expectedRoles =
+      source === undefined ? resolvedRoles : uniqueSortedRoles(source.expectedRoles);
+    return {
+      pageNumber,
+      schemaFamilyId: source?.familyId ?? null,
+      expectedRoles,
+      resolvedRoles,
+      unresolvedExpectedRoles: expectedRoles.filter((role) => !resolvedRoles.includes(role)),
+    };
+  });
+
+  const headerLineIds = new Set<string>();
+  const headerPageNumbers = new Set<number>();
+  for (const pageNumber of pageNumbers) {
+    const block = blockByPage.get(pageNumber) ?? [];
+    if (block.length === 0) continue;
+    headerPageNumbers.add(pageNumber);
+    for (const line of block) headerLineIds.add(line.lineId);
+  }
+
+  return {
+    columns,
+    schemaExpectations,
+    headerProvenance: { lineIds: headerLineIds, pageNumbers: headerPageNumbers },
+  };
+}
+
+export function resolveColumns(
+  input: BudgetTableReconstructionInput,
+  graph: EvidenceGraph,
+): ReadonlyArray<ResolvedColumn> {
+  return resolveBudgetTableColumns(input, graph).columns;
 }
 
 export interface SelectedHeaderProvenance {

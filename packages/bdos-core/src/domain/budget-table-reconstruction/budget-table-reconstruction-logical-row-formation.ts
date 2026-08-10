@@ -2,7 +2,7 @@ import type { SelectedHeaderProvenance } from "./budget-table-reconstruction-col
 import { fingerprintCanonical } from "./budget-table-reconstruction-fingerprint";
 import { parseNumericEvidence } from "./budget-table-reconstruction-numeric-evidence";
 import { headerVocabularyRoles } from "./budget-table-reconstruction-profile";
-import { cellText } from "./budget-table-reconstruction-text";
+import { cellText, isCompactCaption } from "./budget-table-reconstruction-text";
 import type {
   EvidenceLine,
   EvidenceTextItem,
@@ -137,17 +137,11 @@ export function isPlausibleUnitEvidence(text: string): boolean {
   return /^[\p{L}\d\u00b2\u00b3\u00aa\u00ba\u00b0./-]+$/u.test(trimmed);
 }
 
-/** An aggregate row labels itself; it does not narrate. A caption like
- * "TOTAL GERAL" or "VALOR BDI TOTAL:" is a handful of words, while the
- * prose that merely mentions the word "total" is a sentence. The token
- * bound is a structural label/prose distinction, not a tuned parameter. */
-const MAX_AGGREGATE_LABEL_TOKENS = 4;
-
-function isCompactLabel(text: string): boolean {
-  const trimmed = text.trim();
-  if (trimmed.length === 0) return false;
-  return trimmed.split(/\s+/).length <= MAX_AGGREGATE_LABEL_TOKENS;
-}
+/** An aggregate row labels itself; it does not narrate. The label/prose
+ * distinction is the domain's single shared `isCompactCaption` rule -- the
+ * same one that separates a column title from a description that merely
+ * reuses a schema word. */
+const isCompactLabel = isCompactCaption;
 
 /**
  * Positive aggregate evidence. The previous rule promoted a row to
