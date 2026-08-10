@@ -74,9 +74,19 @@ function columnForTextItem(
  * reconstruction did not separate, but each individual text item's own
  * geometry falls unambiguously inside exactly one of the matching columns,
  * use that real per-text-item geometry directly instead of the lexical
- * token-boundary heuristic below. Returns null (never a partial map) when
- * any text item straddles two columns or any matching column would be left
- * without evidence -- in that case the lexical fallback still applies.
+ * token-boundary heuristic below. Returns null when any text item straddles
+ * two columns -- in that case the lexical fallback still applies.
+ *
+ * A matching column that receives no text item is simply absent on this
+ * row and is reported as such, rather than voiding the whole partition.
+ * Requiring every matching column to be fed was the difference between
+ * reading a merged economic row correctly and giving up on it: one column
+ * legitimately empty on that row (a rate that does not apply, an optional
+ * source reference) forced every value in the segment to be duplicated into
+ * every sibling column as shared, undecomposable evidence -- which is how a
+ * single total_price column came to hold three sibling leaves' values at
+ * once. Precise per-text-item geometry is available here and is strictly
+ * better evidence than the lexical guess it replaces.
  */
 function geometricTextItemPartition(
   graph: EvidenceGraph,
@@ -96,7 +106,6 @@ function geometricTextItemPartition(
     existing.push(fragmentId);
     assignment.set(column.columnId, existing);
   }
-  if (!matchingColumns.every((column) => assignment.has(column.columnId))) return null;
   return assignment;
 }
 
@@ -273,10 +282,9 @@ export function formCells(
         continue;
       }
 
-      for (const column of matchingColumns) occupiedColumns.add(column.columnId);
-
       if (matchingColumns.length === 1) {
         const column = matchingColumns[0]!;
+        occupiedColumns.add(column.columnId);
         cells.push({
           cellId: cellIdentity(segment, column, line.lineId),
           pageNumber: line.pageNumber,
@@ -312,6 +320,14 @@ export function formCells(
 
       for (let columnIndex = 0; columnIndex < matchingColumns.length; columnIndex += 1) {
         const column = matchingColumns[columnIndex]!;
+        if (geometricPartition !== null && !geometricPartition.has(column.columnId)) {
+          // This column's band contains none of the segment's text items:
+          // the row is genuinely empty here. Leaving it unoccupied lets the
+          // absent-cell pass below record it as missing, instead of copying
+          // a sibling's value into it.
+          continue;
+        }
+        occupiedColumns.add(column.columnId);
         let fragmentIds = segment.fragmentIds;
         let state: ReconstructedCell["state"] = "ambiguous";
         let reasonCode =
