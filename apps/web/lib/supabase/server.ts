@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -6,6 +7,8 @@ declare const process: {
   env: {
     NEXT_PUBLIC_SUPABASE_URL?: string;
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?: string;
+    SUPABASE_URL?: string;
+    SUPABASE_SECRET_KEY?: string;
   };
 };
 
@@ -102,4 +105,28 @@ export const requireBbaAdmin = async (
   }
 
   return { userId: user.id };
+};
+
+// Cliente com a credencial `secret key` (equivalente `service_role`) —
+// EXCLUSIVO de código de servidor que já revalidou o ator via
+// requireBbaAdmin/requireAuthenticatedCompany (getUser()) ANTES de
+// construir este cliente. Ignora RLS inteiramente; toda autorização real
+// é feita pelas próprias funções SQL exclusivas de servidor que este
+// cliente invoca (p_actor_id validado dentro de cada função — ver
+// 20260714000004_..._server_only_functions.sql e
+// 20260810000000_bdos_budget_official_review.sql). NUNCA importar este
+// módulo, nem repassar o valor retornado, para código que roda no
+// navegador — a `SUPABASE_SECRET_KEY` nunca é `NEXT_PUBLIC_*` e nunca
+// deve alcançar nenhum bundle do cliente.
+export const getSupabaseServiceRoleClient = (): SupabaseClient => {
+  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const secretKey = process.env.SUPABASE_SECRET_KEY;
+
+  if (!supabaseUrl || !secretKey) {
+    throw new Error("Supabase service role nao configurado. Defina SUPABASE_URL e SUPABASE_SECRET_KEY no ambiente (exclusivo de servidor).");
+  }
+
+  return createClient(supabaseUrl, secretKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
 };

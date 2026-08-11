@@ -1,0 +1,158 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { BudgetReviewRepository, AuditEventToPersist } from "@bba/bdos-core/services/budget-official-review";
+import {
+  consolidateBudgetReviewSessionRpcParams,
+  createBudgetReviewSessionRpcParams,
+  mapBudgetReviewSessionRow,
+  recordBudgetReviewRowMutationRpcParams,
+} from "./budget-official-review-mappers";
+
+// Adaptador de persistência (Epic 21.5A) — implementa BudgetReviewRepository
+// (packages/bdos-core/src/services/budget-official-review/budget-review.repository.ts).
+//
+// *** EXCLUSIVO DE SERVIDOR — NUNCA IMPORTAR DE CÓDIGO CLIENTE ***
+//
+// As operações de escrita (createSession, mutateRow, consolidateSession,
+// importRows) chamam funções SQL cujo EXECUTE foi concedido somente a
+// `service_role` (20260810000000_bdos_budget_official_review.sql) — este
+// módulo só funciona, para escrita, com um `SupabaseClient` de
+// service_role. Leitura (loadSession, findSessionByAcquisition) usa um
+// cliente autenticado comum, protegido por RLS (Admin BBA only).
+
+const SESSION_COLUMNS =
+  "id, company_id, procurement_case_id, budget_version_id, document_version_id, source_sha256, acquisition_mechanism, acquisition_mechanism_version, status, metadata, created_by, created_at";
+const ROW_COLUMNS =
+  "id, company_id, session_id, kind, lot_reference, parent_row_id, position, state, extracted, revised, page, evidence_text, justification, inserted_manually, metadata, created_by, created_at";
+
+export function createBudgetReviewServerRepository(supabase: SupabaseClient): BudgetReviewRepository {
+  async function loadRowsForSession(organizationId: string, sessionId: string) {
+    const { data, error } = await supabase
+      .from("budget_review_rows")
+      .select(ROW_COLUMNS)
+      .eq("company_id", organizationId)
+      .eq("session_id", sessionId);
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  return {
+    async findOrganizationIdForSession(sessionId) {
+      const { data, error } = await supabase
+        .from("budget_review_sessions")
+        .select("company_id")
+        .eq("id", sessionId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data === null ? null : String(data.company_id);
+    },
+
+    async loadSession(organizationId, sessionId) {
+      const { data: sessionRow, error: sessionError } = await supabase
+        .from("budget_review_sessions")
+        .select(SESSION_COLUMNS)
+        .eq("company_id", organizationId)
+        .eq("id", sessionId)
+        .maybeSingle();
+
+      if (sessionError) throw sessionError;
+      if (sessionRow === null) return null;
+
+      const rowRows = await loadRowsForSession(organizationId, sessionId);
+      return mapBudgetReviewSessionRow(sessionRow, rowRows);
+    },
+
+    async findSessionByAcquisition(organizationId, procurementCaseId, sourceSha256, acquisitionMechanism) {
+      const { data: sessionRow, error: sessionError } = await supabase
+        .from("budget_review_sessions")
+        .select(SESSION_COLUMNS)
+        .eq("company_id", organizationId)
+        .eq("procurement_case_id", procurementCaseId)
+        .eq("source_sha256", sourceSha256)
+        .eq("acquisition_mechanism", acquisitionMechanism)
+        .maybeSingle();
+
+      if (sessionError) throw sessionError;
+      if (sessionRow === null) return null;
+
+      const rowRows = await loadRowsForSession(organizationId, sessionRow.id);
+      return mapBudgetReviewSessionRow(sessionRow, rowRows);
+    },
+
+    async createSession(organizationId, actor, session) {
+      const { data, error } = await supabase.rpc(
+        "create_budget_review_session",
+        createBudgetReviewSessionRpcParams(organizationId, actor, session),
+      );
+
+      if (error || !data) {
+        throw error ?? new Error("Falha ao persistir a Sessão de Revisão do Orçamento Oficial.");
+      }
+
+      if (data.outcome !== "created" && data.outcome !== "reused") {
+        throw new Error(`create_budget_review_session retornou outcome inesperado: ${String(data.outcome)}`);
+      }
+
+      return { outcome: data.outcome, sessionId: String(data.sessionId) };
+    },
+
+    async mutateRow(organizationId, actor, session, row, isNewRow, auditEvent) {
+      const { data, error } = await supabase.rpc(
+        "record_budget_review_row_mutation",
+        recordBudgetReviewRowMutationRpcParams(organizationId, actor, {
+          isNewRow,
+          session,
+          row,
+          auditEventId: auditEvent?.id ?? null,
+          auditAction: auditEvent?.action ?? null,
+          auditActor: auditEvent?.actor ?? null,
+          auditOccurredAt: auditEvent?.occurredAt ?? null,
+          auditFieldChanges: auditEvent?.fieldChanges ?? [],
+          auditJustification: auditEvent?.justification ?? null,
+          auditMetadata: auditEvent?.metadata ?? {},
+        }),
+      );
+
+      if (error || !data?.success) {
+        throw error ?? new Error("Falha ao persistir a alteração da Linha de Revisão.");
+      }
+    },
+
+    async consolidateSession(organizationId, actor, sessionId, auditEventId) {
+      const { data, error } = await supabase.rpc(
+        "consolidate_budget_review_session",
+        consolidateBudgetReviewSessionRpcParams(organizationId, actor, sessionId, auditEventId, {}),
+      );
+
+      if (error) throw error;
+      return { success: Boolean(data?.success) };
+    },
+
+    async importRows(organizationId, actor, sessionId, rows, occurredAt) {
+      const { data, error } = await supabase.rpc("bulk_import_budget_review_rows", {
+        p_actor_id: actor,
+        p_company_id: organizationId,
+        p_session_id: sessionId,
+        p_rows: rows.map((row) => ({
+          id: row.id,
+          kind: row.kind,
+          lotReference: row.lotReference,
+          parentRowId: row.parentRowId,
+          position: row.position,
+          fields: row.revised,
+          page: row.page,
+          evidenceText: row.evidenceText,
+        })),
+        p_audit_occurred_at: occurredAt,
+      });
+
+      if (error || !data) {
+        throw error ?? new Error("Falha ao importar as Linhas de Revisão em lote.");
+      }
+
+      return Number(data.imported ?? 0);
+    },
+  };
+}
+
+export type { AuditEventToPersist };
