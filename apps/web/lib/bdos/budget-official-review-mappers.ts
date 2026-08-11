@@ -2,6 +2,7 @@ import {
   BudgetLineKind,
   BudgetReviewRowState,
   BudgetReviewSessionStatus,
+  ReconciliationDecisionStatus,
 } from "@bba/bdos-core/services/budget-official-review";
 import type {
   BudgetReviewAuditAction,
@@ -9,6 +10,7 @@ import type {
   BudgetReviewRow,
   BudgetReviewRowFields,
   BudgetReviewSession,
+  ReconciliationDecision,
 } from "@bba/bdos-core/services/budget-official-review";
 
 // Mapeadores explícitos banco <-> domínio (Epic 21.5A), mesma disciplina
@@ -53,6 +55,10 @@ export interface BudgetReviewRowRow {
   readonly evidence_text: string | null;
   readonly justification: string | null;
   readonly inserted_manually: boolean;
+  readonly reconciliation_decision_status: string | null;
+  readonly reconciliation_decision_actor: string | null;
+  readonly reconciliation_decision_justification: string | null;
+  readonly reconciliation_decision_at: string | null;
   readonly metadata: Record<string, unknown> | null;
   readonly created_by: string | null;
   readonly created_at: string;
@@ -101,9 +107,27 @@ function mapBudgetReviewRowRow(row: BudgetReviewRowRow): BudgetReviewRow {
     evidenceText: row.evidence_text,
     justification: row.justification,
     insertedManually: row.inserted_manually,
+    reconciliationDecision: mapReconciliationDecision(row),
     createdBy: row.created_by ?? "",
     createdAt: row.created_at,
     metadata: row.metadata ?? {},
+  };
+}
+
+function mapReconciliationDecision(row: BudgetReviewRowRow): ReconciliationDecision | null {
+  if (row.reconciliation_decision_status === null) {
+    return null;
+  }
+
+  if (row.reconciliation_decision_status !== ReconciliationDecisionStatus.AcceptedAsDocumented) {
+    throw new BudgetReviewReconstructionError(`budget_review_rows "${row.id}": unknown reconciliation_decision_status "${row.reconciliation_decision_status}".`);
+  }
+
+  return {
+    status: ReconciliationDecisionStatus.AcceptedAsDocumented,
+    actor: assertNonBlankString(row.reconciliation_decision_actor, `budget_review_rows "${row.id}".reconciliation_decision_actor`),
+    justification: assertNonBlankString(row.reconciliation_decision_justification, `budget_review_rows "${row.id}".reconciliation_decision_justification`),
+    decidedAt: assertNonBlankString(row.reconciliation_decision_at, `budget_review_rows "${row.id}".reconciliation_decision_at`),
   };
 }
 
@@ -236,6 +260,40 @@ export function recordBudgetReviewRowMutationRpcParams(
     p_audit_actor: input.auditActor,
     p_audit_occurred_at: input.auditOccurredAt,
     p_audit_field_changes: input.auditFieldChanges,
+    p_audit_justification: input.auditJustification,
+    p_audit_metadata: input.auditMetadata,
+  };
+}
+
+export interface ReconciliationDecisionRpcInput {
+  readonly sessionId: string;
+  readonly rowId: string;
+  readonly decision: ReconciliationDecision;
+  readonly auditEventId: string;
+  readonly auditAction: BudgetReviewAuditAction;
+  readonly auditActor: string;
+  readonly auditOccurredAt: string;
+  readonly auditJustification: string | null;
+  readonly auditMetadata: Record<string, unknown>;
+}
+
+export function recordBudgetReviewReconciliationDecisionRpcParams(
+  organizationId: string,
+  actor: string,
+  input: ReconciliationDecisionRpcInput,
+): Record<string, unknown> {
+  return {
+    p_actor_id: actor,
+    p_company_id: organizationId,
+    p_row_id: input.rowId,
+    p_session_id: input.sessionId,
+    p_status: input.decision.status,
+    p_justification: input.decision.justification,
+    p_decided_at: input.decision.decidedAt,
+    p_audit_event_id: input.auditEventId,
+    p_audit_action: input.auditAction,
+    p_audit_actor: input.auditActor,
+    p_audit_occurred_at: input.auditOccurredAt,
     p_audit_justification: input.auditJustification,
     p_audit_metadata: input.auditMetadata,
   };

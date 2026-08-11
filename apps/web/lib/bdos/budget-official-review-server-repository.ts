@@ -4,6 +4,7 @@ import {
   consolidateBudgetReviewSessionRpcParams,
   createBudgetReviewSessionRpcParams,
   mapBudgetReviewSessionRow,
+  recordBudgetReviewReconciliationDecisionRpcParams,
   recordBudgetReviewRowMutationRpcParams,
 } from "./budget-official-review-mappers";
 
@@ -22,7 +23,7 @@ import {
 const SESSION_COLUMNS =
   "id, company_id, procurement_case_id, budget_version_id, document_version_id, source_sha256, acquisition_mechanism, acquisition_mechanism_version, status, metadata, created_by, created_at";
 const ROW_COLUMNS =
-  "id, company_id, session_id, kind, lot_reference, parent_row_id, position, state, extracted, revised, page, evidence_text, justification, inserted_manually, metadata, created_by, created_at";
+  "id, company_id, session_id, kind, lot_reference, parent_row_id, position, state, extracted, revised, page, evidence_text, justification, inserted_manually, reconciliation_decision_status, reconciliation_decision_actor, reconciliation_decision_justification, reconciliation_decision_at, metadata, created_by, created_at";
 
 export function createBudgetReviewServerRepository(supabase: SupabaseClient): BudgetReviewRepository {
   async function loadRowsForSession(organizationId: string, sessionId: string) {
@@ -115,6 +116,27 @@ export function createBudgetReviewServerRepository(supabase: SupabaseClient): Bu
 
       if (error || !data?.success) {
         throw error ?? new Error("Falha ao persistir a alteração da Linha de Revisão.");
+      }
+    },
+
+    async recordReconciliationDecision(organizationId, actor, sessionId, rowId, decision, auditEvent) {
+      const { data, error } = await supabase.rpc(
+        "record_budget_review_reconciliation_decision",
+        recordBudgetReviewReconciliationDecisionRpcParams(organizationId, actor, {
+          sessionId,
+          rowId,
+          decision,
+          auditEventId: auditEvent.id,
+          auditAction: auditEvent.action,
+          auditActor: auditEvent.actor,
+          auditOccurredAt: auditEvent.occurredAt,
+          auditJustification: auditEvent.justification,
+          auditMetadata: auditEvent.metadata,
+        }),
+      );
+
+      if (error || !data?.success) {
+        throw error ?? new Error("Falha ao persistir a Decisão de Reconciliação.");
       }
     },
 

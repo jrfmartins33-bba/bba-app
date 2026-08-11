@@ -26,6 +26,13 @@ interface RowFields {
   readonly documentalGroupTotalText: string | null;
 }
 
+interface ReconciliationDecision {
+  readonly status: "AcceptedAsDocumented";
+  readonly actor: string;
+  readonly justification: string;
+  readonly decidedAt: string;
+}
+
 interface ReviewRow {
   readonly id: string;
   readonly kind: "Group" | "Subgroup" | "ServiceItem";
@@ -39,6 +46,7 @@ interface ReviewRow {
   readonly evidenceText: string | null;
   readonly justification: string | null;
   readonly insertedManually: boolean;
+  readonly reconciliationDecision: ReconciliationDecision | null;
 }
 
 interface ReviewSession {
@@ -183,9 +191,40 @@ export default function OrcamentoRevisaoPage() {
   }
 
   async function handleBulkConfirmSelection() {
-    if (selected.size === 0) return;
-    if (!window.confirm(`Confirmar ${selected.size} linha(s) selecionada(s)?`)) return;
-    const ok = await callAction({ action: "bulkConfirm", rowIds: Array.from(selected) });
+    if (!session) return;
+    const rowIds = Array.from(selected).filter((id) => session.rows.find((row) => row.id === id)?.state === "Pendente");
+    if (rowIds.length === 0) {
+      window.alert("Nenhuma linha selecionada está Pendente.");
+      return;
+    }
+    if (!window.confirm(`Confirmar ${rowIds.length} linha(s) selecionada(s)?`)) return;
+    const ok = await callAction({ action: "bulkConfirm", rowIds });
+    if (ok) setSelected(new Set());
+  }
+
+  async function handleAcceptDivergence(rowId: string) {
+    const justification = window.prompt(
+      "Justificativa (os valores foram conferidos na fonte e serão preservados exatamente como publicados):",
+    );
+    if (!justification) return;
+    await callAction({ action: "acceptDivergence", rowId, justification });
+  }
+
+  async function handleBulkAcceptDivergencesSelection() {
+    if (!session) return;
+    const rowIds = Array.from(selected).filter((id) => {
+      const row = session.rows.find((candidate) => candidate.id === id);
+      return row !== undefined && row.reconciliationDecision === null && reconciliationByRowId.get(id) === "diverges";
+    });
+    if (rowIds.length === 0) {
+      window.alert("Nenhuma linha selecionada tem divergência ativa não aceita.");
+      return;
+    }
+    const justification = window.prompt(
+      `${rowIds.length} divergência(s) serão aceitas exatamente como documentadas. Justificativa:`,
+    );
+    if (!justification) return;
+    const ok = await callAction({ action: "bulkAcceptDivergences", rowIds, justification });
     if (ok) setSelected(new Set());
   }
 
@@ -293,9 +332,14 @@ export default function OrcamentoRevisaoPage() {
       <Card
         title="Linhas do Orçamento"
         action={
-          <Button disabled={selected.size === 0 || busy} onClick={handleBulkConfirmSelection}>
-            Confirmar seleção ({selected.size})
-          </Button>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <Button disabled={selected.size === 0 || busy} onClick={handleBulkConfirmSelection}>
+              Confirmar seleção ({selected.size})
+            </Button>
+            <Button disabled={selected.size === 0 || busy} onClick={handleBulkAcceptDivergencesSelection}>
+              Aceitar divergências selecionadas
+            </Button>
+          </div>
         }
       >
         <div style={{ overflowX: "auto" }}>
@@ -324,7 +368,7 @@ export default function OrcamentoRevisaoPage() {
                   <Fragment key={row.id}>
                     <tr style={{ borderBottom: "1px solid #eee" }}>
                       <td>
-                        {row.state === "Pendente" && (
+                        {(row.state === "Pendente" || (rec === "diverges" && row.reconciliationDecision === null)) && (
                           <input
                             type="checkbox"
                             checked={selected.has(row.id)}
@@ -339,7 +383,12 @@ export default function OrcamentoRevisaoPage() {
                       </td>
                       <td>
                         <span style={{ color: STATE_COLORS[row.state], fontWeight: 600 }}>{STATE_LABELS[row.state]}</span>
-                        {rec === "diverges" && <span style={{ color: "#8a2e2e", marginLeft: "0.4rem" }}>⚠</span>}
+                        {rec === "diverges" && row.reconciliationDecision === null && (
+                          <span style={{ color: "#8a2e2e", marginLeft: "0.4rem" }} title="Divergência de reconciliação não resolvida">⚠</span>
+                        )}
+                        {rec === "diverges" && row.reconciliationDecision !== null && (
+                          <span style={{ color: "#0a7a3d", marginLeft: "0.4rem" }} title="Divergência aceita como documentada">✓</span>
+                        )}
                       </td>
                       <td>{row.lotReference}</td>
                       <td>{row.revised.itemCode ?? "—"}</td>
@@ -360,7 +409,16 @@ export default function OrcamentoRevisaoPage() {
                     {expandedRowId === row.id && (
                       <tr>
                         <td colSpan={13} style={{ background: "#fafafa", padding: "1rem" }}>
-                          <RowDetail row={row} onConfirm={() => handleConfirm(row.id)} onExclude={() => handleExclude(row.id)} onRestore={() => handleRestore(row.id)} busy={busy} sessionInProgress={session.status === "InProgress"} />
+                          <RowDetail
+                            row={row}
+                            reconciliationStatus={rec}
+                            onConfirm={() => handleConfirm(row.id)}
+                            onExclude={() => handleExclude(row.id)}
+                            onRestore={() => handleRestore(row.id)}
+                            onAcceptDivergence={() => handleAcceptDivergence(row.id)}
+                            busy={busy}
+                            sessionInProgress={session.status === "InProgress"}
+                          />
                         </td>
                       </tr>
                     )}
@@ -391,19 +449,25 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function RowDetail({
   row,
+  reconciliationStatus,
   onConfirm,
   onExclude,
   onRestore,
+  onAcceptDivergence,
   busy,
   sessionInProgress,
 }: {
   row: ReviewRow;
+  reconciliationStatus: string | undefined;
   onConfirm: () => void;
   onExclude: () => void;
   onRestore: () => void;
+  onAcceptDivergence: () => void;
   busy: boolean;
   sessionInProgress: boolean;
 }) {
+  const hasUnresolvedDivergence = reconciliationStatus === "diverges" && row.reconciliationDecision === null;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
@@ -416,6 +480,18 @@ function RowDetail({
           <FieldsTable fields={row.revised} />
         </div>
       </div>
+      {reconciliationStatus === "diverges" && (
+        <div style={{ background: row.reconciliationDecision ? "#eaf6ef" : "#fbeaea", padding: "0.75rem", borderRadius: "4px" }}>
+          <strong>Divergência de reconciliação</strong>
+          {row.reconciliationDecision ? (
+            <p>
+              Aceita como documentada por {row.reconciliationDecision.actor} em {new Date(row.reconciliationDecision.decidedAt).toLocaleString("pt-BR")}: “{row.reconciliationDecision.justification}”. Os valores foram preservados exatamente como publicados.
+            </p>
+          ) : (
+            <p>O total derivado não bate com o total documental — confira contra a fonte antes de confirmar, ou aceite a divergência se os três valores estiverem corretamente transcritos.</p>
+          )}
+        </div>
+      )}
       {row.evidenceText && (
         <div>
           <strong>Evidência (texto de origem)</strong>
@@ -439,6 +515,9 @@ function RowDetail({
           )}
           {row.state === "NaoPertenceAoOrcamento" && (
             <Button disabled={busy} onClick={onRestore}>Restaurar</Button>
+          )}
+          {hasUnresolvedDivergence && (
+            <Button disabled={busy} onClick={onAcceptDivergence}>Aceitar divergência documental</Button>
           )}
         </div>
       )}

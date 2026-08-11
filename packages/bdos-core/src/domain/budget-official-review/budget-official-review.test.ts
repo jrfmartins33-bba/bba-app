@@ -8,6 +8,8 @@ import { BudgetLineKind } from "../budget-version";
 import {
   BudgetReviewRowState,
   BudgetReviewSessionStatus,
+  acceptBudgetReviewRowDivergenceAsDocumented,
+  bulkAcceptBudgetReviewRowDivergencesAsDocumented,
   bulkConfirmBudgetReviewRows,
   budgetReviewConsolidationReadiness,
   confirmBudgetReviewRow,
@@ -363,9 +365,39 @@ runTest("Reconciliação de Grupo soma somente Itens de Serviço descendentes, n
   });
   assertReviewSuccess(imported);
 
-  const groupReconciliation = reconcileGroupRow(imported.session, "group-1");
-  assertEqual(groupReconciliation.status, "matches", "300,00 documental must match 100+200 derived from service items, not double-counted via subgroup");
+  const confirmed = bulkConfirmBudgetReviewRows({
+    session: imported.session,
+    rowIds: ["group-1", "subgroup-1", "item-1", "item-2"],
+    actor: "revisor-teste",
+    occurredAt: "2026-08-10T00:00:02.000Z",
+  });
+  assertReviewSuccess(confirmed);
+
+  const groupReconciliation = reconcileGroupRow(confirmed.session, "group-1");
+  assertEqual(groupReconciliation.status, "matches", "300,00 documental must match 100+200 derived from CONFIRMED service items, not double-counted via subgroup");
   assertEqual(groupReconciliation.derivedTotalCents, 30_000, "derived total must be exactly 300,00 in cents");
+});
+
+runTest("Reconciliação de Grupo nunca inclui Item de Serviço Pendente no total derivado (correção §13)", () => {
+  const session = freshSession();
+  const imported = importBudgetReviewRows({
+    session,
+    actor: "sistema",
+    occurredAt: "2026-08-10T00:00:01.000Z",
+    rows: [
+      { id: "group-1", kind: BudgetLineKind.Group, lotReference: "Lote 01", parentRowId: null, position: 0, fields: fields({ documentalGroupTotalText: "100,00" }), page: 16 },
+      { id: "item-1", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "group-1", position: 0, fields: fields({ totalPriceText: "100,00" }), page: 16 },
+      { id: "item-2", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "group-1", position: 1, fields: fields({ totalPriceText: "9999,00" }), page: 16 },
+    ],
+  });
+  assertReviewSuccess(imported);
+
+  const confirmed = confirmBudgetReviewRow({ session: imported.session, rowId: "item-1", actor: "revisor-teste", occurredAt: "2026-08-10T00:00:02.000Z" });
+  assertReviewSuccess(confirmed);
+
+  const groupReconciliation = reconcileGroupRow(confirmed.session, "group-1");
+  assertEqual(groupReconciliation.status, "matches", "item-2 remains Pendente and must not contribute to the derived total");
+  assertEqual(groupReconciliation.derivedTotalCents, 10_000, "derived total must be exactly item-1's 100,00, excluding the Pendente item-2");
 });
 
 // ---------------------------------------------------------------------------
@@ -516,6 +548,189 @@ runTest("Confirmação em lote nunca confirma linha NaoPertenceAoOrcamento nem l
 runTest("Sessão sempre carrega organizationId derivado do Processo, nunca aceito independentemente", () => {
   const session = freshSession();
   assertEqual(session.organizationId, organizationId, "organizationId must be derived from procurementCase");
+});
+
+// ---------------------------------------------------------------------------
+// 11. Decisão de Reconciliação (correção Sprint 21.5A §6-§10)
+// ---------------------------------------------------------------------------
+
+function divergentServiceItemSession(): BudgetReviewSession {
+  const session = freshSession();
+  const imported = importBudgetReviewRows({
+    session,
+    actor: "sistema",
+    occurredAt: "2026-08-10T00:00:01.000Z",
+    rows: serviceItemsUnderRootGroup([
+      { id: "item-divergent", position: 0, fields: fields({ quantityText: "10,00", unitPriceWithBdiText: "1,00", totalPriceText: "10,01" }), page: 16 },
+    ]),
+  });
+  assertReviewSuccess(imported);
+  return imported.session;
+}
+
+runTest("Divergência de reconciliação não aceita bloqueia consolidação", () => {
+  const session = divergentServiceItemSession();
+  const confirmed = bulkConfirmBudgetReviewRows({ session, rowIds: ["root-group"], actor: "revisor-teste", occurredAt: "2026-08-10T00:00:02.000Z" });
+  assertReviewSuccess(confirmed);
+  const corrected = correctBudgetReviewRow({
+    session: confirmed.session,
+    rowId: "item-divergent",
+    fields: { description: "confirmação forçada via correção sem mudar os valores econômicos" },
+    justification: "apenas para forçar Corrigido sem alterar os três valores econômicos.",
+    actor: "revisor-teste",
+    occurredAt: "2026-08-10T00:00:03.000Z",
+  });
+  assertReviewSuccess(corrected);
+
+  const readiness = budgetReviewConsolidationReadiness(corrected.session);
+  assertEqual(readiness.ready, false, "an unresolved divergence must block consolidation even when the row itself is Corrigido");
+});
+
+runTest("Aceitar divergência exige justificativa e não altera os valores revisados", () => {
+  const session = divergentServiceItemSession();
+
+  const withoutJustification = acceptBudgetReviewRowDivergenceAsDocumented({
+    session,
+    rowId: "item-divergent",
+    justification: "",
+    actor: "admin-bba-teste",
+    occurredAt: "2026-08-10T00:00:02.000Z",
+  });
+  if (withoutJustification.success) throw new Error("expected failure for blank justification");
+  assertEqual(withoutJustification.errors[0]?.code, "missing_justification", "expected missing_justification error");
+
+  const accepted = acceptBudgetReviewRowDivergenceAsDocumented({
+    session,
+    rowId: "item-divergent",
+    justification: "Conferido contra a página 16 — os três valores estão corretamente transcritos; a diferença é arredondamento da planilha de origem.",
+    actor: "admin-bba-teste",
+    occurredAt: "2026-08-10T00:00:03.000Z",
+  });
+  assertReviewSuccess(accepted);
+
+  const row = accepted.session.rows.find((candidate) => candidate.id === "item-divergent")!;
+  assertEqual(row.reconciliationDecision?.status, "AcceptedAsDocumented", "row must carry the acceptance decision");
+  assertEqual(row.revised.totalPriceText, "10,01", "revised values must never change when accepting a divergence");
+  assertEqual(row.state, BudgetReviewRowState.Pending, "RowState is untouched by a reconciliation decision — it is a separate concept");
+});
+
+runTest("Aceitação de divergência gera evento de auditoria ReconciliationAcceptedAsDocumented", () => {
+  const session = divergentServiceItemSession();
+  const accepted = acceptBudgetReviewRowDivergenceAsDocumented({
+    session,
+    rowId: "item-divergent",
+    justification: "Conferido contra a fonte.",
+    actor: "admin-bba-teste",
+    occurredAt: "2026-08-10T00:00:02.000Z",
+  });
+  assertReviewSuccess(accepted);
+  assertEqual(accepted.auditEvents.length, 1, "expected exactly one audit event");
+  assertEqual(accepted.auditEvents[0]?.action, "ReconciliationAcceptedAsDocumented", "expected the dedicated audit action");
+  assertEqual(accepted.auditEvents[0]?.justification, "Conferido contra a fonte.", "audit event must carry the justification");
+});
+
+runTest("Não é possível aceitar divergência de linha sem divergência ativa", () => {
+  const session = freshSession();
+  const imported = importBudgetReviewRows({
+    session,
+    actor: "sistema",
+    occurredAt: "2026-08-10T00:00:01.000Z",
+    rows: serviceItemsUnderRootGroup([
+      { id: "item-matches", position: 0, fields: fields({ quantityText: "1,00", unitPriceWithBdiText: "1,00", totalPriceText: "1,00" }), page: 16 },
+    ]),
+  });
+  assertReviewSuccess(imported);
+
+  const attempt = acceptBudgetReviewRowDivergenceAsDocumented({
+    session: imported.session,
+    rowId: "item-matches",
+    justification: "tentativa inválida",
+    actor: "admin-bba-teste",
+    occurredAt: "2026-08-10T00:00:02.000Z",
+  });
+  if (attempt.success) throw new Error("expected failure — row has no active divergence");
+  assertEqual(attempt.errors[0]?.code, "no_active_divergence", "expected no_active_divergence error");
+});
+
+runTest("Aceitação em lote aceita múltiplas divergências com uma única justificativa e gera auditoria por linha", () => {
+  const session = freshSession();
+  const imported = importBudgetReviewRows({
+    session,
+    actor: "sistema",
+    occurredAt: "2026-08-10T00:00:01.000Z",
+    rows: serviceItemsUnderRootGroup([
+      { id: "item-a", position: 0, fields: fields({ quantityText: "10,00", unitPriceWithBdiText: "1,00", totalPriceText: "10,01" }), page: 16 },
+      { id: "item-b", position: 1, fields: fields({ quantityText: "10,00", unitPriceWithBdiText: "1,00", totalPriceText: "9,99" }), page: 16 },
+    ]),
+  });
+  assertReviewSuccess(imported);
+
+  const bulkAccepted = bulkAcceptBudgetReviewRowDivergencesAsDocumented({
+    session: imported.session,
+    rowIds: ["item-a", "item-b"],
+    justification: "Ambas conferidas contra a fonte — arredondamento de centavo.",
+    actor: "admin-bba-teste",
+    occurredAt: "2026-08-10T00:00:02.000Z",
+  });
+  assertReviewSuccess(bulkAccepted);
+  assertEqual(bulkAccepted.auditEvents.length, 1, "expected one bulk audit event from the pure domain function");
+  assertEqual(bulkAccepted.session.rows.find((row) => row.id === "item-a")?.reconciliationDecision?.status, "AcceptedAsDocumented", "item-a must carry the acceptance decision");
+  assertEqual(bulkAccepted.session.rows.find((row) => row.id === "item-b")?.reconciliationDecision?.status, "AcceptedAsDocumented", "item-b must carry the acceptance decision");
+});
+
+runTest("Divergência aceita como documentada não bloqueia mais a consolidação", () => {
+  const session = divergentServiceItemSession();
+  // bulkConfirm é tudo-ou-nada: item-divergent tem divergência ativa e
+  // faria a chamada inteira falhar se incluído aqui — confirma só o grupo
+  // agora, aceita a divergência do item, depois confirma o item sozinho.
+  const confirmed = bulkConfirmBudgetReviewRows({ session, rowIds: ["root-group"], actor: "revisor-teste", occurredAt: "2026-08-10T00:00:02.000Z" });
+  assertReviewSuccess(confirmed);
+
+  const readinessBeforeAcceptance = budgetReviewConsolidationReadiness(confirmed.session);
+  assertEqual(readinessBeforeAcceptance.ready, false, "must still block before the divergence is accepted");
+
+  const accepted = acceptBudgetReviewRowDivergenceAsDocumented({
+    session: confirmed.session,
+    rowId: "item-divergent",
+    justification: "Conferido contra a fonte — arredondamento de centavo.",
+    actor: "admin-bba-teste",
+    occurredAt: "2026-08-10T00:00:03.000Z",
+  });
+  assertReviewSuccess(accepted);
+
+  const confirmedAfterAcceptance = confirmBudgetReviewRow({ session: accepted.session, rowId: "item-divergent", actor: "revisor-teste", occurredAt: "2026-08-10T00:00:04.000Z" });
+  assertReviewSuccess(confirmedAfterAcceptance);
+
+  const readinessAfterAcceptance = budgetReviewConsolidationReadiness(confirmedAfterAcceptance.session);
+  assertEqual(readinessAfterAcceptance.ready, true, "an accepted-as-documented divergence must never block consolidation");
+
+  const consolidation = consolidateBudgetReviewSession({ session: confirmedAfterAcceptance.session, actor: "revisor-teste", occurredAt: "2026-08-10T00:00:05.000Z" });
+  assertReviewSuccess(consolidation);
+});
+
+runTest("Corrigir uma linha limpa uma decisão de reconciliação anterior (valores mudaram, decisão fica obsoleta)", () => {
+  const session = divergentServiceItemSession();
+  const accepted = acceptBudgetReviewRowDivergenceAsDocumented({
+    session,
+    rowId: "item-divergent",
+    justification: "Conferido contra a fonte.",
+    actor: "admin-bba-teste",
+    occurredAt: "2026-08-10T00:00:02.000Z",
+  });
+  assertReviewSuccess(accepted);
+
+  const corrected = correctBudgetReviewRow({
+    session: accepted.session,
+    rowId: "item-divergent",
+    fields: { totalPriceText: "10,00" },
+    justification: "Corrigido após revisão adicional — dígito lido incorretamente.",
+    actor: "revisor-teste",
+    occurredAt: "2026-08-10T00:00:03.000Z",
+  });
+  assertReviewSuccess(corrected);
+
+  const row = corrected.session.rows.find((candidate) => candidate.id === "item-divergent")!;
+  assertEqual(row.reconciliationDecision, null, "a stale reconciliation decision must be cleared once the underlying values change");
 });
 
 // ---------------------------------------------------------------------------

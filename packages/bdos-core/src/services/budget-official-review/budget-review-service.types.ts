@@ -76,6 +76,18 @@ export interface BulkConfirmBudgetReviewRowsCommand {
   readonly rowIds: ReadonlyArray<string>;
 }
 
+export interface AcceptBudgetReviewRowDivergenceCommand {
+  readonly sessionId: string;
+  readonly rowId: string;
+  readonly justification: string;
+}
+
+export interface BulkAcceptBudgetReviewRowDivergencesCommand {
+  readonly sessionId: string;
+  readonly rowIds: ReadonlyArray<string>;
+  readonly justification: string;
+}
+
 export interface ConsolidateBudgetReviewSessionCommand {
   readonly sessionId: string;
 }
@@ -89,6 +101,16 @@ export type BudgetReviewServiceResult =
   | { readonly outcome: "not_found" }
   | { readonly outcome: "domain_error"; readonly errors: ReadonlyArray<BudgetReviewError> }
   | { readonly outcome: "persistence_failure"; readonly message: string };
+
+/**
+ * Resultado específico da consolidação — inclui `concurrency_conflict`
+ * porque, diferente das demais operações desta Sessão, consolidar também
+ * grava um novo retrato inteiro de `BudgetVersion` (via
+ * `saveBudgetVersion`/`persist_budget_version_snapshot`, concorrência
+ * otimista por revisão) — nunca sobrescrita silenciosa se outra escrita
+ * concorrente já mudou a Versão entretanto.
+ */
+export type ConsolidateBudgetReviewSessionServiceResult = BudgetReviewServiceResult | { readonly outcome: "concurrency_conflict" };
 
 export type GetBudgetReviewSessionResult =
   | { readonly outcome: "found"; readonly session: BudgetReviewSession }

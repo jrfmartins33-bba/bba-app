@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import {
+  acceptBudgetReviewRowDivergenceService,
+  bulkAcceptBudgetReviewRowDivergencesService,
   bulkConfirmBudgetReviewRowsService,
   confirmBudgetReviewRowService,
   correctBudgetReviewRowService,
@@ -12,9 +14,10 @@ import {
   reconcileServiceItemRow,
   BudgetLineKind,
 } from "@bba/bdos-core/services/budget-official-review";
-import type { BudgetReviewServiceResult } from "@bba/bdos-core/services/budget-official-review";
+import type { BudgetReviewServiceResult, ConsolidateBudgetReviewSessionServiceResult } from "@bba/bdos-core/services/budget-official-review";
 import { getSupabaseRouteHandlerClient, getSupabaseServiceRoleClient, requireBbaAdmin } from "@/lib/supabase/server";
 import { createBudgetReviewServerRepository } from "@/lib/bdos/budget-official-review-server-repository";
+import { createBudgetVersionRepository } from "@/lib/bdos/procurement-engineering-server-repository";
 
 // Revisão do Orçamento Oficial (Epic 21.5A) — Admin BBA exclusivo
 // (enunciado §47). GET carrega a sessão completa (linhas + reconciliação
@@ -107,7 +110,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   }
 
   const context = { organizationId, actor: admin.userId };
-  let result: BudgetReviewServiceResult;
+  let result: BudgetReviewServiceResult | ConsolidateBudgetReviewSessionServiceResult;
 
   switch (body.action) {
     case "confirm": {
@@ -162,8 +165,19 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       result = await bulkConfirmBudgetReviewRowsService(context, { sessionId, rowIds: body.rowIds }, repository);
       break;
     }
+    case "acceptDivergence": {
+      if (!body.rowId || !body.justification) return NextResponse.json({ error: "missing_fields" }, { status: 400 });
+      result = await acceptBudgetReviewRowDivergenceService(context, { sessionId, rowId: body.rowId, justification: body.justification }, repository);
+      break;
+    }
+    case "bulkAcceptDivergences": {
+      if (!body.rowIds || body.rowIds.length === 0 || !body.justification) return NextResponse.json({ error: "missing_fields" }, { status: 400 });
+      result = await bulkAcceptBudgetReviewRowDivergencesService(context, { sessionId, rowIds: body.rowIds, justification: body.justification }, repository);
+      break;
+    }
     case "consolidate": {
-      result = await consolidateBudgetReviewSessionService(context, { sessionId }, repository);
+      const budgetVersionRepository = createBudgetVersionRepository(getSupabaseServiceRoleClient());
+      result = await consolidateBudgetReviewSessionService(context, { sessionId }, repository, budgetVersionRepository);
       break;
     }
     default:
@@ -179,6 +193,9 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
   if (result.outcome === "persistence_failure") {
     console.error("[orcamentos/revisao] persistence_failure", result.message);
     return NextResponse.json({ error: "persistence_failure" }, { status: 500 });
+  }
+  if (result.outcome === "concurrency_conflict") {
+    return NextResponse.json({ error: "concurrency_conflict" }, { status: 409 });
   }
 
   return NextResponse.json({ session: result.session });

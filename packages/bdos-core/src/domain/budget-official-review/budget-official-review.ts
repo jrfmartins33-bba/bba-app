@@ -10,8 +10,10 @@ import {
   BudgetReviewRowState,
   BudgetReviewSessionStatus,
   EMPTY_BUDGET_REVIEW_ROW_FIELDS,
+  ReconciliationDecisionStatus,
 } from "./budget-official-review.types";
 import type {
+  AcceptBudgetReviewRowDivergenceInput,
   BudgetReviewAuditEvent,
   BudgetReviewConsolidationReadiness,
   BudgetReviewError,
@@ -20,11 +22,13 @@ import type {
   BudgetReviewFieldChange,
   BudgetReviewGroupReconciliation,
   BudgetReviewMetadata,
+  BudgetReviewReconciliationStatus,
   BudgetReviewResult,
   BudgetReviewRow,
   BudgetReviewRowFields,
   BudgetReviewServiceItemReconciliation,
   BudgetReviewSuccess,
+  BulkAcceptBudgetReviewRowDivergencesInput,
   BulkConfirmBudgetReviewRowsInput,
   ConfirmBudgetReviewRowInput,
   ConsolidateBudgetReviewSessionInput,
@@ -33,9 +37,24 @@ import type {
   ExcludeBudgetReviewRowInput,
   ImportBudgetReviewRowsInput,
   InsertManualBudgetReviewRowInput,
+  ReconciliationDecision,
   RestoreBudgetReviewRowInput,
   BudgetReviewSession,
 } from "./budget-official-review.types";
+
+/**
+ * Estados que tornam uma Linha de Revisão elegível para compor o orçamento
+ * (projeção para `BudgetLine`, totalização de Grupo/Subgrupo) — nunca
+ * `Pendente` (ainda não avaliada), nunca `NaoPertenceAoOrcamento` (revisor
+ * decidiu que não é um item real). Exportado para reuso pela camada de
+ * Serviço de Aplicação (projeção para `BudgetVersion`) e pelos testes —
+ * uma única fonte de verdade para "o que conta como aprovado".
+ */
+export const ACCEPTED_BUDGET_REVIEW_ROW_STATES: ReadonlySet<BudgetReviewRowState> = new Set([
+  BudgetReviewRowState.Confirmed,
+  BudgetReviewRowState.Corrected,
+  BudgetReviewRowState.ManuallyInserted,
+]);
 
 /**
  * Cria uma nova Sessão de Revisão do Orçamento Oficial, sempre em
@@ -201,6 +220,7 @@ export function importBudgetReviewRows(input: ImportBudgetReviewRowsInput): Budg
       evidenceText: rowInput.evidenceText ?? null,
       justification: null,
       insertedManually: false,
+      reconciliationDecision: null,
       createdBy: input.actor,
       createdAt: input.occurredAt,
       metadata,
@@ -289,6 +309,10 @@ export function correctBudgetReviewRow(input: CorrectBudgetReviewRowInput): Budg
     revised: { ...target.revised, ...input.fields },
     state: BudgetReviewRowState.Corrected,
     justification: input.justification,
+    // Uma decisão de reconciliação anterior descreve os valores ANTIGOS —
+    // uma correção muda os valores, então a decisão fica obsoleta e precisa
+    // ser reavaliada pelo revisor (nunca herdada silenciosamente).
+    reconciliationDecision: null,
   };
 
   const auditEvent = createAuditEvent(
@@ -420,6 +444,7 @@ export function insertManualBudgetReviewRow(input: InsertManualBudgetReviewRowIn
     evidenceText: null,
     justification: input.justification,
     insertedManually: true,
+    reconciliationDecision: null,
     createdBy: input.actor,
     createdAt: input.occurredAt,
     metadata,
@@ -478,7 +503,7 @@ export function bulkConfirmBudgetReviewRows(input: BulkConfirmBudgetReviewRowsIn
 
     if (target.kind === BudgetLineKind.ServiceItem) {
       const reconciliation = reconcileServiceItemRow(target);
-      if (reconciliation.status === "diverges") {
+      if (reconciliation.status === "diverges" && target.reconciliationDecision === null) {
         errors.push(createError("row_has_active_inconsistency", "rowId", `Row "${rowId}" has an active reconciliation divergence — excluded from bulk confirm.`, metadata));
         return;
       }
@@ -515,6 +540,149 @@ export function bulkConfirmBudgetReviewRows(input: BulkConfirmBudgetReviewRowsIn
 }
 
 /**
+ * Aceita uma divergência documental como definitiva (correção §7/§10): o
+ * revisor conferiu os três valores contra a fonte e decidiu preservá-los
+ * exatamente como publicados. Nunca altera `revised` — apenas anexa a
+ * decisão. Exige uma divergência ativa (`diverges`) — não é um atalho para
+ * "confirmar sem checar"; uma linha sem divergência (`matches`,
+ * `insufficient_data`, `not_applicable`) não tem o que aceitar.
+ */
+export function acceptBudgetReviewRowDivergenceAsDocumented(input: AcceptBudgetReviewRowDivergenceInput): BudgetReviewResult {
+  const { session, rowId } = input;
+  const metadata: BudgetReviewMetadata = { ...session.metadata, reviewSessionId: session.id, rowId };
+
+  if (session.status === BudgetReviewSessionStatus.Consolidated) {
+    return immutableSessionFailure(session, "session", metadata);
+  }
+
+  const target = findRow(session, rowId, metadata);
+  if (target === undefined) {
+    return failure([createError("unknown_row", "rowId", `No row with id "${rowId}" exists in this session.`, metadata)], metadata);
+  }
+
+  if (target.state === BudgetReviewRowState.NotBudgetItem) {
+    return failure(
+      [createError("row_not_confirmable", "rowId", `Row "${rowId}" is marked "NaoPertenceAoOrcamento" — a reconciliation decision does not apply.`, metadata)],
+      metadata,
+    );
+  }
+
+  if (isBlank(input.justification)) {
+    return failure([createError("missing_justification", "justification", "Accepting a documented divergence requires a non-blank justification.", metadata)], metadata);
+  }
+
+  if (rowReconciliationStatus(session, target) !== "diverges") {
+    return failure([createError("no_active_divergence", "rowId", `Row "${rowId}" has no active reconciliation divergence to accept.`, metadata)], metadata);
+  }
+
+  const decision: ReconciliationDecision = {
+    status: ReconciliationDecisionStatus.AcceptedAsDocumented,
+    actor: input.actor,
+    justification: input.justification,
+    decidedAt: input.occurredAt,
+  };
+
+  const updatedRow: BudgetReviewRow = { ...target, reconciliationDecision: decision };
+  const auditEvent = createAuditEvent(
+    session.id,
+    rowId,
+    BudgetReviewAuditAction.ReconciliationAcceptedAsDocumented,
+    input.actor,
+    input.occurredAt,
+    [],
+    input.justification,
+    metadata,
+  );
+
+  return success(replaceRow(session, updatedRow), [auditEvent], metadata);
+}
+
+/**
+ * Aceitação em lote (enunciado §16 — produtividade sem regra matemática
+ * automática): uma única justificativa cobre todas as linhas selecionadas.
+ * Tudo ou nada, mesma disciplina de `bulkConfirmBudgetReviewRows` — uma
+ * linha já aceita é um no-op silencioso (idempotente), mas uma linha sem
+ * divergência ativa ou marcada `NaoPertenceAoOrcamento` falha a operação
+ * inteira, nunca uma aceitação parcial silenciosa.
+ */
+export function bulkAcceptBudgetReviewRowDivergencesAsDocumented(input: BulkAcceptBudgetReviewRowDivergencesInput): BudgetReviewResult {
+  const { session, rowIds } = input;
+  const metadata: BudgetReviewMetadata = { ...session.metadata, reviewSessionId: session.id };
+
+  if (session.status === BudgetReviewSessionStatus.Consolidated) {
+    return immutableSessionFailure(session, "session", metadata);
+  }
+
+  if (rowIds.length === 0) {
+    return failure([createError("empty_row_selection", "rowIds", "At least one row must be selected.", metadata)], metadata);
+  }
+
+  if (isBlank(input.justification)) {
+    return failure([createError("missing_justification", "justification", "Accepting documented divergences in bulk requires a non-blank justification.", metadata)], metadata);
+  }
+
+  const errors: BudgetReviewError[] = [];
+  const targets: BudgetReviewRow[] = [];
+
+  rowIds.forEach((rowId) => {
+    const target = findRow(session, rowId, metadata);
+    if (target === undefined) {
+      errors.push(createError("unknown_row", "rowId", `No row with id "${rowId}" exists in this session.`, metadata));
+      return;
+    }
+
+    if (target.reconciliationDecision !== null) {
+      return;
+    }
+
+    if (target.state === BudgetReviewRowState.NotBudgetItem) {
+      errors.push(createError("row_not_confirmable", "rowId", `Row "${rowId}" is marked "NaoPertenceAoOrcamento" — excluded from bulk acceptance.`, metadata));
+      return;
+    }
+
+    if (rowReconciliationStatus(session, target) !== "diverges") {
+      errors.push(createError("no_active_divergence", "rowId", `Row "${rowId}" has no active reconciliation divergence — excluded from bulk acceptance.`, metadata));
+      return;
+    }
+
+    targets.push(target);
+  });
+
+  if (errors.length > 0) {
+    return failure(errors, metadata);
+  }
+
+  if (targets.length === 0) {
+    return success(session, [], metadata);
+  }
+
+  const decision: ReconciliationDecision = {
+    status: ReconciliationDecisionStatus.AcceptedAsDocumented,
+    actor: input.actor,
+    justification: input.justification,
+    decidedAt: input.occurredAt,
+  };
+
+  const updatedRows = session.rows.map((row) => {
+    const isTarget = targets.some((target) => target.id === row.id);
+    return isTarget ? { ...row, reconciliationDecision: decision } : row;
+  });
+
+  const auditEvent = createAuditEvent(
+    session.id,
+    null,
+    BudgetReviewAuditAction.BulkReconciliationAcceptedAsDocumented,
+    input.actor,
+    input.occurredAt,
+    [],
+    input.justification,
+    { ...metadata, acceptedRowIds: targets.map((row) => row.id) },
+  );
+
+  return success({ ...session, rows: updatedRows }, [auditEvent], metadata);
+}
+
+/**
  * Reconciliação determinística de um Item de Serviço: quantidade × preço
  * unitário com BDI, comparado ao total documental — aritmética exata via
  * `bigint`, nunca ponto flutuante (enunciado §36). Sem dado suficiente,
@@ -545,13 +713,22 @@ export function reconcileServiceItemRow(row: BudgetReviewRow): BudgetReviewServi
   };
 }
 
+/** Status de reconciliação de qualquer linha (Item de Serviço ou Grupo/Subgrupo), independente do kind. */
+function rowReconciliationStatus(session: BudgetReviewSession, row: BudgetReviewRow): BudgetReviewReconciliationStatus {
+  if (row.kind === BudgetLineKind.ServiceItem) {
+    return reconcileServiceItemRow(row).status;
+  }
+  return reconcileGroupRow(session, row.id).status;
+}
+
 /**
  * Reconciliação de Grupo/Subgrupo: total documental (quando a fonte o
- * apresenta) contra a soma dos Itens de Serviço filhos já Confirmados ou
- * Corrigidos (nunca inclui `Pendente`, nunca `NaoPertenceAoOrcamento` —
- * evita dupla contagem e contagem de linha excluída). Filhos Grupo/Subgrupo
- * nunca somam como parcela própria — a mesma disciplina de
- * `calculateLineTotal` em `budget-version` (enunciado §37).
+ * apresenta) contra a soma dos Itens de Serviço filhos já Confirmados,
+ * Corrigidos ou Inseridos Manualmente (nunca `Pendente` — ainda não
+ * avaliado — nem `NaoPertenceAoOrcamento` — evita dupla contagem e
+ * contagem de linha excluída/não avaliada). Filhos Grupo/Subgrupo nunca
+ * somam como parcela própria — a mesma disciplina de `calculateLineTotal`
+ * em `budget-version` (enunciado §37/correção §13).
  */
 export function reconcileGroupRow(session: BudgetReviewSession, rowId: string): BudgetReviewGroupReconciliation {
   const row = session.rows.find((candidate) => candidate.id === rowId);
@@ -579,11 +756,16 @@ export function reconcileGroupRow(session: BudgetReviewSession, rowId: string): 
 }
 
 /**
- * Gates de consolidação (enunciado §39) — bloqueia se existir: linha
- * Pendente; divergência de reconciliação de Item de Serviço não resolvida;
- * divergência de reconciliação de Grupo/Subgrupo não resolvida. Correção
- * de uma linha (`Corrigido`) é elegível para consolidação — a correção em
- * si é a resolução da pendência.
+ * Gates de consolidação (enunciado §39, ajustado pela correção §10) —
+ * bloqueia se existir: linha Pendente; divergência de reconciliação de Item
+ * de Serviço sem decisão humana `AcceptedAsDocumented`; divergência de
+ * Grupo/Subgrupo sem essa mesma decisão; Item de Serviço já aprovado sem
+ * total documental legível (não seria projetável para `BudgetLine` —
+ * correção §2/§4). Correção de uma linha (`Corrigido`) é elegível para
+ * consolidação — a correção em si é a resolução da pendência. Uma
+ * divergência com decisão `AcceptedAsDocumented` nunca bloqueia — os
+ * valores continuam documentais e auditáveis, apenas deixam de ser um
+ * impedimento (correção §10).
  */
 export function budgetReviewConsolidationReadiness(session: BudgetReviewSession): BudgetReviewConsolidationReadiness {
   const blockers: string[] = [];
@@ -596,7 +778,9 @@ export function budgetReviewConsolidationReadiness(session: BudgetReviewSession)
   const serviceItemRows = session.rows.filter(
     (row) => row.kind === BudgetLineKind.ServiceItem && row.state !== BudgetReviewRowState.NotBudgetItem,
   );
-  const divergentServiceItems = serviceItemRows.filter((row) => reconcileServiceItemRow(row).status === "diverges");
+  const divergentServiceItems = serviceItemRows.filter(
+    (row) => reconcileServiceItemRow(row).status === "diverges" && row.reconciliationDecision === null,
+  );
   if (divergentServiceItems.length > 0) {
     blockers.push(`${divergentServiceItems.length} Item(ns) de Serviço com divergência de reconciliação não resolvida.`);
   }
@@ -604,9 +788,19 @@ export function budgetReviewConsolidationReadiness(session: BudgetReviewSession)
   const groupRows = session.rows.filter(
     (row) => row.kind !== BudgetLineKind.ServiceItem && row.state !== BudgetReviewRowState.NotBudgetItem,
   );
-  const divergentGroups = groupRows.filter((row) => reconcileGroupRow(session, row.id).status === "diverges");
+  const divergentGroups = groupRows.filter(
+    (row) => reconcileGroupRow(session, row.id).status === "diverges" && row.reconciliationDecision === null,
+  );
   if (divergentGroups.length > 0) {
     blockers.push(`${divergentGroups.length} Grupo(s)/Subgrupo(s) com divergência entre total documental e total derivado.`);
+  }
+
+  const approvedServiceItems = serviceItemRows.filter((row) => ACCEPTED_BUDGET_REVIEW_ROW_STATES.has(row.state));
+  const unprojectableServiceItems = approvedServiceItems.filter(
+    (row) => moneyCentsFromBrazilianText(row.revised.totalPriceText) === null,
+  );
+  if (unprojectableServiceItems.length > 0) {
+    blockers.push(`${unprojectableServiceItems.length} Item(ns) de Serviço aprovado(s) sem total documental legível — não podem ser projetados para a Versão do Orçamento.`);
   }
 
   return {
@@ -644,7 +838,7 @@ export function consolidateBudgetReviewSession(input: ConsolidateBudgetReviewSes
 // ---------------------------------------------------------------------------
 
 function descendantServiceItemTotals(session: BudgetReviewSession, rowId: string): ReadonlyArray<number | null> {
-  const children = session.rows.filter((row) => row.parentRowId === rowId && row.state !== BudgetReviewRowState.NotBudgetItem);
+  const children = session.rows.filter((row) => row.parentRowId === rowId && ACCEPTED_BUDGET_REVIEW_ROW_STATES.has(row.state));
 
   return children.flatMap((child) => {
     if (child.kind === BudgetLineKind.ServiceItem) {

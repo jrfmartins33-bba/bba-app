@@ -1,4 +1,10 @@
-import type { BudgetReviewAuditAction, BudgetReviewFieldChange, BudgetReviewRow, BudgetReviewSession } from "../../domain/budget-official-review";
+import type {
+  BudgetReviewAuditAction,
+  BudgetReviewFieldChange,
+  BudgetReviewRow,
+  BudgetReviewSession,
+  ReconciliationDecision,
+} from "../../domain/budget-official-review";
 
 /** Um evento de auditoria a persistir junto de uma mutação de linha ou consolidação — sempre na mesma transação (enunciado §19). */
 export interface AuditEventToPersist {
@@ -67,4 +73,19 @@ export interface BudgetReviewRepository {
 
   /** Importação inicial em lote — todas Pendente, cada uma com seu próprio evento RowImported, uma única transação física. */
   importRows(organizationId: string, actor: string, sessionId: string, rows: ReadonlyArray<BudgetReviewRow>, occurredAt: string): Promise<number>;
+
+  /**
+   * Persiste uma Decisão de Reconciliação (`AcceptedAsDocumented`) e seu
+   * evento de auditoria na mesma transação — nunca altera `revised` ou
+   * `state` (correção §7: "valores revised NÃO mudam"). Mutação distinta de
+   * `mutateRow` porque altera colunas diferentes (nunca `state`/`revised`).
+   */
+  recordReconciliationDecision(
+    organizationId: string,
+    actor: string,
+    sessionId: string,
+    rowId: string,
+    decision: ReconciliationDecision,
+    auditEvent: AuditEventToPersist,
+  ): Promise<void>;
 }

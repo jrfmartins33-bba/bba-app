@@ -136,9 +136,31 @@ export interface BudgetReviewRow {
   readonly evidenceText: string | null;
   readonly justification: string | null;
   readonly insertedManually: boolean;
+  readonly reconciliationDecision: ReconciliationDecision | null;
   readonly createdBy: BudgetReviewActor;
   readonly createdAt: BudgetReviewTimestamp;
   readonly metadata: BudgetReviewMetadata;
+}
+
+/**
+ * Decisão humana de reconciliação — conceito deliberadamente separado de
+ * `BudgetReviewRowState` (Confirmado/Corrigido continuam significando
+ * apenas "revisor avaliou os valores", nunca "divergência resolvida").
+ * `AcceptedAsDocumented` documenta que o Admin BBA conferiu os três valores
+ * (quantidade, preço unitário, total) contra a fonte e decidiu preservá-los
+ * exatamente como publicados, mesmo com uma diferença aritmética residual
+ * (tipicamente arredondamento em cadeia da planilha de origem) — nunca uma
+ * correção automática de tolerância.
+ */
+export enum ReconciliationDecisionStatus {
+  AcceptedAsDocumented = "AcceptedAsDocumented",
+}
+
+export interface ReconciliationDecision {
+  readonly status: ReconciliationDecisionStatus.AcceptedAsDocumented;
+  readonly actor: BudgetReviewActor;
+  readonly justification: string;
+  readonly decidedAt: BudgetReviewTimestamp;
 }
 
 /**
@@ -172,6 +194,8 @@ export enum BudgetReviewAuditAction {
   RowInsertedManually = "RowInsertedManually",
   BulkConfirmed = "BulkConfirmed",
   SessionConsolidated = "SessionConsolidated",
+  ReconciliationAcceptedAsDocumented = "ReconciliationAcceptedAsDocumented",
+  BulkReconciliationAcceptedAsDocumented = "BulkReconciliationAcceptedAsDocumented",
 }
 
 export interface BudgetReviewFieldChange {
@@ -284,6 +308,28 @@ export interface BulkConfirmBudgetReviewRowsInput {
   readonly occurredAt: BudgetReviewTimestamp;
 }
 
+/**
+ * Aceitar uma divergência documental (enunciado da correção §7): a linha
+ * precisa ter uma divergência de reconciliação ativa; `revised` nunca é
+ * alterado por esta operação — apenas anexa a decisão humana.
+ */
+export interface AcceptBudgetReviewRowDivergenceInput {
+  readonly session: BudgetReviewSession;
+  readonly rowId: BudgetReviewRowId;
+  readonly justification: string;
+  readonly actor: BudgetReviewActor;
+  readonly occurredAt: BudgetReviewTimestamp;
+}
+
+/** Aceitação em lote — mesma justificativa para todas as linhas selecionadas (enunciado §16). */
+export interface BulkAcceptBudgetReviewRowDivergencesInput {
+  readonly session: BudgetReviewSession;
+  readonly rowIds: ReadonlyArray<BudgetReviewRowId>;
+  readonly justification: string;
+  readonly actor: BudgetReviewActor;
+  readonly occurredAt: BudgetReviewTimestamp;
+}
+
 export interface ConsolidateBudgetReviewSessionInput {
   readonly session: BudgetReviewSession;
   readonly actor: BudgetReviewActor;
@@ -321,6 +367,7 @@ export type BudgetReviewErrorCode =
   | "empty_row_selection"
   | "row_has_active_inconsistency"
   | "row_not_confirmable"
+  | "no_active_divergence"
   | "consolidation_blocked";
 
 export interface BudgetReviewError {

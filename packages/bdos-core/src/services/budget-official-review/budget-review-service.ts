@@ -1,4 +1,7 @@
 import {
+  acceptBudgetReviewRowDivergenceAsDocumented,
+  BudgetReviewSessionStatus,
+  bulkAcceptBudgetReviewRowDivergencesAsDocumented,
   bulkConfirmBudgetReviewRows,
   confirmBudgetReviewRow,
   consolidateBudgetReviewSession,
@@ -10,14 +13,21 @@ import {
   restoreBudgetReviewRow,
 } from "../../domain/budget-official-review";
 import type { BudgetReviewAuditEvent, BudgetReviewRow, BudgetReviewSession } from "../../domain/budget-official-review";
+import { BudgetVersionStatus, consolidateBudgetVersion } from "../../domain/budget-version";
+import type { BudgetVersion } from "../../domain/budget-version";
+import type { BudgetVersionRepository, PersistedEntity } from "../procurement-engineering/budget-version.repository";
+import { projectBudgetReviewSessionToBudgetVersion } from "./budget-review-projection";
 import type { ApplicationContext } from "./application-context";
 import { toInfrastructureErrorMessage } from "./application-context";
 import type { AuditEventToPersist, BudgetReviewRepository } from "./budget-review.repository";
 import type {
+  AcceptBudgetReviewRowDivergenceCommand,
   BudgetReviewServiceResult,
+  BulkAcceptBudgetReviewRowDivergencesCommand,
   BulkConfirmBudgetReviewRowsCommand,
   ConfirmBudgetReviewRowCommand,
   ConsolidateBudgetReviewSessionCommand,
+  ConsolidateBudgetReviewSessionServiceResult,
   CorrectBudgetReviewRowCommand,
   CreateBudgetReviewSessionCommand,
   ExcludeBudgetReviewRowCommand,
@@ -258,26 +268,215 @@ export async function bulkConfirmBudgetReviewRowsService(
   }
 }
 
-export async function consolidateBudgetReviewSessionService(
+/** Aceita uma divergência documental — nunca altera `revised`, apenas anexa a decisão e sua auditoria. */
+export async function acceptBudgetReviewRowDivergenceService(
   context: ApplicationContext,
-  command: ConsolidateBudgetReviewSessionCommand,
+  command: AcceptBudgetReviewRowDivergenceCommand,
   repository: BudgetReviewRepository,
 ): Promise<BudgetReviewServiceResult> {
   const loaded = await repository.loadSession(context.organizationId, command.sessionId);
   if (loaded === null) return { outcome: "not_found" };
 
   const occurredAt = nowIso();
-  const domainResult = consolidateBudgetReviewSession({ session: loaded, actor: context.actor, occurredAt });
+  const domainResult = acceptBudgetReviewRowDivergenceAsDocumented({
+    session: loaded,
+    rowId: command.rowId,
+    justification: command.justification,
+    actor: context.actor,
+    occurredAt,
+  });
   if (!domainResult.success) return { outcome: "domain_error", errors: domainResult.errors };
 
-  if (domainResult.auditEvents.length === 0) {
-    // no-op (já estava Consolidated).
+  const updatedRow = findRow(domainResult.session, command.rowId)!;
+  return persistReconciliationDecision(context, repository, domainResult.session, updatedRow, toAuditPersist(domainResult.auditEvents[0]!));
+}
+
+/** Aceitação em lote — mesma justificativa para todo o lote, persistida linha a linha (mesma disciplina de bulkConfirmBudgetReviewRowsService). */
+export async function bulkAcceptBudgetReviewRowDivergencesService(
+  context: ApplicationContext,
+  command: BulkAcceptBudgetReviewRowDivergencesCommand,
+  repository: BudgetReviewRepository,
+): Promise<BudgetReviewServiceResult> {
+  const loaded = await repository.loadSession(context.organizationId, command.sessionId);
+  if (loaded === null) return { outcome: "not_found" };
+
+  const occurredAt = nowIso();
+  const domainResult = bulkAcceptBudgetReviewRowDivergencesAsDocumented({
+    session: loaded,
+    rowIds: command.rowIds,
+    justification: command.justification,
+    actor: context.actor,
+    occurredAt,
+  });
+  if (!domainResult.success) return { outcome: "domain_error", errors: domainResult.errors };
+
+  const bulkEvent = domainResult.auditEvents[0];
+  if (bulkEvent === undefined) {
     return { outcome: "success", session: domainResult.session };
   }
 
+  const acceptedRowIds = new Set((bulkEvent.metadata.acceptedRowIds as ReadonlyArray<string> | undefined) ?? []);
+
   try {
-    await repository.consolidateSession(context.organizationId, context.actor, command.sessionId, domainResult.auditEvents[0]!.id);
+    for (const rowId of acceptedRowIds) {
+      const row = findRow(domainResult.session, rowId)!;
+      const rowAuditEvent: AuditEventToPersist = {
+        id: `${bulkEvent.id}:${rowId}`,
+        action: bulkEvent.action,
+        actor: bulkEvent.actor,
+        occurredAt: bulkEvent.occurredAt,
+        fieldChanges: [],
+        justification: bulkEvent.justification,
+        metadata: { bulkEventId: bulkEvent.id },
+      };
+      await repository.recordReconciliationDecision(
+        context.organizationId,
+        context.actor,
+        command.sessionId,
+        rowId,
+        row.reconciliationDecision!,
+        rowAuditEvent,
+      );
+    }
     return { outcome: "success", session: domainResult.session };
+  } catch (error) {
+    return { outcome: "persistence_failure", message: toInfrastructureErrorMessage(error) };
+  }
+}
+
+async function persistReconciliationDecision(
+  context: ApplicationContext,
+  repository: BudgetReviewRepository,
+  session: BudgetReviewSession,
+  row: BudgetReviewRow,
+  auditEvent: AuditEventToPersist,
+): Promise<BudgetReviewServiceResult> {
+  try {
+    await repository.recordReconciliationDecision(context.organizationId, context.actor, session.id, row.id, row.reconciliationDecision!, auditEvent);
+    return { outcome: "success", session };
+  } catch (error) {
+    return { outcome: "persistence_failure", message: toInfrastructureErrorMessage(error) };
+  }
+}
+
+/**
+ * Consolida a Sessão de Revisão E projeta suas linhas aprovadas para dentro
+ * da BudgetVersion (Draft) já existente, consolidando-a também — fecha o
+ * ciclo completo (correção §2/§5): Sessão revisada -> aprovação humana ->
+ * BudgetVersion real -> Consolidated -> /orcamentos.
+ *
+ * Os dois agregados (BudgetReviewSession, BudgetVersion) nunca compartilham
+ * uma única transação física — são dois RPCs distintos contra tabelas
+ * diferentes. A ordem de escrita é sempre: 1) projetar+persistir a
+ * BudgetVersion primeiro, 2) só then marcar a Sessão Consolidated — nunca o
+ * inverso, para que uma falha no passo 1 nunca deixe a Sessão marcada como
+ * concluída sem o orçamento real por trás dela. Mesmo assim, uma falha
+ * exatamente entre os dois passos é possível (processo interrompido depois
+ * do passo 1, antes do passo 2) — os três estados de reentrada abaixo
+ * tratam essa janela explicitamente, nunca reprocessando silenciosamente
+ * algo que já está correto, nunca deixando os dois agregados divergentes.
+ */
+export async function consolidateBudgetReviewSessionService(
+  context: ApplicationContext,
+  command: ConsolidateBudgetReviewSessionCommand,
+  repository: BudgetReviewRepository,
+  budgetVersionRepository: BudgetVersionRepository,
+): Promise<ConsolidateBudgetReviewSessionServiceResult> {
+  const loaded = await repository.loadSession(context.organizationId, command.sessionId);
+  if (loaded === null) return { outcome: "not_found" };
+
+  const loadedVersion = await budgetVersionRepository.loadBudgetVersion(context.organizationId, loaded.budgetVersionId);
+  if (loadedVersion === null) {
+    return { outcome: "persistence_failure", message: `Versão do Orçamento "${loaded.budgetVersionId}" referenced by this session was not found.` };
+  }
+
+  // Caso feliz já concluído em uma tentativa anterior — no-op puro, nunca
+  // reprojeta, nunca regrava nada.
+  if (loaded.status === BudgetReviewSessionStatus.Consolidated && loadedVersion.entity.status === BudgetVersionStatus.Consolidated) {
+    return { outcome: "success", session: loaded };
+  }
+
+  // Recovery: a BudgetVersion já foi projetada e persistida Consolidated
+  // numa tentativa anterior, mas o flip da Sessão falhou depois (a última
+  // etapa do fluxo). Não reprojeta — a Versão já É o retrato final; só
+  // fecha a Sessão. Ainda passa pelo domínio puro (nunca grava direto) —
+  // se a readiness genuinamente não for mais válida (ex.: rows alteradas
+  // entre tentativas), o erro de domínio é propagado, nunca engolido como
+  // se fosse um no-op.
+  if (loaded.status !== BudgetReviewSessionStatus.Consolidated && loadedVersion.entity.status === BudgetVersionStatus.Consolidated) {
+    const recoveryOccurredAt = nowIso();
+    const recoveryDomainResult = consolidateBudgetReviewSession({ session: loaded, actor: context.actor, occurredAt: recoveryOccurredAt });
+    if (!recoveryDomainResult.success) return { outcome: "domain_error", errors: recoveryDomainResult.errors };
+    return finalizeSessionConsolidation(context, repository, recoveryDomainResult.session, command.sessionId, recoveryDomainResult.auditEvents[0]!);
+  }
+
+  // Recovery: a Sessão já virou Consolidated numa tentativa anterior, mas a
+  // persistência da BudgetVersion falhou antes de completar (a etapa
+  // anterior ao flip). As linhas da Sessão já consolidada são imutáveis —
+  // reprojeta e persiste agora, sem repetir o flip (já feito).
+  if (loaded.status === BudgetReviewSessionStatus.Consolidated && loadedVersion.entity.status !== BudgetVersionStatus.Consolidated) {
+    return projectAndPersistBudgetVersion(context, budgetVersionRepository, loaded, loadedVersion);
+  }
+
+  // Caminho normal: os dois agregados ainda em estado inicial.
+  const occurredAt = nowIso();
+  const domainResult = consolidateBudgetReviewSession({ session: loaded, actor: context.actor, occurredAt });
+  if (!domainResult.success) return { outcome: "domain_error", errors: domainResult.errors };
+
+  const projectAndPersistResult = await projectAndPersistBudgetVersion(context, budgetVersionRepository, domainResult.session, loadedVersion);
+  if (projectAndPersistResult.outcome !== "success") {
+    return projectAndPersistResult;
+  }
+
+  return finalizeSessionConsolidation(context, repository, domainResult.session, command.sessionId, domainResult.auditEvents[0]!);
+}
+
+/** Passo 1: projeta as linhas aprovadas para BudgetLine e persiste a BudgetVersion consolidada (validação + gravação já existentes, nunca reimplementadas). */
+async function projectAndPersistBudgetVersion(
+  context: ApplicationContext,
+  budgetVersionRepository: BudgetVersionRepository,
+  session: BudgetReviewSession,
+  loadedVersion: PersistedEntity<BudgetVersion>,
+): Promise<ConsolidateBudgetReviewSessionServiceResult> {
+  const projectionResult = projectBudgetReviewSessionToBudgetVersion(session, loadedVersion.entity);
+  if (!projectionResult.success) {
+    return { outcome: "persistence_failure", message: `Falha ao projetar a Sessão de Revisão para a Versão do Orçamento: ${JSON.stringify(projectionResult.errors)}` };
+  }
+
+  const consolidationResult = consolidateBudgetVersion({ budgetVersion: projectionResult.budgetVersion });
+  if (!consolidationResult.success) {
+    return { outcome: "persistence_failure", message: `Falha ao consolidar a Versão do Orçamento projetada: ${JSON.stringify(consolidationResult.errors)}` };
+  }
+
+  try {
+    const saveResult = await budgetVersionRepository.saveBudgetVersion(
+      context.organizationId,
+      context.actor,
+      consolidationResult.budgetVersion,
+      loadedVersion.revision,
+    );
+
+    if (saveResult.outcome === "concurrency_conflict") {
+      return { outcome: "concurrency_conflict" };
+    }
+
+    return { outcome: "success", session };
+  } catch (error) {
+    return { outcome: "persistence_failure", message: toInfrastructureErrorMessage(error) };
+  }
+}
+
+/** Passo 2 (sempre por último): marca a Sessão de Revisão Consolidated, gravando o evento SessionConsolidated já produzido pelo domínio puro no chamador. */
+async function finalizeSessionConsolidation(
+  context: ApplicationContext,
+  repository: BudgetReviewRepository,
+  session: BudgetReviewSession,
+  sessionId: string,
+  auditEvent: BudgetReviewAuditEvent,
+): Promise<ConsolidateBudgetReviewSessionServiceResult> {
+  try {
+    await repository.consolidateSession(context.organizationId, context.actor, sessionId, auditEvent.id);
+    return { outcome: "success", session: { ...session, status: BudgetReviewSessionStatus.Consolidated } };
   } catch (error) {
     return { outcome: "persistence_failure", message: toInfrastructureErrorMessage(error) };
   }
