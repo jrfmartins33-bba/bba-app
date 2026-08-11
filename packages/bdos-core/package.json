@@ -12,6 +12,7 @@
     "./services/measurement-bulletin-import": "./src/services/measurement-bulletin-import/index.ts",
     "./services/procurement-engineering": "./src/services/procurement-engineering/index.ts",
     "./services/document-processing": "./src/services/document-processing/index.ts",
+    "./services/budget-official-review": "./src/services/budget-official-review/index.ts",
     "./advisor/claude-narrator": "./src/advisor/claude-narrator.ts",
     "./advisor/advisor-context.types": "./src/advisor/advisor-context.types.ts",
     "./advisor/advisor-context-builder": "./src/advisor/advisor-context-builder.ts",
