@@ -21,7 +21,7 @@ import {
 // cliente autenticado comum, protegido por RLS (Admin BBA only).
 
 const SESSION_COLUMNS =
-  "id, company_id, procurement_case_id, budget_version_id, document_version_id, source_sha256, acquisition_mechanism, acquisition_mechanism_version, status, metadata, created_by, created_at";
+  "id, company_id, procurement_case_id, procurement_lot_id, budget_version_id, document_version_id, source_sha256, acquisition_mechanism, acquisition_mechanism_version, status, metadata, created_by, created_at";
 const ROW_COLUMNS =
   "id, company_id, session_id, kind, lot_reference, parent_row_id, position, state, extracted, revised, page, evidence_text, justification, inserted_manually, reconciliation_decision_status, reconciliation_decision_actor, reconciliation_decision_justification, reconciliation_decision_at, metadata, created_by, created_at";
 
@@ -63,15 +63,22 @@ export function createBudgetReviewServerRepository(supabase: SupabaseClient): Bu
       return mapBudgetReviewSessionRow(sessionRow, rowRows);
     },
 
-    async findSessionByAcquisition(organizationId, procurementCaseId, sourceSha256, acquisitionMechanism) {
-      const { data: sessionRow, error: sessionError } = await supabase
+    async findSessionByAcquisition(organizationId, procurementCaseId, sourceSha256, acquisitionMechanism, procurementLotId) {
+      let query = supabase
         .from("budget_review_sessions")
         .select(SESSION_COLUMNS)
         .eq("company_id", organizationId)
         .eq("procurement_case_id", procurementCaseId)
         .eq("source_sha256", sourceSha256)
-        .eq("acquisition_mechanism", acquisitionMechanism)
-        .maybeSingle();
+        .eq("acquisition_mechanism", acquisitionMechanism);
+
+      if (procurementLotId) {
+        query = query.eq("procurement_lot_id", procurementLotId);
+      } else {
+        query = query.is("procurement_lot_id", null);
+      }
+
+      const { data: sessionRow, error: sessionError } = await query.maybeSingle();
 
       if (sessionError) throw sessionError;
       if (sessionRow === null) return null;

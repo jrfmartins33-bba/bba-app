@@ -44,10 +44,10 @@ export interface ImportStructuredBudgetXlsxCommand {
   readonly procurementLotId: string;
   readonly fileBytes: Uint8Array;
   readonly originalFileName: string;
+  readonly storageReference: string;
   readonly mimeType?: string;
   readonly sizeBytes?: number;
   readonly sha256?: string;
-  readonly storageReference?: string | null;
 }
 
 export type ImportStructuredBudgetXlsxOutcome =
@@ -120,10 +120,17 @@ export async function importStructuredBudgetXlsxService(
     reviewRepository,
   } = repositories;
 
-  // 1. Calculate SHA-256
+  // 1. Calculate SHA-256 and Validate Storage Reference
   const sha256 = command.sha256 ?? computeSha256(command.fileBytes);
   const mimeType = command.mimeType ?? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   const sizeBytes = command.sizeBytes ?? command.fileBytes.length;
+
+  if (!command.storageReference || command.storageReference.trim().length === 0) {
+    return {
+      outcome: "domain_error",
+      errors: ["A referência de armazenamento real (storageReference) é obrigatória e deve ser fornecida após a confirmação do upload no Storage."],
+    };
+  }
 
   // 2. Validate ProcurementCase and ProcurementLot
   let procurementCase: ProcurementCase | null = null;
@@ -156,13 +163,14 @@ export async function importStructuredBudgetXlsxService(
     return { outcome: "not_found", message: `Lote "${command.procurementLotId}" não encontrado para o processo.` };
   }
 
-  // 3. Check for existing idempotent BudgetReviewSession
+  // 3. Check for existing idempotent BudgetReviewSession (Lot-scoped)
   try {
     const existingSession = await reviewRepository.findSessionByAcquisition(
       context.organizationId,
       command.procurementCaseId,
       sha256,
       "xlsx_structured_import",
+      command.procurementLotId,
     );
 
     if (existingSession !== null) {
@@ -181,11 +189,18 @@ export async function importStructuredBudgetXlsxService(
     return { outcome: "persistence_failure", message: toInfrastructureErrorMessage(error) };
   }
 
-  // 4. Register or Reuse DocumentArtifact and DocumentVersion
+  // 4. Register or Reuse DocumentArtifact and DocumentVersion (Lot-scoped Artifact)
   let documentVersion: DocumentVersion;
   try {
-    // Check if DocumentArtifact already exists for this case or create new
-    const docArtifactId = `doc-case-${command.procurementCaseId}`;
+    // Identity of DocumentArtifact is stable by (process + lot + role)
+    const docArtifactId = command.procurementLotId
+      ? `doc-lot-${command.procurementCaseId}-${command.procurementLotId}`
+      : `doc-case-${command.procurementCaseId}`;
+
+    const docArtifactTitle = command.procurementLotId
+      ? `Orçamento Oficial - ${procurementLot.title}`
+      : `Orçamento Oficial - ${procurementCase.title}`;
+
     let documentArtifact = await documentRepository.findDocumentById(context.organizationId, docArtifactId);
 
     if (documentArtifact === null) {
@@ -193,7 +208,7 @@ export async function importStructuredBudgetXlsxService(
         id: docArtifactId,
         organizationId: context.organizationId,
         context: command.procurementCaseId,
-        title: command.originalFileName,
+        title: docArtifactTitle,
         registeredBy: context.actor,
         registeredAt: nowIso(),
       });
@@ -209,8 +224,8 @@ export async function importStructuredBudgetXlsxService(
       );
     }
 
-    // Register or reuse DocumentVersion by SHA-256
-    const storageRef = command.storageReference ?? `${context.organizationId}/orcamentos/${sha256}.xlsx`;
+    // Register or reuse DocumentVersion by SHA-256 with real storageReference
+    const storageRef = command.storageReference.trim();
 
     const versionDomainResult = createDocumentVersion({
       id: crypto.randomUUID(),
@@ -310,6 +325,7 @@ export async function importStructuredBudgetXlsxService(
     const sessionDomainResult = createBudgetReviewSession({
       id: crypto.randomUUID(),
       procurementCase,
+      procurementLotId: command.procurementLotId,
       budgetVersion: draftBudgetVersion,
       documentVersion,
       sourceSha256: sha256,

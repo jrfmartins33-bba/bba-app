@@ -41,12 +41,13 @@ export interface BudgetReviewRepository {
 
   loadSession(organizationId: string, sessionId: string): Promise<BudgetReviewSession | null>;
 
-  /** Idempotência física por (procurementCaseId, sourceSha256, acquisitionMechanism) — enunciado §25. */
+  /** Idempotência física por (procurementCaseId, procurementLotId, sourceSha256, acquisitionMechanism) — enunciado §25. */
   findSessionByAcquisition(
     organizationId: string,
     procurementCaseId: string,
     sourceSha256: string,
     acquisitionMechanism: string,
+    procurementLotId?: string | null,
   ): Promise<BudgetReviewSession | null>;
 
   /** `actor` é a identidade já autenticada e resolvida pela camada de servidor — nunca um valor independente escolhido pelo chamador. */

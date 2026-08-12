@@ -142,6 +142,7 @@ export function createBudgetReviewSession(input: CreateBudgetReviewSessionInput)
     id: input.id,
     organizationId: input.procurementCase.organizationId,
     procurementCaseId: input.procurementCase.id,
+    procurementLotId: input.procurementLotId ?? null,
     budgetVersionId: input.budgetVersion.id,
     documentVersionId: input.documentVersion.id,
     sourceSha256: input.sourceSha256,

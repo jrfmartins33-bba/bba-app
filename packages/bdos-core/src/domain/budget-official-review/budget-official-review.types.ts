@@ -173,6 +173,7 @@ export interface BudgetReviewSession {
   readonly id: BudgetReviewSessionId;
   readonly organizationId: BudgetReviewOrganizationId;
   readonly procurementCaseId: string;
+  readonly procurementLotId?: string | null;
   readonly budgetVersionId: string;
   readonly documentVersionId: string;
   readonly sourceSha256: string;
@@ -228,6 +229,7 @@ export interface BudgetReviewAuditEvent {
 export interface CreateBudgetReviewSessionInput {
   readonly id: BudgetReviewSessionId;
   readonly procurementCase: ProcurementCase;
+  readonly procurementLotId?: string | null;
   readonly budgetVersion: BudgetVersion;
   readonly documentVersion: DocumentVersion;
   readonly sourceSha256: string;

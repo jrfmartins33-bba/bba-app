@@ -29,6 +29,7 @@ export interface BudgetReviewSessionRow {
   readonly id: string;
   readonly company_id: string;
   readonly procurement_case_id: string;
+  readonly procurement_lot_id: string | null;
   readonly budget_version_id: string;
   readonly document_version_id: string;
   readonly source_sha256: string;
@@ -69,6 +70,7 @@ export function mapBudgetReviewSessionRow(row: BudgetReviewSessionRow, rows: Rea
     id: assertNonBlankString(row.id, "budget_review_sessions.id"),
     organizationId: assertNonBlankString(row.company_id, "budget_review_sessions.company_id"),
     procurementCaseId: assertNonBlankString(row.procurement_case_id, "budget_review_sessions.procurement_case_id"),
+    procurementLotId: row.procurement_lot_id ?? null,
     budgetVersionId: assertNonBlankString(row.budget_version_id, "budget_review_sessions.budget_version_id"),
     documentVersionId: assertNonBlankString(row.document_version_id, "budget_review_sessions.document_version_id"),
     sourceSha256: assertNonBlankString(row.source_sha256, "budget_review_sessions.source_sha256"),
@@ -211,6 +213,7 @@ export function createBudgetReviewSessionRpcParams(
     p_acquisition_mechanism: session.acquisitionMechanism,
     p_acquisition_mechanism_version: session.acquisitionMechanismVersion,
     p_metadata: session.metadata,
+    p_procurement_lot_id: session.procurementLotId ?? null,
   };
 }
 

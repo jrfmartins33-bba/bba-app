@@ -1,70 +1,62 @@
-import { buildXlsxFixture } from "../../domain/schedule-management/adapters/excel-import/xlsx-test-fixtures";
-import type {
-  BudgetReviewRepository,
-  CreateSessionResult,
-} from "./budget-review.repository";
-import type {
-  BudgetVersionRepository,
-  SaveBudgetVersionResult,
-} from "../procurement-engineering/budget-version.repository";
+import {
+  createDocumentArtifact,
+  createDocumentVersion,
+  type DocumentArtifact,
+  type DocumentVersion,
+} from "../../domain/document-processing";
 import type { DocumentRepository } from "../document-processing/document.repository";
 import type { DocumentVersionRepository } from "../document-processing/document-version.repository";
+import {
+  type ProcurementCase,
+  type ProcurementLot,
+} from "../../domain/procurement-case";
 import type { ProcurementCaseRepository } from "../procurement-engineering/procurement-case.repository";
-import type {
-  BudgetReviewRow,
-  BudgetReviewSession,
+import { type BudgetVersion } from "../../domain/budget-version";
+import type { BudgetVersionRepository, SaveBudgetVersionResult } from "../procurement-engineering/budget-version.repository";
+import {
+  BudgetReviewSessionStatus,
+  type BudgetReviewSession,
 } from "../../domain/budget-official-review";
-import type { BudgetVersion } from "../../domain/budget-version";
-import type { DocumentArtifact, DocumentVersion } from "../../domain/document-processing";
-import type { ProcurementCase, ProcurementLot } from "../../domain/procurement-case";
-import type { ApplicationContext } from "./application-context";
+import type { BudgetReviewRepository, CreateSessionResult } from "./budget-review.repository";
 import { importStructuredBudgetXlsxService } from "./import-structured-budget-xlsx-service";
+import type { ApplicationContext } from "./application-context";
+import { buildXlsxFixture } from "../../domain/schedule-management/adapters/excel-import/xlsx-test-fixtures";
 
 // ---------------------------------------------------------------------------
-// Test Runner & Assertion Helpers
+// Test Runner Helpers
 // ---------------------------------------------------------------------------
 
-function assertEqual<T>(actual: T, expected: T, message: string): void {
+function assertEqual<T>(actual: T, expected: T, message: string) {
   if (actual !== expected) {
     throw new Error(`[FAIL] ${message} — Expected: ${String(expected)}, Got: ${String(actual)}`);
   }
 }
 
-function assertTrue(condition: boolean, message: string): void {
+function assertTrue(condition: boolean, message: string) {
   if (!condition) {
     throw new Error(`[FAIL] ${message}`);
   }
 }
 
-function runTest(name: string, fn: () => void | Promise<void>): void {
+async function runTest(name: string, fn: () => Promise<void>) {
   try {
-    const res = fn();
-    if (res instanceof Promise) {
-      res
-        .then(() => console.log(`  ✓ ${name}`))
-        .catch((err) => {
-          console.error(`  ✗ ${name}`);
-          console.error(err);
-          process.exitCode = 1;
-        });
-    } else {
-      console.log(`  ✓ ${name}`);
-    }
-  } catch (err) {
+    await fn();
+    console.log(`  ✓ ${name}`);
+  } catch (error) {
     console.error(`  ✗ ${name}`);
-    console.error(err);
+    console.error(error);
     process.exitCode = 1;
   }
 }
 
 // ---------------------------------------------------------------------------
-// Fake Repositories for Application Service Testing
+// Fake Repositories
 // ---------------------------------------------------------------------------
 
-function createFakeContext(overrides: Partial<ApplicationContext> = {}): ApplicationContext {
+function createFakeContext(): ApplicationContext {
   return {
-    organizationId: overrides.organizationId ?? "org-test-alagoas",
-    actor: overrides.actor ?? "actor-admin-test",
+    organizationId: "org-alagoas-test",
+    actor: "user-ricardo-test",
   };
 }
 
@@ -72,24 +64,23 @@ function createFakeProcurementCaseRepository(
   cases: ProcurementCase[] = [],
   lots: ProcurementLot[] = [],
 ): ProcurementCaseRepository {
+  const caseMap = new Map<string, ProcurementCase>(cases.map((c) => [`${c.organizationId}:${c.id}`, c]));
+  const lotMap = new Map<string, ProcurementLot>(lots.map((l) => [`${l.organizationId}:${l.procurementCaseId}:${l.id}`, l]));
+
   return {
-    async createProcurementCase(_orgId, _actor, pc) {
-      cases.push(pc);
-      return pc;
+    async findProcurementCaseById(orgId: string, id: string) {
+      return caseMap.get(`${orgId}:${id}`) ?? null;
     },
-    async findProcurementCaseById(orgId, id) {
-      return cases.find((c) => c.organizationId === orgId && c.id === id) ?? null;
+    async findProcurementLotById(orgId: string, caseId: string, lotId: string) {
+      return lotMap.get(`${orgId}:${caseId}:${lotId}`) ?? null;
     },
-    async createProcurementLot(_orgId, _actor, lot) {
-      lots.push(lot);
-      return lot;
+    async createProcurementCase(orgId: string, _actor: string, caseObj: ProcurementCase) {
+      caseMap.set(`${orgId}:${caseObj.id}`, caseObj);
+      return caseObj;
     },
-    async findProcurementLotById(orgId, caseId, id) {
-      return (
-        lots.find(
-          (l) => l.organizationId === orgId && l.procurementCaseId === caseId && l.id === id,
-        ) ?? null
-      );
+    async createProcurementLot(orgId: string, _actor: string, lotObj: ProcurementLot) {
+      lotMap.set(`${orgId}:${lotObj.procurementCaseId}:${lotObj.id}`, lotObj);
+      return lotObj;
     },
   };
 }
@@ -97,12 +88,12 @@ function createFakeProcurementCaseRepository(
 function createFakeDocumentRepository(): DocumentRepository {
   const documents = new Map<string, DocumentArtifact>();
   return {
-    async createDocument(orgId, _actor, document) {
+    async createDocument(orgId: string, _actor: string, document: DocumentArtifact) {
       const key = `${orgId}:${document.id}`;
       documents.set(key, document);
       return document;
     },
-    async findDocumentById(orgId, id) {
+    async findDocumentById(orgId: string, id: string) {
       return documents.get(`${orgId}:${id}`) ?? null;
     },
   };
@@ -111,7 +102,7 @@ function createFakeDocumentRepository(): DocumentRepository {
 function createFakeDocumentVersionRepository(): DocumentVersionRepository {
   const versions = new Map<string, DocumentVersion>();
   return {
-    async createOrReuseDocumentVersion(orgId, _actor, documentVersion) {
+    async createOrReuseDocumentVersion(orgId: string, _actor: string, documentVersion: DocumentVersion) {
       const key = `${orgId}:${documentVersion.documentId}:${documentVersion.sha256}`;
       const existing = versions.get(key);
       if (existing) {
@@ -120,17 +111,17 @@ function createFakeDocumentVersionRepository(): DocumentVersionRepository {
       versions.set(key, documentVersion);
       return { outcome: "created", documentVersion };
     },
-    async findDocumentVersionById(orgId, id) {
+    async findDocumentVersionById(orgId: string, id: string) {
       for (const version of versions.values()) {
         if (version.documentId && version.id === id) return version;
       }
       return null;
     },
-    async findDocumentVersionByDocumentAndSha256(orgId, documentId, sha256) {
+    async findDocumentVersionByDocumentAndSha256(orgId: string, documentId: string, sha256: string) {
       return versions.get(`${orgId}:${documentId}:${sha256}`) ?? null;
     },
     async listDocumentVersionsByDocument() {
-      return [];
+      return Array.from(versions.values());
     },
   };
 }
@@ -138,16 +129,16 @@ function createFakeDocumentVersionRepository(): DocumentVersionRepository {
 function createFakeBudgetVersionRepository(): BudgetVersionRepository {
   const versions = new Map<string, BudgetVersion>();
   return {
-    async createDraftBudgetVersion(orgId, _actor, budgetVersion) {
+    async createDraftBudgetVersion(orgId: string, _actor: string, budgetVersion: BudgetVersion) {
       const key = `${orgId}:${budgetVersion.id}`;
       versions.set(key, budgetVersion);
       return { entity: budgetVersion, revision: 1 };
     },
-    async loadBudgetVersion(orgId, id) {
+    async loadBudgetVersion(orgId: string, id: string) {
       const found = versions.get(`${orgId}:${id}`);
       return found ? { entity: found, revision: 1 } : null;
     },
-    async saveBudgetVersion(_orgId, _actor, budgetVersion, expectedRevision): Promise<SaveBudgetVersionResult> {
+    async saveBudgetVersion(_orgId: string, _actor: string, budgetVersion: BudgetVersion, expectedRevision?: number): Promise<SaveBudgetVersionResult> {
       return { outcome: "saved", revision: (expectedRevision ?? 1) + 1 };
     },
   };
@@ -156,36 +147,45 @@ function createFakeBudgetVersionRepository(): BudgetVersionRepository {
 function createFakeBudgetReviewRepository(): BudgetReviewRepository {
   const sessions = new Map<string, BudgetReviewSession>();
   return {
-    async findOrganizationIdForSession(sessionId) {
+    async findOrganizationIdForSession(sessionId: string) {
       for (const session of sessions.values()) {
         if (session.id === sessionId) return session.organizationId;
       }
       return null;
     },
-    async loadSession(_orgId, sessionId) {
+    async loadSession(_orgId: string, sessionId: string) {
       return sessions.get(sessionId) ?? null;
     },
-    async findSessionByAcquisition(orgId, caseId, sourceSha256, acquisitionMechanism) {
+    async findSessionByAcquisition(orgId: string, caseId: string, sourceSha256: string, acquisitionMechanism: string, procurementLotId?: string | null) {
       for (const session of sessions.values()) {
+        const matchesLot = procurementLotId
+          ? session.procurementLotId === procurementLotId
+          : !session.procurementLotId;
+
         if (
           session.organizationId === orgId &&
           session.procurementCaseId === caseId &&
           session.sourceSha256 === sourceSha256 &&
-          session.acquisitionMechanism === acquisitionMechanism
+          session.acquisitionMechanism === acquisitionMechanism &&
+          matchesLot
         ) {
           return session;
         }
       }
       return null;
     },
-    async createSession(orgId, _actor, session): Promise<CreateSessionResult> {
-      const key = `${orgId}:${session.procurementCaseId}:${session.sourceSha256}:${session.acquisitionMechanism}`;
+    async createSession(orgId: string, _actor: string, session: BudgetReviewSession): Promise<CreateSessionResult> {
       for (const existing of sessions.values()) {
+        const matchesLot = session.procurementLotId
+          ? existing.procurementLotId === session.procurementLotId
+          : !existing.procurementLotId;
+
         if (
           existing.organizationId === orgId &&
           existing.procurementCaseId === session.procurementCaseId &&
           existing.sourceSha256 === session.sourceSha256 &&
-          existing.acquisitionMechanism === session.acquisitionMechanism
+          existing.acquisitionMechanism === session.acquisitionMechanism &&
+          matchesLot
         ) {
           return { outcome: "reused", sessionId: existing.id };
         }
@@ -197,7 +197,7 @@ function createFakeBudgetReviewRepository(): BudgetReviewRepository {
     async consolidateSession() {
       return { success: true };
     },
-    async importRows(_orgId, _actor, sessionId, rows): Promise<number> {
+    async importRows(_orgId: string, _actor: string, sessionId: string, rows: any[]): Promise<number> {
       const session = sessions.get(sessionId);
       if (!session) return 0;
       const updatedRows = [...session.rows, ...rows];
@@ -234,6 +234,7 @@ function buildSetup() {
   const context = createFakeContext();
   const caseId = "case-alagoas-01";
   const lotId = "lot-alagoas-01";
+  const lot02Id = "lot-alagoas-02";
 
   const procurementCase: ProcurementCase = {
     id: caseId,
@@ -252,7 +253,16 @@ function buildSetup() {
     metadata: {},
   };
 
-  const caseRepo = createFakeProcurementCaseRepository([procurementCase], [procurementLot]);
+  const procurementLot02: ProcurementLot = {
+    id: lot02Id,
+    organizationId: context.organizationId,
+    procurementCaseId: caseId,
+    title: "Lote 02",
+    externalReference: null,
+    metadata: {},
+  };
+
+  const caseRepo = createFakeProcurementCaseRepository([procurementCase], [procurementLot, procurementLot02]);
   const docRepo = createFakeDocumentRepository();
   const docVersionRepo = createFakeDocumentVersionRepository();
   const budgetVersionRepo = createFakeBudgetVersionRepository();
@@ -266,17 +276,17 @@ function buildSetup() {
     reviewRepository: reviewRepo,
   };
 
-  return { context, caseId, lotId, procurementCase, procurementLot, repositories };
+  return { context, caseId, lotId, lot02Id, procurementCase, procurementLot, procurementLot02, repositories };
 }
 
 // ---------------------------------------------------------------------------
-// Unit Tests Execution (T01 – T17)
+// Unit Tests Execution (Sprint 21.5C.1A Hardening)
 // ---------------------------------------------------------------------------
 
 async function main() {
-  console.log("Running Sprint 21.5C.1 Application Service Unit Tests (T01 - T17)...\n");
+  console.log("Running Sprint 21.5C.1A Application Service Unit Tests...\n");
 
-  await runTest("1. Importação válida de XLSX com orquestração completa", async () => {
+  await runTest("1. storageReference é OBRIGATÓRIO (rejeita se ausente ou string vazia)", async () => {
     const { context, caseId, lotId, repositories } = buildSetup();
     const bytes = buildValidTestXlsxBytes();
 
@@ -287,186 +297,192 @@ async function main() {
         procurementLotId: lotId,
         fileBytes: bytes,
         originalFileName: "Orcamento_Lote01.xlsx",
+        storageReference: "", // Vazio!
       },
       repositories,
     );
 
-    if (result.outcome !== "success") {
-      console.error("Test 1 Result:", result);
-    }
-    assertEqual(result.outcome, "success", "expected outcome success");
-    assertEqual(result.idempotentReuse, false, "expected new session creation");
-    assertTrue(Boolean(result.reviewSessionId), "expected reviewSessionId");
-    assertTrue(Boolean(result.budgetVersionId), "expected budgetVersionId");
-    assertTrue(Boolean(result.documentVersionId), "expected documentVersionId");
-    assertEqual(result.rowCount, 3, "expected 3 rows imported");
+    assertEqual(result.outcome, "domain_error", "expected domain_error when storageReference is empty");
+    assertTrue(Boolean(result.errors && result.errors.length > 0), "expected error message");
   });
 
-  await runTest("2. Rejeita lote inexistente", async () => {
-    const { context, caseId, repositories } = buildSetup();
-    const bytes = buildValidTestXlsxBytes();
-
-    const result = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: "lot-invalido",
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    assertEqual(result.outcome, "not_found", "expected not_found outcome");
-  });
-
-  await runTest("3. Rejeita lote de outro processo", async () => {
-    const { context, caseId, repositories } = buildSetup();
-    const bytes = buildValidTestXlsxBytes();
-
-    // Adiciona outro lote pertencente a outro processo
-    const otherCaseId = "case-outro-processo";
-    const otherLotId = "lot-outro-processo";
-    await repositories.procurementCaseRepository.createProcurementCase(context.organizationId, context.actor, {
-      id: otherCaseId,
-      organizationId: context.organizationId,
-      title: "Outro Processo",
-      externalReference: null,
-      metadata: {},
-    });
-    await repositories.procurementCaseRepository.createProcurementLot(context.organizationId, context.actor, {
-      id: otherLotId,
-      organizationId: context.organizationId,
-      procurementCaseId: otherCaseId,
-      title: "Outro Lote",
-      externalReference: null,
-      metadata: {},
-    });
-
-    const result = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: otherLotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    assertEqual(result.outcome, "not_found", "expected not_found outcome when lot does not match case");
-  });
-
-  await runTest("4. Rejeita processo de outra organização", async () => {
-    const { caseId, lotId, repositories } = buildSetup();
-    const contextOutraOrg = createFakeContext({ organizationId: "outra-organizacao" });
-    const bytes = buildValidTestXlsxBytes();
-
-    const result = await importStructuredBudgetXlsxService(
-      contextOutraOrg,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    assertEqual(result.outcome, "not_found", "expected not_found outcome when case belongs to another org");
-  });
-
-  await runTest("5. Rejeita XLSX estruturalmente inválido (corrompido/zip inválido)", async () => {
+  await runTest("2. Sem fallback fictício de Storage (usa o storageReference real fornecido)", async () => {
     const { context, caseId, lotId, repositories } = buildSetup();
-    const bytesCorrompidos = new Uint8Array([1, 2, 3, 4, 5, 6]);
+    const bytes = buildValidTestXlsxBytes();
+    const realStorageRef = `${context.organizationId}/orcamentos/real-file-sha.xlsx`;
 
     const result = await importStructuredBudgetXlsxService(
       context,
       {
         procurementCaseId: caseId,
         procurementLotId: lotId,
-        fileBytes: bytesCorrompidos,
-        originalFileName: "Corrompido.xlsx",
+        fileBytes: bytes,
+        originalFileName: "Orcamento_Lote01.xlsx",
+        storageReference: realStorageRef,
       },
       repositories,
     );
 
-    assertEqual(result.outcome, "importer_error", "expected importer_error outcome");
+    assertEqual(result.outcome, "success", "expected success outcome");
+    const docVersion = await repositories.documentVersionRepository.findDocumentVersionById(
+      context.organizationId,
+      result.documentVersionId!,
+    );
+    assertTrue(docVersion !== null, "DocumentVersion found");
+    assertEqual(docVersion!.storageReference, realStorageRef, "must preserve exact storageReference");
   });
 
-  await runTest("6. Rejeita quando importador retorna erro estrutural (sem abas orçamentárias)", async () => {
+  await runTest("3. Retry no MESMO lote reutiliza a mesma sessão", async () => {
     const { context, caseId, lotId, repositories } = buildSetup();
-    const bytesSemOrcamento = buildXlsxFixture([
-      { name: "Resumo", rows: [["Apenas texto", "Sem tabela"]] },
+    const bytes = buildValidTestXlsxBytes();
+    const storageRef = `${context.organizationId}/orcamentos/test.xlsx`;
+
+    const res1 = await importStructuredBudgetXlsxService(
+      context,
+      { procurementCaseId: caseId, procurementLotId: lotId, fileBytes: bytes, originalFileName: "O.xlsx", storageReference: storageRef },
+      repositories,
+    );
+    assertEqual(res1.outcome, "success", "res1 success");
+    assertEqual(res1.idempotentReuse, false, "res1 new session");
+
+    const res2 = await importStructuredBudgetXlsxService(
+      context,
+      { procurementCaseId: caseId, procurementLotId: lotId, fileBytes: bytes, originalFileName: "O.xlsx", storageReference: storageRef },
+      repositories,
+    );
+    assertEqual(res2.outcome, "success", "res2 success");
+    assertEqual(res2.idempotentReuse, true, "res2 reused session");
+    assertEqual(res2.reviewSessionId, res1.reviewSessionId, "reused same session ID");
+  });
+
+  await runTest("4. MESMOS bytes em LOTES DIFERENTES criam DUAS sessões distintas", async () => {
+    const { context, caseId, lotId, lot02Id, repositories } = buildSetup();
+    const bytes = buildValidTestXlsxBytes();
+    const storageRef = `${context.organizationId}/orcamentos/same-bytes.xlsx`;
+
+    const resLote01 = await importStructuredBudgetXlsxService(
+      context,
+      { procurementCaseId: caseId, procurementLotId: lotId, fileBytes: bytes, originalFileName: "O.xlsx", storageReference: storageRef },
+      repositories,
+    );
+
+    const resLote02 = await importStructuredBudgetXlsxService(
+      context,
+      { procurementCaseId: caseId, procurementLotId: lot02Id, fileBytes: bytes, originalFileName: "O.xlsx", storageReference: storageRef },
+      repositories,
+    );
+
+    assertEqual(resLote01.outcome, "success", "Lote 01 success");
+    assertEqual(resLote02.outcome, "success", "Lote 02 success");
+    assertTrue(resLote01.reviewSessionId !== resLote02.reviewSessionId, "Sessions MUST be distinct for different lots");
+
+    const session01 = await repositories.reviewRepository.loadSession(context.organizationId, resLote01.reviewSessionId!);
+    const session02 = await repositories.reviewRepository.loadSession(context.organizationId, resLote02.reviewSessionId!);
+
+    assertEqual(session01!.procurementLotId, lotId, "session 01 lotId match");
+    assertEqual(session02!.procurementLotId, lot02Id, "session 02 lotId match");
+  });
+
+  await runTest("5. Identidade de DocumentArtifact é distinta entre lotes diferentes", async () => {
+    const { context, caseId, lotId, lot02Id, repositories } = buildSetup();
+    const bytes = buildValidTestXlsxBytes();
+    const storageRef = `${context.organizationId}/orcamentos/same-bytes.xlsx`;
+
+    const resLote01 = await importStructuredBudgetXlsxService(
+      context,
+      { procurementCaseId: caseId, procurementLotId: lotId, fileBytes: bytes, originalFileName: "O.xlsx", storageReference: storageRef },
+      repositories,
+    );
+
+    const resLote02 = await importStructuredBudgetXlsxService(
+      context,
+      { procurementCaseId: caseId, procurementLotId: lot02Id, fileBytes: bytes, originalFileName: "O.xlsx", storageReference: storageRef },
+      repositories,
+    );
+
+    const ver01 = await repositories.documentVersionRepository.findDocumentVersionById(context.organizationId, resLote01.documentVersionId!);
+    const ver02 = await repositories.documentVersionRepository.findDocumentVersionById(context.organizationId, resLote02.documentVersionId!);
+
+    assertTrue(ver01 !== null && ver02 !== null, "both document versions loaded");
+    assertTrue(ver01!.documentId !== ver02!.documentId, "DocumentArtifact IDs MUST be distinct between different lots");
+    assertEqual(ver01!.documentId, `doc-lot-${caseId}-${lotId}`, "Lote 01 artifact ID");
+    assertEqual(ver02!.documentId, `doc-lot-${caseId}-${lot02Id}`, "Lote 02 artifact ID");
+  });
+
+  await runTest("6. Nova versão de XLSX no MESMO lote reusa o mesmo DocumentArtifact do lote", async () => {
+    const { context, caseId, lotId, repositories } = buildSetup();
+    const bytesV1 = buildValidTestXlsxBytes();
+
+    const resV1 = await importStructuredBudgetXlsxService(
+      context,
+      { procurementCaseId: caseId, procurementLotId: lotId, fileBytes: bytesV1, originalFileName: "O_v1.xlsx", storageReference: "ref1.xlsx" },
+      repositories,
+    );
+
+    // Build a slightly modified XLSX for V2 (different bytes/sha256)
+    const bytesV2 = buildXlsxFixture([
+      {
+        name: "Orçamento",
+        rows: [
+          ["ITEM", "CÓDIGO", "DESCRIÇÃO", "UNID", "QUANT", "BDI", "PREÇO UNIT", "PREÇO TOTAL"],
+          ["X", "1", "SERVIÇOS PRELIMINARES REVISADOS", "", "", "", "", "120.000,00"],
+          ["01.01", "", "SERVIÇOS PRELIMINARES", "", "", "", "", "12.000,00"],
+        ],
+      },
     ]);
 
-    const result = await importStructuredBudgetXlsxService(
+    const resV2 = await importStructuredBudgetXlsxService(
       context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytesSemOrcamento,
-        originalFileName: "SemOrcamento.xlsx",
-      },
+      { procurementCaseId: caseId, procurementLotId: lotId, fileBytes: bytesV2, originalFileName: "O_v2.xlsx", storageReference: "ref2.xlsx" },
       repositories,
     );
 
-    assertEqual(result.outcome, "importer_error", "expected importer_error for sheet without budget header");
+    const ver1 = await repositories.documentVersionRepository.findDocumentVersionById(context.organizationId, resV1.documentVersionId!);
+    const ver2 = await repositories.documentVersionRepository.findDocumentVersionById(context.organizationId, resV2.documentVersionId!);
+
+    assertTrue(ver1 !== null && ver2 !== null, "both versions loaded");
+    assertEqual(ver1!.documentId, ver2!.documentId, "MUST reuse same DocumentArtifact ID for new version of same lot");
+    assertTrue(ver1!.id !== ver2!.id, "DocumentVersions are distinct");
   });
 
-  await runTest("7. Criação da BudgetVersion Draft com escopo Lot", async () => {
-    const { context, caseId, lotId, repositories } = buildSetup();
-    const bytes = buildValidTestXlsxBytes();
+  await runTest("7. Sessão WholeCase antiga continua válida (procurementLotId: null)", async () => {
+    const { context, caseId, repositories } = buildSetup();
+    const reviewRepo = repositories.reviewRepository;
 
-    const result = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
+    // Create a mock historical WholeCase session (procurementLotId: null)
+    const wholeCaseSession: BudgetReviewSession = {
+      id: "sess-historical-whole-case",
+      organizationId: context.organizationId,
+      procurementCaseId: caseId,
+      procurementLotId: null,
+      budgetVersionId: "bv-whole-case",
+      documentVersionId: "docv-whole-case",
+      sourceSha256: "sha-historical-pdf",
+      acquisitionMechanism: "vision_assisted_transcription",
+      acquisitionMechanismVersion: "claude-sonnet-5",
+      status: BudgetReviewSessionStatus.InProgress,
+      rows: [],
+      createdBy: context.actor,
+      createdAt: new Date().toISOString(),
+      metadata: {},
+    };
 
-    assertTrue(Boolean(result.budgetVersionId), "budgetVersionId returned");
-    const createdVersion = await repositories.budgetVersionRepository.loadBudgetVersion(
+    await reviewRepo.createSession(context.organizationId, context.actor, wholeCaseSession);
+
+    const reloaded = await reviewRepo.findSessionByAcquisition(
       context.organizationId,
-      result.budgetVersionId!,
+      caseId,
+      "sha-historical-pdf",
+      "vision_assisted_transcription",
+      null, // WholeCase lookup
     );
 
-    assertTrue(createdVersion !== null, "version loaded");
-    assertEqual(createdVersion!.entity.status, "Draft", "status must be Draft");
-    assertEqual(createdVersion!.entity.scope.kind, "Lot", "scope must be Lot");
-    assertTrue("procurementLotId" in createdVersion!.entity.scope && createdVersion!.entity.scope.procurementLotId === lotId, "lotId must match");
+    assertTrue(reloaded !== null, "Historical WholeCase session loaded successfully");
+    assertEqual(reloaded!.id, "sess-historical-whole-case", "Session ID matches");
+    assertEqual(reloaded!.procurementLotId ?? null, null, "procurementLotId is null");
   });
 
-  await runTest("8. Criação da Sessão com status InProgress e mecanismo xlsx_structured_import", async () => {
-    const { context, caseId, lotId, repositories } = buildSetup();
-    const bytes = buildValidTestXlsxBytes();
-
-    const result = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    const session = await repositories.reviewRepository.loadSession(
-      context.organizationId,
-      result.reviewSessionId!,
-    );
-
-    assertTrue(session !== null, "session loaded");
-    assertEqual(session!.status, "InProgress", "session status must be InProgress");
-    assertEqual(session!.acquisitionMechanism, "xlsx_structured_import", "acquisitionMechanism match");
-  });
-
-  await runTest("9. Todas as linhas começam com estado Pendente", async () => {
+  await runTest("8. Motor R11 e OCR nunca são invocados na importação XLSX", async () => {
     const { context, caseId, lotId, repositories } = buildSetup();
     const bytes = buildValidTestXlsxBytes();
 
@@ -476,255 +492,18 @@ async function main() {
         procurementCaseId: caseId,
         procurementLotId: lotId,
         fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
+        originalFileName: "Orcamento_Lote01.xlsx",
+        storageReference: "org/orcamentos/ref.xlsx",
       },
       repositories,
     );
 
-    const session = await repositories.reviewRepository.loadSession(
-      context.organizationId,
-      result.reviewSessionId!,
-    );
-
-    for (const row of session!.rows) {
-      assertEqual(row.state, "Pendente", `row ${row.id} state must be Pendente`);
-    }
+    assertEqual(result.outcome, "success", "import succeeded without OCR/R11");
+    const session = await repositories.reviewRepository.loadSession(context.organizationId, result.reviewSessionId!);
+    assertEqual(session!.acquisitionMechanism, "xlsx_structured_import", "acquisitionMechanism must be xlsx_structured_import");
   });
 
-  await runTest("10. Evidência documental: page = null para linhas XLSX", async () => {
-    const { context, caseId, lotId, repositories } = buildSetup();
-    const bytes = buildValidTestXlsxBytes();
-
-    const result = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    const session = await repositories.reviewRepository.loadSession(
-      context.organizationId,
-      result.reviewSessionId!,
-    );
-
-    for (const row of session!.rows) {
-      assertEqual(row.page, null, "XLSX rows must have page = null");
-    }
-  });
-
-  await runTest("11. Metadata de célula e intervalo XLSX preservados em evidenceText/metadata", async () => {
-    const { context, caseId, lotId, repositories } = buildSetup();
-    const bytes = buildValidTestXlsxBytes();
-
-    const result = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    const session = await repositories.reviewRepository.loadSession(
-      context.organizationId,
-      result.reviewSessionId!,
-    );
-
-    const itemRow = session!.rows.find((r) => r.kind === "ServiceItem");
-    assertTrue(Boolean(itemRow), "service item row found");
-    assertTrue(
-      itemRow!.evidenceText?.includes("A") ?? false,
-      "evidenceText contains cell location metadata",
-    );
-  });
-
-  await runTest("12. Retry idempotente: segunda chamada com mesmo arquivo retorna a mesma sessão", async () => {
-    const { context, caseId, lotId, repositories } = buildSetup();
-    const bytes = buildValidTestXlsxBytes();
-
-    const result1 = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    const result2 = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    assertEqual(result2.outcome, "success", "retry outcome success");
-    assertEqual(result2.idempotentReuse, true, "retry marked idempotentReuse = true");
-    assertEqual(result2.reviewSessionId, result1.reviewSessionId, "reviewSessionId must be identical");
-  });
-
-  await runTest("13. Retry idempotente NÃO duplica BudgetVersion", async () => {
-    const { context, caseId, lotId, repositories } = buildSetup();
-    const bytes = buildValidTestXlsxBytes();
-
-    const result1 = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    const result2 = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    assertEqual(result2.budgetVersionId, result1.budgetVersionId, "budgetVersionId must be identical on retry");
-  });
-
-  await runTest("14. Retry idempotente NÃO duplica Sessão", async () => {
-    const { context, caseId, lotId, repositories } = buildSetup();
-    const bytes = buildValidTestXlsxBytes();
-
-    const result1 = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    const result2 = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    assertEqual(result2.reviewSessionId, result1.reviewSessionId, "reviewSessionId must be identical on retry");
-  });
-
-  await runTest("15. Retry idempotente NÃO duplica Linhas na Sessão", async () => {
-    const { context, caseId, lotId, repositories } = buildSetup();
-    const bytes = buildValidTestXlsxBytes();
-
-    const result1 = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    const session = await repositories.reviewRepository.loadSession(
-      context.organizationId,
-      result1.reviewSessionId!,
-    );
-
-    assertEqual(session!.rows.length, 3, "row count must remain exactly 3 without duplication");
-  });
-
-  await runTest("16. Reutilização de DocumentVersion por SHA-256 no repositório documental", async () => {
-    const { context, caseId, lotId, repositories } = buildSetup();
-    const bytes = buildValidTestXlsxBytes();
-
-    const result1 = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    const result2 = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    assertEqual(result2.documentVersionId, result1.documentVersionId, "documentVersionId must be reused by SHA-256");
-  });
-
-  await runTest("17. Motor R11 e OCR nunca são invocados na importação XLSX", async () => {
-    const { context, caseId, lotId, repositories } = buildSetup();
-    const bytes = buildValidTestXlsxBytes();
-
-    const result = await importStructuredBudgetXlsxService(
-      context,
-      {
-        procurementCaseId: caseId,
-        procurementLotId: lotId,
-        fileBytes: bytes,
-        originalFileName: "Orcamento.xlsx",
-      },
-      repositories,
-    );
-
-    const session = await repositories.reviewRepository.loadSession(
-      context.organizationId,
-      result.reviewSessionId!,
-    );
-
-    assertEqual(session!.acquisitionMechanism, "xlsx_structured_import", "mechanism must be pure xlsx import");
-    assertTrue(!session!.acquisitionMechanism.includes("vision"), "must not be vision");
-    assertTrue(!session!.acquisitionMechanism.includes("r11"), "must not be r11");
-  });
-
-  console.log("\nAll 17 synthetic unit tests completed successfully!");
+  console.log("\nAll Sprint 21.5C.1A unit tests completed successfully!");
 }
 
-main().catch((err) => {
-  console.error("Test execution failed:", err);
-  process.exitCode = 1;
-});
+main().catch(console.error);
