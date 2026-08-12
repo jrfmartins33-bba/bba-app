@@ -64,8 +64,20 @@ export async function POST(request: Request): Promise<NextResponse> {
   const { companyId, userId } = auth;
   const storagePath = body.storagePath.trim();
 
-  // Validate that storagePath starts with companyId
-  if (!storagePath.startsWith(`${companyId}/`)) {
+  // Strict path format validation: <companyId>/orcamentos/<64 hex chars>.xlsx
+  // Rejects path traversal, wrong namespaces, non-XLSX extensions, weak filenames.
+  const STORAGE_PATH_REGEX = /^([0-9a-f-]{36})\/orcamentos\/([0-9a-f]{64})\.xlsx$/i;
+  const pathMatch = STORAGE_PATH_REGEX.exec(storagePath);
+
+  if (!pathMatch) {
+    return NextResponse.json({ error: "invalid_storage_path_format" }, { status: 400 });
+  }
+
+  // Path must belong to the authenticated company — never trust client-supplied companyId
+  const pathCompanyId = pathMatch[1];
+  const shaFromPath = pathMatch[2].toLowerCase();
+
+  if (pathCompanyId !== companyId) {
     return NextResponse.json({ error: "unauthorized_storage_path" }, { status: 403 });
   }
 
@@ -89,6 +101,18 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // 2. Recalculate SHA-256 server-side from actual downloaded bytes
   const recalculatedSha256 = createHash("sha256").update(fileBytes).digest("hex");
+
+  // 3. INTEGRITY GATE: SHA of the path filename MUST match SHA of the actual bytes.
+  // This ensures no one can substitute different bytes under a trusted path,
+  // and prevents the Application Service from ingesting a tampered file.
+  if (recalculatedSha256 !== shaFromPath) {
+    console.error(
+      "[orcamentos/importacao/process] SHA integrity failure:",
+      { pathSha: shaFromPath, actualSha: recalculatedSha256 },
+    );
+    return NextResponse.json({ error: "storage_integrity_failure" }, { status: 422 });
+  }
+
 
   // 3. Assemble Repositories
   const procurementCaseRepository = createProcurementCaseRepository(serviceRoleClient);

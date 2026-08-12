@@ -150,6 +150,7 @@ export default function ImportarOrcamentoPage() {
       const storagePath: string = prepareData.storagePath;
 
       // 3. Upload file directly to Supabase Storage using browser client
+      // upsert:false guarantees immutability — an existing object is never overwritten.
       setStep("uploading");
       setStatusMessage("Armazenando planilha de forma segura...");
 
@@ -161,12 +162,22 @@ export default function ImportarOrcamentoPage() {
         .from("bdos-imports")
         .upload(storagePath, selectedFile, {
           contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          upsert: true,
+          upsert: false,
         });
 
       if (uploadError) {
-        console.error("Storage upload error:", uploadError);
-        throw new Error("Não foi possível enviar o arquivo para o armazenamento. Tente novamente.");
+        // Supabase Storage returns a specific message when the object already exists.
+        // Treat this as idempotent success — the server will verify the object bytes.
+        const isAlreadyExists =
+          uploadError.message?.toLowerCase().includes("already exists") ||
+          uploadError.message?.toLowerCase().includes("duplicate") ||
+          (uploadError as unknown as { statusCode?: string }).statusCode === "409";
+
+        if (!isAlreadyExists) {
+          console.error("Storage upload error:", uploadError);
+          throw new Error("Não foi possível enviar o arquivo para o armazenamento. Tente novamente.");
+        }
+        // Object already exists — this is expected for re-imports; continue to process route.
       }
 
       // 4. Trigger backend Application Service processing
