@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { BudgetPageHeader } from "@/components/budget/budget-page-header";
 import { BudgetEmptyState } from "@/components/budget/budget-empty-state";
 
@@ -99,14 +100,21 @@ export default function OrcamentosPage() {
       <BudgetPageHeader isDemonstration={false} />
       <section className="section-grid" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
         <div className="bba-card">
-          <h2>Orçamento Oficial Revisado</h2>
-          <p style={{ color: "#666" }}>
-            Representação estruturada do orçamento publicado pelo órgão, conferida no BBA.
-          </p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
+            <div>
+              <h2>Orçamento Oficial Revisado</h2>
+              <p style={{ color: "#666" }}>
+                Representação estruturada do orçamento publicado pelo órgão, conferida no BBA.
+              </p>
+            </div>
+            <Link href="/orcamentos/importar" className="bba-button bba-button--secondary bba-button--sm">
+              Importar outro orçamento
+            </Link>
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "1rem", marginTop: "1rem" }}>
             <div>
               <div style={{ fontSize: "0.75rem", color: "#666" }}>Origem</div>
-              <div>DNOCS</div>
+              <div>Documento oficial</div>
             </div>
             <div>
               <div style={{ fontSize: "0.75rem", color: "#666" }}>Estado</div>

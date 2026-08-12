@@ -79,12 +79,19 @@ const STATE_COLORS: Record<ReviewRow["state"], string> = {
 
 const PAGE_SIZE = 50;
 
+interface ReviewContext {
+  readonly procurementCaseTitle: string;
+  readonly procurementCaseReference: string | null;
+  readonly procurementLotTitle: string;
+}
+
 export default function OrcamentoRevisaoPage() {
   const params = useParams<{ sessionId: string }>();
   const sessionId = params.sessionId;
 
   const [session, setSession] = useState<ReviewSession | null>(null);
   const [reconciliation, setReconciliation] = useState<Reconciliation | null>(null);
+  const [reviewContext, setReviewContext] = useState<ReviewContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -104,11 +111,13 @@ export default function OrcamentoRevisaoPage() {
       if (!res.ok) {
         setError(res.status === 403 ? "Acesso restrito ao Admin BBA." : "Sessão de Revisão não encontrada.");
         setSession(null);
+        setReviewContext(null);
         return;
       }
       const data = await res.json();
       setSession(data.session);
       setReconciliation(data.reconciliation);
+      setReviewContext(data.context ?? null);
     } catch {
       setError("Não foi possível carregar a Sessão de Revisão.");
     } finally {
@@ -266,7 +275,11 @@ export default function OrcamentoRevisaoPage() {
       <section className="page-header">
         <div>
           <h1>Revisão do Orçamento Oficial</h1>
-          <p>Recuperação das Barragens de Alagoas — origem: documento oficial DNOCS</p>
+          <p>
+            {reviewContext
+              ? `${reviewContext.procurementCaseTitle}${reviewContext.procurementLotTitle ? ` — ${reviewContext.procurementLotTitle}` : ""}`
+              : "Documento oficial"}
+          </p>
         </div>
       </section>
 

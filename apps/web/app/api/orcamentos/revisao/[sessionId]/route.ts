@@ -17,7 +17,7 @@ import {
 import type { BudgetReviewServiceResult, ConsolidateBudgetReviewSessionServiceResult } from "@bba/bdos-core/services/budget-official-review";
 import { getSupabaseRouteHandlerClient, getSupabaseServiceRoleClient, requireBbaAdmin } from "@/lib/supabase/server";
 import { createBudgetReviewServerRepository } from "@/lib/bdos/budget-official-review-server-repository";
-import { createBudgetVersionRepository } from "@/lib/bdos/procurement-engineering-server-repository";
+import { createBudgetVersionRepository, createProcurementCaseRepository } from "@/lib/bdos/procurement-engineering-server-repository";
 
 // Revisão do Orçamento Oficial (Epic 21.5A) — Admin BBA exclusivo
 // (enunciado §47). GET carrega a sessão completa (linhas + reconciliação
@@ -71,7 +71,20 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
     readiness: budgetReviewConsolidationReadiness(session),
   };
 
-  return NextResponse.json({ session, reconciliation });
+  const serviceRoleClient = getSupabaseServiceRoleClient();
+  const procurementCaseRepo = createProcurementCaseRepository(serviceRoleClient);
+  const procurementCase = await procurementCaseRepo.findProcurementCaseById(organizationId, session.procurementCaseId);
+  const procurementLot = session.procurementLotId
+    ? await procurementCaseRepo.findProcurementLotById(organizationId, session.procurementCaseId, session.procurementLotId)
+    : null;
+
+  const contextDto = {
+    procurementCaseTitle: procurementCase?.title ?? "Processo de Licitação",
+    procurementCaseReference: procurementCase?.externalReference ?? null,
+    procurementLotTitle: procurementLot?.title ?? (session.procurementLotId ? "Lote" : "Visão Abrangente"),
+  };
+
+  return NextResponse.json({ session, reconciliation, context: contextDto });
 }
 
 interface ActionBody {
