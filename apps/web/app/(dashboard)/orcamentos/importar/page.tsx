@@ -17,6 +17,8 @@ interface ProcurementCaseDto {
   readonly id: string;
   readonly title: string;
   readonly externalReference: string | null;
+  readonly companyId: string | null;
+  readonly companyName: string | null;
   readonly lots: ReadonlyArray<ProcurementLotDto>;
 }
 
@@ -47,6 +49,7 @@ async function computeSha256InBrowser(file: File): Promise<string> {
 
 export default function ImportarOrcamentoPage() {
   const [cases, setCases] = useState<ReadonlyArray<ProcurementCaseDto>>([]);
+  const [actorRole, setActorRole] = useState<"company_user" | "bba_admin" | null>(null);
   const [loadingContext, setLoadingContext] = useState(true);
   const [contextError, setContextError] = useState<string | null>(null);
 
@@ -69,6 +72,7 @@ export default function ImportarOrcamentoPage() {
       .then((data) => {
         const fetchedCases: ReadonlyArray<ProcurementCaseDto> = data.cases ?? [];
         setCases(fetchedCases);
+        setActorRole(data.role ?? null);
         if (fetchedCases.length === 1) {
           setSelectedCaseId(fetchedCases[0].id);
           if (fetchedCases[0].lots.length === 1) {
@@ -334,7 +338,9 @@ export default function ImportarOrcamentoPage() {
                   <div style={{ padding: "0.75rem", color: "#64748b", fontSize: "0.875rem" }}>Carregando processos de licitação...</div>
                 ) : cases.length === 0 ? (
                   <div style={{ padding: "0.875rem", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#64748b", fontSize: "0.875rem" }}>
-                    Nenhum processo de licitação cadastrado para sua empresa.
+                    {actorRole === "bba_admin"
+                      ? "Nenhum processo de licitação cadastrado no sistema."
+                      : "Nenhum processo de licitação cadastrado para sua empresa."}
                   </div>
                 ) : (
                   <select
@@ -346,7 +352,7 @@ export default function ImportarOrcamentoPage() {
                     <option value="">Selecione o Processo de Licitação...</option>
                     {cases.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.title} {c.externalReference ? `(${c.externalReference})` : ""}
+                        {actorRole === "bba_admin" && c.companyName ? `[${c.companyName}] ` : ""}{c.title}{c.externalReference ? ` (${c.externalReference})` : ""}
                       </option>
                     ))}
                   </select>

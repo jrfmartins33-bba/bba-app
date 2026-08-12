@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getSupabaseRouteHandlerClient, requireAuthenticatedCompany } from "@/lib/supabase/server";
+import { getSupabaseRouteHandlerClient, getSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import { resolveBudgetImportAccess, deriveOrganizationFromCase } from "@/lib/bdos/budget-import-access";
 
 const MAX_STANDARD_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB limit
 
@@ -34,9 +35,9 @@ function isValidRequestBody(body: unknown): body is PrepareUploadRequestBody {
 
 export async function POST(request: Request): Promise<NextResponse> {
   const supabase = getSupabaseRouteHandlerClient();
-  const auth = await requireAuthenticatedCompany(supabase);
+  const access = await resolveBudgetImportAccess(supabase);
 
-  if (!auth) {
+  if (!access) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
 
@@ -59,38 +60,64 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "file_too_large" }, { status: 413 });
   }
 
-  const { companyId } = auth;
   const sha256 = body.sha256.trim().toLowerCase();
 
   try {
-    // Validate that procurementCase belongs to company
-    const { data: caseRow, error: caseErr } = await supabase
-      .from("procurement_cases")
-      .select("id")
-      .eq("company_id", companyId)
-      .eq("id", body.procurementCaseId)
-      .maybeSingle();
+    let resolvedOrganizationId: string;
 
-    if (caseErr) throw caseErr;
-    if (!caseRow) {
-      return NextResponse.json({ error: "procurement_case_not_found" }, { status: 404 });
+    if (access.kind === "company_user") {
+      // company_user: validate case/lot belong to their authenticated company.
+      // Uses their own Supabase client so RLS enforces isolation.
+      const companyId = access.organizationId;
+
+      const { data: caseRow, error: caseErr } = await supabase
+        .from("procurement_cases")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("id", body.procurementCaseId)
+        .maybeSingle();
+
+      if (caseErr) throw caseErr;
+      if (!caseRow) {
+        return NextResponse.json({ error: "procurement_case_not_found" }, { status: 404 });
+      }
+
+      const { data: lotRow, error: lotErr } = await supabase
+        .from("procurement_lots")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("procurement_case_id", body.procurementCaseId)
+        .eq("id", body.procurementLotId)
+        .maybeSingle();
+
+      if (lotErr) throw lotErr;
+      if (!lotRow) {
+        return NextResponse.json({ error: "procurement_lot_not_found" }, { status: 404 });
+      }
+
+      resolvedOrganizationId = companyId;
+    } else {
+      // bba_admin: derive company_id server-side from the ProcurementCase.
+      // The browser-supplied procurementCaseId is looked up via service-role —
+      // we never use a companyId from the request body.
+      const derived = await deriveOrganizationFromCase(
+        body.procurementCaseId,
+        body.procurementLotId,
+      );
+
+      if (!derived) {
+        return NextResponse.json({ error: "procurement_case_not_found" }, { status: 404 });
+      }
+
+      if (!derived.lotVerified) {
+        return NextResponse.json({ error: "procurement_lot_not_found" }, { status: 404 });
+      }
+
+      resolvedOrganizationId = derived.organizationId;
     }
 
-    // Validate that procurementLot belongs to process and company
-    const { data: lotRow, error: lotErr } = await supabase
-      .from("procurement_lots")
-      .select("id")
-      .eq("company_id", companyId)
-      .eq("procurement_case_id", body.procurementCaseId)
-      .eq("id", body.procurementLotId)
-      .maybeSingle();
-
-    if (lotErr) throw lotErr;
-    if (!lotRow) {
-      return NextResponse.json({ error: "procurement_lot_not_found" }, { status: 404 });
-    }
-
-    const storagePath = `${companyId}/orcamentos/${sha256}.xlsx`;
+    // storagePath is built using the server-derived organizationId — never client-supplied.
+    const storagePath = `${resolvedOrganizationId}/orcamentos/${sha256}.xlsx`;
 
     return NextResponse.json({ storagePath, sha256 });
   } catch (error) {

@@ -4,9 +4,8 @@ import { importStructuredBudgetXlsxService } from "@bba/bdos-core/services/budge
 import {
   getSupabaseRouteHandlerClient,
   getSupabaseServiceRoleClient,
-  requireAuthenticatedCompany,
-  requireBbaAdmin,
 } from "@/lib/supabase/server";
+import { resolveBudgetImportAccess, deriveOrganizationFromCase } from "@/lib/bdos/budget-import-access";
 import {
   createProcurementCaseRepository,
   createBudgetVersionRepository,
@@ -44,9 +43,9 @@ function isValidRequestBody(body: unknown): body is ProcessRequestBody {
 
 export async function POST(request: Request): Promise<NextResponse> {
   const readClient = getSupabaseRouteHandlerClient();
-  const auth = await requireAuthenticatedCompany(readClient);
+  const access = await resolveBudgetImportAccess(readClient);
 
-  if (!auth) {
+  if (!access) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
 
@@ -61,7 +60,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "invalid_process_body" }, { status: 400 });
   }
 
-  const { companyId, userId } = auth;
   const storagePath = body.storagePath.trim();
 
   // Strict path format validation: <companyId>/orcamentos/<64 hex chars>.xlsx
@@ -73,11 +71,36 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "invalid_storage_path_format" }, { status: 400 });
   }
 
-  // Path must belong to the authenticated company — never trust client-supplied companyId
   const pathCompanyId = pathMatch[1];
   const shaFromPath = pathMatch[2].toLowerCase();
 
-  if (pathCompanyId !== companyId) {
+  // Resolve and verify the authoritative organizationId server-side.
+  // Neither the storagePath's prefix nor any client-supplied companyId is trusted.
+  let resolvedOrganizationId: string;
+
+  if (access.kind === "company_user") {
+    resolvedOrganizationId = access.organizationId;
+  } else {
+    // bba_admin: derive organizationId from the ProcurementCase server-side.
+    const derived = await deriveOrganizationFromCase(
+      body.procurementCaseId,
+      body.procurementLotId,
+    );
+
+    if (!derived) {
+      return NextResponse.json({ error: "procurement_case_not_found" }, { status: 404 });
+    }
+
+    if (!derived.lotVerified) {
+      return NextResponse.json({ error: "procurement_lot_not_found" }, { status: 404 });
+    }
+
+    resolvedOrganizationId = derived.organizationId;
+  }
+
+  // The storagePath prefix must match the server-derived organizationId.
+  // This closes the final cross-contamination vector.
+  if (pathCompanyId !== resolvedOrganizationId) {
     return NextResponse.json({ error: "unauthorized_storage_path" }, { status: 403 });
   }
 
@@ -113,17 +136,17 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "storage_integrity_failure" }, { status: 422 });
   }
 
-
-  // 3. Assemble Repositories
+  // 4. Assemble Repositories
   const procurementCaseRepository = createProcurementCaseRepository(serviceRoleClient);
   const documentRepository = createDocumentRepository(serviceRoleClient);
   const documentVersionRepository = createDocumentVersionRepository(serviceRoleClient);
   const budgetVersionRepository = createBudgetVersionRepository(serviceRoleClient);
   const reviewRepository = createBudgetReviewServerRepository(serviceRoleClient);
 
+  // organizationId is always the server-derived value — never from the request body.
   const context = {
-    organizationId: companyId,
-    actor: userId,
+    organizationId: resolvedOrganizationId,
+    actor: access.userId,
   };
 
   const command = {
@@ -156,17 +179,24 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     // Check if actor is BBA Admin to authorize opening review page
-    const admin = await requireBbaAdmin(readClient);
+    const isAdmin = access.kind === "bba_admin";
 
-    // Fetch human Titles for case and lot
-    const procurementCase = await procurementCaseRepository.findProcurementCaseById(companyId, body.procurementCaseId);
-    const procurementLot = await procurementCaseRepository.findProcurementLotById(companyId, body.procurementCaseId, body.procurementLotId);
+    // Fetch human titles for case and lot
+    const procurementCase = await procurementCaseRepository.findProcurementCaseById(
+      resolvedOrganizationId,
+      body.procurementCaseId,
+    );
+    const procurementLot = await procurementCaseRepository.findProcurementLotById(
+      resolvedOrganizationId,
+      body.procurementCaseId,
+      body.procurementLotId,
+    );
 
     return NextResponse.json({
       outcome: "success",
       idempotentReuse: result.idempotentReuse ?? false,
       reviewSessionId: result.reviewSessionId,
-      canOpenReview: Boolean(admin),
+      canOpenReview: isAdmin,
       procurementCaseTitle: procurementCase?.title ?? "Processo de Licitação",
       procurementLotTitle: procurementLot?.title ?? "Lote",
       originalFileName: body.originalFileName,

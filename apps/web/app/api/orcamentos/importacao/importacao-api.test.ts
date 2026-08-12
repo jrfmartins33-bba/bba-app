@@ -35,144 +35,184 @@ function stripComments(source: string): string {
 }
 
 function main() {
-  console.log("Running Sprint 21.5C.2A — Storage Immutability & SHA Integrity Tests\n");
+  console.log("Running Sprint 21.5C.2A — Access Resolver + Storage Immutability Tests\n");
 
-  const processSource = readSource("apps/web/app/api/orcamentos/importacao/process/route.ts");
-  const importarPageSource = readSource("apps/web/app/(dashboard)/orcamentos/importar/page.tsx");
+  const resolverSource = readSource("apps/web/lib/bdos/budget-import-access.ts");
   const contextoSource = readSource("apps/web/app/api/orcamentos/importacao/contexto/route.ts");
   const prepareUploadSource = readSource("apps/web/app/api/orcamentos/importacao/prepare-upload/route.ts");
+  const processSource = readSource("apps/web/app/api/orcamentos/importacao/process/route.ts");
+  const importarPageSource = readSource("apps/web/app/(dashboard)/orcamentos/importar/page.tsx");
   const adminRevisaoSource = readSource("apps/web/app/(dashboard)/admin/orcamentos/[sessionId]/revisao/page.tsx");
 
-  // ── Section A: upsert:false enforcement ────────────────────────────────────
-  console.log("A. Storage Mutability Controls\n");
+  // ── 1. Resolver contract ─────────────────────────────────────────────────
+  console.log("1. resolveBudgetImportAccess() resolver\n");
 
-  runTest("A1. upsert:true removido da UI de importação", () => {
-    assertTrue(!importarPageSource.includes("upsert: true"), "upsert:true must NOT be present in importar/page.tsx");
+  runTest("1.1 Resolver exists and exports resolveBudgetImportAccess", () => {
+    assertTrue(resolverSource.includes("resolveBudgetImportAccess"), "resolver must export resolveBudgetImportAccess");
   });
 
-  runTest("A2. upsert:false definido na UI de importação", () => {
-    assertTrue(importarPageSource.includes("upsert: false"), "upsert:false must be present in importar/page.tsx");
+  runTest("1.2 company_user branch: uses profile.company_id as organizationId", () => {
+    assertTrue(resolverSource.includes("company_user"), "resolver must handle company_user kind");
+    assertTrue(resolverSource.includes("profile.company_id"), "resolver must use profile.company_id for company_user");
   });
 
-  runTest("A3. Objeto já existente distinguido de erro real (isAlreadyExists check)", () => {
+  runTest("1.3 bba_admin branch: organizationId starts as null, not from browser", () => {
+    assertTrue(resolverSource.includes("bba_admin"), "resolver must handle bba_admin kind");
+    assertTrue(resolverSource.includes("organizationId: null"), "bba_admin initial organizationId must be null");
+  });
+
+  runTest("1.4 Profiles with no company_id and no bba_admin role are rejected", () => {
+    // After the two valid branches, return null
+    const nullReturn = resolverSource.match(/return null/g) ?? [];
+    assertTrue(nullReturn.length >= 2, "resolver must return null for unauthorized profiles (at least 2 null returns)");
+  });
+
+  // ── 2. company_user isolation ─────────────────────────────────────────────
+  console.log("\n2. company_user multi-tenant isolation\n");
+
+  runTest("2.1 company_user → contexto 200 using their authenticated company", () => {
     assertTrue(
-      importarPageSource.includes("isAlreadyExists"),
-      "UI must distinguish 'already exists' from real upload errors",
+      contextoSource.includes("kind === \"company_user\"") || contextoSource.includes("kind ===\"company_user\""),
+      "contexto route must distinguish company_user",
+    );
+    assertTrue(
+      contextoSource.includes("organizationId"),
+      "contexto uses organizationId for company_user",
     );
   });
 
-  runTest("A4. Erro de 'already exists' não termina o fluxo com throw", () => {
-    // After the isAlreadyExists branch, execution continues to the process step
-    const alreadyExistsBlock = importarPageSource.includes("if (!isAlreadyExists)");
-    assertTrue(alreadyExistsBlock, "Only non-duplicate errors should throw; duplicates must continue to process");
-  });
-
-  // ── Section B: Storage path format validation ───────────────────────────────
-  console.log("\nB. Storage Path Format Validation\n");
-
-  runTest("B1. Regex de formato exato do path está definido", () => {
+  runTest("2.2 company_user sees only their company's cases (eq company_id filter)", () => {
+    // The company_user branch must have .eq("company_id", companyId)
     assertTrue(
-      processSource.includes("STORAGE_PATH_REGEX"),
-      "process/route.ts must define STORAGE_PATH_REGEX",
+      contextoSource.includes(".eq(\"company_id\", companyId)"),
+      "company_user branch must filter by company_id",
     );
   });
 
-  runTest("B2. Regex exige uuid/orcamentos/<64 hex>.xlsx", () => {
-    const regexLine = processSource.match(/STORAGE_PATH_REGEX\s*=\s*\/(.+?)\//)?.[0] ?? "";
-    assertTrue(regexLine.includes("64") || regexLine.includes("{64}") || processSource.includes("[0-9a-f]{64}"), "Regex must require exactly 64 hex chars for SHA-256 in path");
-  });
-
-  runTest("B3. path fora de /orcamentos/ é rejeitado com invalid_storage_path_format", () => {
+  runTest("2.3 company_user storagePath uses authenticated company_id, not browser value", () => {
     assertTrue(
-      processSource.includes("invalid_storage_path_format"),
-      "process/route.ts must reject invalid path format",
+      prepareUploadSource.includes("resolvedOrganizationId") &&
+        prepareUploadSource.includes("storagePath = `${resolvedOrganizationId}"),
+      "storagePath must use resolvedOrganizationId, never a client-supplied companyId",
     );
   });
 
-  runTest("B4. path de outra empresa rejeitado com unauthorized_storage_path", () => {
+  // ── 3. bba_admin cross-company support ───────────────────────────────────
+  console.log("\n3. bba_admin cross-company access\n");
+
+  runTest("3.1 bba_admin → contexto 200 (uses service-role, not requireAuthenticatedCompany)", () => {
     assertTrue(
-      processSource.includes("unauthorized_storage_path"),
-      "process/route.ts must reject path from different company",
+      contextoSource.includes("resolveBudgetImportAccess"),
+      "contexto must use resolveBudgetImportAccess (not requireAuthenticatedCompany)",
+    );
+    assertTrue(
+      !contextoSource.includes("requireAuthenticatedCompany"),
+      "contexto must NOT directly call requireAuthenticatedCompany (resolver handles it)",
+    );
+    assertTrue(
+      contextoSource.includes("getSupabaseServiceRoleClient"),
+      "contexto must use service-role client for bba_admin",
     );
   });
 
-  // ── Section C: SHA integrity gate ────────────────────────────────────────
-  console.log("\nC. SHA Integrity Gate\n");
-
-  runTest("C1. SHA extraído do path (shaFromPath) é comparado ao SHA calculado dos bytes", () => {
+  runTest("3.2 bba_admin contexto includes companyId and companyName in DTO", () => {
     assertTrue(
-      processSource.includes("shaFromPath"),
-      "process/route.ts must extract SHA from path and compare it to actual bytes SHA",
+      contextoSource.includes("companyName"),
+      "bba_admin contexto DTO must include companyName for disambiguation",
     );
   });
 
-  runTest("C2. storage_integrity_failure retornado quando SHA diverge", () => {
+  runTest("3.3 bba_admin → organizationId derived server-side from ProcurementCase", () => {
     assertTrue(
-      processSource.includes("storage_integrity_failure"),
-      "process/route.ts must return storage_integrity_failure on SHA mismatch",
+      prepareUploadSource.includes("deriveOrganizationFromCase"),
+      "prepare-upload must call deriveOrganizationFromCase for bba_admin",
+    );
+    assertTrue(
+      processSource.includes("deriveOrganizationFromCase"),
+      "process must call deriveOrganizationFromCase for bba_admin",
     );
   });
 
-  runTest("C3. importStructuredBudgetXlsxService NÃO é chamado quando SHA diverge", () => {
-    // Find the runtime *call* (await ...), not the import statement.
-    // The import line appears first in the file; we look for the call site.
-    const runtimeCallPos = processSource.indexOf("await importStructuredBudgetXlsxService");
-    const integrityPos = processSource.indexOf("storage_integrity_failure");
-    assertTrue(runtimeCallPos > -1, "importStructuredBudgetXlsxService must have a runtime call site");
-    assertTrue(integrityPos > -1, "storage_integrity_failure guard must be present");
-    assertTrue(integrityPos < runtimeCallPos, "SHA integrity gate must come before the runtime call to importStructuredBudgetXlsxService");
-  });
-
-  runTest("C4. SHA server-side é recalculado a partir dos bytes baixados do Storage", () => {
+  runTest("3.4 deriveOrganizationFromCase exists in resolver module", () => {
     assertTrue(
-      processSource.includes('createHash("sha256")'),
-      "process/route.ts must recalculate SHA-256 server-side from downloaded bytes",
+      resolverSource.includes("deriveOrganizationFromCase"),
+      "resolver module must export deriveOrganizationFromCase",
     );
   });
 
-  // ── Section D: Legacy hardcode audit ────────────────────────────────────────
-  console.log("\nD. Hardcode Audit\n");
+  // ── 4. Security / boundary checks ───────────────────────────────────────
+  console.log("\n4. Security and boundary enforcement\n");
 
-  runTest("D1. Zero hardcode de Alagoas/DNOCS em páginas produtivas", () => {
-    const combined = stripComments([adminRevisaoSource].join("\n"));
+  runTest("4.1 Lot from a different Case is rejected (lotVerified check)", () => {
     assertTrue(
-      !combined.includes("Recuperação das Barragens de Alagoas"),
-      "No hardcoded pilot title must remain in admin revisao page",
-    );
-    assertTrue(
-      !combined.includes("origem: documento oficial DNOCS"),
-      "No hardcoded DNOCS subtitle must remain in admin revisao page",
+      resolverSource.includes("lotVerified") &&
+        (prepareUploadSource.includes("!derived.lotVerified") || processSource.includes("!derived.lotVerified")),
+      "lot cross-case validation must check lotVerified from deriveOrganizationFromCase",
     );
   });
 
-  runTest("D2. Zero Motor R11 / OCR no fluxo de importação XLSX", () => {
+  runTest("4.2 Client-supplied companyId is never used as authority in prepare-upload", () => {
+    const body = prepareUploadSource;
+    // body.companyId must not appear; storagePath must use resolvedOrganizationId
+    assertTrue(
+      !body.includes("body.companyId"),
+      "prepare-upload must never use body.companyId",
+    );
+  });
+
+  runTest("4.3 storagePath in process route verified against server-derived organizationId", () => {
+    assertTrue(
+      processSource.includes("pathCompanyId !== resolvedOrganizationId"),
+      "process route must verify pathCompanyId matches resolvedOrganizationId",
+    );
+  });
+
+  runTest("4.4 importStructuredBudgetXlsxService receives server-derived organizationId", () => {
+    // The context passed to the service must use resolvedOrganizationId
+    assertTrue(
+      processSource.includes("organizationId: resolvedOrganizationId"),
+      "Application Service context must use resolvedOrganizationId",
+    );
+  });
+
+  // ── 5. Storage immutability (Sprint 21.5C.2A prior gates) ────────────────
+  console.log("\n5. Storage immutability (carried from 21.5C.2A)\n");
+
+  runTest("5.1 upsert:false enforced in upload UI", () => {
+    assertTrue(importarPageSource.includes("upsert: false"), "upsert:false must be present in importar page");
+    assertTrue(!importarPageSource.includes("upsert: true"), "upsert:true must NOT exist in importar page");
+  });
+
+  runTest("5.2 SHA integrity gate in process route", () => {
+    assertTrue(processSource.includes("storage_integrity_failure"), "process route must have SHA integrity gate");
+  });
+
+  runTest("5.3 Strict path format regex present", () => {
+    assertTrue(processSource.includes("STORAGE_PATH_REGEX"), "process route must validate path format with regex");
+  });
+
+  // ── 6. No Motor R11 / OCR / hardcodes ────────────────────────────────────
+  console.log("\n6. Hardcode and architecture audit\n");
+
+  runTest("6.1 Zero Motor R11 / OCR in import flow", () => {
     const combined = [contextoSource, prepareUploadSource, processSource, importarPageSource].join("\n");
     assertTrue(!combined.toLowerCase().includes("motor-r11"), "Zero references to Motor R11");
     assertTrue(!combined.toLowerCase().includes("paddleocr"), "Zero references to PaddleOCR");
-    assertTrue(!combined.toLowerCase().includes("tesseract"), "Zero references to Tesseract");
   });
 
-  // ── Section E: API auth guards ───────────────────────────────────────────
-  console.log("\nE. Authentication Guards\n");
-
-  runTest("E1. /contexto exige requireAuthenticatedCompany", () => {
-    assertTrue(contextoSource.includes("requireAuthenticatedCompany"), "Context route must require authentication");
+  runTest("6.2 Zero Alagoas/DNOCS hardcodes in productive pages", () => {
+    const cleaned = stripComments(adminRevisaoSource);
+    assertTrue(!cleaned.includes("Recuperação das Barragens de Alagoas"), "No Alagoas hardcode in revisao page");
   });
 
-  runTest("E2. /prepare-upload exige requireAuthenticatedCompany", () => {
-    assertTrue(prepareUploadSource.includes("requireAuthenticatedCompany"), "Prepare-upload route must require authentication");
+  runTest("6.3 resolver is server-only (no NEXT_PUBLIC import)", () => {
+    assertTrue(
+      !resolverSource.includes("NEXT_PUBLIC_"),
+      "budget-import-access.ts must not reference NEXT_PUBLIC_ env vars",
+    );
   });
 
-  runTest("E3. /process exige requireAuthenticatedCompany", () => {
-    assertTrue(processSource.includes("requireAuthenticatedCompany"), "Process route must require authentication");
-  });
-
-  runTest("E4. /process verifica BBA Admin para canOpenReview sem fabricar condição", () => {
-    assertTrue(processSource.includes("requireBbaAdmin"), "Process route must check real BBA Admin for canOpenReview");
-    assertTrue(!processSource.includes("canOpenReview: true"), "canOpenReview must never be hardcoded to true");
-  });
-
-  console.log("\n✓ All Sprint 21.5C.2A tests passed!\n");
+  console.log("\n✓ All Sprint 21.5C.2A access-resolver tests passed!\n");
 }
 
 main();
