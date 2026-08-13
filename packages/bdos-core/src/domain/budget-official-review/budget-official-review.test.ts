@@ -621,6 +621,48 @@ runTest("[FORMULA RECONCILIATION] Reconciliação com regra TRUNCAR da fonte", (
   assertEqual(recUnrecognized.status, "source_calculation_unverified", "fórmula não reconhecida deve retornar status source_calculation_unverified, nunca divergência fabricada");
 });
 
+runTest("[SYNTHETIC FIXTURE] Prova de não-hardcode: ROUND vs TRUNCAR na mesma quantidade/preço", () => {
+  const ruleRound = detectCalculationRule("ROUND(F31*J31, 2)", { quantityColLetter: "F", unitPriceColLetter: "J" });
+  assertEqual(ruleRound.kind, "round_product", "fórmula ROUND deve ser detectada como round_product");
+
+  const ruleTrunc = detectCalculationRule("TRUNC(F31*J31, 2)", { quantityColLetter: "F", unitPriceColLetter: "J" });
+  assertEqual(ruleTrunc.kind, "truncate_product", "fórmula TRUNC deve ser detectada como truncate_product");
+
+  const session = freshSession();
+  const imported = importBudgetReviewRows({
+    session,
+    actor: "sistema",
+    occurredAt: "2026-08-10T00:00:01.000Z",
+    rows: serviceItemsUnderRootGroup([
+      {
+        id: "fixture-round-63683",
+        position: 0,
+        calculationRule: ruleRound,
+        fields: fields({ quantityText: "155.703", unitPriceWithBdiText: "4.09", totalPriceText: "636.83" }),
+        page: 10,
+      },
+      {
+        id: "fixture-trunc-63682",
+        position: 1,
+        calculationRule: ruleTrunc,
+        fields: fields({ quantityText: "155.703", unitPriceWithBdiText: "4.09", totalPriceText: "636.82" }),
+        page: 10,
+      },
+    ]),
+  });
+  assertReviewSuccess(imported);
+
+  const rowRound = imported.session.rows.find((r) => r.id === "fixture-round-63683")!;
+  const recRound = reconcileServiceItemRow(rowRound);
+  assertEqual(recRound.status, "matches", "ROUND com 636.83 deve dar MATCHES");
+  assertEqual(recRound.derivedTotalCents, 63683, "ROUND derivado deve ser 63683 centavos");
+
+  const rowTrunc = imported.session.rows.find((r) => r.id === "fixture-trunc-63682")!;
+  const recTrunc = reconcileServiceItemRow(rowTrunc);
+  assertEqual(recTrunc.status, "matches", "TRUNC com 636.82 deve dar MATCHES");
+  assertEqual(recTrunc.derivedTotalCents, 63682, "TRUNC derivado deve ser 63682 centavos");
+});
+
 // ---------------------------------------------------------------------------
 // 8. Consolidação bloqueada com pendências / consolidação válida
 // ---------------------------------------------------------------------------
