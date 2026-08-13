@@ -26,6 +26,7 @@ import {
   type BudgetReviewRowFields,
   type BudgetReviewSession,
 } from "./index";
+import { exactQuantityFromCanonicalDecimalText } from "./budget-official-review-economic-value";
 
 const organizationId = "organization-bba-alagoas";
 
@@ -357,10 +358,10 @@ runTest("Reconciliação de Grupo soma somente Itens de Serviço descendentes, n
     actor: "sistema",
     occurredAt: "2026-08-10T00:00:01.000Z",
     rows: [
-      { id: "group-1", kind: BudgetLineKind.Group, lotReference: "Lote 01", parentRowId: null, position: 0, fields: fields({ documentalGroupTotalText: "300,00" }), page: 16 },
-      { id: "subgroup-1", kind: BudgetLineKind.Subgroup, lotReference: "Lote 01", parentRowId: "group-1", position: 0, fields: fields({ documentalGroupTotalText: "300,00" }), page: 16 },
-      { id: "item-1", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "subgroup-1", position: 0, fields: fields({ totalPriceText: "100,00" }), page: 16 },
-      { id: "item-2", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "subgroup-1", position: 1, fields: fields({ totalPriceText: "200,00" }), page: 16 },
+      { id: "group-1", kind: BudgetLineKind.Group, lotReference: "Lote 01", parentRowId: null, position: 0, fields: fields({ documentalGroupTotalText: "300.00" }), page: 16 },
+      { id: "subgroup-1", kind: BudgetLineKind.Subgroup, lotReference: "Lote 01", parentRowId: "group-1", position: 0, fields: fields({ documentalGroupTotalText: "300.00" }), page: 16 },
+      { id: "item-1", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "subgroup-1", position: 0, fields: fields({ totalPriceText: "100.00" }), page: 16 },
+      { id: "item-2", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "subgroup-1", position: 1, fields: fields({ totalPriceText: "200.00" }), page: 16 },
     ],
   });
   assertReviewSuccess(imported);
@@ -374,8 +375,8 @@ runTest("Reconciliação de Grupo soma somente Itens de Serviço descendentes, n
   assertReviewSuccess(confirmed);
 
   const groupReconciliation = reconcileGroupRow(confirmed.session, "group-1");
-  assertEqual(groupReconciliation.status, "matches", "300,00 documental must match 100+200 derived from CONFIRMED service items, not double-counted via subgroup");
-  assertEqual(groupReconciliation.derivedTotalCents, 30_000, "derived total must be exactly 300,00 in cents");
+  assertEqual(groupReconciliation.status, "matches", "300.00 documental must match 100+200 derived from CONFIRMED service items, not double-counted via subgroup");
+  assertEqual(groupReconciliation.derivedTotalCents, 30_000, "derived total must be exactly 300.00 in cents");
 });
 
 runTest("Reconciliação de Grupo retorna insufficient_data enquanto existirem descendentes Pendentes", () => {
@@ -385,9 +386,9 @@ runTest("Reconciliação de Grupo retorna insufficient_data enquanto existirem d
     actor: "sistema",
     occurredAt: "2026-08-10T00:00:01.000Z",
     rows: [
-      { id: "group-1", kind: BudgetLineKind.Group, lotReference: "Lote 01", parentRowId: null, position: 0, fields: fields({ documentalGroupTotalText: "100,00" }), page: 16 },
-      { id: "item-1", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "group-1", position: 0, fields: fields({ totalPriceText: "100,00" }), page: 16 },
-      { id: "item-2", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "group-1", position: 1, fields: fields({ totalPriceText: "9999,00" }), page: 16 },
+      { id: "group-1", kind: BudgetLineKind.Group, lotReference: "Lote 01", parentRowId: null, position: 0, fields: fields({ documentalGroupTotalText: "100.00" }), page: 16 },
+      { id: "item-1", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "group-1", position: 0, fields: fields({ totalPriceText: "100.00" }), page: 16 },
+      { id: "item-2", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "group-1", position: 1, fields: fields({ totalPriceText: "9999.00" }), page: 16 },
     ],
   });
   assertReviewSuccess(imported);
@@ -405,7 +406,7 @@ runTest("Reconciliação de Grupo retorna insufficient_data enquanto existirem d
   assertReviewSuccess(confirmedGroup);
 
   const groupReconciliationResolved = reconcileGroupRow(confirmedGroup.session, "group-1");
-  assertEqual(groupReconciliationResolved.status, "diverges", "after all children and group resolved, 100,00 + 9999,00 != 100,00 -> diverges");
+  assertEqual(groupReconciliationResolved.status, "diverges", "after all children and group resolved, 100.00 + 9999.00 != 100.00 -> diverges");
 });
 
 // ---------------------------------------------------------------------------
@@ -419,14 +420,16 @@ runTest("Reconciliação de Item de Serviço: quantidade × preço unitário == 
     actor: "sistema",
     occurredAt: "2026-08-10T00:00:01.000Z",
     rows: serviceItemsUnderRootGroup([
-      { id: "item-1", position: 0, fields: fields({ quantityText: "46.656,22", unitPriceWithBdiText: "0,72", totalPriceText: "33.592,48" }), page: 16 },
+      // Formato CANÔNICO INTERNO (ponto como separador decimal) — como o importador XLSX armazena.
+      // Equivalente matemático: 46656.22 × 0.72 = 33592.4784, arredondado = 33592.48
+      { id: "item-1", position: 0, fields: fields({ quantityText: "46656.22", unitPriceWithBdiText: "0.72", totalPriceText: "33592.48" }), page: 16 },
     ]),
   });
   assertReviewSuccess(imported);
 
   const row = imported.session.rows.find((candidate) => candidate.id === "item-1")!;
   const reconciliation = reconcileServiceItemRow(row);
-  assertEqual(reconciliation.status, "matches", "46.656,22 * 0,72 = 33.592,4784, rounds to 33.592,48");
+  assertEqual(reconciliation.status, "matches", "46656.22 * 0.72 = 33592.4784, rounds to 33592.48");
 });
 
 runTest("Reconciliação sinaliza divergência real sem tolerância arbitrária", () => {
@@ -436,14 +439,126 @@ runTest("Reconciliação sinaliza divergência real sem tolerância arbitrária"
     actor: "sistema",
     occurredAt: "2026-08-10T00:00:01.000Z",
     rows: serviceItemsUnderRootGroup([
-      { id: "item-1", position: 0, fields: fields({ quantityText: "10,00", unitPriceWithBdiText: "1,00", totalPriceText: "999,00" }), page: 16 },
+      // Formato CANÔNICO INTERNO: "10.00" = 10,00; "1.00" = 1,00; "999.00" = 999,00
+      { id: "item-1", position: 0, fields: fields({ quantityText: "10.00", unitPriceWithBdiText: "1.00", totalPriceText: "999.00" }), page: 16 },
     ]),
   });
   assertReviewSuccess(imported);
 
   const reconciliation = reconcileServiceItemRow(imported.session.rows.find((row) => row.id === "item-1")!);
-  assertEqual(reconciliation.status, "diverges", "10 * 1,00 = 10,00, documented as 999,00 — must diverge");
+  assertEqual(reconciliation.status, "diverges", "10 * 1.00 = 10.00, documented as 999.00 — must diverge");
   assertEqual(reconciliation.differenceCents, 1_000 - 99_900, "difference must be exact, no rounding tolerance applied");
+});
+
+// ---------------------------------------------------------------------------
+// 7b. Testes regressivos — bug ×1000 em quantidades com 3 casas decimais
+// Causa: normalizeBrazilianDecimal removia o ponto de "155.703" (3 dígitos após
+// o ponto no final da string), convertendo para "155703" (×1000).
+// Correto: os campos canônicos internos usam ponto como separador decimal.
+// ---------------------------------------------------------------------------
+
+runTest("[REGRESSION] 03.02.09 — 155.703 × 4.09 × NÃO deve produzir divergência de R$ 636.188,45", () => {
+  const session = freshSession();
+  const imported = importBudgetReviewRows({
+    session,
+    actor: "sistema",
+    occurredAt: "2026-08-10T00:00:01.000Z",
+    rows: serviceItemsUnderRootGroup([
+      {
+        id: "03-02-09",
+        position: 0,
+        fields: fields({ quantityText: "155.703", unitPriceWithBdiText: "4.09", totalPriceText: "636.82" }),
+        page: 50,
+      },
+    ]),
+  });
+  assertReviewSuccess(imported);
+
+  const row = imported.session.rows.find((r) => r.id === "03-02-09")!;
+  const rec = reconcileServiceItemRow(row);
+
+  // 155.703 × 4.09 = 636.82527 → arredondado para 636.83 (diferença de 1 centavo, não R$ 636.188,45)
+  // derivedTotalCents deve ser 63683, não 63682745 (que seria o ×1000 errado)
+  if (rec.derivedTotalCents !== null) {
+    const bugValue = 155703 * 409; // o valor errado que o bug produziria (em centavos)
+    assertEqual(rec.derivedTotalCents === bugValue, false, "derivedTotalCents NÃO pode ser o valor ×1000 (155703 × 4.09 × 100)");
+    // A diferença deve ser de no máximo 2 centavos (arredondamento), não R$ 636.188,45
+    assertEqual(Math.abs(rec.differenceCents ?? 0) < 300, true, "diferença deve ser de poucos centavos, não R$ 636.188,45");
+  }
+  // Não pode ser not_applicable nem insufficient_data
+  assertEqual(rec.status !== "not_applicable" && rec.status !== "insufficient_data", true, "item deve ser reconciliado");
+});
+
+runTest("[REGRESSION] 03.02.10 — 271.575 × 0.63 NÃO deve produzir divergência de R$ 170.921,16", () => {
+  const session = freshSession();
+  const imported = importBudgetReviewRows({
+    session,
+    actor: "sistema",
+    occurredAt: "2026-08-10T00:00:01.000Z",
+    rows: serviceItemsUnderRootGroup([
+      {
+        id: "03-02-10",
+        position: 0,
+        fields: fields({ quantityText: "271.575", unitPriceWithBdiText: "0.63", totalPriceText: "171.09" }),
+        page: 50,
+      },
+    ]),
+  });
+  assertReviewSuccess(imported);
+
+  const row = imported.session.rows.find((r) => r.id === "03-02-10")!;
+  const rec = reconcileServiceItemRow(row);
+
+  // 271.575 × 0.63 = 171.09225 → arredondado para 171.09 (matches)
+  if (rec.derivedTotalCents !== null) {
+    const bugValue = Math.round(271575 * 63); // valor errado que o bug produziria
+    assertEqual(rec.derivedTotalCents === bugValue, false, "derivedTotalCents NÃO pode ser o valor ×1000");
+    assertEqual(Math.abs(rec.differenceCents ?? 0) < 300, true, "diferença deve ser de poucos centavos, não R$ 170.921,16");
+  }
+  assertEqual(rec.status !== "not_applicable" && rec.status !== "insufficient_data", true, "item deve ser reconciliado");
+});
+
+runTest("[REGRESSION] exactQuantityFromCanonicalDecimalText — contrato de escala", () => {
+  const parse = exactQuantityFromCanonicalDecimalText;
+
+  // 3 casas decimais — NÃO deve ser interpretado como milhar
+  const q155703 = parse("155.703")!;
+  assertEqual(q155703.scaledValue, 155703n, "155.703 scaledValue deve ser 155703n");
+  assertEqual(q155703.scale, 3, "155.703 scale deve ser 3");
+
+  const q271575 = parse("271.575")!;
+  assertEqual(q271575.scaledValue, 271575n, "271.575 scaledValue deve ser 271575n");
+  assertEqual(q271575.scale, 3, "271.575 scale deve ser 3");
+
+  // 3 casas decimais, parte inteira = 0
+  const q014 = parse("0.125")!;
+  assertEqual(q014.scaledValue, 125n, "0.125 scaledValue deve ser 125n");
+  assertEqual(q014.scale, 3, "0.125 scale deve ser 3");
+
+  // 4 casas decimais
+  const q4dec = parse("23.5365")!;
+  assertEqual(q4dec.scaledValue, 235365n, "23.5365 scaledValue deve ser 235365n");
+  assertEqual(q4dec.scale, 4, "23.5365 scale deve ser 4");
+
+  // Inteiro
+  const q14 = parse("14")!;
+  assertEqual(q14.scaledValue, 14n, "14 scaledValue deve ser 14n");
+  assertEqual(q14.scale, 0, "14 scale deve ser 0");
+
+  // 2 casas — não afeta milhar de 5+ dígitos
+  const q6621 = parse("6621.62")!;
+  assertEqual(q6621.scaledValue, 662162n, "6621.62 scaledValue deve ser 662162n");
+  assertEqual(q6621.scale, 2, "6621.62 scale deve ser 2");
+
+  // 3 casas, 4 dígitos no inteiro
+  const q1234 = parse("1234.567")!;
+  assertEqual(q1234.scaledValue, 1234567n, "1234.567 scaledValue deve ser 1234567n");
+  assertEqual(q1234.scale, 3, "1234.567 scale deve ser 3");
+
+  // 4 casas, 4 dígitos no inteiro
+  const q12345678 = parse("1234.5678")!;
+  assertEqual(q12345678.scaledValue, 12345678n, "1234.5678 scaledValue deve ser 12345678n");
+  assertEqual(q12345678.scale, 4, "1234.5678 scale deve ser 4");
 });
 
 // ---------------------------------------------------------------------------
@@ -456,7 +571,7 @@ runTest("Consolidação bloqueada quando existe linha Pendente", () => {
     session,
     actor: "sistema",
     occurredAt: "2026-08-10T00:00:01.000Z",
-    rows: serviceItemsUnderRootGroup([{ id: "item-1", position: 0, fields: fields({ quantityText: "1,00", unitPriceWithBdiText: "1,00", totalPriceText: "1,00" }), page: 16 }]),
+    rows: serviceItemsUnderRootGroup([{ id: "item-1", position: 0, fields: fields({ quantityText: "1.00", unitPriceWithBdiText: "1.00", totalPriceText: "1.00" }), page: 16 }]),
   });
   assertReviewSuccess(imported);
 
@@ -474,7 +589,7 @@ runTest("Consolidação válida quando todas as linhas estão resolvidas e recon
     session,
     actor: "sistema",
     occurredAt: "2026-08-10T00:00:01.000Z",
-    rows: serviceItemsUnderRootGroup([{ id: "item-1", position: 0, fields: fields({ quantityText: "1,00", unitPriceWithBdiText: "1,00", totalPriceText: "1,00" }), page: 16 }]),
+    rows: serviceItemsUnderRootGroup([{ id: "item-1", position: 0, fields: fields({ quantityText: "1.00", unitPriceWithBdiText: "1.00", totalPriceText: "1.00" }), page: 16 }]),
   });
   assertReviewSuccess(imported);
 
@@ -495,7 +610,7 @@ runTest("Sessão consolidada é imutável", () => {
     session,
     actor: "sistema",
     occurredAt: "2026-08-10T00:00:01.000Z",
-    rows: serviceItemsUnderRootGroup([{ id: "item-1", position: 0, fields: fields({ quantityText: "1,00", unitPriceWithBdiText: "1,00", totalPriceText: "1,00" }), page: 16 }]),
+    rows: serviceItemsUnderRootGroup([{ id: "item-1", position: 0, fields: fields({ quantityText: "1.00", unitPriceWithBdiText: "1.00", totalPriceText: "1.00" }), page: 16 }]),
   });
   assertReviewSuccess(imported);
   const confirmed = bulkConfirmBudgetReviewRows({ session: imported.session, rowIds: ["root-group", "item-1"], actor: "revisor-teste", occurredAt: "2026-08-10T00:00:02.000Z" });
@@ -519,8 +634,8 @@ runTest("Confirmação em lote nunca confirma linha NaoPertenceAoOrcamento nem l
     actor: "sistema",
     occurredAt: "2026-08-10T00:00:01.000Z",
     rows: serviceItemsUnderRootGroup([
-      { id: "item-clean", position: 0, fields: fields({ quantityText: "1,00", unitPriceWithBdiText: "1,00", totalPriceText: "1,00" }), page: 16 },
-      { id: "item-divergent", position: 1, fields: fields({ quantityText: "1,00", unitPriceWithBdiText: "1,00", totalPriceText: "999,00" }), page: 16 },
+      { id: "item-clean", position: 0, fields: fields({ quantityText: "1.00", unitPriceWithBdiText: "1.00", totalPriceText: "1.00" }), page: 16 },
+      { id: "item-divergent", position: 1, fields: fields({ quantityText: "1.00", unitPriceWithBdiText: "1.00", totalPriceText: "999.00" }), page: 16 },
       { id: "item-excluded", position: 2, fields: fields({ description: "não pertence" }), page: 16 },
     ]),
   });
@@ -570,7 +685,7 @@ function divergentServiceItemSession(): BudgetReviewSession {
     actor: "sistema",
     occurredAt: "2026-08-10T00:00:01.000Z",
     rows: serviceItemsUnderRootGroup([
-      { id: "item-divergent", position: 0, fields: fields({ quantityText: "10,00", unitPriceWithBdiText: "1,00", totalPriceText: "10,01" }), page: 16 },
+      { id: "item-divergent", position: 0, fields: fields({ quantityText: "10.00", unitPriceWithBdiText: "1.00", totalPriceText: "10.01" }), page: 16 },
     ]),
   });
   assertReviewSuccess(imported);
@@ -619,7 +734,7 @@ runTest("Aceitar divergência exige justificativa e não altera os valores revis
 
   const row = accepted.session.rows.find((candidate) => candidate.id === "item-divergent")!;
   assertEqual(row.reconciliationDecision?.status, "AcceptedAsDocumented", "row must carry the acceptance decision");
-  assertEqual(row.revised.totalPriceText, "10,01", "revised values must never change when accepting a divergence");
+  assertEqual(row.revised.totalPriceText, "10.01", "revised values must never change when accepting a divergence");
   assertEqual(row.state, BudgetReviewRowState.Pending, "RowState is untouched by a reconciliation decision — it is a separate concept");
 });
 
@@ -645,7 +760,7 @@ runTest("Não é possível aceitar divergência de linha sem divergência ativa"
     actor: "sistema",
     occurredAt: "2026-08-10T00:00:01.000Z",
     rows: serviceItemsUnderRootGroup([
-      { id: "item-matches", position: 0, fields: fields({ quantityText: "1,00", unitPriceWithBdiText: "1,00", totalPriceText: "1,00" }), page: 16 },
+      { id: "item-matches", position: 0, fields: fields({ quantityText: "1.00", unitPriceWithBdiText: "1.00", totalPriceText: "1.00" }), page: 16 },
     ]),
   });
   assertReviewSuccess(imported);
@@ -668,8 +783,8 @@ runTest("Aceitação em lote aceita múltiplas divergências com uma única just
     actor: "sistema",
     occurredAt: "2026-08-10T00:00:01.000Z",
     rows: serviceItemsUnderRootGroup([
-      { id: "item-a", position: 0, fields: fields({ quantityText: "10,00", unitPriceWithBdiText: "1,00", totalPriceText: "10,01" }), page: 16 },
-      { id: "item-b", position: 1, fields: fields({ quantityText: "10,00", unitPriceWithBdiText: "1,00", totalPriceText: "9,99" }), page: 16 },
+      { id: "item-a", position: 0, fields: fields({ quantityText: "10.00", unitPriceWithBdiText: "1.00", totalPriceText: "10.01" }), page: 16 },
+      { id: "item-b", position: 1, fields: fields({ quantityText: "10.00", unitPriceWithBdiText: "1.00", totalPriceText: "9.99" }), page: 16 },
     ]),
   });
   assertReviewSuccess(imported);
@@ -731,7 +846,7 @@ runTest("Corrigir uma linha limpa uma decisão de reconciliação anterior (valo
   const corrected = correctBudgetReviewRow({
     session: accepted.session,
     rowId: "item-divergent",
-    fields: { totalPriceText: "10,00" },
+    fields: { totalPriceText: "10.00" },
     justification: "Corrigido após revisão adicional — dígito lido incorretamente.",
     actor: "revisor-teste",
     occurredAt: "2026-08-10T00:00:03.000Z",

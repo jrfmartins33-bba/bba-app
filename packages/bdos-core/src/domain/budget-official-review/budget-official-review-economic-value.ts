@@ -87,6 +87,53 @@ export function multiplyQuantityByUnitPriceCents(quantity: ExactQuantity, unitPr
   return Number(rounded);
 }
 
+/**
+ * Parseia texto decimal no formato CANÔNICO INTERNO — ponto como separador
+ * decimal, nunca como separador de milhar. Este é o formato armazenado pelo
+ * importador XLSX em todos os campos `...Text` de `BudgetReviewRowFields`
+ * (ex.: "155.703" = 155,703; "46656.22" = 46.656,22; "14" = 14; "0.125" = 0,125).
+ *
+ * NÃO chama `normalizeBrazilianDecimal` — esse helper é exclusivo para texto
+ * pt-BR de origem humana/OCR ("46.656,22", "0,72") e interpretaria "155.703"
+ * como separador de milhar, produzindo 155703 (erro ×1000).
+ */
+export function exactQuantityFromCanonicalDecimalText(text: string | null): ExactQuantity | null {
+  if (text === null) return null;
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return null;
+
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(trimmed);
+  if (match === null) {
+    throw new RangeError(`Invalid canonical quantity text "${text}": expected a non-negative decimal with dot as decimal separator.`);
+  }
+
+  const wholePart = match[1];
+  const fractionPart = match[2] ?? "";
+
+  if (fractionPart.length > MAX_QUANTITY_SCALE) {
+    throw new RangeError(
+      `Canonical quantity text "${text}" has ${fractionPart.length} decimal places, exceeding the supported maximum of ${MAX_QUANTITY_SCALE}.`,
+    );
+  }
+
+  const scale = fractionPart.length;
+  const scaledValue = BigInt(wholePart + fractionPart);
+  return { scaledValue, scale };
+}
+
+/**
+ * Parseia texto monetário no formato CANÔNICO INTERNO — ponto como separador
+ * decimal, sempre 2 casas decimais para campos monetários (ex.: "4.09", "636.82").
+ * Uso correto para campos `unitPriceWithBdiText`, `totalPriceText`,
+ * `unitCostWithoutBdiText` de `BudgetReviewRowFields` armazenados pelo importador.
+ */
+export function moneyCentsFromCanonicalDecimalText(text: string | null): MoneyCents | null {
+  if (text === null) return null;
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return null;
+  return centsFromDecimalString(trimmed);
+}
+
 export function sumMoneyCents(values: ReadonlyArray<MoneyCents | null>): MoneyCents {
   return sumCents(values.filter((value): value is MoneyCents => value !== null));
 }
@@ -118,7 +165,7 @@ export function calculateOfficialBudgetCents(
   let totalCents = 0n;
   for (const row of rows) {
     if (row.kind === "ServiceItem" && row.extracted?.totalPriceText) {
-      const cents = moneyCentsFromBrazilianText(row.extracted.totalPriceText);
+      const cents = moneyCentsFromCanonicalDecimalText(row.extracted.totalPriceText);
       if (cents !== null) {
         totalCents += BigInt(cents);
       }

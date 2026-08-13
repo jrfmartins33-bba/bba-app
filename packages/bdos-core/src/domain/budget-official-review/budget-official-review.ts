@@ -1,7 +1,7 @@
 import { BudgetLineKind, BudgetVersionStatus } from "../budget-version";
 import {
-  exactQuantityFromBrazilianText,
-  moneyCentsFromBrazilianText,
+  exactQuantityFromCanonicalDecimalText,
+  moneyCentsFromCanonicalDecimalText,
   multiplyQuantityByUnitPriceCents,
   sumMoneyCents,
 } from "./budget-official-review-economic-value";
@@ -686,9 +686,13 @@ export function reconcileServiceItemRow(row: BudgetReviewRow): BudgetReviewServi
     return { rowId: row.id, status: "not_applicable", derivedTotalCents: null, documentedTotalCents: null, differenceCents: null };
   }
 
-  const quantity = exactQuantityFromBrazilianText(row.revised.quantityText);
-  const unitPriceCents = moneyCentsFromBrazilianText(row.revised.unitPriceWithBdiText);
-  const documentedTotalCents = moneyCentsFromBrazilianText(row.revised.totalPriceText);
+  // row.revised.*Text são armazenados em formato CANÔNICO INTERNO pelo importador XLSX
+  // (ponto como separador decimal). NÃO usar parsers Brazilian-text — eles removeriam
+  // o ponto de quantidades como "155.703", interpretando-o como separador de milhar
+  // e produzindo 155703 (erro ×1000). Ver budget-official-review-economic-value.ts.
+  const quantity = exactQuantityFromCanonicalDecimalText(row.revised.quantityText);
+  const unitPriceCents = moneyCentsFromCanonicalDecimalText(row.revised.unitPriceWithBdiText);
+  const documentedTotalCents = moneyCentsFromCanonicalDecimalText(row.revised.totalPriceText);
 
   if (quantity === null || unitPriceCents === null || documentedTotalCents === null) {
     return { rowId: row.id, status: "insufficient_data", derivedTotalCents: null, documentedTotalCents, differenceCents: null };
@@ -743,7 +747,7 @@ export function reconcileGroupRow(session: BudgetReviewSession, rowId: string): 
     return { rowId, status: "not_applicable", derivedTotalCents: null, documentedTotalCents: null, differenceCents: null };
   }
 
-  const documentedTotalCents = moneyCentsFromBrazilianText(row.revised.documentalGroupTotalText);
+  const documentedTotalCents = moneyCentsFromCanonicalDecimalText(row.revised.documentalGroupTotalText);
   const derivedTotalCents = sumMoneyCents(descendantServiceItemTotals(session, rowId));
 
   if (documentedTotalCents === null || row.state === BudgetReviewRowState.Pending || hasPendingDescendantRows(session, rowId)) {
@@ -803,7 +807,7 @@ export function budgetReviewConsolidationReadiness(session: BudgetReviewSession)
 
   const approvedServiceItems = serviceItemRows.filter((row) => ACCEPTED_BUDGET_REVIEW_ROW_STATES.has(row.state));
   const unprojectableServiceItems = approvedServiceItems.filter(
-    (row) => moneyCentsFromBrazilianText(row.revised.totalPriceText) === null,
+    (row) => moneyCentsFromCanonicalDecimalText(row.revised.totalPriceText) === null,
   );
   if (unprojectableServiceItems.length > 0) {
     blockers.push(`${unprojectableServiceItems.length} Item(ns) de Serviço aprovado(s) sem total documental legível — não podem ser projetados para a Versão do Orçamento.`);
@@ -848,7 +852,7 @@ function descendantServiceItemTotals(session: BudgetReviewSession, rowId: string
 
   return children.flatMap((child) => {
     if (child.kind === BudgetLineKind.ServiceItem) {
-      return [moneyCentsFromBrazilianText(child.revised.totalPriceText)];
+      return [moneyCentsFromCanonicalDecimalText(child.revised.totalPriceText)];
     }
     return descendantServiceItemTotals(session, child.id);
   });

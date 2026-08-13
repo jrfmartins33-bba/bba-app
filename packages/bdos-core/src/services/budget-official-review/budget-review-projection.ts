@@ -1,6 +1,6 @@
 import { addBudgetLine, BudgetLineKind } from "../../domain/budget-version";
 import type { BudgetVersion, BudgetVersionResult } from "../../domain/budget-version";
-import { ACCEPTED_BUDGET_REVIEW_ROW_STATES, moneyCentsFromBrazilianText } from "../../domain/budget-official-review";
+import { ACCEPTED_BUDGET_REVIEW_ROW_STATES, moneyCentsFromCanonicalDecimalText } from "../../domain/budget-official-review";
 import type { BudgetReviewRow, BudgetReviewSession } from "../../domain/budget-official-review";
 
 // Correção Sprint 21.5A (Bloqueador A) — projeta as Linhas de Revisão já
@@ -56,7 +56,7 @@ function projectRowAndDescendants(session: BudgetReviewSession, row: BudgetRevie
     parentLineId: row.parentRowId,
     position: row.position,
     scope: budgetVersion.scope,
-    totalCents: row.kind === BudgetLineKind.ServiceItem ? moneyCentsFromBrazilianText(row.revised.totalPriceText) : null,
+    totalCents: row.kind === BudgetLineKind.ServiceItem ? moneyCentsFromCanonicalDecimalText(row.revised.totalPriceText) : null,
     metadata: {
       lotReference: row.lotReference,
       sourcePage: row.page,
