@@ -11,5 +11,12 @@ export interface ApplicationInfrastructureError {
 }
 
 export function toInfrastructureErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const errObj = error as Record<string, unknown>;
+    if (typeof errObj.message === "string" && errObj.message.length > 0) return errObj.message;
+    if (typeof errObj.error === "string" && errObj.error.length > 0) return errObj.error;
+  }
+  return String(error);
 }

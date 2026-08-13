@@ -192,10 +192,8 @@ export async function importStructuredBudgetXlsxService(
   // 4. Register or Reuse DocumentArtifact and DocumentVersion (Lot-scoped Artifact)
   let documentVersion: DocumentVersion;
   try {
-    // Identity of DocumentArtifact is stable by (process + lot + role)
-    const docArtifactId = command.procurementLotId
-      ? `doc-lot-${command.procurementCaseId}-${command.procurementLotId}`
-      : `doc-case-${command.procurementCaseId}`;
+    // Identity of DocumentArtifact is stable by Lot ID or Case ID (valid UUIDs)
+    const docArtifactId = command.procurementLotId || command.procurementCaseId;
 
     const docArtifactTitle = command.procurementLotId
       ? `Orçamento Oficial - ${procurementLot.title}`

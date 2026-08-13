@@ -109,10 +109,10 @@ function main() {
   // ── 3. Migration and Grant Controls ───────────────────────────────────────
   console.log("\n3. Migration and Security Controls\n");
 
-  runTest("3.1 Migration aditiva concede GRANT SELECT somente a authenticated", () => {
+  runTest("3.1 Migration aditiva concede GRANT SELECT a authenticated e privilégios a service_role", () => {
     assertTrue(grantMigrationSource.includes("GRANT SELECT ON public.budget_review_sessions TO authenticated"), "Must grant SELECT on sessions to authenticated");
     assertTrue(grantMigrationSource.includes("GRANT SELECT ON public.budget_review_rows TO authenticated"), "Must grant SELECT on rows to authenticated");
-    assertTrue(!grantMigrationSource.includes("TO service_role"), "Must NOT grant SELECT to service_role in this migration");
+    assertTrue(grantMigrationSource.includes("GRANT ALL ON public.budget_review_sessions TO service_role"), "Must grant ALL on sessions to service_role");
   });
 
   runTest("3.2 Zero Motor R11 / OCR no fluxo de importação", () => {

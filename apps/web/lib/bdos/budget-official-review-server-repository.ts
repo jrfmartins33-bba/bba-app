@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BudgetReviewRepository, AuditEventToPersist } from "@bba/bdos-core/services/budget-official-review";
+import { createHash } from "crypto";
 import {
   consolidateBudgetReviewSessionRpcParams,
   createBudgetReviewSessionRpcParams,
@@ -25,6 +26,14 @@ const SESSION_COLUMNS =
   "id, company_id, procurement_case_id, procurement_lot_id, budget_version_id, document_version_id, source_sha256, acquisition_mechanism, acquisition_mechanism_version, status, metadata, created_by, created_at";
 const ROW_COLUMNS =
   "id, company_id, session_id, kind, lot_reference, parent_row_id, position, state, extracted, revised, page, evidence_text, justification, inserted_manually, reconciliation_decision_status, reconciliation_decision_actor, reconciliation_decision_justification, reconciliation_decision_at, metadata, created_by, created_at";
+
+function toValidUuid(id: string): string {
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return id;
+  }
+  const hash = createHash("sha256").update(id).digest("hex");
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+}
 
 export function createBudgetReviewServerRepository(
   readClient: SupabaseClient,
@@ -169,10 +178,10 @@ export function createBudgetReviewServerRepository(
         p_company_id: organizationId,
         p_session_id: sessionId,
         p_rows: rows.map((row) => ({
-          id: row.id,
+          id: toValidUuid(row.id),
           kind: row.kind,
           lotReference: row.lotReference,
-          parentRowId: row.parentRowId,
+          parentRowId: row.parentRowId ? toValidUuid(row.parentRowId) : null,
           position: row.position,
           fields: row.revised,
           page: row.page,
