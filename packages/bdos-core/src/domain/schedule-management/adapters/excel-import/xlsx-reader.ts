@@ -1,5 +1,5 @@
 import { inflateRawSync } from "node:zlib";
-import type { ExcelCellValue, ExcelSheetDto, ExcelSheetRow, ExcelWorkbookDto } from "./xlsx-reader.types";
+import type { ExcelCellRaw, ExcelCellValue, ExcelSheetDto, ExcelSheetRaw, ExcelSheetRow, ExcelSheetRowRaw, ExcelWorkbookDto, ExcelWorkbookRaw } from "./xlsx-reader.types";
 
 /**
  * BBA Project Studio — Sprint 1. Leitor mínimo, hand-rolled, do
@@ -241,4 +241,172 @@ function decodeXmlEntities(value: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&amp;/g, "&");
+}
+
+// ---------------------------------------------------------------------------
+// readXlsxWorkbookRaw — Sprint 21.5B (additive, does not change the API above)
+// ---------------------------------------------------------------------------
+
+/**
+ * Variante aditiva de `readXlsxWorkbook` que preserva, em cada célula, o
+ * conteúdo bruto do elemento `<v>` (campo `rawString`, apenas para células de
+ * tipo numérico) e a referência da coluna (`columnRef`, ex.: `"B"`). A API
+ * original permanece inalterada. Reutiliza todos os helpers internos já
+ * existentes; apenas `parseSheetRowsRaw` e `readCellRaw` são novos.
+ */
+export function readXlsxWorkbookRaw(bytes: Uint8Array): ExcelWorkbookRaw {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const entries = readCentralDirectory(bytes, view);
+  const readText = (name: string): string | null => {
+    const entry = entries.get(name);
+    return entry === undefined ? null : decodeUtf8(readEntry(bytes, view, entry));
+  };
+
+  const workbookXml = readText("xl/workbook.xml");
+  if (workbookXml === null) {
+    throw new Error("Invalid .xlsx file: xl/workbook.xml not found.");
+  }
+
+  const relsXml = readText("xl/_rels/workbook.xml.rels");
+  const sharedStrings = parseSharedStrings(readText("xl/sharedStrings.xml"));
+
+  const relTargetById = parseRelationships(relsXml);
+  const sheetMetas = parseWorkbookSheets(workbookXml);
+
+  const sheets: ExcelSheetRaw[] = sheetMetas.map((meta) => {
+    const target = relTargetById.get(meta.relationshipId);
+    const sheetPath = target === undefined ? null : resolveXlPath(target);
+    const sheetXml = sheetPath === null ? null : readText(sheetPath);
+
+    return {
+      name: meta.name,
+      hidden: meta.hidden,
+      rows: sheetXml === null ? [] : parseSheetRowsRaw(sheetXml, sharedStrings),
+    };
+  });
+
+  return { sheets };
+}
+
+function parseSheetRowsRaw(
+  sheetXml: string,
+  sharedStrings: ReadonlyArray<string>,
+): ReadonlyArray<ExcelSheetRowRaw> {
+  const sharedFormulas = new Map<string, string>();
+  const sharedMatches = sheetXml.matchAll(/<f\s[^>]*si="(\d+)"[^>]*>([\s\S]*?)<\/f>/g);
+  for (const match of sharedMatches) {
+    const si = match[1]!;
+    const text = decodeXmlEntities(match[2] ?? "").trim();
+    if (text.length > 0 && !text.includes("<") && !text.includes(">")) {
+      sharedFormulas.set(si, text);
+    }
+  }
+
+  const rowBlocks = sheetXml.match(/<row[^>]*\/>|<row[^>]*>[\s\S]*?<\/row>/g) ?? [];
+
+  return rowBlocks.map((rowBlock) => {
+    const rowNumber = Number(/<row r="(\d+)"/.exec(rowBlock)?.[1] ?? "0");
+    const cellBlocks = rowBlock.match(/<c\s[^>]*\/>|<c\s[^>]*>[\s\S]*?<\/c>/g) ?? [];
+
+    const sparse = new Map<number, ExcelCellRaw>();
+    let maxColumn = -1;
+    const colRefs = new Map<number, string>();
+
+    cellBlocks.forEach((cellBlock) => {
+      const cellRefMatch = /r="([A-Z]+)\d+"/.exec(cellBlock);
+      if (cellRefMatch === undefined || cellRefMatch === null) {
+        return;
+      }
+      const colLetters = cellRefMatch[1]!;
+      const columnIndex = columnLettersToIndex(colLetters);
+      maxColumn = Math.max(maxColumn, columnIndex);
+      colRefs.set(columnIndex, colLetters);
+      sparse.set(columnIndex, readCellRaw(cellBlock, sharedStrings, colLetters, sharedFormulas));
+    });
+
+    const cells: ExcelCellRaw[] = [];
+    for (let column = 0; column <= maxColumn; column++) {
+      cells.push(
+        sparse.get(column) ?? {
+          value: null,
+          rawString: null,
+          columnRef: colRefs.get(column) ?? indexToColumnLetters(column),
+          formula: null,
+        },
+      );
+    }
+
+    return { rowNumber, cells };
+  });
+}
+
+function readCellRaw(
+  cellBlock: string,
+  sharedStrings: ReadonlyArray<string>,
+  columnRef: string,
+  sharedFormulas: ReadonlyMap<string, string>,
+): ExcelCellRaw {
+  let formula: string | null = null;
+  const fMatch = /<f(?:\s[^>]*)?>([\s\S]*?)<\/f>|<f\s([^>]*)\/>/.exec(cellBlock);
+  if (fMatch !== null) {
+    const inlineText = decodeXmlEntities(fMatch[1] ?? "").trim();
+    if (inlineText.length > 0) {
+      formula = inlineText;
+    } else {
+      const attrStr = fMatch[2] ?? fMatch[0];
+      const si = /si="(\d+)"/.exec(attrStr)?.[1];
+      if (si !== undefined && sharedFormulas.has(si)) {
+        formula = sharedFormulas.get(si)!;
+      }
+    }
+  }
+
+  const type = /\st="([^"]+)"/.exec(cellBlock)?.[1] ?? null;
+  const inlineMatch = /<is>[\s\S]*?<t[^>]*>([\s\S]*?)<\/t>[\s\S]*?<\/is>/.exec(cellBlock);
+
+  if (inlineMatch !== null) {
+    return { value: decodeXmlEntities(inlineMatch[1] ?? ""), rawString: null, columnRef, formula };
+  }
+
+  const valueMatch = /<v>([\s\S]*?)<\/v>/.exec(cellBlock);
+  if (valueMatch === null) {
+    return { value: null, rawString: null, columnRef, formula };
+  }
+
+  const raw = valueMatch[1] ?? "";
+
+  if (type === "s") {
+    const index = Number(raw);
+    return { value: sharedStrings[index] ?? null, rawString: null, columnRef, formula };
+  }
+
+  if (type === "str" || type === "e") {
+    return { value: decodeXmlEntities(raw), rawString: null, columnRef, formula };
+  }
+
+  if (type === "b") {
+    return { value: raw === "1" ? 1 : 0, rawString: null, columnRef, formula };
+  }
+
+  // Numeric cell (type absent or type === "n"): preserve rawString for exact decimal access.
+  const numeric = Number(raw);
+  const value = Number.isNaN(numeric) ? decodeXmlEntities(raw) : numeric;
+  return {
+    value,
+    rawString: Number.isNaN(numeric) ? null : raw,
+    columnRef,
+    formula,
+  };
+}
+
+/** Inverse of columnLettersToIndex — used only as a fallback for gap columns. */
+function indexToColumnLetters(index: number): string {
+  let result = "";
+  let n = index + 1;
+  while (n > 0) {
+    const remainder = (n - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    n = Math.floor((n - 1) / 26);
+  }
+  return result;
 }

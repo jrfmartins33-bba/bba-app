@@ -19,3 +19,5 @@ coverage
 *.xlsx
 *.xls
 *.xlsm
+
+_local-results/
