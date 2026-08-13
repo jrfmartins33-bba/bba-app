@@ -141,7 +141,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const documentRepository = createDocumentRepository(serviceRoleClient);
   const documentVersionRepository = createDocumentVersionRepository(serviceRoleClient);
   const budgetVersionRepository = createBudgetVersionRepository(serviceRoleClient);
-  const reviewRepository = createBudgetReviewServerRepository(serviceRoleClient);
+  const reviewRepository = createBudgetReviewServerRepository(readClient, serviceRoleClient);
 
   // organizationId is always the server-derived value — never from the request body.
   const context = {

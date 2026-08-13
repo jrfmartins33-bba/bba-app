@@ -8,26 +8,32 @@ import {
   recordBudgetReviewRowMutationRpcParams,
 } from "./budget-official-review-mappers";
 
-// Adaptador de persistência (Epic 21.5A) — implementa BudgetReviewRepository
-// (packages/bdos-core/src/services/budget-official-review/budget-review.repository.ts).
+// Adaptador de persistência (Epic 21.5A / Sprint 21.5C.2B)
+// Implementa BudgetReviewRepository (packages/bdos-core/src/services/budget-official-review/budget-review.repository.ts).
 //
 // *** EXCLUSIVO DE SERVIDOR — NUNCA IMPORTAR DE CÓDIGO CLIENTE ***
 //
-// As operações de escrita (createSession, mutateRow, consolidateSession,
-// importRows) chamam funções SQL cujo EXECUTE foi concedido somente a
-// `service_role` (20260810000000_bdos_budget_official_review.sql) — este
-// módulo só funciona, para escrita, com um `SupabaseClient` de
-// service_role. Leitura (loadSession, findSessionByAcquisition) usa um
-// cliente autenticado comum, protegido por RLS (Admin BBA only).
+// Arquitetura BDOS de separação Read / Write:
+// - Operações de LEITURA (findOrganizationIdForSession, loadSession, findSessionByAcquisition, loadRowsForSession)
+//   utilizam `readClient` (cliente autenticado do usuário), protegidas pelas políticas de RLS de SELECT
+//   (`budget_review_sessions_select_company_or_admin` e `budget_review_rows_select_admin_only`).
+// - Operações de ESCRITA (createSession, mutateRow, recordReconciliationDecision, consolidateSession, importRows)
+//   utilizam `writeClient` (cliente de `service_role`), invocando RPCs SQL cujas permissões de EXECUTE foram
+//   concedidas estritamente a `service_role` (20260810000000_bdos_budget_official_review.sql).
 
 const SESSION_COLUMNS =
   "id, company_id, procurement_case_id, procurement_lot_id, budget_version_id, document_version_id, source_sha256, acquisition_mechanism, acquisition_mechanism_version, status, metadata, created_by, created_at";
 const ROW_COLUMNS =
   "id, company_id, session_id, kind, lot_reference, parent_row_id, position, state, extracted, revised, page, evidence_text, justification, inserted_manually, reconciliation_decision_status, reconciliation_decision_actor, reconciliation_decision_justification, reconciliation_decision_at, metadata, created_by, created_at";
 
-export function createBudgetReviewServerRepository(supabase: SupabaseClient): BudgetReviewRepository {
+export function createBudgetReviewServerRepository(
+  readClient: SupabaseClient,
+  writeClient?: SupabaseClient,
+): BudgetReviewRepository {
+  const wClient = writeClient ?? readClient;
+
   async function loadRowsForSession(organizationId: string, sessionId: string) {
-    const { data, error } = await supabase
+    const { data, error } = await readClient
       .from("budget_review_rows")
       .select(ROW_COLUMNS)
       .eq("company_id", organizationId)
@@ -38,7 +44,7 @@ export function createBudgetReviewServerRepository(supabase: SupabaseClient): Bu
 
   return {
     async findOrganizationIdForSession(sessionId) {
-      const { data, error } = await supabase
+      const { data, error } = await readClient
         .from("budget_review_sessions")
         .select("company_id")
         .eq("id", sessionId)
@@ -49,7 +55,7 @@ export function createBudgetReviewServerRepository(supabase: SupabaseClient): Bu
     },
 
     async loadSession(organizationId, sessionId) {
-      const { data: sessionRow, error: sessionError } = await supabase
+      const { data: sessionRow, error: sessionError } = await readClient
         .from("budget_review_sessions")
         .select(SESSION_COLUMNS)
         .eq("company_id", organizationId)
@@ -64,7 +70,7 @@ export function createBudgetReviewServerRepository(supabase: SupabaseClient): Bu
     },
 
     async findSessionByAcquisition(organizationId, procurementCaseId, sourceSha256, acquisitionMechanism, procurementLotId) {
-      let query = supabase
+      let query = readClient
         .from("budget_review_sessions")
         .select(SESSION_COLUMNS)
         .eq("company_id", organizationId)
@@ -88,7 +94,7 @@ export function createBudgetReviewServerRepository(supabase: SupabaseClient): Bu
     },
 
     async createSession(organizationId, actor, session) {
-      const { data, error } = await supabase.rpc(
+      const { data, error } = await wClient.rpc(
         "create_budget_review_session",
         createBudgetReviewSessionRpcParams(organizationId, actor, session),
       );
@@ -105,7 +111,7 @@ export function createBudgetReviewServerRepository(supabase: SupabaseClient): Bu
     },
 
     async mutateRow(organizationId, actor, session, row, isNewRow, auditEvent) {
-      const { data, error } = await supabase.rpc(
+      const { data, error } = await wClient.rpc(
         "record_budget_review_row_mutation",
         recordBudgetReviewRowMutationRpcParams(organizationId, actor, {
           isNewRow,
@@ -127,7 +133,7 @@ export function createBudgetReviewServerRepository(supabase: SupabaseClient): Bu
     },
 
     async recordReconciliationDecision(organizationId, actor, sessionId, rowId, decision, auditEvent) {
-      const { data, error } = await supabase.rpc(
+      const { data, error } = await wClient.rpc(
         "record_budget_review_reconciliation_decision",
         recordBudgetReviewReconciliationDecisionRpcParams(organizationId, actor, {
           sessionId,
@@ -148,7 +154,7 @@ export function createBudgetReviewServerRepository(supabase: SupabaseClient): Bu
     },
 
     async consolidateSession(organizationId, actor, sessionId, auditEventId) {
-      const { data, error } = await supabase.rpc(
+      const { data, error } = await wClient.rpc(
         "consolidate_budget_review_session",
         consolidateBudgetReviewSessionRpcParams(organizationId, actor, sessionId, auditEventId, {}),
       );
@@ -158,7 +164,7 @@ export function createBudgetReviewServerRepository(supabase: SupabaseClient): Bu
     },
 
     async importRows(organizationId, actor, sessionId, rows, occurredAt) {
-      const { data, error } = await supabase.rpc("bulk_import_budget_review_rows", {
+      const { data, error } = await wClient.rpc("bulk_import_budget_review_rows", {
         p_actor_id: actor,
         p_company_id: organizationId,
         p_session_id: sessionId,

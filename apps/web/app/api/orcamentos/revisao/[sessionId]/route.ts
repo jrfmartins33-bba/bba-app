@@ -50,7 +50,7 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const repository = createBudgetReviewServerRepository(getSupabaseServiceRoleClient());
+  const repository = createBudgetReviewServerRepository(readClient, getSupabaseServiceRoleClient());
   const organizationId = await resolveOrganizationId(repository, params.sessionId);
   if (organizationId === null) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -115,7 +115,7 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
     return NextResponse.json({ error: "invalid_json_body" }, { status: 400 });
   }
 
-  const repository = createBudgetReviewServerRepository(getSupabaseServiceRoleClient());
+  const repository = createBudgetReviewServerRepository(readClient, getSupabaseServiceRoleClient());
   const sessionId = params.sessionId;
   const organizationId = await resolveOrganizationId(repository, sessionId);
   if (organizationId === null) {

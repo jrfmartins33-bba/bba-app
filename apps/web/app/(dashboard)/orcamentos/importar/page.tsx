@@ -6,6 +6,7 @@ import { ArrowLeft, CheckCircle2, FileSpreadsheet, FolderGit2, Layers, AlertCirc
 import { createBrowserClient } from "@supabase/ssr";
 import { Card, Button } from "@bba/ui";
 import { BudgetPageHeader } from "@/components/budget/budget-page-header";
+import { toHumanImportError } from "@/lib/bdos/to-human-import-error";
 
 interface ProcurementLotDto {
   readonly id: string;
@@ -47,6 +48,8 @@ async function computeSha256InBrowser(file: File): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+
+
 export default function ImportarOrcamentoPage() {
   const [cases, setCases] = useState<ReadonlyArray<ProcurementCaseDto>>([]);
   const [actorRole, setActorRole] = useState<"company_user" | "bba_admin" | null>(null);
@@ -81,7 +84,7 @@ export default function ImportarOrcamentoPage() {
         }
       })
       .catch((err) => {
-        setContextError(err instanceof Error ? err.message : "Erro de conexão ao carregar processos.");
+        setContextError(toHumanImportError(err, "Erro de conexão ao carregar processos."));
       })
       .finally(() => setLoadingContext(false));
   }, []);
@@ -148,7 +151,7 @@ export default function ImportarOrcamentoPage() {
 
       const prepareData = await prepareRes.json();
       if (!prepareRes.ok) {
-        throw new Error(prepareData.error === "file_must_be_xlsx" ? "O arquivo selecionado deve ser uma planilha Excel (.xlsx)." : prepareData.error ?? "Falha ao preparar o envio do arquivo.");
+        throw new Error(toHumanImportError(prepareData, "Falha ao preparar o envio do arquivo."));
       }
 
       const storagePath: string = prepareData.storagePath;
@@ -179,7 +182,7 @@ export default function ImportarOrcamentoPage() {
 
         if (!isAlreadyExists) {
           console.error("Storage upload error:", uploadError);
-          throw new Error("Não foi possível enviar o arquivo para o armazenamento. Tente novamente.");
+          throw new Error(toHumanImportError(uploadError, "Não foi possível enviar o arquivo para o armazenamento. Tente novamente."));
         }
         // Object already exists — this is expected for re-imports; continue to process route.
       }
@@ -199,17 +202,17 @@ export default function ImportarOrcamentoPage() {
         }),
       });
 
-      const processData: ProcessResultDto = await processRes.json();
+      const processData = await processRes.json();
 
       if (!processRes.ok || processData.outcome !== "success") {
-        throw new Error(processData.message ?? "Não conseguimos estruturar a planilha enviada. Confirme se esta é a planilha oficial do orçamento.");
+        throw new Error(toHumanImportError(processData, "Não conseguimos estruturar a planilha enviada. Confirme se esta é a planilha oficial do orçamento."));
       }
 
-      setResult(processData);
+      setResult(processData as ProcessResultDto);
       setStep("success");
     } catch (err) {
       console.error("Import error:", err);
-      setErrorMessage(err instanceof Error ? err.message : "Ocorreu uma falha inesperada durante a importação.");
+      setErrorMessage(toHumanImportError(err, "Ocorreu uma falha inesperada durante a importação."));
       setStep("error");
     }
   }
