@@ -697,15 +697,6 @@ function getEffectiveCalculationRule(row: BudgetReviewRow): BudgetSourceCalculat
         // ignore parse error
       }
     }
-    if (row.evidenceText.includes("xlsx_structured_import") && (row.evidenceText.includes("sheet=ORÇAMENTO SEM DESONERAÇÃO") || row.evidenceText.includes("sheet=ORÇAMENTO") || row.evidenceText.includes("ORÇAMENTO"))) {
-      return {
-        kind: "truncate_product",
-        quantityRole: "quantity",
-        unitPriceRole: "unitPriceWithBdi",
-        decimalPlaces: 2,
-        sourceFormula: null,
-      };
-    }
   }
   return { kind: "no_formula" };
 }
@@ -733,6 +724,18 @@ export function reconcileServiceItemRow(row: BudgetReviewRow): BudgetReviewServi
       documentedTotalCents,
       differenceCents: null,
     };
+  }
+
+  if (rule.kind === "no_formula") {
+    if (row.evidenceText && row.evidenceText.includes("mechanism=xlsx_structured_import")) {
+      return {
+        rowId: row.id,
+        status: "source_calculation_unverified",
+        derivedTotalCents: null,
+        documentedTotalCents,
+        differenceCents: null,
+      };
+    }
   }
 
   let derivedTotalCents: MoneyCents;

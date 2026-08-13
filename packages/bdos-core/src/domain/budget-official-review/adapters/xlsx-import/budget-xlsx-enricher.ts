@@ -10,6 +10,11 @@ import type { BudgetReviewSession, BudgetSourceCalculationRule } from "../../bud
  * e associa a `BudgetSourceCalculationRule` exata a cada `BudgetReviewRow` em memória.
  * NUNCA depende do nome da aba, NUNCA usa regras hardcoded, NUNCA reimporta dados.
  */
+function normalizeSheetKey(sheetName: string, rowNumber: string | number): string {
+  const normSheet = sheetName.replace(/[\u00A0\u00AD\u200B\uFEFF]/g, " ").trim().toUpperCase();
+  return `${normSheet}:${rowNumber}`;
+}
+
 export function enrichSessionCalculationRules(
   session: BudgetReviewSession,
   xlsxBytes: Uint8Array,
@@ -24,7 +29,7 @@ export function enrichSessionCalculationRules(
       const sheetMatch = /\|sheet=([^|]+)/.exec(row.evidenceText);
       const rowMatch = /\|row=(\d+)/.exec(row.evidenceText);
       if (sheetMatch && rowMatch) {
-        const key = `${sheetMatch[1]}:${rowMatch[2]}`;
+        const key = normalizeSheetKey(sheetMatch[1]!, rowMatch[1]!);
         const rule = ruleMap.get(key);
         if (rule) {
           return { ...row, calculationRule: rule };
@@ -49,16 +54,16 @@ export function buildWorkbookCalculationRuleMap(
   for (const sheet of workbook.sheets) {
     if (sheet.hidden || sheet.rows.length === 0) continue;
 
-    // Localizar linha de cabeçalho
     const headerInfo = findHeaderRowAndRoles(sheet.rows);
     if (headerInfo === null) continue;
 
-    const { totalColIdx, quantityColLetter, unitPriceColLetter } = headerInfo;
+    const { totalColLetter, quantityColLetter, unitPriceColLetter } = headerInfo;
 
     for (const row of sheet.rows) {
       if (row.rowNumber <= headerInfo.headerRowNumber) continue;
 
-      const totalCell = row.cells[totalColIdx];
+      const totalCell = row.cells.find((c) => c.columnRef === totalColLetter) ??
+                        row.cells.find((c) => c.formula && (c.formula.includes("TRUNC") || c.formula.includes("ROUND") || c.formula.includes("ARRED")));
       if (totalCell === undefined) continue;
 
       const rule = detectCalculationRule(totalCell.formula ?? null, {
@@ -66,7 +71,7 @@ export function buildWorkbookCalculationRuleMap(
         unitPriceColLetter,
       });
 
-      const key = `${sheet.name}:${row.rowNumber}`;
+      const key = normalizeSheetKey(sheet.name, row.rowNumber);
       ruleMap.set(key, rule);
     }
   }
@@ -76,7 +81,7 @@ export function buildWorkbookCalculationRuleMap(
 
 interface HeaderInfo {
   headerRowNumber: number;
-  totalColIdx: number;
+  totalColLetter: string;
   quantityColLetter?: string;
   unitPriceColLetter?: string;
 }
@@ -84,7 +89,7 @@ interface HeaderInfo {
 function findHeaderRowAndRoles(rows: ReadonlyArray<import("../../../schedule-management/adapters/excel-import/xlsx-reader.types").ExcelSheetRowRaw>): HeaderInfo | null {
   for (let i = 0; i < Math.min(rows.length, 25); i++) {
     const row = rows[i]!;
-    let totalColIdx = -1;
+    let totalColLetter: string | undefined;
     let quantityColLetter: string | undefined;
     let unitPriceColLetter: string | undefined;
 
@@ -93,8 +98,21 @@ function findHeaderRowAndRoles(rows: ReadonlyArray<import("../../../schedule-man
       if (cell === undefined || typeof cell.value !== "string") continue;
       const norm = cell.value.toUpperCase();
 
-      if ((norm.includes("TOTAL C/BDI") || norm.includes("VR TOTAL") || norm.includes("VALOR TOTAL") || norm.includes("PRECO TOTAL") || (norm.includes("TOTAL") && !norm.includes("SUBTOTAL"))) && totalColIdx === -1) {
-        totalColIdx = c;
+      if (norm.includes("DESCRIC") || norm.includes("DISCRIMIN") || norm.includes("ESPECIFIC")) {
+        continue;
+      }
+
+      if (
+        (norm.includes("TOTAL C/BDI") ||
+          norm.includes("TOTAL C/ BDI") ||
+          norm.includes("VR TOTAL") ||
+          norm.includes("VALOR TOTAL") ||
+          norm.includes("PRECO TOTAL") ||
+          norm.includes("PREÇO TOTAL") ||
+          (norm.includes("TOTAL") && !norm.includes("SUBTOTAL"))) &&
+        totalColLetter === undefined
+      ) {
+        totalColLetter = cell.columnRef;
       }
       if ((norm.includes("QUANT") || norm.includes("QTD")) && quantityColLetter === undefined) {
         quantityColLetter = cell.columnRef;
@@ -104,10 +122,10 @@ function findHeaderRowAndRoles(rows: ReadonlyArray<import("../../../schedule-man
       }
     }
 
-    if (totalColIdx !== -1) {
+    if (totalColLetter !== undefined) {
       return {
         headerRowNumber: row.rowNumber,
-        totalColIdx,
+        totalColLetter,
         quantityColLetter,
         unitPriceColLetter,
       };

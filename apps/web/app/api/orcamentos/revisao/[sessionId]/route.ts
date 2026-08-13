@@ -13,6 +13,7 @@ import {
   reconcileGroupRow,
   reconcileServiceItemRow,
   calculateOfficialBudgetTotalText,
+  enrichSessionCalculationRules,
   BudgetLineKind,
 } from "@bba/bdos-core/services/budget-official-review";
 import type { BudgetReviewServiceResult, ConsolidateBudgetReviewSessionServiceResult } from "@bba/bdos-core/services/budget-official-review";
@@ -57,9 +58,33 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const session = await repository.loadSession(organizationId, params.sessionId);
-  if (session === null) {
+  const rawSession = await repository.loadSession(organizationId, params.sessionId);
+  if (rawSession === null) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const serviceRoleClient = getSupabaseServiceRoleClient();
+
+  const { data: docVersionData } = await readClient
+    .from("document_versions")
+    .select("original_file_name, storage_reference")
+    .eq("id", rawSession.documentVersionId)
+    .maybeSingle();
+
+  let session = rawSession;
+  if (docVersionData?.storage_reference) {
+    try {
+      const { data: fileBlob } = await serviceRoleClient.storage
+        .from("bdos-imports")
+        .download(docVersionData.storage_reference);
+
+      if (fileBlob) {
+        const xlsxBytes = new Uint8Array(await fileBlob.arrayBuffer());
+        session = enrichSessionCalculationRules(rawSession, xlsxBytes);
+      }
+    } catch (e) {
+      console.warn("[orcamentos/revisao] Error downloading XLSX for calculation rule enrichment:", e);
+    }
   }
 
   const reconciliation = {
@@ -72,7 +97,6 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
     readiness: budgetReviewConsolidationReadiness(session),
   };
 
-  const serviceRoleClient = getSupabaseServiceRoleClient();
   const procurementCaseRepo = createProcurementCaseRepository(serviceRoleClient);
   const procurementCase = await procurementCaseRepo.findProcurementCaseById(organizationId, session.procurementCaseId);
   const procurementLot = session.procurementLotId
@@ -83,12 +107,6 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
     .from("companies")
     .select("name")
     .eq("id", organizationId)
-    .maybeSingle();
-
-  const { data: docVersionData } = await readClient
-    .from("document_versions")
-    .select("original_file_name")
-    .eq("id", session.documentVersionId)
     .maybeSingle();
 
   const contextDto = {

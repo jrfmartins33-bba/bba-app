@@ -663,6 +663,41 @@ runTest("[SYNTHETIC FIXTURE] Prova de não-hardcode: ROUND vs TRUNCAR na mesma q
   assertEqual(recTrunc.derivedTotalCents, 63682, "TRUNC derivado deve ser 63682 centavos");
 });
 
+runTest("[FORMULA NO-FALLBACK] Sem fórmula (no_formula) em linha XLSX -> source_calculation_unverified (sem inventar ROUND ou TRUNC)", () => {
+  const session = freshSession();
+  const imported = importBudgetReviewRows({
+    session,
+    actor: "sistema",
+    occurredAt: "2026-08-10T00:00:01.000Z",
+    rows: serviceItemsUnderRootGroup([
+      {
+        id: "item-no-formula",
+        position: 0,
+        calculationRule: { kind: "no_formula" },
+        evidenceText: "mechanism=xlsx_structured_import|version=1|sheet=S1|row=1",
+        fields: fields({ quantityText: "10.00", unitPriceWithBdiText: "10.00", totalPriceText: "100.00" }),
+        page: 1,
+      },
+    ]),
+  });
+  assertReviewSuccess(imported);
+
+  const row = imported.session.rows.find((r) => r.id === "item-no-formula")!;
+  const rec = reconcileServiceItemRow(row);
+  assertEqual(rec.status, "source_calculation_unverified", "no_formula em linha XLSX deve retornar source_calculation_unverified sem inventar cálculo silencioso");
+  assertEqual(rec.derivedTotalCents, null, "derivedTotalCents deve ser null quando a fórmula não foi verificada");
+});
+
+runTest("[SHEET NAME INDEPENDENCE] Nome da aba ('ORÇAMENTO' vs 'PLANILHA XYZ') não afeta regra matemática", () => {
+  // Aba 'ORÇAMENTO' com fórmula ROUND -> round_product
+  const ruleOrcamentoRound = detectCalculationRule("ROUND(H10*K10, 2)");
+  assertEqual(ruleOrcamentoRound.kind, "round_product", "fórmula ROUND na aba ORÇAMENTO deve ser round_product");
+
+  // Aba 'PLANILHA XYZ' com fórmula TRUNC -> truncate_product
+  const rulePlanilhaTrunc = detectCalculationRule("TRUNC(H10*K10, 2)");
+  assertEqual(rulePlanilhaTrunc.kind, "truncate_product", "fórmula TRUNC na aba PLANILHA XYZ deve ser truncate_product");
+});
+
 // ---------------------------------------------------------------------------
 // 8. Consolidação bloqueada com pendências / consolidação válida
 // ---------------------------------------------------------------------------

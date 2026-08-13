@@ -297,7 +297,7 @@ function parseSheetRowsRaw(
   for (const match of sharedMatches) {
     const si = match[1]!;
     const text = decodeXmlEntities(match[2] ?? "").trim();
-    if (text.length > 0) {
+    if (text.length > 0 && !text.includes("<") && !text.includes(">")) {
       sharedFormulas.set(si, text);
     }
   }
