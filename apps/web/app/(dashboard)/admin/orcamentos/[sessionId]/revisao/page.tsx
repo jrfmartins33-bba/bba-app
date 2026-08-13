@@ -140,7 +140,15 @@ function StateBadge({ state }: { state: ReviewRow["state"] }) {
   );
 }
 
-function ReconciliationBadge({ item, decision }: { item: ReconciliationItem | undefined; decision: ReconciliationDecision | null }) {
+function ReconciliationBadge({
+  item,
+  decision,
+  onOpenDivergenceDecision,
+}: {
+  item: ReconciliationItem | undefined;
+  decision: ReconciliationDecision | null;
+  onOpenDivergenceDecision?: () => void;
+}) {
   if (!item || item.status === "insufficient_data" || item.status === "not_applicable") {
     return null;
   }
@@ -175,7 +183,8 @@ function ReconciliationBadge({ item, decision }: { item: ReconciliationItem | un
 
     return (
       <span
-        title="Diferença entre o total derivado e o valor publicado no documento oficial."
+        title="Diferença entre o total derivado e o valor publicado no documento oficial. Clique para decidir."
+        onClick={onOpenDivergenceDecision}
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -188,6 +197,7 @@ function ReconciliationBadge({ item, decision }: { item: ReconciliationItem | un
           border: "1px solid rgba(245, 158, 11, 0.4)",
           color: "#fbbf24",
           whiteSpace: "nowrap",
+          cursor: onOpenDivergenceDecision ? "pointer" : "default",
         }}
       >
         {label}
@@ -214,9 +224,20 @@ interface ReviewContext {
   readonly officialBudgetTotalText: string;
 }
 
+export type DialogType =
+  | "bulkConfirm"
+  | "singleConfirm"
+  | "divergenceDecision"
+  | "singleCorrectRow"
+  | "singleAcceptDivergence"
+  | "bulkAcceptDivergences"
+  | "exclude"
+  | "restore"
+  | "consolidate";
+
 interface DialogState {
   readonly isOpen: boolean;
-  readonly type: "bulkConfirm" | "singleConfirm" | "bulkAcceptDivergences" | "singleAcceptDivergence" | "exclude" | "restore" | "consolidate";
+  readonly type: DialogType;
   readonly targetRowId?: string;
   readonly title: string;
   readonly description: string;
@@ -426,15 +447,19 @@ export default function OrcamentoRevisaoPage() {
     }
   }
 
-  // Dialog Trigger Handlers
   function openConfirmRowDialog(rowId: string) {
+    const row = session?.rows.find((r) => r.id === rowId);
+    const rec = reconciliationByRowId.get(rowId);
+    if (rec?.status === "diverges" && row?.reconciliationDecision === null) {
+      openDivergenceDecisionDialog(rowId);
+      return;
+    }
     setDialog({
       isOpen: true,
       type: "singleConfirm",
       targetRowId: rowId,
       title: "Confirmar revisão do item",
       description: "Confirma que os valores revisados do item correspondem ao documento oficial?",
-      confirmLabel: "Confirmar item",
     });
   }
 
@@ -449,13 +474,33 @@ export default function OrcamentoRevisaoPage() {
     });
   }
 
+  function openDivergenceDecisionDialog(rowId: string) {
+    setDialog({
+      isOpen: true,
+      type: "divergenceDecision",
+      targetRowId: rowId,
+      title: "Diferença documental",
+      description: "Escolha como deseja tratar esta diferença.",
+    });
+  }
+
+  function openCorrectRowDialog(rowId: string) {
+    setDialog({
+      isOpen: true,
+      type: "singleCorrectRow",
+      targetRowId: rowId,
+      title: "Corrigir valor da linha",
+      description: "Corrigir valores revisados do item.",
+    });
+  }
+
   function openAcceptDivergenceDialog(rowId: string) {
     setDialog({
       isOpen: true,
       type: "singleAcceptDivergence",
       targetRowId: rowId,
-      title: "Aceitar diferença documental",
-      description: "Os valores foram conferidos na fonte oficial e a diferença será aceita como documentada. Informe a justificativa técnica para auditoria:",
+      title: "Aceitar valor publicado",
+      description: "Você está confirmando que o valor publicado no documento oficial deve ser mantido mesmo com esta diferença de cálculo.",
       requireJustification: true,
       justificationPlaceholder: "Ex.: Valor publicado na fonte original apresenta diferença de arredondamento em relação ao cálculo derivado.",
       confirmLabel: "Aceitar valor publicado",
@@ -467,7 +512,7 @@ export default function OrcamentoRevisaoPage() {
     setDialog({
       isOpen: true,
       type: "bulkAcceptDivergences",
-      title: `Aceitar ${divergentSelectedCount} diferença(s) documentais em lote`,
+      title: `Accept ${divergentSelectedCount} diferença(s) documentais em lote`,
       description: `${divergentSelectedCount} item(ns) com diferença documental serão aceitos exatamente como publicados. Informe a justificativa técnica para auditoria:`,
       requireJustification: true,
       justificationPlaceholder: "Ex.: Diferenças documentais conferidas na planilha oficial publicada.",
@@ -508,6 +553,29 @@ export default function OrcamentoRevisaoPage() {
       description: "Esta ação finalizará a sessão de revisão e gerará a versão oficial consolidada do orçamento. A ação é irreversível.",
       confirmLabel: "Consolidar Orçamento",
     });
+  }
+
+  async function handleDialogCorrect(fields: Record<string, string | null>, justification: string) {
+    if (dialog.targetRowId) {
+      await callAction(
+        { action: "correct", rowId: dialog.targetRowId, fields, justification },
+        "✓ Valor corrigido e registrado na revisão.",
+      );
+    }
+  }
+
+  function handleReviewIndividually() {
+    setDialog((prev) => ({ ...prev, isOpen: false }));
+    setFilterState("divergent");
+    setSelected(new Set());
+    setPage(0);
+    const firstDivergent = session?.rows.find((r) => {
+      const rec = reconciliationByRowId.get(r.id);
+      return r.reconciliationDecision === null && rec?.status === "diverges";
+    });
+    if (firstDivergent) {
+      setExpandedRowId(firstDivergent.id);
+    }
   }
 
   async function handleDialogConfirm(justification?: string) {
@@ -880,7 +948,11 @@ export default function OrcamentoRevisaoPage() {
                       <td style={{ padding: "0.5rem" }}>
                         <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
                           <StateBadge state={row.state} />
-                          <ReconciliationBadge item={rec} decision={row.reconciliationDecision} />
+                          <ReconciliationBadge
+                            item={rec}
+                            decision={row.reconciliationDecision}
+                            onOpenDivergenceDecision={() => openDivergenceDecisionDialog(row.id)}
+                          />
                         </div>
                       </td>
                       <td style={{ padding: "0.5rem" }}>{row.lotReference}</td>
@@ -909,6 +981,7 @@ export default function OrcamentoRevisaoPage() {
                             onExclude={() => openExcludeDialog(row.id)}
                             onRestore={() => openRestoreDialog(row.id)}
                             onAcceptDivergence={() => openAcceptDivergenceDialog(row.id)}
+                            onCorrectRow={() => openCorrectRowDialog(row.id)}
                             busy={busy}
                             sessionInProgress={session.status === "InProgress"}
                           />
@@ -954,15 +1027,17 @@ export default function OrcamentoRevisaoPage() {
       {/* Action Dialog Modal (Replaces browser alert/confirm/prompt) */}
       <ReviewActionDialog
         isOpen={dialog.isOpen}
-        title={dialog.title}
-        description={dialog.description}
-        confirmLabel={dialog.confirmLabel}
-        requireJustification={dialog.requireJustification}
-        justificationPlaceholder={dialog.justificationPlaceholder}
-        isDestructive={dialog.isDestructive}
+        dialogState={dialog}
+        row={session?.rows.find((r) => r.id === dialog.targetRowId) ?? null}
+        reconciliationItem={dialog.targetRowId ? reconciliationByRowId.get(dialog.targetRowId) : null}
+        divergentSelectedCount={divergentSelectedCount}
         busy={busy}
         onClose={() => setDialog((prev) => ({ ...prev, isOpen: false }))}
         onConfirm={handleDialogConfirm}
+        onCorrect={handleDialogCorrect}
+        onOpenAcceptDivergence={openAcceptDivergenceDialog}
+        onOpenCorrectRow={openCorrectRowDialog}
+        onReviewIndividually={handleReviewIndividually}
       />
     </div>
   );
@@ -984,6 +1059,7 @@ function RowDetail({
   onExclude,
   onRestore,
   onAcceptDivergence,
+  onCorrectRow,
   busy,
   sessionInProgress,
 }: {
@@ -993,6 +1069,7 @@ function RowDetail({
   onExclude: () => void;
   onRestore: () => void;
   onAcceptDivergence: () => void;
+  onCorrectRow: () => void;
   busy: boolean;
   sessionInProgress: boolean;
 }) {
@@ -1055,7 +1132,7 @@ function RowDetail({
       {row.page && <p style={{ fontSize: "0.85rem" }}>Página fonte: {row.page}</p>}
 
       {sessionInProgress && (
-        <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem", flexWrap: "wrap" }}>
           {row.state === "Pendente" && (
             <Button disabled={busy} onClick={onConfirm}>Confirmar item</Button>
           )}
@@ -1066,7 +1143,10 @@ function RowDetail({
             <Button disabled={busy} onClick={onRestore}>Restaurar item</Button>
           )}
           {hasUnresolvedDivergence && (
-            <Button disabled={busy} onClick={onAcceptDivergence}>Aceitar valor publicado</Button>
+            <>
+              <Button variant="secondary" disabled={busy} onClick={onCorrectRow}>✏️ Corrigir valor</Button>
+              <Button disabled={busy} onClick={onAcceptDivergence}>✓ Aceitar valor publicado</Button>
+            </>
           )}
         </div>
       )}
