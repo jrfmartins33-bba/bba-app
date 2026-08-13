@@ -18,7 +18,8 @@
 
 import type { ExcelCellRaw, ExcelSheetRaw, ExcelWorkbookRaw } from "../../../schedule-management/adapters/excel-import/xlsx-reader.types";
 import { BudgetLineKind } from "../../../budget-version";
-import type { BudgetReviewRowKind, ImportBudgetReviewRowInput } from "../../budget-official-review.types";
+import type { BudgetReviewRowKind, BudgetSourceCalculationRule, ImportBudgetReviewRowInput } from "../../budget-official-review.types";
+import { detectCalculationRule } from "../../budget-official-review-economic-value";
 import { BUDGET_XLSX_IMPORTER_VERSION } from "./budget-xlsx-importer.types";
 import type {
   BudgetColumnRole,
@@ -668,6 +669,20 @@ function buildInputRow(
   const lastCol = row.cells[row.cells.length - 1]?.columnRef ?? "A";
   const sha12 = context.sourceSha256.slice(0, 12);
 
+  const totalCell = getCell("total");
+  const quantityCell = getCell("quantity");
+  const unitPriceCell = getCell("unitPriceWithBdi");
+
+  let calculationRule: BudgetSourceCalculationRule | null = null;
+  if (!isGroupOrSubgroup && totalCell?.formula) {
+    calculationRule = detectCalculationRule(totalCell.formula, {
+      quantityColLetter: quantityCell?.columnRef,
+      unitPriceColLetter: unitPriceCell?.columnRef,
+    });
+  }
+
+  const calcSuffix = calculationRule ? `|calc=${JSON.stringify(calculationRule)}` : "";
+
   return {
     id: row.rowId,
     kind: row.kind,
@@ -675,10 +690,11 @@ function buildInputRow(
     parentRowId: row.resolvedParentRowId ?? null,
     position: row.position,
     page: null,
+    calculationRule,
     evidenceText:
       `mechanism=xlsx_structured_import|version=${BUDGET_XLSX_IMPORTER_VERSION}` +
       `|sha256=${sha12}|sheet=${sheetName}` +
-      `|row=${row.rowNumber}|cols=${firstCol}${row.rowNumber}:${lastCol}${row.rowNumber}`,
+      `|row=${row.rowNumber}|cols=${firstCol}${row.rowNumber}:${lastCol}${row.rowNumber}${calcSuffix}`,
     fields: {
       itemCode: row.itemCode,
       description: cellToText(getCell("description")),

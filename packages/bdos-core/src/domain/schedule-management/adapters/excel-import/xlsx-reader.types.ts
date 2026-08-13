@@ -40,6 +40,12 @@ export interface ExcelCellRaw {
   readonly rawString: string | null;
   /** Column letter(s) for this cell, e.g. "A", "B", "AB". */
   readonly columnRef: string;
+  /**
+   * Raw text of the `<f>` XML element for cells with a formula (un-evaluated).
+   * Shared formulas (`<f t="shared" si="...">`) are resolved to their master expression.
+   * `null` for cells without a formula.
+   */
+  readonly formula?: string | null;
 }
 
 export interface ExcelSheetRowRaw {

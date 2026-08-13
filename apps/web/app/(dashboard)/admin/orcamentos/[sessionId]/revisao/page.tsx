@@ -179,11 +179,11 @@ function ReconciliationBadge({
   if (item.status === "diverges") {
     const diffAbs = Math.abs(item.differenceCents ?? 0);
     const formattedDiff = formatBudgetMoneyPtBr(diffAbs / 100);
-    const label = diffAbs === 1 ? "Diferença de arredondamento · R$ 0,01" : `Diferença documental · R$ ${formattedDiff}`;
+    const label = `Diferença documental · R$ ${formattedDiff}`;
 
     return (
       <span
-        title="Diferença entre o total derivado e o valor publicado no documento oficial. Clique para decidir."
+        title="Diferença entre o total derivado da fórmula oficial e o valor publicado no documento. Clique para decidir."
         onClick={onOpenDivergenceDecision}
         style={{
           display: "inline-flex",
@@ -205,7 +205,7 @@ function ReconciliationBadge({
     );
   }
 
-  if (item.status === "matches") {
+  if (item.status === "matches" || item.status === "source_calculation_unverified") {
     return null;
   }
 

@@ -134,6 +134,7 @@ export interface BudgetReviewRow {
   readonly revised: BudgetReviewRowFields;
   readonly page: number | null;
   readonly evidenceText: string | null;
+  readonly calculationRule?: BudgetSourceCalculationRule | null;
   readonly justification: string | null;
   readonly insertedManually: boolean;
   readonly reconciliationDecision: ReconciliationDecision | null;
@@ -249,6 +250,7 @@ export interface ImportBudgetReviewRowInput {
   readonly fields: BudgetReviewRowFields;
   readonly page: number | null;
   readonly evidenceText?: string | null;
+  readonly calculationRule?: BudgetSourceCalculationRule | null;
 }
 
 export interface ImportBudgetReviewRowsInput {
@@ -401,7 +403,41 @@ export type BudgetReviewResult = BudgetReviewSuccess | BudgetReviewFailure;
 // Reconciliação (determinística, sem LLM — enunciado §36)
 // ---------------------------------------------------------------------------
 
-export type BudgetReviewReconciliationStatus = "matches" | "diverges" | "insufficient_data" | "not_applicable";
+export type BudgetSourceCalculationRule =
+  | {
+      readonly kind: "truncate_product";
+      readonly quantityRole: "quantity";
+      readonly unitPriceRole: "unitPriceWithBdi";
+      readonly decimalPlaces: 2;
+      readonly sourceFormula: string | null;
+    }
+  | {
+      readonly kind: "round_product";
+      readonly quantityRole: "quantity";
+      readonly unitPriceRole: "unitPriceWithBdi";
+      readonly decimalPlaces: 2;
+      readonly sourceFormula: string | null;
+    }
+  | {
+      readonly kind: "direct_product";
+      readonly quantityRole: "quantity";
+      readonly unitPriceRole: "unitPriceWithBdi";
+      readonly sourceFormula: string | null;
+    }
+  | {
+      readonly kind: "unrecognized_formula";
+      readonly sourceFormula: string;
+    }
+  | {
+      readonly kind: "no_formula";
+    };
+
+export type BudgetReviewReconciliationStatus =
+  | "matches"
+  | "diverges"
+  | "insufficient_data"
+  | "not_applicable"
+  | "source_calculation_unverified";
 
 export interface BudgetReviewServiceItemReconciliation {
   readonly rowId: BudgetReviewRowId;

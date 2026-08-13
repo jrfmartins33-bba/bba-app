@@ -292,6 +292,16 @@ function parseSheetRowsRaw(
   sheetXml: string,
   sharedStrings: ReadonlyArray<string>,
 ): ReadonlyArray<ExcelSheetRowRaw> {
+  const sharedFormulas = new Map<string, string>();
+  const sharedMatches = sheetXml.matchAll(/<f\s[^>]*si="(\d+)"[^>]*>([\s\S]*?)<\/f>/g);
+  for (const match of sharedMatches) {
+    const si = match[1]!;
+    const text = decodeXmlEntities(match[2] ?? "").trim();
+    if (text.length > 0) {
+      sharedFormulas.set(si, text);
+    }
+  }
+
   const rowBlocks = sheetXml.match(/<row[^>]*\/>|<row[^>]*>[\s\S]*?<\/row>/g) ?? [];
 
   return rowBlocks.map((rowBlock) => {
@@ -311,7 +321,7 @@ function parseSheetRowsRaw(
       const columnIndex = columnLettersToIndex(colLetters);
       maxColumn = Math.max(maxColumn, columnIndex);
       colRefs.set(columnIndex, colLetters);
-      sparse.set(columnIndex, readCellRaw(cellBlock, sharedStrings, colLetters));
+      sparse.set(columnIndex, readCellRaw(cellBlock, sharedStrings, colLetters, sharedFormulas));
     });
 
     const cells: ExcelCellRaw[] = [];
@@ -321,6 +331,7 @@ function parseSheetRowsRaw(
           value: null,
           rawString: null,
           columnRef: colRefs.get(column) ?? indexToColumnLetters(column),
+          formula: null,
         },
       );
     }
@@ -333,32 +344,48 @@ function readCellRaw(
   cellBlock: string,
   sharedStrings: ReadonlyArray<string>,
   columnRef: string,
+  sharedFormulas: ReadonlyMap<string, string>,
 ): ExcelCellRaw {
+  let formula: string | null = null;
+  const fMatch = /<f(?:\s[^>]*)?>([\s\S]*?)<\/f>|<f\s([^>]*)\/>/.exec(cellBlock);
+  if (fMatch !== null) {
+    const inlineText = decodeXmlEntities(fMatch[1] ?? "").trim();
+    if (inlineText.length > 0) {
+      formula = inlineText;
+    } else {
+      const attrStr = fMatch[2] ?? fMatch[0];
+      const si = /si="(\d+)"/.exec(attrStr)?.[1];
+      if (si !== undefined && sharedFormulas.has(si)) {
+        formula = sharedFormulas.get(si)!;
+      }
+    }
+  }
+
   const type = /\st="([^"]+)"/.exec(cellBlock)?.[1] ?? null;
   const inlineMatch = /<is>[\s\S]*?<t[^>]*>([\s\S]*?)<\/t>[\s\S]*?<\/is>/.exec(cellBlock);
 
   if (inlineMatch !== null) {
-    return { value: decodeXmlEntities(inlineMatch[1] ?? ""), rawString: null, columnRef };
+    return { value: decodeXmlEntities(inlineMatch[1] ?? ""), rawString: null, columnRef, formula };
   }
 
   const valueMatch = /<v>([\s\S]*?)<\/v>/.exec(cellBlock);
   if (valueMatch === null) {
-    return { value: null, rawString: null, columnRef };
+    return { value: null, rawString: null, columnRef, formula };
   }
 
   const raw = valueMatch[1] ?? "";
 
   if (type === "s") {
     const index = Number(raw);
-    return { value: sharedStrings[index] ?? null, rawString: null, columnRef };
+    return { value: sharedStrings[index] ?? null, rawString: null, columnRef, formula };
   }
 
   if (type === "str" || type === "e") {
-    return { value: decodeXmlEntities(raw), rawString: null, columnRef };
+    return { value: decodeXmlEntities(raw), rawString: null, columnRef, formula };
   }
 
   if (type === "b") {
-    return { value: raw === "1" ? 1 : 0, rawString: null, columnRef };
+    return { value: raw === "1" ? 1 : 0, rawString: null, columnRef, formula };
   }
 
   // Numeric cell (type absent or type === "n"): preserve rawString for exact decimal access.
@@ -368,6 +395,7 @@ function readCellRaw(
     value,
     rawString: Number.isNaN(numeric) ? null : raw,
     columnRef,
+    formula,
   };
 }
 

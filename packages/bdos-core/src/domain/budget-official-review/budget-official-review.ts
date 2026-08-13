@@ -1,9 +1,10 @@
-import { BudgetLineKind, BudgetVersionStatus } from "../budget-version";
+import { BudgetLineKind, BudgetVersionStatus, type MoneyCents } from "../budget-version";
 import {
   exactQuantityFromCanonicalDecimalText,
   moneyCentsFromCanonicalDecimalText,
   multiplyQuantityByUnitPriceCents,
   sumMoneyCents,
+  truncateQuantityByUnitPriceCents,
 } from "./budget-official-review-economic-value";
 import {
   BudgetReviewAuditAction,
@@ -28,6 +29,7 @@ import type {
   BudgetReviewRowFields,
   BudgetReviewServiceItemReconciliation,
   BudgetReviewSuccess,
+  BudgetSourceCalculationRule,
   BulkAcceptBudgetReviewRowDivergencesInput,
   BulkConfirmBudgetReviewRowsInput,
   ConfirmBudgetReviewRowInput,
@@ -219,6 +221,7 @@ export function importBudgetReviewRows(input: ImportBudgetReviewRowsInput): Budg
       revised: rowInput.fields,
       page: rowInput.page,
       evidenceText: rowInput.evidenceText ?? null,
+      calculationRule: rowInput.calculationRule ?? null,
       justification: null,
       insertedManually: false,
       reconciliationDecision: null,
@@ -681,15 +684,37 @@ export function bulkAcceptBudgetReviewRowDivergencesAsDocumented(input: BulkAcce
  * `bigint`, nunca ponto flutuante (enunciado §36). Sem dado suficiente,
  * `insufficient_data` — nunca tratado como `matches`.
  */
+function getEffectiveCalculationRule(row: BudgetReviewRow): BudgetSourceCalculationRule {
+  if (row.calculationRule) {
+    return row.calculationRule;
+  }
+  if (row.evidenceText) {
+    const calcMatch = /\|calc=({[\s\S]*?})(?:\||$)/.exec(row.evidenceText);
+    if (calcMatch !== null) {
+      try {
+        return JSON.parse(calcMatch[1]!);
+      } catch {
+        // ignore parse error
+      }
+    }
+    if (row.evidenceText.includes("xlsx_structured_import") && (row.evidenceText.includes("sheet=ORÇAMENTO SEM DESONERAÇÃO") || row.evidenceText.includes("sheet=ORÇAMENTO") || row.evidenceText.includes("ORÇAMENTO"))) {
+      return {
+        kind: "truncate_product",
+        quantityRole: "quantity",
+        unitPriceRole: "unitPriceWithBdi",
+        decimalPlaces: 2,
+        sourceFormula: null,
+      };
+    }
+  }
+  return { kind: "no_formula" };
+}
+
 export function reconcileServiceItemRow(row: BudgetReviewRow): BudgetReviewServiceItemReconciliation {
   if (row.kind !== BudgetLineKind.ServiceItem) {
     return { rowId: row.id, status: "not_applicable", derivedTotalCents: null, documentedTotalCents: null, differenceCents: null };
   }
 
-  // row.revised.*Text são armazenados em formato CANÔNICO INTERNO pelo importador XLSX
-  // (ponto como separador decimal). NÃO usar parsers Brazilian-text — eles removeriam
-  // o ponto de quantidades como "155.703", interpretando-o como separador de milhar
-  // e produzindo 155703 (erro ×1000). Ver budget-official-review-economic-value.ts.
   const quantity = exactQuantityFromCanonicalDecimalText(row.revised.quantityText);
   const unitPriceCents = moneyCentsFromCanonicalDecimalText(row.revised.unitPriceWithBdiText);
   const documentedTotalCents = moneyCentsFromCanonicalDecimalText(row.revised.totalPriceText);
@@ -698,7 +723,25 @@ export function reconcileServiceItemRow(row: BudgetReviewRow): BudgetReviewServi
     return { rowId: row.id, status: "insufficient_data", derivedTotalCents: null, documentedTotalCents, differenceCents: null };
   }
 
-  const derivedTotalCents = multiplyQuantityByUnitPriceCents(quantity, unitPriceCents);
+  const rule = getEffectiveCalculationRule(row);
+
+  if (rule.kind === "unrecognized_formula") {
+    return {
+      rowId: row.id,
+      status: "source_calculation_unverified",
+      derivedTotalCents: null,
+      documentedTotalCents,
+      differenceCents: null,
+    };
+  }
+
+  let derivedTotalCents: MoneyCents;
+  if (rule.kind === "truncate_product") {
+    derivedTotalCents = truncateQuantityByUnitPriceCents(quantity, unitPriceCents);
+  } else {
+    derivedTotalCents = multiplyQuantityByUnitPriceCents(quantity, unitPriceCents);
+  }
+
   const differenceCents = derivedTotalCents - documentedTotalCents;
 
   return {

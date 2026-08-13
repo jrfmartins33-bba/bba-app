@@ -88,6 +88,97 @@ export function multiplyQuantityByUnitPriceCents(quantity: ExactQuantity, unitPr
 }
 
 /**
+ * Multiplicação exata quantidade × preço unitário (centavos), TRUNCANDO o resultado
+ * para 2 casas decimais (centavos inteiros) — como determinado pela fórmula oficial
+ * da planilha Excel (`TRUNCAR((Qtd*Preco); 2)` / `TRUNC((Qtd*Preco), 2)`).
+ * Aritmética puramente exata via `bigint` (divisão inteira truncada), zero ponto flutuante.
+ */
+export function truncateQuantityByUnitPriceCents(quantity: ExactQuantity, unitPriceCents: MoneyCents): MoneyCents {
+  const numerator = quantity.scaledValue * BigInt(unitPriceCents);
+  const denominator = 10n ** BigInt(quantity.scale);
+  const truncated = numerator / denominator;
+
+  if (truncated > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new RangeError(`Derived total ${truncated.toString()} exceeds the safe integer range.`);
+  }
+
+  return Number(truncated);
+}
+
+/**
+ * Detector determinístico de fórmula de cálculo do XLSX oficial (Sprint 21.5C.3).
+ * Identifica semanticamente se a célula de total de um item de serviço utiliza
+ * TRUNCAR, ARRED ou produto direto de dois operandos (quantidade e preço unitário com BDI),
+ * sem hardcode de colunas nem dependência de localização de idioma do Excel (suporta
+ * tanto nomes de funções em inglês "TRUNC", "ROUND", "IFERROR", "IF" quanto em português
+ * "TRUNCAR", "ARRED", "SEERRO", "SE").
+ */
+export function detectCalculationRule(
+  formula: string | null,
+  options?: {
+    readonly quantityColLetter?: string;
+    readonly unitPriceColLetter?: string;
+  },
+): import("./budget-official-review.types").BudgetSourceCalculationRule {
+  if (formula === null) {
+    return { kind: "no_formula" };
+  }
+
+  const trimmed = formula.trim();
+  if (trimmed.length === 0) {
+    return { kind: "no_formula" };
+  }
+
+  const upper = trimmed.toUpperCase();
+
+  const hasTrunc = upper.includes("TRUNC");
+  const hasRound = upper.includes("ROUND") || upper.includes("ARRED");
+  const hasTwoDecimals = upper.includes(",2") || upper.includes(", 2") || upper.includes(";2") || upper.includes("; 2");
+  const hasProduct = upper.includes("*");
+
+  if (options?.quantityColLetter && options?.unitPriceColLetter) {
+    const qCol = options.quantityColLetter.toUpperCase();
+    const uCol = options.unitPriceColLetter.toUpperCase();
+    const colProductPattern = new RegExp(`(?:${qCol}\\d+.*\\*.*${uCol}\\d+)|(?:${uCol}\\d+.*\\*.*${qCol}\\d+)`, "i");
+    if (!colProductPattern.test(upper)) {
+      return { kind: "unrecognized_formula", sourceFormula: trimmed };
+    }
+  }
+
+  if (hasTrunc && hasProduct && hasTwoDecimals) {
+    return {
+      kind: "truncate_product",
+      quantityRole: "quantity",
+      unitPriceRole: "unitPriceWithBdi",
+      decimalPlaces: 2,
+      sourceFormula: trimmed,
+    };
+  }
+
+  if (hasRound && hasProduct && hasTwoDecimals) {
+    return {
+      kind: "round_product",
+      quantityRole: "quantity",
+      unitPriceRole: "unitPriceWithBdi",
+      decimalPlaces: 2,
+      sourceFormula: trimmed,
+    };
+  }
+
+  const isDirectProduct = /^[+=]?\(?[A-Z]+\d+\s*\*\s*[A-Z]+\d+\)?$/i.test(upper);
+  if (isDirectProduct) {
+    return {
+      kind: "direct_product",
+      quantityRole: "quantity",
+      unitPriceRole: "unitPriceWithBdi",
+      sourceFormula: trimmed,
+    };
+  }
+
+  return { kind: "unrecognized_formula", sourceFormula: trimmed };
+}
+
+/**
  * Parseia texto decimal no formato CANÔNICO INTERNO — ponto como separador
  * decimal, nunca como separador de milhar. Este é o formato armazenado pelo
  * importador XLSX em todos os campos `...Text` de `BudgetReviewRowFields`

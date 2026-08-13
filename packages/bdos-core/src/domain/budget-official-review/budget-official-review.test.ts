@@ -26,7 +26,12 @@ import {
   type BudgetReviewRowFields,
   type BudgetReviewSession,
 } from "./index";
-import { exactQuantityFromCanonicalDecimalText } from "./budget-official-review-economic-value";
+import {
+  detectCalculationRule,
+  exactQuantityFromCanonicalDecimalText,
+  moneyCentsFromCanonicalDecimalText,
+  truncateQuantityByUnitPriceCents,
+} from "./budget-official-review-economic-value";
 
 const organizationId = "organization-bba-alagoas";
 
@@ -97,7 +102,14 @@ const fields = (overrides: Partial<BudgetReviewRowFields> = {}): BudgetReviewRow
 
 /** A Item de Serviço always requires a Grupo/Subgrupo parent (mirrors budget-version's own rule) — this helper prepends a root Grupo for tests that only care about a bare Item de Serviço. */
 function serviceItemsUnderRootGroup(
-  items: ReadonlyArray<{ id: string; position: number; fields: BudgetReviewRowFields; page: number; evidenceText?: string }>,
+  items: ReadonlyArray<{
+    id: string;
+    position: number;
+    fields: BudgetReviewRowFields;
+    page: number;
+    evidenceText?: string;
+    calculationRule?: import("./budget-official-review.types").BudgetSourceCalculationRule | null;
+  }>,
 ) {
   return [
     { id: "root-group", kind: BudgetLineKind.Group, lotReference: "Lote 01", parentRowId: null, position: 0, fields: fields(), page: 16 },
@@ -110,6 +122,7 @@ function serviceItemsUnderRootGroup(
       fields: item.fields,
       page: item.page,
       evidenceText: item.evidenceText,
+      calculationRule: item.calculationRule,
     })),
   ];
 }
@@ -518,47 +531,94 @@ runTest("[REGRESSION] 03.02.10 — 271.575 × 0.63 NÃO deve produzir divergênc
   assertEqual(rec.status !== "not_applicable" && rec.status !== "insufficient_data", true, "item deve ser reconciliado");
 });
 
-runTest("[REGRESSION] exactQuantityFromCanonicalDecimalText — contrato de escala", () => {
-  const parse = exactQuantityFromCanonicalDecimalText;
+runTest("[FORMULA RULE] detectCalculationRule — detector determinístico de fórmulas", () => {
+  // 1. TRUNCAR com 2 casas
+  const rule1 = detectCalculationRule("IF(D75=\"\", \"\", IFERROR(TRUNC((H75*K75),2), 9999999999999))");
+  assertEqual(rule1.kind, "truncate_product", "TRUNC com 2 casas deve ser detectado como truncate_product");
 
-  // 3 casas decimais — NÃO deve ser interpretado como milhar
-  const q155703 = parse("155.703")!;
-  assertEqual(q155703.scaledValue, 155703n, "155.703 scaledValue deve ser 155703n");
-  assertEqual(q155703.scale, 3, "155.703 scale deve ser 3");
+  // 2. TRUNCAR em Português
+  const rule2 = detectCalculationRule("SE(D75=\"\"; \"\"; SEERRO(TRUNCAR((H75*K75); 2); 9999999999999))");
+  assertEqual(rule2.kind, "truncate_product", "TRUNCAR em português com 2 casas deve ser detectado como truncate_product");
 
-  const q271575 = parse("271.575")!;
-  assertEqual(q271575.scaledValue, 271575n, "271.575 scaledValue deve ser 271575n");
-  assertEqual(q271575.scale, 3, "271.575 scale deve ser 3");
+  // 3. ROUND / ARRED com 2 casas
+  const rule3 = detectCalculationRule("ROUND((H75*K75), 2)");
+  assertEqual(rule3.kind, "round_product", "ROUND com 2 casas deve ser detectado como round_product");
 
-  // 3 casas decimais, parte inteira = 0
-  const q014 = parse("0.125")!;
-  assertEqual(q014.scaledValue, 125n, "0.125 scaledValue deve ser 125n");
-  assertEqual(q014.scale, 3, "0.125 scale deve ser 3");
+  // 4. Produto direto
+  const rule4 = detectCalculationRule("+H75*K75");
+  assertEqual(rule4.kind, "direct_product", "produto direto deve ser detectado como direct_product");
 
-  // 4 casas decimais
-  const q4dec = parse("23.5365")!;
-  assertEqual(q4dec.scaledValue, 235365n, "23.5365 scaledValue deve ser 235365n");
-  assertEqual(q4dec.scale, 4, "23.5365 scale deve ser 4");
+  // 5. Rejeita operandos se colunas informadas não baterem
+  const rule5 = detectCalculationRule("TRUNC((A75*B75), 2)", { quantityColLetter: "H", unitPriceColLetter: "K" });
+  assertEqual(rule5.kind, "unrecognized_formula", "deve rejeitar operandos de colunas incorretas");
 
-  // Inteiro
-  const q14 = parse("14")!;
-  assertEqual(q14.scaledValue, 14n, "14 scaledValue deve ser 14n");
-  assertEqual(q14.scale, 0, "14 scale deve ser 0");
+  // 6. Fórmula não reconhecida
+  const rule6 = detectCalculationRule("VLOOKUP(A1, B:C, 2, FALSE)");
+  assertEqual(rule6.kind, "unrecognized_formula", "fórmula complexa não reconhecida deve ser unrecognized_formula");
 
-  // 2 casas — não afeta milhar de 5+ dígitos
-  const q6621 = parse("6621.62")!;
-  assertEqual(q6621.scaledValue, 662162n, "6621.62 scaledValue deve ser 662162n");
-  assertEqual(q6621.scale, 2, "6621.62 scale deve ser 2");
+  // 7. Sem fórmula
+  const rule7 = detectCalculationRule(null);
+  assertEqual(rule7.kind, "no_formula", "null deve retornar no_formula");
+});
 
-  // 3 casas, 4 dígitos no inteiro
-  const q1234 = parse("1234.567")!;
-  assertEqual(q1234.scaledValue, 1234567n, "1234.567 scaledValue deve ser 1234567n");
-  assertEqual(q1234.scale, 3, "1234.567 scale deve ser 3");
+runTest("[FORMULA ARITHMETIC] truncateQuantityByUnitPriceCents — cálculo exato via bigint", () => {
+  // Item 03.02.09: 155.703 × 4.09 = 636.82527 → TRUNCAR → 636.82 (63682 centavos)
+  const q030209 = exactQuantityFromCanonicalDecimalText("155.703")!;
+  const p030209 = moneyCentsFromCanonicalDecimalText("4.09")!;
+  const totalTruncated = truncateQuantityByUnitPriceCents(q030209, p030209);
+  assertEqual(totalTruncated, 63682, "155.703 * 4.09 truncado para 2 casas deve ser exatamente 63682 centavos (R$ 636,82)");
 
-  // 4 casas, 4 dígitos no inteiro
-  const q12345678 = parse("1234.5678")!;
-  assertEqual(q12345678.scaledValue, 12345678n, "1234.5678 scaledValue deve ser 12345678n");
-  assertEqual(q12345678.scale, 4, "1234.5678 scale deve ser 4");
+  // Item 03.02.10: 271.575 × 0.63 = 171.09225 → TRUNCAR → 171.09 (17109 centavos)
+  const q030210 = exactQuantityFromCanonicalDecimalText("271.575")!;
+  const p030210 = moneyCentsFromCanonicalDecimalText("0.63")!;
+  const totalTruncated2 = truncateQuantityByUnitPriceCents(q030210, p030210);
+  assertEqual(totalTruncated2, 17109, "271.575 * 0.63 truncado para 2 casas deve ser exatamente 17109 centavos (R$ 171,09)");
+});
+
+runTest("[FORMULA RECONCILIATION] Reconciliação com regra TRUNCAR da fonte", () => {
+  const session = freshSession();
+  const imported = importBudgetReviewRows({
+    session,
+    actor: "sistema",
+    occurredAt: "2026-08-10T00:00:01.000Z",
+    rows: serviceItemsUnderRootGroup([
+      {
+        id: "03-02-09",
+        position: 0,
+        calculationRule: { kind: "truncate_product", quantityRole: "quantity", unitPriceRole: "unitPriceWithBdi", decimalPlaces: 2, sourceFormula: "TRUNC((H75*K75),2)" },
+        fields: fields({ quantityText: "155.703", unitPriceWithBdiText: "4.09", totalPriceText: "636.82" }),
+        page: 50,
+      },
+      {
+        id: "item-real-divergence",
+        position: 1,
+        calculationRule: { kind: "truncate_product", quantityRole: "quantity", unitPriceRole: "unitPriceWithBdi", decimalPlaces: 2, sourceFormula: "TRUNC((H75*K75),2)" },
+        fields: fields({ quantityText: "100.00", unitPriceWithBdiText: "10.00", totalPriceText: "500.00" }), // 100 * 10 = 1000, mas doc = 500
+        page: 50,
+      },
+      {
+        id: "item-unrecognized",
+        position: 2,
+        calculationRule: { kind: "unrecognized_formula", sourceFormula: "CUSTOM_MACRO()" },
+        fields: fields({ quantityText: "100.00", unitPriceWithBdiText: "10.00", totalPriceText: "1000.00" }),
+        page: 50,
+      },
+    ]),
+  });
+  assertReviewSuccess(imported);
+
+  const r030209 = imported.session.rows.find((r) => r.id === "03-02-09")!;
+  const rec030209 = reconcileServiceItemRow(r030209);
+  assertEqual(rec030209.status, "matches", "03.02.09 com regra TRUNCAR deve resultar em MATCHES sem R$ 0,01 residual");
+  assertEqual(rec030209.differenceCents, 0, "diferença em centavos deve ser exatamente zero");
+
+  const rDivergent = imported.session.rows.find((r) => r.id === "item-real-divergence")!;
+  const recDivergent = reconcileServiceItemRow(rDivergent);
+  assertEqual(recDivergent.status, "diverges", "divergência real deve continuar sendo sinalizada como diverges");
+
+  const rUnrecognized = imported.session.rows.find((r) => r.id === "item-unrecognized")!;
+  const recUnrecognized = reconcileServiceItemRow(rUnrecognized);
+  assertEqual(recUnrecognized.status, "source_calculation_unverified", "fórmula não reconhecida deve retornar status source_calculation_unverified, nunca divergência fabricada");
 });
 
 // ---------------------------------------------------------------------------
