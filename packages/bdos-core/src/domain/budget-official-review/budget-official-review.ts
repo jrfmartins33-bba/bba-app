@@ -502,14 +502,6 @@ export function bulkConfirmBudgetReviewRows(input: BulkConfirmBudgetReviewRowsIn
       return;
     }
 
-    if (target.kind === BudgetLineKind.ServiceItem) {
-      const reconciliation = reconcileServiceItemRow(target);
-      if (reconciliation.status === "diverges" && target.reconciliationDecision === null) {
-        errors.push(createError("row_has_active_inconsistency", "rowId", `Row "${rowId}" has an active reconciliation divergence — excluded from bulk confirm.`, metadata));
-        return;
-      }
-    }
-
     targets.push(target);
   });
 
@@ -731,6 +723,19 @@ function rowReconciliationStatus(session: BudgetReviewSession, row: BudgetReview
  * somam como parcela própria — a mesma disciplina de `calculateLineTotal`
  * em `budget-version` (enunciado §37/correção §13).
  */
+function hasPendingDescendantRows(session: BudgetReviewSession, rowId: string): boolean {
+  const children = session.rows.filter((row) => row.parentRowId === rowId && row.state !== BudgetReviewRowState.NotBudgetItem);
+  return children.some((child) => {
+    if (child.state === BudgetReviewRowState.Pending) {
+      return true;
+    }
+    if (child.kind !== BudgetLineKind.ServiceItem) {
+      return hasPendingDescendantRows(session, child.id);
+    }
+    return false;
+  });
+}
+
 export function reconcileGroupRow(session: BudgetReviewSession, rowId: string): BudgetReviewGroupReconciliation {
   const row = session.rows.find((candidate) => candidate.id === rowId);
 
@@ -741,8 +746,8 @@ export function reconcileGroupRow(session: BudgetReviewSession, rowId: string): 
   const documentedTotalCents = moneyCentsFromBrazilianText(row.revised.documentalGroupTotalText);
   const derivedTotalCents = sumMoneyCents(descendantServiceItemTotals(session, rowId));
 
-  if (documentedTotalCents === null) {
-    return { rowId, status: "insufficient_data", derivedTotalCents, documentedTotalCents: null, differenceCents: null };
+  if (documentedTotalCents === null || row.state === BudgetReviewRowState.Pending || hasPendingDescendantRows(session, rowId)) {
+    return { rowId, status: "insufficient_data", derivedTotalCents, documentedTotalCents, differenceCents: null };
   }
 
   const differenceCents = derivedTotalCents - documentedTotalCents;

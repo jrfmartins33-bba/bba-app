@@ -89,4 +89,31 @@ export interface BudgetReviewRepository {
     decision: ReconciliationDecision,
     auditEvent: AuditEventToPersist,
   ): Promise<void>;
+
+  /** Mutação em lote — persiste N mutações de linha em uma única transação/chamada RPC. */
+  bulkMutateRows?(
+    organizationId: string,
+    actor: string,
+    sessionId: string,
+    mutations: ReadonlyArray<{
+      id: string;
+      state: string;
+      revised: unknown;
+      justification: string | null;
+      evidenceText: string | null;
+    }>,
+    occurredAt: string,
+  ): Promise<number>;
+
+  /** Decisões de reconciliação em lote — persiste N decisões em uma única transação/chamada RPC. */
+  bulkRecordReconciliationDecisions?(
+    organizationId: string,
+    actor: string,
+    sessionId: string,
+    decisions: ReadonlyArray<{
+      rowId: string;
+      justification: string;
+    }>,
+    occurredAt: string,
+  ): Promise<number>;
 }

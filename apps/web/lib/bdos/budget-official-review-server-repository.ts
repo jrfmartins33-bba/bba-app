@@ -196,6 +196,47 @@ export function createBudgetReviewServerRepository(
 
       return Number(data.imported ?? 0);
     },
+
+    async bulkMutateRows(organizationId, actor, sessionId, mutations, occurredAt) {
+      const { data, error } = await wClient.rpc("bulk_mutate_budget_review_rows", {
+        p_session_id: sessionId,
+        p_company_id: organizationId,
+        p_mutations: mutations.map((m) => ({
+          id: toValidUuid(m.id),
+          state: m.state,
+          revised: m.revised,
+          justification: m.justification,
+          evidenceText: m.evidenceText,
+        })),
+        p_actor: actor,
+        p_occurred_at: occurredAt,
+      });
+
+      if (error || !data) {
+        throw error ?? new Error("Falha ao salvar as mutações em lote.");
+      }
+
+      return Array.isArray(data) && data.length > 0 ? Number(data[0]?.mutated_count ?? 0) : 0;
+    },
+
+    async bulkRecordReconciliationDecisions(organizationId, actor, sessionId, decisions, occurredAt) {
+      const { data, error } = await wClient.rpc("bulk_record_budget_review_reconciliation_decisions", {
+        p_session_id: sessionId,
+        p_company_id: organizationId,
+        p_decisions: decisions.map((d) => ({
+          rowId: toValidUuid(d.rowId),
+          justification: d.justification,
+        })),
+        p_actor: actor,
+        p_occurred_at: occurredAt,
+      });
+
+      if (error || !data) {
+        throw error ?? new Error("Falha ao salvar as decisões em lote.");
+      }
+
+      return Array.isArray(data) && data.length > 0 ? Number(data[0]?.decided_count ?? 0) : 0;
+    },
   };
 }
 

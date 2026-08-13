@@ -249,18 +249,32 @@ export async function bulkConfirmBudgetReviewRowsService(
   const confirmedRowIds = new Set((bulkEvent.metadata.confirmedRowIds as ReadonlyArray<string> | undefined) ?? []);
 
   try {
-    for (const rowId of confirmedRowIds) {
-      const row = findRow(domainResult.session, rowId)!;
-      const rowAuditEvent: AuditEventToPersist = {
-        id: `${bulkEvent.id}:${rowId}`,
-        action: bulkEvent.action,
-        actor: bulkEvent.actor,
-        occurredAt: bulkEvent.occurredAt,
-        fieldChanges: [],
-        justification: null,
-        metadata: { bulkEventId: bulkEvent.id },
-      };
-      await repository.mutateRow(context.organizationId, context.actor, domainResult.session, row, false, rowAuditEvent);
+    if (typeof repository.bulkMutateRows === "function") {
+      const mutations = Array.from(confirmedRowIds).map((rowId) => {
+        const row = findRow(domainResult.session, rowId)!;
+        return {
+          id: row.id,
+          state: row.state,
+          revised: row.revised,
+          justification: row.justification,
+          evidenceText: row.evidenceText,
+        };
+      });
+      await repository.bulkMutateRows(context.organizationId, context.actor, command.sessionId, mutations, occurredAt);
+    } else {
+      for (const rowId of confirmedRowIds) {
+        const row = findRow(domainResult.session, rowId)!;
+        const rowAuditEvent: AuditEventToPersist = {
+          id: `${bulkEvent.id}:${rowId}`,
+          action: bulkEvent.action,
+          actor: bulkEvent.actor,
+          occurredAt: bulkEvent.occurredAt,
+          fieldChanges: [],
+          justification: null,
+          metadata: { bulkEventId: bulkEvent.id },
+        };
+        await repository.mutateRow(context.organizationId, context.actor, domainResult.session, row, false, rowAuditEvent);
+      }
     }
     return { outcome: "success", session: domainResult.session };
   } catch (error) {
@@ -318,25 +332,39 @@ export async function bulkAcceptBudgetReviewRowDivergencesService(
   const acceptedRowIds = new Set((bulkEvent.metadata.acceptedRowIds as ReadonlyArray<string> | undefined) ?? []);
 
   try {
-    for (const rowId of acceptedRowIds) {
-      const row = findRow(domainResult.session, rowId)!;
-      const rowAuditEvent: AuditEventToPersist = {
-        id: `${bulkEvent.id}:${rowId}`,
-        action: bulkEvent.action,
-        actor: bulkEvent.actor,
-        occurredAt: bulkEvent.occurredAt,
-        fieldChanges: [],
-        justification: bulkEvent.justification,
-        metadata: { bulkEventId: bulkEvent.id },
-      };
-      await repository.recordReconciliationDecision(
+    if (typeof repository.bulkRecordReconciliationDecisions === "function") {
+      const decisions = Array.from(acceptedRowIds).map((rowId) => ({
+        rowId,
+        justification: command.justification,
+      }));
+      await repository.bulkRecordReconciliationDecisions(
         context.organizationId,
         context.actor,
         command.sessionId,
-        rowId,
-        row.reconciliationDecision!,
-        rowAuditEvent,
+        decisions,
+        occurredAt,
       );
+    } else {
+      for (const rowId of acceptedRowIds) {
+        const row = findRow(domainResult.session, rowId)!;
+        const rowAuditEvent: AuditEventToPersist = {
+          id: `${bulkEvent.id}:${rowId}`,
+          action: bulkEvent.action,
+          actor: bulkEvent.actor,
+          occurredAt: bulkEvent.occurredAt,
+          fieldChanges: [],
+          justification: bulkEvent.justification,
+          metadata: { bulkEventId: bulkEvent.id },
+        };
+        await repository.recordReconciliationDecision(
+          context.organizationId,
+          context.actor,
+          command.sessionId,
+          rowId,
+          row.reconciliationDecision!,
+          rowAuditEvent,
+        );
+      }
     }
     return { outcome: "success", session: domainResult.session };
   } catch (error) {

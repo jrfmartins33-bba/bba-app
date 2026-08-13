@@ -1,11 +1,13 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { Card, Button } from "@bba/ui";
-import { formatBudgetMoneyPtBr } from "@/lib/bdos/format-budget-money";
+import { formatBudgetMoneyPtBr, formatBudgetNumberPtBr, formatBudgetPercentPtBr } from "@/lib/bdos/format-budget-number";
+import { toHumanReviewActionError } from "@/lib/bdos/to-human-review-error";
+import { ReviewActionDialog } from "./ReviewActionDialog";
 
-// Revisão do Orçamento Oficial (Epic 21.5A / Sprint 21.5C.2B UX) — experiência Admin dedicada.
+// Workspace Operacional da Revisão do Orçamento Oficial (Epic 21.5A / Sprint 21.5C.2B Premium)
 
 interface RowFields {
   readonly itemCode: string | null;
@@ -52,9 +54,17 @@ interface ReviewSession {
   readonly rows: ReadonlyArray<ReviewRow>;
 }
 
+interface ReconciliationItem {
+  readonly rowId: string;
+  readonly status: string;
+  readonly differenceCents: number | null;
+  readonly derivedTotalCents?: number | null;
+  readonly documentedTotalCents?: number | null;
+}
+
 interface Reconciliation {
-  readonly serviceItems: ReadonlyArray<{ rowId: string; status: string; differenceCents: number | null }>;
-  readonly groups: ReadonlyArray<{ rowId: string; status: string; differenceCents: number | null }>;
+  readonly serviceItems: ReadonlyArray<ReconciliationItem>;
+  readonly groups: ReadonlyArray<ReconciliationItem>;
   readonly readiness: { ready: boolean; blockers: ReadonlyArray<string>; pendingRowCount: number; divergentReconciliationCount: number };
 }
 
@@ -130,12 +140,109 @@ function StateBadge({ state }: { state: ReviewRow["state"] }) {
   );
 }
 
+function ReconciliationBadge({ item, decision }: { item: ReconciliationItem | undefined; decision: ReconciliationDecision | null }) {
+  if (!item || item.status === "insufficient_data" || item.status === "not_applicable") {
+    return null;
+  }
+
+  if (decision !== null) {
+    return (
+      <span
+        title={`Decisão registrada por ${decision.actor}: "${decision.justification}"`}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.25rem",
+          padding: "0.15rem 0.45rem",
+          borderRadius: "4px",
+          fontSize: "0.7rem",
+          fontWeight: 600,
+          backgroundColor: "rgba(16, 185, 129, 0.1)",
+          border: "1px solid rgba(16, 185, 129, 0.3)",
+          color: "#34d399",
+          whiteSpace: "nowrap",
+        }}
+      >
+        ✓ Diferença aceita
+      </span>
+    );
+  }
+
+  if (item.status === "diverges") {
+    const diffAbs = Math.abs(item.differenceCents ?? 0);
+    const formattedDiff = formatBudgetMoneyPtBr(diffAbs / 100);
+    const label = diffAbs === 1 ? "Diferença de arredondamento · R$ 0,01" : `Diferença documental · R$ ${formattedDiff}`;
+
+    return (
+      <span
+        title="Diferença entre o total derivado e o valor publicado no documento oficial."
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.25rem",
+          padding: "0.15rem 0.45rem",
+          borderRadius: "4px",
+          fontSize: "0.7rem",
+          fontWeight: 600,
+          backgroundColor: "rgba(245, 158, 11, 0.12)",
+          border: "1px solid rgba(245, 158, 11, 0.4)",
+          color: "#fbbf24",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {label}
+      </span>
+    );
+  }
+
+  if (item.status === "matches") {
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.25rem",
+          padding: "0.15rem 0.45rem",
+          borderRadius: "4px",
+          fontSize: "0.7rem",
+          fontWeight: 500,
+          backgroundColor: "rgba(16, 185, 129, 0.08)",
+          border: "1px solid rgba(16, 185, 129, 0.2)",
+          color: "#a7f3d0",
+          whiteSpace: "nowrap",
+        }}
+      >
+        ✓ Conciliado
+      </span>
+    );
+  }
+
+  return null;
+}
+
 const PAGE_SIZE = 50;
 
 interface ReviewContext {
   readonly procurementCaseTitle: string;
   readonly procurementCaseReference: string | null;
   readonly procurementLotTitle: string;
+}
+
+interface DialogState {
+  readonly isOpen: boolean;
+  readonly type: "bulkConfirm" | "singleConfirm" | "bulkAcceptDivergences" | "singleAcceptDivergence" | "exclude" | "restore" | "consolidate";
+  readonly targetRowId?: string;
+  readonly title: string;
+  readonly description: string;
+  readonly requireJustification?: boolean;
+  readonly justificationPlaceholder?: string;
+  readonly isDestructive?: boolean;
+  readonly confirmLabel?: string;
+}
+
+interface ToastState {
+  readonly type: "success" | "error";
+  readonly message: string;
 }
 
 export default function OrcamentoRevisaoPage() {
@@ -148,6 +255,7 @@ export default function OrcamentoRevisaoPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<ToastState | null>(null);
 
   const [filterState, setFilterState] = useState<string>("all");
   const [filterLote, setFilterLote] = useState<string>("all");
@@ -155,6 +263,15 @@ export default function OrcamentoRevisaoPage() {
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+
+  const [dialog, setDialog] = useState<DialogState>({
+    isOpen: false,
+    type: "singleConfirm",
+    title: "",
+    description: "",
+  });
+
+  const viewportRef = useRef<HTMLDivElement | null>(null);
 
   async function reload() {
     setLoading(true);
@@ -184,9 +301,9 @@ export default function OrcamentoRevisaoPage() {
   }, [sessionId]);
 
   const reconciliationByRowId = useMemo(() => {
-    const map = new Map<string, string>();
-    reconciliation?.serviceItems.forEach((r) => map.set(r.rowId, r.status));
-    reconciliation?.groups.forEach((r) => map.set(r.rowId, r.status));
+    const map = new Map<string, ReconciliationItem>();
+    reconciliation?.serviceItems.forEach((r) => map.set(r.rowId, r));
+    reconciliation?.groups.forEach((r) => map.set(r.rowId, r));
     return map;
   }, [reconciliation]);
 
@@ -201,7 +318,8 @@ export default function OrcamentoRevisaoPage() {
     return session.rows.filter((row) => {
       if (filterState !== "all") {
         if (filterState === "divergent") {
-          if (reconciliationByRowId.get(row.id) !== "diverges") return false;
+          const rec = reconciliationByRowId.get(row.id);
+          if (!rec || rec.status !== "diverges") return false;
         } else if (row.state !== filterState) {
           return false;
         }
@@ -220,7 +338,7 @@ export default function OrcamentoRevisaoPage() {
     return filteredRows.filter((row) => {
       const rec = reconciliationByRowId.get(row.id);
       const isPending = row.state === "Pendente";
-      const isDivergent = rec === "diverges" && row.reconciliationDecision === null;
+      const isDivergent = rec?.status === "diverges" && row.reconciliationDecision === null;
       return isPending || isDivergent;
     });
   }, [filteredRows, reconciliationByRowId]);
@@ -245,7 +363,8 @@ export default function OrcamentoRevisaoPage() {
     if (!session) return 0;
     return Array.from(selected).filter((id) => {
       const r = session.rows.find((candidate) => candidate.id === id);
-      return r !== undefined && r.reconciliationDecision === null && reconciliationByRowId.get(id) === "diverges";
+      const rec = reconciliationByRowId.get(id);
+      return r !== undefined && r.reconciliationDecision === null && rec?.status === "diverges";
     }).length;
   }, [session, selected, reconciliationByRowId]);
 
@@ -263,7 +382,6 @@ export default function OrcamentoRevisaoPage() {
     setSelected(new Set());
   }
 
-  // Clear selection on filter changes to prevent accidental bulk actions on invisible rows
   function handleFilterStateChange(newState: string) {
     setFilterState(newState);
     setPage(0);
@@ -282,11 +400,19 @@ export default function OrcamentoRevisaoPage() {
     setSelected(new Set());
   }
 
+  function changePage(newPage: number) {
+    setPage(newPage);
+    if (viewportRef.current) {
+      viewportRef.current.scrollTop = 0;
+    }
+  }
+
   const pageRows = filteredRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
 
-  async function callAction(body: Record<string, unknown>) {
+  async function callAction(body: Record<string, unknown>, successMessage?: string) {
     setBusy(true);
+    setToast(null);
     try {
       const res = await fetch(`/api/orcamentos/revisao/${sessionId}`, {
         method: "POST",
@@ -295,71 +421,135 @@ export default function OrcamentoRevisaoPage() {
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
-        window.alert(`Ação não concluída: ${payload.error ?? res.status}`);
+        const humanError = toHumanReviewActionError(payload, "Não foi possível concluir a ação solicitada.");
+        setToast({ type: "error", message: humanError });
         return false;
       }
       await reload();
+      if (successMessage) {
+        setToast({ type: "success", message: successMessage });
+        setTimeout(() => setToast(null), 5000);
+      }
       return true;
+    } catch {
+      setToast({ type: "error", message: "Ocorreu um erro de comunicação com o servidor." });
+      return false;
     } finally {
       setBusy(false);
+      setDialog((prev) => ({ ...prev, isOpen: false }));
     }
   }
 
-  async function handleConfirm(rowId: string) {
-    await callAction({ action: "confirm", rowId });
-  }
-
-  async function handleExclude(rowId: string) {
-    const justification = window.prompt("Justificativa para marcar como 'Não pertence ao orçamento':");
-    if (!justification) return;
-    await callAction({ action: "exclude", rowId, justification });
-  }
-
-  async function handleRestore(rowId: string) {
-    await callAction({ action: "restore", rowId });
-  }
-
-  async function handleBulkConfirmSelection() {
-    if (!session) return;
-    const rowIds = Array.from(selected).filter((id) => session.rows.find((row) => row.id === id)?.state === "Pendente");
-    if (rowIds.length === 0) {
-      window.alert("Nenhuma linha selecionada está Pendente.");
-      return;
-    }
-    if (!window.confirm(`Confirmar ${rowIds.length} linha(s) selecionada(s)?`)) return;
-    const ok = await callAction({ action: "bulkConfirm", rowIds });
-    if (ok) setSelected(new Set());
-  }
-
-  async function handleAcceptDivergence(rowId: string) {
-    const justification = window.prompt(
-      "Justificativa (os valores foram conferidos na fonte e serão preservados exatamente como publicados):",
-    );
-    if (!justification) return;
-    await callAction({ action: "acceptDivergence", rowId, justification });
-  }
-
-  async function handleBulkAcceptDivergencesSelection() {
-    if (!session) return;
-    const rowIds = Array.from(selected).filter((id) => {
-      const row = session.rows.find((candidate) => candidate.id === id);
-      return row !== undefined && row.reconciliationDecision === null && reconciliationByRowId.get(id) === "diverges";
+  // Dialog Trigger Handlers
+  function openConfirmRowDialog(rowId: string) {
+    setDialog({
+      isOpen: true,
+      type: "singleConfirm",
+      targetRowId: rowId,
+      title: "Confirmar revisão do item",
+      description: "Confirma que os valores revisados do item correspondem ao documento oficial?",
+      confirmLabel: "Confirmar item",
     });
-    if (rowIds.length === 0) {
-      window.alert("Nenhuma linha selecionada tem divergência ativa não aceita.");
-      return;
-    }
-    const justification = window.prompt(
-      `${rowIds.length} divergência(s) serão aceitas exatamente como documentadas. Justificativa:`,
-    );
-    if (!justification) return;
-    const ok = await callAction({ action: "bulkAcceptDivergences", rowIds, justification });
-    if (ok) setSelected(new Set());
   }
 
-  async function handleConsolidate() {
-    if (!window.confirm("Consolidar o Orçamento Oficial Revisado? Esta ação é irreversível.")) return;
-    await callAction({ action: "consolidate" });
+  function openBulkConfirmDialog() {
+    if (pendingSelectedCount === 0) return;
+    setDialog({
+      isOpen: true,
+      type: "bulkConfirm",
+      title: `Confirmar ${pendingSelectedCount} item(ns) em lote`,
+      description: `Serão confirmadas ${pendingSelectedCount} linha(s) com estado 'Pendente'. Esta ação registra sua conferência nos itens selecionados.`,
+      confirmLabel: `Confirmar ${pendingSelectedCount} item(ns)`,
+    });
+  }
+
+  function openAcceptDivergenceDialog(rowId: string) {
+    setDialog({
+      isOpen: true,
+      type: "singleAcceptDivergence",
+      targetRowId: rowId,
+      title: "Aceitar diferença documental",
+      description: "Os valores foram conferidos na fonte oficial e a diferença será aceita como documentada. Informe a justificativa técnica para auditoria:",
+      requireJustification: true,
+      justificationPlaceholder: "Ex.: Valor publicado na fonte original apresenta diferença de arredondamento em relação ao cálculo derivado.",
+      confirmLabel: "Aceitar valor publicado",
+    });
+  }
+
+  function openBulkAcceptDivergencesDialog() {
+    if (divergentSelectedCount === 0) return;
+    setDialog({
+      isOpen: true,
+      type: "bulkAcceptDivergences",
+      title: `Aceitar ${divergentSelectedCount} diferença(s) documentais em lote`,
+      description: `${divergentSelectedCount} item(ns) com diferença documental serão aceitos exatamente como publicados. Informe a justificativa técnica para auditoria:`,
+      requireJustification: true,
+      justificationPlaceholder: "Ex.: Diferenças documentais conferidas na planilha oficial publicada.",
+      confirmLabel: `Aceitar ${divergentSelectedCount} diferença(s)`,
+    });
+  }
+
+  function openExcludeDialog(rowId: string) {
+    setDialog({
+      isOpen: true,
+      type: "exclude",
+      targetRowId: rowId,
+      title: "Marcar item como não pertencente ao orçamento",
+      description: "Este item deixará de compor os totais do orçamento. Informe a justificativa para auditoria:",
+      requireJustification: true,
+      justificationPlaceholder: "Ex.: Item duplicado ou fora do escopo da licitação.",
+      isDestructive: true,
+      confirmLabel: "Marcar como não pertencente",
+    });
+  }
+
+  function openRestoreDialog(rowId: string) {
+    setDialog({
+      isOpen: true,
+      type: "restore",
+      targetRowId: rowId,
+      title: "Restaurar item no orçamento",
+      description: "O item voltará a compor a lista do orçamento como 'Pendente' para revisão.",
+      confirmLabel: "Restaurar item",
+    });
+  }
+
+  function openConsolidateDialog() {
+    setDialog({
+      isOpen: true,
+      type: "consolidate",
+      title: "Consolidar Orçamento Oficial Revisado",
+      description: "Esta ação finalizará a sessão de revisão e gerará a versão oficial consolidada do orçamento. A ação é irreversível.",
+      confirmLabel: "Consolidar Orçamento",
+    });
+  }
+
+  async function handleDialogConfirm(justification?: string) {
+    if (dialog.type === "singleConfirm" && dialog.targetRowId) {
+      await callAction({ action: "confirm", rowId: dialog.targetRowId }, "Item confirmado com sucesso.");
+    } else if (dialog.type === "bulkConfirm") {
+      if (!session) return;
+      const rowIds = Array.from(selected).filter((id) => session.rows.find((row) => row.id === id)?.state === "Pendente");
+      const ok = await callAction({ action: "bulkConfirm", rowIds }, `${rowIds.length} item(ns) confirmado(s) com sucesso.`);
+      if (ok) setSelected(new Set());
+    } else if (dialog.type === "singleAcceptDivergence" && dialog.targetRowId) {
+      await callAction({ action: "acceptDivergence", rowId: dialog.targetRowId, justification }, "Diferença documental aceita com sucesso.");
+    } else if (dialog.type === "bulkAcceptDivergences") {
+      if (!session) return;
+      const rowIds = Array.from(selected).filter((id) => {
+        const r = session.rows.find((candidate) => candidate.id === id);
+        const rec = reconciliationByRowId.get(id);
+        return r !== undefined && r.reconciliationDecision === null && rec?.status === "diverges";
+      });
+      const ok = await callAction({ action: "bulkAcceptDivergences", rowIds, justification }, `${rowIds.length} diferença(s) documental(is) aceita(s) com sucesso.`);
+      if (ok) setSelected(new Set());
+    } else if (dialog.type === "exclude" && dialog.targetRowId) {
+      await callAction({ action: "exclude", rowId: dialog.targetRowId, justification }, "Item marcado como não pertencente.");
+    } else if (dialog.type === "restore" && dialog.targetRowId) {
+      await callAction({ action: "restore", rowId: dialog.targetRowId }, "Item restaurado com sucesso.");
+    } else if (dialog.type === "consolidate") {
+      await callAction({ action: "consolidate" }, "Orçamento Oficial Revisado consolidado com sucesso.");
+    }
   }
 
   if (loading) {
@@ -367,7 +557,7 @@ export default function OrcamentoRevisaoPage() {
       <section className="page-header">
         <div>
           <h1>Revisão do Orçamento Oficial</h1>
-          <p>Carregando...</p>
+          <p>Carregando workspace de revisão...</p>
         </div>
       </section>
     );
@@ -398,12 +588,12 @@ export default function OrcamentoRevisaoPage() {
     color: "#f3f4f6",
     padding: "0.6rem 0.5rem",
     borderBottom: "2px solid #374151",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.25)",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
     whiteSpace: "nowrap",
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
       <section className="page-header">
         <div>
           <h1>Revisão do Orçamento Oficial</h1>
@@ -414,6 +604,31 @@ export default function OrcamentoRevisaoPage() {
           </p>
         </div>
       </section>
+
+      {toast && (
+        <div
+          style={{
+            padding: "0.75rem 1rem",
+            borderRadius: "6px",
+            backgroundColor: toast.type === "success" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+            border: toast.type === "success" ? "1px solid #10b981" : "1px solid #ef4444",
+            color: toast.type === "success" ? "#6ee7b7" : "#fca5a5",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            fontWeight: 500,
+            fontSize: "0.875rem",
+          }}
+        >
+          <span>{toast.message}</span>
+          <button
+            onClick={() => setToast(null)}
+            style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: "1rem" }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <Card title="Resumo">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "1rem" }}>
@@ -428,20 +643,22 @@ export default function OrcamentoRevisaoPage() {
         {reconciliation && (
           <div style={{ marginTop: "1rem" }}>
             {reconciliation.readiness.ready ? (
-              <p style={{ color: "#0a7a3d" }}>Pronto para consolidação.</p>
+              <p style={{ color: "#34d399", fontWeight: 600 }}>✓ Pronto para consolidação final do Orçamento Oficial.</p>
             ) : (
               <div>
-                <p style={{ color: "#8a2e2e", fontWeight: 600 }}>Pendências para consolidação:</p>
-                <ul>
+                <p style={{ color: "#fca5a5", fontWeight: 600 }}>Pendências para consolidação:</p>
+                <ul style={{ margin: "0.25rem 0", paddingLeft: "1.2rem", color: "#d1d5db", fontSize: "0.85rem" }}>
                   {reconciliation.readiness.blockers.map((blocker) => (
                     <li key={blocker}>{blocker}</li>
                   ))}
                 </ul>
               </div>
             )}
-            <Button disabled={!reconciliation.readiness.ready || busy || session.status === "Consolidated"} onClick={handleConsolidate}>
-              {session.status === "Consolidated" ? "Já consolidado" : "Consolidar Orçamento Oficial Revisado"}
-            </Button>
+            <div style={{ marginTop: "0.75rem" }}>
+              <Button disabled={!reconciliation.readiness.ready || busy || session.status === "Consolidated"} onClick={openConsolidateDialog}>
+                {session.status === "Consolidated" ? "Já consolidado" : "Consolidar Orçamento Oficial Revisado"}
+              </Button>
+            </div>
           </div>
         )}
       </Card>
@@ -455,7 +672,7 @@ export default function OrcamentoRevisaoPage() {
             <option value="Corrigido">Corrigido</option>
             <option value="NaoPertenceAoOrcamento">Não pertence ao orçamento</option>
             <option value="InseridoManualmente">Inserido manualmente</option>
-            <option value="divergent">Somente com divergência de reconciliação</option>
+            <option value="divergent">Somente com diferença documental</option>
           </select>
           <select value={filterLote} onChange={(e) => handleFilterLoteChange(e.target.value)}>
             <option value="all">Todos os lotes</option>
@@ -470,7 +687,7 @@ export default function OrcamentoRevisaoPage() {
             onChange={(e) => handleSearchChange(e.target.value)}
             style={{ minWidth: "260px" }}
           />
-          <span style={{ fontWeight: 500 }}>{filteredRows.length} linha(s) encontrada(s)</span>
+          <span style={{ fontWeight: 500, fontSize: "0.85rem" }}>{filteredRows.length} linha(s) encontrada(s)</span>
 
           {eligibleFilteredRows.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginLeft: "auto" }}>
@@ -485,35 +702,67 @@ export default function OrcamentoRevisaoPage() {
                 />
                 Selecionar todos os resultados filtrados ({eligibleFilteredRows.length})
               </label>
-              {selected.size > 0 && (
-                <Button variant="secondary" onClick={handleClearSelection}>
-                  Limpar seleção ({selected.size})
-                </Button>
-              )}
             </div>
           )}
         </div>
       </Card>
 
-      <Card
-        title="Linhas do Orçamento"
-        action={
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            <Button disabled={pendingSelectedCount === 0 || busy} onClick={handleBulkConfirmSelection}>
-              Confirmar selecionadas ({pendingSelectedCount})
-            </Button>
-            <Button disabled={divergentSelectedCount === 0 || busy} onClick={handleBulkAcceptDivergencesSelection}>
-              Aceitar divergências selecionadas ({divergentSelectedCount})
-            </Button>
-          </div>
-        }
-      >
-        <div style={{ overflowX: "auto", position: "relative" }}>
+      {/* DATA GRID WORKSPACE */}
+      <Card title="Linhas do Orçamento">
+        {/* 1. Selection ActionBar (Always Visible At Top of Workspace) */}
+        <div
+          style={{
+            padding: "0.75rem 1rem",
+            backgroundColor: "#1f2937",
+            borderRadius: "6px 6px 0 0",
+            borderBottom: "1px solid #374151",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "1rem",
+            flexWrap: "wrap",
+          }}
+        >
+          {selected.size === 0 ? (
+            <span style={{ fontSize: "0.85rem", color: "#9ca3af", fontStyle: "italic" }}>
+              Selecione itens na tabela para realizar ações em lote
+            </span>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap", width: "100%", justifyContent: "space-between" }}>
+              <span style={{ fontWeight: 700, color: "#60a5fa", fontSize: "0.9rem" }}>
+                {selected.size} item(ns) selecionado(s)
+              </span>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <Button disabled={pendingSelectedCount === 0 || busy} onClick={openBulkConfirmDialog}>
+                  Confirmar selecionadas ({pendingSelectedCount})
+                </Button>
+                <Button disabled={divergentSelectedCount === 0 || busy} onClick={openBulkAcceptDivergencesDialog}>
+                  Aceitar divergências ({divergentSelectedCount})
+                </Button>
+                <Button variant="secondary" disabled={busy} onClick={handleClearSelection}>
+                  Limpar seleção
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 2. TableScrollViewport (Only this element scrolls vertically & horizontally) */}
+        <div
+          ref={viewportRef}
+          style={{
+            maxHeight: "calc(100vh - 280px)",
+            minHeight: "380px",
+            overflow: "auto",
+            position: "relative",
+            backgroundColor: "#0f172a",
+          }}
+        >
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
             <thead>
               <tr style={{ textAlign: "left" }}>
                 <th style={{ ...thStyle, width: "32px" }}></th>
-                <th style={thStyle}>Estado</th>
+                <th style={thStyle}>Estado / Conciliação</th>
                 <th style={thStyle}>Lote</th>
                 <th style={thStyle}>Item</th>
                 <th style={thStyle}>Descrição</th>
@@ -534,7 +783,7 @@ export default function OrcamentoRevisaoPage() {
                   <Fragment key={row.id}>
                     <tr style={{ borderBottom: "1px solid #1f2937" }}>
                       <td style={{ padding: "0.5rem" }}>
-                        {(row.state === "Pendente" || (rec === "diverges" && row.reconciliationDecision === null)) && (
+                        {(row.state === "Pendente" || (rec?.status === "diverges" && row.reconciliationDecision === null)) && (
                           <input
                             type="checkbox"
                             checked={selected.has(row.id)}
@@ -548,30 +797,25 @@ export default function OrcamentoRevisaoPage() {
                         )}
                       </td>
                       <td style={{ padding: "0.5rem" }}>
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
                           <StateBadge state={row.state} />
-                          {rec === "diverges" && row.reconciliationDecision === null && (
-                            <span style={{ color: "#ef4444", fontWeight: 700, marginLeft: "0.2rem" }} title="Divergência de reconciliação não resolvida">⚠</span>
-                          )}
-                          {rec === "diverges" && row.reconciliationDecision !== null && (
-                            <span style={{ color: "#10b981", fontWeight: 700, marginLeft: "0.2rem" }} title="Divergência aceita como documentada">✓</span>
-                          )}
+                          <ReconciliationBadge item={rec} decision={row.reconciliationDecision} />
                         </div>
                       </td>
                       <td style={{ padding: "0.5rem" }}>{row.lotReference}</td>
                       <td style={{ padding: "0.5rem" }}>{row.revised.itemCode ?? "—"}</td>
                       <td style={{ padding: "0.5rem", fontWeight: row.kind !== "ServiceItem" ? 700 : 400, maxWidth: "320px" }}>{row.revised.description ?? "—"}</td>
                       <td style={{ padding: "0.5rem" }}>{row.revised.unit ?? "—"}</td>
-                      <td style={{ padding: "0.5rem" }}>{row.revised.quantityText ?? "—"}</td>
+                      <td style={{ padding: "0.5rem" }}>{formatBudgetNumberPtBr(row.revised.quantityText)}</td>
                       <td style={{ padding: "0.5rem" }}>{formatBudgetMoneyPtBr(row.revised.unitCostWithoutBdiText)}</td>
-                      <td style={{ padding: "0.5rem" }}>{row.revised.bdiPercentText ?? "—"}</td>
+                      <td style={{ padding: "0.5rem" }}>{formatBudgetPercentPtBr(row.revised.bdiPercentText)}</td>
                       <td style={{ padding: "0.5rem" }}>{formatBudgetMoneyPtBr(row.revised.unitPriceWithBdiText)}</td>
                       <td style={{ padding: "0.5rem" }}>{formatBudgetMoneyPtBr(row.revised.totalPriceText ?? row.revised.documentalGroupTotalText)}</td>
                       <td style={{ padding: "0.5rem" }}>{row.page ?? "—"}</td>
                       <td style={{ padding: "0.5rem" }}>
-                        <button onClick={() => setExpandedRowId(expandedRowId === row.id ? null : row.id)}>
+                        <Button variant="secondary" onClick={() => setExpandedRowId(expandedRowId === row.id ? null : row.id)}>
                           {expandedRowId === row.id ? "Fechar" : "Ver"}
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                     {expandedRowId === row.id && (
@@ -579,11 +823,11 @@ export default function OrcamentoRevisaoPage() {
                         <td colSpan={13} style={{ background: "#1f2937", padding: "1rem" }}>
                           <RowDetail
                             row={row}
-                            reconciliationStatus={rec}
-                            onConfirm={() => handleConfirm(row.id)}
-                            onExclude={() => handleExclude(row.id)}
-                            onRestore={() => handleRestore(row.id)}
-                            onAcceptDivergence={() => handleAcceptDivergence(row.id)}
+                            reconciliationItem={rec}
+                            onConfirm={() => openConfirmRowDialog(row.id)}
+                            onExclude={() => openExcludeDialog(row.id)}
+                            onRestore={() => openRestoreDialog(row.id)}
+                            onAcceptDivergence={() => openAcceptDivergenceDialog(row.id)}
                             busy={busy}
                             sessionInProgress={session.status === "InProgress"}
                           />
@@ -596,21 +840,49 @@ export default function OrcamentoRevisaoPage() {
             </tbody>
           </table>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem" }}>
+
+        {/* 3. PaginationBar (Always Visible At Bottom of Workspace) */}
+        <div
+          style={{
+            padding: "0.75rem 1rem",
+            backgroundColor: "#1f2937",
+            borderRadius: "0 0 6px 6px",
+            borderTop: "1px solid #374151",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           <div style={{ display: "flex", gap: "0.5rem" }}>
-            <Button disabled={page === 0} onClick={() => setPage(0)}>
-              ⏮ Primeira página
+            <Button disabled={page === 0} onClick={() => changePage(0)}>
+              ⏮ Primeira
             </Button>
-            <Button disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-              Anterior
+            <Button disabled={page === 0} onClick={() => changePage(page - 1)}>
+              ← Anterior
             </Button>
           </div>
-          <span style={{ fontWeight: 600 }}>Página {page + 1} de {totalPages}</span>
-          <Button disabled={page >= totalPages - 1} onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}>
-            Próxima
+          <span style={{ fontWeight: 600, fontSize: "0.875rem" }}>
+            Página {page + 1} de {totalPages}
+          </span>
+          <Button disabled={page >= totalPages - 1} onClick={() => changePage(page + 1)}>
+            Próxima →
           </Button>
         </div>
       </Card>
+
+      {/* Action Dialog Modal (Replaces browser alert/confirm/prompt) */}
+      <ReviewActionDialog
+        isOpen={dialog.isOpen}
+        title={dialog.title}
+        description={dialog.description}
+        confirmLabel={dialog.confirmLabel}
+        requireJustification={dialog.requireJustification}
+        justificationPlaceholder={dialog.justificationPlaceholder}
+        isDestructive={dialog.isDestructive}
+        busy={busy}
+        onClose={() => setDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleDialogConfirm}
+      />
     </div>
   );
 }
@@ -626,7 +898,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function RowDetail({
   row,
-  reconciliationStatus,
+  reconciliationItem,
   onConfirm,
   onExclude,
   onRestore,
@@ -635,7 +907,7 @@ function RowDetail({
   sessionInProgress,
 }: {
   row: ReviewRow;
-  reconciliationStatus: string | undefined;
+  reconciliationItem: ReconciliationItem | undefined;
   onConfirm: () => void;
   onExclude: () => void;
   onRestore: () => void;
@@ -643,7 +915,7 @@ function RowDetail({
   busy: boolean;
   sessionInProgress: boolean;
 }) {
-  const hasUnresolvedDivergence = reconciliationStatus === "diverges" && row.reconciliationDecision === null;
+  const hasUnresolvedDivergence = reconciliationItem?.status === "diverges" && row.reconciliationDecision === null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
@@ -657,44 +929,63 @@ function RowDetail({
           <FieldsTable fields={row.revised} />
         </div>
       </div>
-      {reconciliationStatus === "diverges" && (
-        <div style={{ background: row.reconciliationDecision ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)", padding: "0.75rem", borderRadius: "4px" }}>
-          <strong>Divergência de reconciliação</strong>
+
+      {reconciliationItem && reconciliationItem.status === "diverges" && (
+        <div
+          style={{
+            background: row.reconciliationDecision ? "rgba(16, 185, 129, 0.1)" : "rgba(245, 158, 11, 0.1)",
+            border: row.reconciliationDecision ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(245, 158, 11, 0.3)",
+            padding: "0.75rem",
+            borderRadius: "6px",
+          }}
+        >
+          <strong>Diferença documental</strong>
           {row.reconciliationDecision ? (
-            <p>
+            <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem" }}>
               Aceita como documentada por {row.reconciliationDecision.actor} em {new Date(row.reconciliationDecision.decidedAt).toLocaleString("pt-BR")}: “{row.reconciliationDecision.justification}”. Os valores foram preservados exatamente como publicados.
             </p>
           ) : (
-            <p>O total derivado não bate com o total documental — confira contra a fonte antes de confirmar, ou aceite a divergência se os três valores estiverem corretamente transcritos.</p>
+            <div style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+              <p style={{ margin: 0 }}>
+                O total derivado ({formatBudgetMoneyPtBr((reconciliationItem.derivedTotalCents ?? 0) / 100)}) difere do total publicado ({formatBudgetMoneyPtBr((reconciliationItem.documentedTotalCents ?? 0) / 100)}).
+              </p>
+              <p style={{ margin: 0, fontStyle: "italic", color: "#9ca3af" }}>
+                Os valores acima correspondem ao documento oficial. A diferença decorre da relação entre os valores publicados.
+              </p>
+            </div>
           )}
         </div>
       )}
+
       {row.evidenceText && (
         <div>
           <strong>Evidência (texto de origem)</strong>
-          <p style={{ fontFamily: "monospace", fontSize: "0.8rem" }}>{row.evidenceText}</p>
+          <p style={{ fontFamily: "monospace", fontSize: "0.8rem", color: "#d1d5db" }}>{row.evidenceText}</p>
         </div>
       )}
+
       {row.justification && (
         <div>
           <strong>Justificativa</strong>
-          <p>{row.justification}</p>
+          <p style={{ fontSize: "0.85rem" }}>{row.justification}</p>
         </div>
       )}
-      {row.page && <p>Página fonte: {row.page}</p>}
+
+      {row.page && <p style={{ fontSize: "0.85rem" }}>Página fonte: {row.page}</p>}
+
       {sessionInProgress && (
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
           {row.state === "Pendente" && (
-            <Button disabled={busy} onClick={onConfirm}>Confirmar</Button>
+            <Button disabled={busy} onClick={onConfirm}>Confirmar item</Button>
           )}
           {row.state !== "NaoPertenceAoOrcamento" && (
-            <Button disabled={busy} onClick={onExclude}>Marcar como não pertencente ao orçamento</Button>
+            <Button disabled={busy} onClick={onExclude}>Marcar como não pertencente</Button>
           )}
           {row.state === "NaoPertenceAoOrcamento" && (
-            <Button disabled={busy} onClick={onRestore}>Restaurar</Button>
+            <Button disabled={busy} onClick={onRestore}>Restaurar item</Button>
           )}
           {hasUnresolvedDivergence && (
-            <Button disabled={busy} onClick={onAcceptDivergence}>Aceitar divergência documental</Button>
+            <Button disabled={busy} onClick={onAcceptDivergence}>Aceitar valor publicado</Button>
           )}
         </div>
       )}
@@ -708,9 +999,9 @@ function FieldsTable({ fields }: { fields: RowFields }) {
     ["Fonte", fields.sourceFonte],
     ["Tipo", fields.sourceTipo],
     ["Unidade", fields.unit],
-    ["Quantidade", fields.quantityText],
+    ["Quantidade", formatBudgetNumberPtBr(fields.quantityText)],
     ["Custo unit. s/BDI", formatBudgetMoneyPtBr(fields.unitCostWithoutBdiText)],
-    ["BDI", fields.bdiPercentText],
+    ["BDI", formatBudgetPercentPtBr(fields.bdiPercentText)],
     ["Preço unit. c/BDI", formatBudgetMoneyPtBr(fields.unitPriceWithBdiText)],
     ["Total", formatBudgetMoneyPtBr(fields.totalPriceText)],
     ["Total documental (grupo)", formatBudgetMoneyPtBr(fields.documentalGroupTotalText)],

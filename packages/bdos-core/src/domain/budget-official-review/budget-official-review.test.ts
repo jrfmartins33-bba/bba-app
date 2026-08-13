@@ -378,7 +378,7 @@ runTest("Reconciliação de Grupo soma somente Itens de Serviço descendentes, n
   assertEqual(groupReconciliation.derivedTotalCents, 30_000, "derived total must be exactly 300,00 in cents");
 });
 
-runTest("Reconciliação de Grupo nunca inclui Item de Serviço Pendente no total derivado (correção §13)", () => {
+runTest("Reconciliação de Grupo retorna insufficient_data enquanto existirem descendentes Pendentes", () => {
   const session = freshSession();
   const imported = importBudgetReviewRows({
     session,
@@ -392,12 +392,20 @@ runTest("Reconciliação de Grupo nunca inclui Item de Serviço Pendente no tota
   });
   assertReviewSuccess(imported);
 
-  const confirmed = confirmBudgetReviewRow({ session: imported.session, rowId: "item-1", actor: "revisor-teste", occurredAt: "2026-08-10T00:00:02.000Z" });
-  assertReviewSuccess(confirmed);
+  const confirmedItem1 = confirmBudgetReviewRow({ session: imported.session, rowId: "item-1", actor: "revisor-teste", occurredAt: "2026-08-10T00:00:02.000Z" });
+  assertReviewSuccess(confirmedItem1);
 
-  const groupReconciliation = reconcileGroupRow(confirmed.session, "group-1");
-  assertEqual(groupReconciliation.status, "matches", "item-2 remains Pendente and must not contribute to the derived total");
-  assertEqual(groupReconciliation.derivedTotalCents, 10_000, "derived total must be exactly item-1's 100,00, excluding the Pendente item-2");
+  const groupReconciliationPending = reconcileGroupRow(confirmedItem1.session, "group-1");
+  assertEqual(groupReconciliationPending.status, "insufficient_data", "item-2 is still Pendente so group status must be insufficient_data");
+
+  const confirmedItem2 = confirmBudgetReviewRow({ session: confirmedItem1.session, rowId: "item-2", actor: "revisor-teste", occurredAt: "2026-08-10T00:00:03.000Z" });
+  assertReviewSuccess(confirmedItem2);
+
+  const confirmedGroup = confirmBudgetReviewRow({ session: confirmedItem2.session, rowId: "group-1", actor: "revisor-teste", occurredAt: "2026-08-10T00:00:04.000Z" });
+  assertReviewSuccess(confirmedGroup);
+
+  const groupReconciliationResolved = reconcileGroupRow(confirmedGroup.session, "group-1");
+  assertEqual(groupReconciliationResolved.status, "diverges", "after all children and group resolved, 100,00 + 9999,00 != 100,00 -> diverges");
 });
 
 // ---------------------------------------------------------------------------
@@ -527,17 +535,18 @@ runTest("Confirmação em lote nunca confirma linha NaoPertenceAoOrcamento nem l
     actor: "revisor-teste",
     occurredAt: "2026-08-10T00:00:03.000Z",
   });
-  if (bulkAttempt.success) throw new Error("expected all-or-nothing failure when the selection includes an ineligible row");
+  // item-excluded is "NaoPertenceAoOrcamento" (not Pendente), so bulk confirm fails all-or-nothing
+  if (bulkAttempt.success) throw new Error("expected all-or-nothing failure when the selection includes an ineligible non-pending row");
 
   const bulkClean = bulkConfirmBudgetReviewRows({
     session: excluded.session,
-    rowIds: ["item-clean"],
+    rowIds: ["item-clean", "item-divergent"],
     actor: "revisor-teste",
     occurredAt: "2026-08-10T00:00:04.000Z",
   });
   assertReviewSuccess(bulkClean);
   assertEqual(bulkClean.session.rows.find((row) => row.id === "item-clean")?.state, BudgetReviewRowState.Confirmed, "clean row must be confirmed");
-  assertEqual(bulkClean.session.rows.find((row) => row.id === "item-divergent")?.state, BudgetReviewRowState.Pending, "divergent row must remain untouched");
+  assertEqual(bulkClean.session.rows.find((row) => row.id === "item-divergent")?.state, BudgetReviewRowState.Confirmed, "divergent pending row is now confirmed");
   assertEqual(bulkClean.session.rows.find((row) => row.id === "item-excluded")?.state, BudgetReviewRowState.NotBudgetItem, "excluded row must remain untouched");
 });
 
