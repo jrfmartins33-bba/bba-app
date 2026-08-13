@@ -163,6 +163,22 @@ export async function importStructuredBudgetXlsxService(
     return { outcome: "not_found", message: `Lote "${command.procurementLotId}" não encontrado para o processo.` };
   }
 
+function computeSummaryFromRows(rows: ReadonlyArray<{ kind: string }>): BudgetXlsxImportSummary {
+  const groupCount = rows.filter((r) => r.kind === "Group").length;
+  const subgroupCount = rows.filter((r) => r.kind === "Subgroup").length;
+  const serviceItemCount = rows.filter((r) => r.kind === "ServiceItem").length;
+  return {
+    groupCount,
+    subgroupCount,
+    serviceItemCount,
+    totalRowCount: rows.length,
+    skippedRowCount: 0,
+    orphanCount: 0,
+    sheetName: null,
+    headerRowNumber: null,
+  };
+}
+
   // 3. Check for existing idempotent BudgetReviewSession (Lot-scoped)
   try {
     const existingSession = await reviewRepository.findSessionByAcquisition(
@@ -183,6 +199,7 @@ export async function importStructuredBudgetXlsxService(
         procurementCaseId: command.procurementCaseId,
         procurementLotId: command.procurementLotId,
         rowCount: existingSession.rows.length,
+        summary: computeSummaryFromRows(existingSession.rows),
       };
     }
   } catch (error) {
@@ -355,6 +372,7 @@ export async function importStructuredBudgetXlsxService(
           procurementCaseId: command.procurementCaseId,
           procurementLotId: command.procurementLotId,
           rowCount: reloaded.rows.length,
+          summary: computeSummaryFromRows(reloaded.rows),
         };
       }
     }

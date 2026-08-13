@@ -3,12 +3,9 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { Card, Button } from "@bba/ui";
+import { formatBudgetMoneyPtBr } from "@/lib/bdos/format-budget-money";
 
-// Revisão do Orçamento Oficial (Epic 21.5A) — experiência Admin dedicada
-// (enunciado §26). Cliente nunca acessa esta rota (gate em
-// app/(dashboard)/admin/layout.tsx + RLS admin-only nas tabelas). Não
-// expõe fingerprint/grammarId/evidence IDs na primeira dobra (enunciado
-// §27) — diagnóstico técnico fica em painel sob demanda por linha.
+// Revisão do Orçamento Oficial (Epic 21.5A / Sprint 21.5C.2B UX) — experiência Admin dedicada.
 
 interface RowFields {
   readonly itemCode: string | null;
@@ -69,13 +66,69 @@ const STATE_LABELS: Record<ReviewRow["state"], string> = {
   InseridoManualmente: "Inserido manualmente",
 };
 
-const STATE_COLORS: Record<ReviewRow["state"], string> = {
-  Pendente: "#9a7b00",
-  Confirmado: "#0a7a3d",
-  Corrigido: "#0a5ea8",
-  NaoPertenceAoOrcamento: "#8a2e2e",
-  InseridoManualmente: "#6a3d9a",
+interface StateBadgeStyle {
+  readonly bg: string;
+  readonly border: string;
+  readonly text: string;
+  readonly dot: string;
+}
+
+const STATE_BADGE_STYLES: Record<ReviewRow["state"], StateBadgeStyle> = {
+  Pendente: {
+    bg: "rgba(245, 158, 11, 0.15)",
+    border: "1px solid #f59e0b",
+    text: "#fcd34d",
+    dot: "#fbbf24",
+  },
+  Confirmado: {
+    bg: "rgba(16, 185, 129, 0.15)",
+    border: "1px solid #10b981",
+    text: "#6ee7b7",
+    dot: "#34d399",
+  },
+  Corrigido: {
+    bg: "rgba(59, 130, 246, 0.15)",
+    border: "1px solid #3b82f6",
+    text: "#93c5fd",
+    dot: "#60a5fa",
+  },
+  NaoPertenceAoOrcamento: {
+    bg: "rgba(239, 68, 68, 0.15)",
+    border: "1px solid #ef4444",
+    text: "#fca5a5",
+    dot: "#f87171",
+  },
+  InseridoManualmente: {
+    bg: "rgba(168, 85, 247, 0.15)",
+    border: "1px solid #a855f7",
+    text: "#d8b4fe",
+    dot: "#c084fc",
+  },
 };
+
+function StateBadge({ state }: { state: ReviewRow["state"] }) {
+  const style = STATE_BADGE_STYLES[state];
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.35rem",
+        padding: "0.2rem 0.55rem",
+        borderRadius: "9999px",
+        fontSize: "0.75rem",
+        fontWeight: 600,
+        backgroundColor: style.bg,
+        border: style.border,
+        color: style.text,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: style.dot }} />
+      {STATE_LABELS[state]}
+    </span>
+  );
+}
 
 const PAGE_SIZE = 50;
 
@@ -161,6 +214,73 @@ export default function OrcamentoRevisaoPage() {
       return true;
     });
   }, [session, filterState, filterLote, search, reconciliationByRowId]);
+
+  // Eligible rows for bulk selection in current filter scope
+  const eligibleFilteredRows = useMemo(() => {
+    return filteredRows.filter((row) => {
+      const rec = reconciliationByRowId.get(row.id);
+      const isPending = row.state === "Pendente";
+      const isDivergent = rec === "diverges" && row.reconciliationDecision === null;
+      return isPending || isDivergent;
+    });
+  }, [filteredRows, reconciliationByRowId]);
+
+  const allEligibleSelected = useMemo(() => {
+    if (eligibleFilteredRows.length === 0) return false;
+    return eligibleFilteredRows.every((r) => selected.has(r.id));
+  }, [eligibleFilteredRows, selected]);
+
+  const someEligibleSelected = useMemo(() => {
+    if (eligibleFilteredRows.length === 0) return false;
+    return eligibleFilteredRows.some((r) => selected.has(r.id));
+  }, [eligibleFilteredRows, selected]);
+
+  // Derived counts for actionable buttons
+  const pendingSelectedCount = useMemo(() => {
+    if (!session) return 0;
+    return Array.from(selected).filter((id) => session.rows.find((r) => r.id === id)?.state === "Pendente").length;
+  }, [session, selected]);
+
+  const divergentSelectedCount = useMemo(() => {
+    if (!session) return 0;
+    return Array.from(selected).filter((id) => {
+      const r = session.rows.find((candidate) => candidate.id === id);
+      return r !== undefined && r.reconciliationDecision === null && reconciliationByRowId.get(id) === "diverges";
+    }).length;
+  }, [session, selected, reconciliationByRowId]);
+
+  function handleSelectAllFilteredToggle() {
+    if (allEligibleSelected) {
+      setSelected(new Set());
+    } else {
+      const next = new Set(selected);
+      eligibleFilteredRows.forEach((r) => next.add(r.id));
+      setSelected(next);
+    }
+  }
+
+  function handleClearSelection() {
+    setSelected(new Set());
+  }
+
+  // Clear selection on filter changes to prevent accidental bulk actions on invisible rows
+  function handleFilterStateChange(newState: string) {
+    setFilterState(newState);
+    setPage(0);
+    setSelected(new Set());
+  }
+
+  function handleFilterLoteChange(newLote: string) {
+    setFilterLote(newLote);
+    setPage(0);
+    setSelected(new Set());
+  }
+
+  function handleSearchChange(newSearch: string) {
+    setSearch(newSearch);
+    setPage(0);
+    setSelected(new Set());
+  }
 
   const pageRows = filteredRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
@@ -270,6 +390,18 @@ export default function OrcamentoRevisaoPage() {
   const correctedCount = session.rows.filter((r) => r.state === "Corrigido").length;
   const notBudgetCount = session.rows.filter((r) => r.state === "NaoPertenceAoOrcamento").length;
 
+  const thStyle: React.CSSProperties = {
+    position: "sticky",
+    top: 0,
+    zIndex: 10,
+    backgroundColor: "#111827",
+    color: "#f3f4f6",
+    padding: "0.6rem 0.5rem",
+    borderBottom: "2px solid #374151",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.25)",
+    whiteSpace: "nowrap",
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <section className="page-header">
@@ -316,7 +448,7 @@ export default function OrcamentoRevisaoPage() {
 
       <Card title="Filtros">
         <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "center" }}>
-          <select value={filterState} onChange={(e) => { setFilterState(e.target.value); setPage(0); }}>
+          <select value={filterState} onChange={(e) => handleFilterStateChange(e.target.value)}>
             <option value="all">Todos os estados</option>
             <option value="Pendente">Pendente</option>
             <option value="Confirmado">Confirmado</option>
@@ -325,7 +457,7 @@ export default function OrcamentoRevisaoPage() {
             <option value="InseridoManualmente">Inserido manualmente</option>
             <option value="divergent">Somente com divergência de reconciliação</option>
           </select>
-          <select value={filterLote} onChange={(e) => { setFilterLote(e.target.value); setPage(0); }}>
+          <select value={filterLote} onChange={(e) => handleFilterLoteChange(e.target.value)}>
             <option value="all">Todos os lotes</option>
             {lotes.map((lote) => (
               <option key={lote} value={lote}>{lote}</option>
@@ -335,43 +467,64 @@ export default function OrcamentoRevisaoPage() {
             type="text"
             placeholder="Buscar por item, código ou descrição"
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            onChange={(e) => handleSearchChange(e.target.value)}
             style={{ minWidth: "260px" }}
           />
-          <span>{filteredRows.length} linha(s)</span>
+          <span style={{ fontWeight: 500 }}>{filteredRows.length} linha(s) encontrada(s)</span>
+
+          {eligibleFilteredRows.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginLeft: "auto" }}>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}>
+                <input
+                  type="checkbox"
+                  checked={allEligibleSelected}
+                  ref={(input) => {
+                    if (input) input.indeterminate = someEligibleSelected && !allEligibleSelected;
+                  }}
+                  onChange={handleSelectAllFilteredToggle}
+                />
+                Selecionar todos os resultados filtrados ({eligibleFilteredRows.length})
+              </label>
+              {selected.size > 0 && (
+                <Button variant="secondary" onClick={handleClearSelection}>
+                  Limpar seleção ({selected.size})
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </Card>
 
       <Card
         title="Linhas do Orçamento"
         action={
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <Button disabled={selected.size === 0 || busy} onClick={handleBulkConfirmSelection}>
-              Confirmar seleção ({selected.size})
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <Button disabled={pendingSelectedCount === 0 || busy} onClick={handleBulkConfirmSelection}>
+              Confirmar selecionadas ({pendingSelectedCount})
             </Button>
-            <Button disabled={selected.size === 0 || busy} onClick={handleBulkAcceptDivergencesSelection}>
-              Aceitar divergências selecionadas
+            <Button disabled={divergentSelectedCount === 0 || busy} onClick={handleBulkAcceptDivergencesSelection}>
+              Aceitar divergências selecionadas ({divergentSelectedCount})
             </Button>
           </div>
         }
       >
-        <div style={{ overflowX: "auto" }}>
+        <div style={{ overflowX: "auto", position: "relative" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
             <thead>
-              <tr style={{ textAlign: "left", borderBottom: "1px solid #ddd" }}>
-                <th></th>
-                <th>Estado</th>
-                <th>Lote</th>
-                <th>Item</th>
-                <th>Descrição</th>
-                <th>Unid.</th>
-                <th>Quant.</th>
-                <th>Custo unit.</th>
-                <th>BDI</th>
-                <th>Preço unit.</th>
-                <th>Total</th>
-                <th>Pág.</th>
-                <th></th>
+              <tr style={{ textAlign: "left" }}>
+                <th style={{ ...thStyle, width: "32px" }}></th>
+                <th style={thStyle}>Estado</th>
+                <th style={thStyle}>Lote</th>
+                <th style={thStyle}>Item</th>
+                <th style={thStyle}>Descrição</th>
+                <th style={thStyle}>Unid.</th>
+                <th style={thStyle}>Quant.</th>
+                <th style={thStyle}>Custo unit. (R$)</th>
+                <th style={thStyle}>BDI</th>
+                <th style={thStyle}>Preço unit. (R$)</th>
+                <th style={thStyle}>Total (R$)</th>
+                <th style={thStyle}>Pág.</th>
+                <th style={thStyle}></th>
               </tr>
             </thead>
             <tbody>
@@ -379,8 +532,8 @@ export default function OrcamentoRevisaoPage() {
                 const rec = reconciliationByRowId.get(row.id);
                 return (
                   <Fragment key={row.id}>
-                    <tr style={{ borderBottom: "1px solid #eee" }}>
-                      <td>
+                    <tr style={{ borderBottom: "1px solid #1f2937" }}>
+                      <td style={{ padding: "0.5rem" }}>
                         {(row.state === "Pendente" || (rec === "diverges" && row.reconciliationDecision === null)) && (
                           <input
                             type="checkbox"
@@ -394,26 +547,28 @@ export default function OrcamentoRevisaoPage() {
                           />
                         )}
                       </td>
-                      <td>
-                        <span style={{ color: STATE_COLORS[row.state], fontWeight: 600 }}>{STATE_LABELS[row.state]}</span>
-                        {rec === "diverges" && row.reconciliationDecision === null && (
-                          <span style={{ color: "#8a2e2e", marginLeft: "0.4rem" }} title="Divergência de reconciliação não resolvida">⚠</span>
-                        )}
-                        {rec === "diverges" && row.reconciliationDecision !== null && (
-                          <span style={{ color: "#0a7a3d", marginLeft: "0.4rem" }} title="Divergência aceita como documentada">✓</span>
-                        )}
+                      <td style={{ padding: "0.5rem" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+                          <StateBadge state={row.state} />
+                          {rec === "diverges" && row.reconciliationDecision === null && (
+                            <span style={{ color: "#ef4444", fontWeight: 700, marginLeft: "0.2rem" }} title="Divergência de reconciliação não resolvida">⚠</span>
+                          )}
+                          {rec === "diverges" && row.reconciliationDecision !== null && (
+                            <span style={{ color: "#10b981", fontWeight: 700, marginLeft: "0.2rem" }} title="Divergência aceita como documentada">✓</span>
+                          )}
+                        </div>
                       </td>
-                      <td>{row.lotReference}</td>
-                      <td>{row.revised.itemCode ?? "—"}</td>
-                      <td style={{ fontWeight: row.kind !== "ServiceItem" ? 700 : 400, maxWidth: "320px" }}>{row.revised.description ?? "—"}</td>
-                      <td>{row.revised.unit ?? "—"}</td>
-                      <td>{row.revised.quantityText ?? "—"}</td>
-                      <td>{row.revised.unitCostWithoutBdiText ?? "—"}</td>
-                      <td>{row.revised.bdiPercentText ?? "—"}</td>
-                      <td>{row.revised.unitPriceWithBdiText ?? "—"}</td>
-                      <td>{row.revised.totalPriceText ?? row.revised.documentalGroupTotalText ?? "—"}</td>
-                      <td>{row.page ?? "—"}</td>
-                      <td>
+                      <td style={{ padding: "0.5rem" }}>{row.lotReference}</td>
+                      <td style={{ padding: "0.5rem" }}>{row.revised.itemCode ?? "—"}</td>
+                      <td style={{ padding: "0.5rem", fontWeight: row.kind !== "ServiceItem" ? 700 : 400, maxWidth: "320px" }}>{row.revised.description ?? "—"}</td>
+                      <td style={{ padding: "0.5rem" }}>{row.revised.unit ?? "—"}</td>
+                      <td style={{ padding: "0.5rem" }}>{row.revised.quantityText ?? "—"}</td>
+                      <td style={{ padding: "0.5rem" }}>{formatBudgetMoneyPtBr(row.revised.unitCostWithoutBdiText)}</td>
+                      <td style={{ padding: "0.5rem" }}>{row.revised.bdiPercentText ?? "—"}</td>
+                      <td style={{ padding: "0.5rem" }}>{formatBudgetMoneyPtBr(row.revised.unitPriceWithBdiText)}</td>
+                      <td style={{ padding: "0.5rem" }}>{formatBudgetMoneyPtBr(row.revised.totalPriceText ?? row.revised.documentalGroupTotalText)}</td>
+                      <td style={{ padding: "0.5rem" }}>{row.page ?? "—"}</td>
+                      <td style={{ padding: "0.5rem" }}>
                         <button onClick={() => setExpandedRowId(expandedRowId === row.id ? null : row.id)}>
                           {expandedRowId === row.id ? "Fechar" : "Ver"}
                         </button>
@@ -421,7 +576,7 @@ export default function OrcamentoRevisaoPage() {
                     </tr>
                     {expandedRowId === row.id && (
                       <tr>
-                        <td colSpan={13} style={{ background: "#fafafa", padding: "1rem" }}>
+                        <td colSpan={13} style={{ background: "#1f2937", padding: "1rem" }}>
                           <RowDetail
                             row={row}
                             reconciliationStatus={rec}
@@ -441,10 +596,19 @@ export default function OrcamentoRevisaoPage() {
             </tbody>
           </table>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "1rem" }}>
-          <Button disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>Anterior</Button>
-          <span>Página {page + 1} de {totalPages}</span>
-          <Button disabled={page >= totalPages - 1} onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}>Próxima</Button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem" }}>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <Button disabled={page === 0} onClick={() => setPage(0)}>
+              ⏮ Primeira página
+            </Button>
+            <Button disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+              Anterior
+            </Button>
+          </div>
+          <span style={{ fontWeight: 600 }}>Página {page + 1} de {totalPages}</span>
+          <Button disabled={page >= totalPages - 1} onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}>
+            Próxima
+          </Button>
         </div>
       </Card>
     </div>
@@ -454,7 +618,7 @@ export default function OrcamentoRevisaoPage() {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div style={{ fontSize: "0.75rem", color: "#666" }}>{label}</div>
+      <div style={{ fontSize: "0.75rem", color: "#9ca3af" }}>{label}</div>
       <div style={{ fontSize: "1.1rem", fontWeight: 700 }}>{value}</div>
     </div>
   );
@@ -494,7 +658,7 @@ function RowDetail({
         </div>
       </div>
       {reconciliationStatus === "diverges" && (
-        <div style={{ background: row.reconciliationDecision ? "#eaf6ef" : "#fbeaea", padding: "0.75rem", borderRadius: "4px" }}>
+        <div style={{ background: row.reconciliationDecision ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)", padding: "0.75rem", borderRadius: "4px" }}>
           <strong>Divergência de reconciliação</strong>
           {row.reconciliationDecision ? (
             <p>
@@ -545,11 +709,11 @@ function FieldsTable({ fields }: { fields: RowFields }) {
     ["Tipo", fields.sourceTipo],
     ["Unidade", fields.unit],
     ["Quantidade", fields.quantityText],
-    ["Custo unit. s/BDI", fields.unitCostWithoutBdiText],
+    ["Custo unit. s/BDI", formatBudgetMoneyPtBr(fields.unitCostWithoutBdiText)],
     ["BDI", fields.bdiPercentText],
-    ["Preço unit. c/BDI", fields.unitPriceWithBdiText],
-    ["Total", fields.totalPriceText],
-    ["Total documental (grupo)", fields.documentalGroupTotalText],
+    ["Preço unit. c/BDI", formatBudgetMoneyPtBr(fields.unitPriceWithBdiText)],
+    ["Total", formatBudgetMoneyPtBr(fields.totalPriceText)],
+    ["Total documental (grupo)", formatBudgetMoneyPtBr(fields.documentalGroupTotalText)],
     ["Col. FGV-DNIT", fields.colFgvDnit],
   ];
   return (
@@ -557,7 +721,7 @@ function FieldsTable({ fields }: { fields: RowFields }) {
       <tbody>
         {entries.map(([label, value]) => (
           <tr key={label}>
-            <td style={{ color: "#666", paddingRight: "0.5rem" }}>{label}</td>
+            <td style={{ color: "#9ca3af", paddingRight: "0.5rem" }}>{label}</td>
             <td>{value ?? "—"}</td>
           </tr>
         ))}

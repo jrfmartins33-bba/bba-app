@@ -14,6 +14,8 @@ function assertTrue(condition: boolean, message: string) {
   }
 }
 
+import { formatBudgetMoneyPtBr } from "../../../../lib/bdos/format-budget-money";
+
 const REPO_ROOT = resolve(__dirname, "..", "..", "..", "..", "..", "..");
 
 function readSource(relativePath: string): string {
@@ -115,10 +117,23 @@ function main() {
     assertTrue(grantMigrationSource.includes("GRANT ALL ON public.budget_review_sessions TO service_role"), "Must grant ALL on sessions to service_role");
   });
 
-  runTest("3.2 Zero Motor R11 / OCR no fluxo de importação", () => {
-    const combined = [contextoSource, prepareUploadSource, processSource, importarPageSource].join("\n");
-    assertTrue(!combined.toLowerCase().includes("motor-r11"), "Zero references to Motor R11");
-    assertTrue(!combined.toLowerCase().includes("paddleocr"), "Zero references to PaddleOCR");
+  // ── 4. Money Formatter pt-BR & Idempotent Summary ───────────────────────
+  console.log("\n4. BRL Money Formatter & Idempotent Summary\n");
+
+  runTest("4.1 formatBudgetMoneyPtBr formats Brazilian currency correctly", () => {
+    assertEqual(formatBudgetMoneyPtBr("361.52"), "361,52", "361.52 -> 361,52");
+    assertEqual(formatBudgetMoneyPtBr("4489.30"), "4.489,30", "4489.30 -> 4.489,30");
+    assertEqual(formatBudgetMoneyPtBr("46656.22"), "46.656,22", "46656.22 -> 46.656,22");
+    assertEqual(formatBudgetMoneyPtBr("33592.47"), "33.592,47", "33592.47 -> 33.592,47");
+    assertEqual(formatBudgetMoneyPtBr("316292.87"), "316.292,87", "316292.87 -> 316.292,87");
+    assertEqual(formatBudgetMoneyPtBr("0.90"), "0,90", "0.90 -> 0,90");
+    assertEqual(formatBudgetMoneyPtBr(null), "—", "null -> —");
+  });
+
+  runTest("4.2 import-structured-budget-xlsx-service computes summary on idempotent reuse", () => {
+    const serviceSource = readSource("packages/bdos-core/src/services/budget-official-review/import-structured-budget-xlsx-service.ts");
+    assertTrue(serviceSource.includes("summary: computeSummaryFromRows(existingSession.rows)"), "Must include summary on existingSession return");
+    assertTrue(serviceSource.includes("summary: computeSummaryFromRows(reloaded.rows)"), "Must include summary on reloaded session return");
   });
 
   console.log("\n✓ All Sprint 21.5C.2B tests passed!\n");

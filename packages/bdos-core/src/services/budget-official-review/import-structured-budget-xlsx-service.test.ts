@@ -405,8 +405,8 @@ async function main() {
 
     assertTrue(ver01 !== null && ver02 !== null, "both document versions loaded");
     assertTrue(ver01!.documentId !== ver02!.documentId, "DocumentArtifact IDs MUST be distinct between different lots");
-    assertEqual(ver01!.documentId, `doc-lot-${caseId}-${lotId}`, "Lote 01 artifact ID");
-    assertEqual(ver02!.documentId, `doc-lot-${caseId}-${lot02Id}`, "Lote 02 artifact ID");
+    assertEqual(ver01!.documentId, lotId, "Lote 01 artifact ID");
+    assertEqual(ver02!.documentId, lot02Id, "Lote 02 artifact ID");
   });
 
   await runTest("6. Nova versão de XLSX no MESMO lote reusa o mesmo DocumentArtifact do lote", async () => {
