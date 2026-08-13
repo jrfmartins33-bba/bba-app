@@ -197,45 +197,58 @@ export function createBudgetReviewServerRepository(
       return Number(data.imported ?? 0);
     },
 
-    async bulkMutateRows(organizationId, actor, sessionId, mutations, occurredAt) {
+    async bulkMutateRows(organizationId, actor, sessionId, mutations) {
       const { data, error } = await wClient.rpc("bulk_mutate_budget_review_rows", {
-        p_session_id: sessionId,
+        p_actor_id: actor,
         p_company_id: organizationId,
+        p_session_id: sessionId,
         p_mutations: mutations.map((m) => ({
-          id: toValidUuid(m.id),
-          state: m.state,
+          row_id: toValidUuid(m.rowId),
+          new_state: m.newState,
           revised: m.revised,
-          justification: m.justification,
-          evidenceText: m.evidenceText,
+          justification: m.justification ?? null,
+          evidence_text: m.evidenceText ?? null,
+          audit_event_id: m.auditEvent.id,
+          audit_action: m.auditEvent.action,
+          audit_actor: m.auditEvent.actor,
+          audit_occurred_at: m.auditEvent.occurredAt,
+          audit_field_changes: m.auditEvent.fieldChanges ?? [],
+          audit_justification: m.auditEvent.justification ?? null,
+          audit_metadata: m.auditEvent.metadata ?? {},
         })),
-        p_actor: actor,
-        p_occurred_at: occurredAt,
       });
 
-      if (error || !data) {
+      if (error || typeof data !== "number") {
         throw error ?? new Error("Falha ao salvar as mutações em lote.");
       }
 
-      return Array.isArray(data) && data.length > 0 ? Number(data[0]?.mutated_count ?? 0) : 0;
+      return Number(data);
     },
 
-    async bulkRecordReconciliationDecisions(organizationId, actor, sessionId, decisions, occurredAt) {
+    async bulkRecordReconciliationDecisions(organizationId, actor, sessionId, decisions) {
       const { data, error } = await wClient.rpc("bulk_record_budget_review_reconciliation_decisions", {
-        p_session_id: sessionId,
+        p_actor_id: actor,
         p_company_id: organizationId,
+        p_session_id: sessionId,
         p_decisions: decisions.map((d) => ({
-          rowId: toValidUuid(d.rowId),
+          row_id: toValidUuid(d.rowId),
+          status: d.status,
           justification: d.justification,
+          decided_at: d.decidedAt,
+          audit_event_id: d.auditEvent.id,
+          audit_action: d.auditEvent.action,
+          audit_actor: d.auditEvent.actor,
+          audit_occurred_at: d.auditEvent.occurredAt,
+          audit_justification: d.auditEvent.justification ?? null,
+          audit_metadata: d.auditEvent.metadata ?? {},
         })),
-        p_actor: actor,
-        p_occurred_at: occurredAt,
       });
 
-      if (error || !data) {
+      if (error || typeof data !== "number") {
         throw error ?? new Error("Falha ao salvar as decisões em lote.");
       }
 
-      return Array.isArray(data) && data.length > 0 ? Number(data[0]?.decided_count ?? 0) : 0;
+      return Number(data);
     },
   };
 }

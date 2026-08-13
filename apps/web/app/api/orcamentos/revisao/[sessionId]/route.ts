@@ -12,6 +12,7 @@ import {
   budgetReviewConsolidationReadiness,
   reconcileGroupRow,
   reconcileServiceItemRow,
+  calculateOfficialBudgetTotalText,
   BudgetLineKind,
 } from "@bba/bdos-core/services/budget-official-review";
 import type { BudgetReviewServiceResult, ConsolidateBudgetReviewSessionServiceResult } from "@bba/bdos-core/services/budget-official-review";
@@ -78,10 +79,26 @@ export async function GET(_request: Request, { params }: RouteParams): Promise<N
     ? await procurementCaseRepo.findProcurementLotById(organizationId, session.procurementCaseId, session.procurementLotId)
     : null;
 
+  const { data: companyData } = await readClient
+    .from("companies")
+    .select("name")
+    .eq("id", organizationId)
+    .maybeSingle();
+
+  const { data: docVersionData } = await readClient
+    .from("document_versions")
+    .select("original_file_name")
+    .eq("id", session.documentVersionId)
+    .maybeSingle();
+
   const contextDto = {
+    companyName: companyData?.name ?? "Empresa",
     procurementCaseTitle: procurementCase?.title ?? "Processo de Licitação",
     procurementCaseReference: procurementCase?.externalReference ?? null,
     procurementLotTitle: procurementLot?.title ?? (session.procurementLotId ? "Lote" : "Visão Abrangente"),
+    procurementLotReference: procurementLot?.externalReference ?? null,
+    originalFileName: docVersionData?.original_file_name ?? "Planilha Orçamentária.xlsx",
+    officialBudgetTotalText: calculateOfficialBudgetTotalText(session.rows),
   };
 
   return NextResponse.json({ session, reconciliation, context: contextDto });

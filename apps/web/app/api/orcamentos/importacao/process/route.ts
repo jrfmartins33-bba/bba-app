@@ -200,6 +200,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       procurementCaseTitle: procurementCase?.title ?? "Processo de Licitação",
       procurementLotTitle: procurementLot?.title ?? "Lote",
       originalFileName: body.originalFileName,
+      officialBudgetTotalText: result.officialBudgetTotalText ?? null,
       groupCount: result.summary?.groupCount ?? 0,
       subgroupCount: result.summary?.subgroupCount ?? 0,
       serviceItemCount: result.summary?.serviceItemCount ?? 0,

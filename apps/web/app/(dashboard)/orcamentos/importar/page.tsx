@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, FileSpreadsheet, FolderGit2, Layers, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileSpreadsheet, FolderGit2, Layers, AlertCircle, Loader2, ArrowRight, Upload } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 import { Card, Button } from "@bba/ui";
 import { BudgetPageHeader } from "@/components/budget/budget-page-header";
 import { toHumanImportError } from "@/lib/bdos/to-human-import-error";
+import { formatBudgetMoneyPtBr } from "@/lib/bdos/format-budget-number";
 
 interface ProcurementLotDto {
   readonly id: string;
@@ -31,6 +32,7 @@ interface ProcessResultDto {
   readonly procurementCaseTitle: string;
   readonly procurementLotTitle: string;
   readonly originalFileName: string;
+  readonly officialBudgetTotalText?: string;
   readonly groupCount: number;
   readonly subgroupCount: number;
   readonly serviceItemCount: number;
@@ -254,10 +256,40 @@ export default function ImportarOrcamentoPage() {
                 </div>
               </div>
 
+              {/* Hero Valor Oficial */}
+              <div
+                style={{
+                  background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+                  borderRadius: "10px",
+                  padding: "1.25rem 1.5rem",
+                  color: "#ffffff",
+                  border: "1px solid #334155",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "1rem",
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "0.75rem", textTransform: "uppercase", color: "#94a3b8", fontWeight: 600, letterSpacing: "0.05em" }}>
+                    Valor Oficial Identificado
+                  </div>
+                  <div style={{ fontSize: "2rem", fontWeight: 800, color: "#f59e0b", marginTop: "0.2rem", letterSpacing: "-0.02em" }}>
+                    R$ {formatBudgetMoneyPtBr(result.officialBudgetTotalText)}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", fontSize: "0.85rem", color: "#cbd5e1" }}>
+                  <div><strong style={{ color: "#f8fafc" }}>Processo:</strong> {result.procurementCaseTitle}</div>
+                  <div style={{ marginTop: "0.2rem" }}><strong style={{ color: "#f8fafc" }}>Lote:</strong> {result.procurementLotTitle}</div>
+                </div>
+              </div>
+
               {/* Context Callout */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", background: "#f8fafc", padding: "1rem", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
                 <div>
-                  <div style={{ fontSize: "0.75rem", color: "#64748b", textTransform: "uppercase", fontWeight: 600 }}>Planilha</div>
+                  <div style={{ fontSize: "0.75rem", color: "#64748b", textTransform: "uppercase", fontWeight: 600 }}>Planilha Fonte</div>
                   <div style={{ fontWeight: 600, color: "#1e293b", fontSize: "0.95rem", wordBreak: "break-all" }}>{result.originalFileName}</div>
                 </div>
                 <div>
@@ -293,11 +325,33 @@ export default function ImportarOrcamentoPage() {
                 </div>
               </div>
 
-              {/* Actions */}
-              <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "center", paddingTop: "0.5rem", borderTop: "1px solid #e2e8f0" }}>
+              {/* Actions Footer */}
+              <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "center", paddingTop: "1rem", borderTop: "1px solid #e2e8f0" }}>
                 {result.canOpenReview && result.reviewSessionId ? (
-                  <Link className="bba-button bba-button--primary" href={`/admin/orcamentos/${result.reviewSessionId}/revisao`}>
-                    Abrir Revisão do Orçamento Oficial
+                  <Link
+                    href={`/admin/orcamentos/${result.reviewSessionId}/revisao`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.75rem",
+                      background: "linear-gradient(135deg, #d97706 0%, #b45309 100%)",
+                      color: "#ffffff",
+                      padding: "0.875rem 1.75rem",
+                      borderRadius: "8px",
+                      fontWeight: 700,
+                      fontSize: "1rem",
+                      textDecoration: "none",
+                      boxShadow: "0 4px 12px rgba(217, 119, 6, 0.3)",
+                      transition: "transform 0.15s ease, boxShadow 0.15s ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", flexDirection: "column", textAlign: "left" }}>
+                      <span>Revisar orçamento</span>
+                      <span style={{ fontSize: "0.75rem", fontWeight: 400, color: "rgba(255, 255, 255, 0.85)" }}>
+                        Conferir os itens e preparar a versão oficial
+                      </span>
+                    </div>
+                    <ArrowRight size={20} />
                   </Link>
                 ) : (
                   <div style={{ fontSize: "0.9rem", color: "#475569", fontWeight: 500 }}>
@@ -306,14 +360,27 @@ export default function ImportarOrcamentoPage() {
                 )}
                 <button
                   type="button"
-                  className="bba-button bba-button--secondary"
                   onClick={() => {
                     setStep("idle");
                     setResult(null);
                     setSelectedFile(null);
                   }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    background: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    color: "#334155",
+                    padding: "0.875rem 1.5rem",
+                    borderRadius: "8px",
+                    fontWeight: 600,
+                    fontSize: "0.95rem",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
                 >
-                  Importar outro orçamento
+                  <Upload size={18} /> Importar outro orçamento
                 </button>
               </div>
             </div>

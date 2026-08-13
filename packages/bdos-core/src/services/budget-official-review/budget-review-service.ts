@@ -12,7 +12,7 @@ import {
   insertManualBudgetReviewRow,
   restoreBudgetReviewRow,
 } from "../../domain/budget-official-review";
-import type { BudgetReviewAuditEvent, BudgetReviewRow, BudgetReviewSession } from "../../domain/budget-official-review";
+import type { BudgetReviewAuditAction, BudgetReviewAuditEvent, BudgetReviewRow, BudgetReviewSession } from "../../domain/budget-official-review";
 import { BudgetVersionStatus, consolidateBudgetVersion } from "../../domain/budget-version";
 import type { BudgetVersion } from "../../domain/budget-version";
 import type { BudgetVersionRepository, PersistedEntity } from "../procurement-engineering/budget-version.repository";
@@ -252,15 +252,28 @@ export async function bulkConfirmBudgetReviewRowsService(
     if (typeof repository.bulkMutateRows === "function") {
       const mutations = Array.from(confirmedRowIds).map((rowId) => {
         const row = findRow(domainResult.session, rowId)!;
+        const rowAuditEvent: AuditEventToPersist = {
+          id: `${bulkEvent.id}:${rowId}`,
+          action: "BulkConfirmed" as BudgetReviewAuditAction,
+          actor: bulkEvent.actor,
+          occurredAt: bulkEvent.occurredAt,
+          fieldChanges: [],
+          justification: null,
+          metadata: { bulkEventId: bulkEvent.id },
+        };
         return {
-          id: row.id,
-          state: row.state,
+          rowId: row.id,
+          newState: row.state,
           revised: row.revised,
           justification: row.justification,
           evidenceText: row.evidenceText,
+          auditEvent: rowAuditEvent,
         };
       });
-      await repository.bulkMutateRows(context.organizationId, context.actor, command.sessionId, mutations, occurredAt);
+      const mutatedCount = await repository.bulkMutateRows(context.organizationId, context.actor, command.sessionId, mutations);
+      if (mutatedCount !== confirmedRowIds.size) {
+        return { outcome: "persistence_failure", message: `Count mismatch: expected ${confirmedRowIds.size}, got ${mutatedCount}` };
+      }
     } else {
       for (const rowId of confirmedRowIds) {
         const row = findRow(domainResult.session, rowId)!;
@@ -333,17 +346,34 @@ export async function bulkAcceptBudgetReviewRowDivergencesService(
 
   try {
     if (typeof repository.bulkRecordReconciliationDecisions === "function") {
-      const decisions = Array.from(acceptedRowIds).map((rowId) => ({
-        rowId,
-        justification: command.justification,
-      }));
-      await repository.bulkRecordReconciliationDecisions(
+      const decisions = Array.from(acceptedRowIds).map((rowId) => {
+        const row = findRow(domainResult.session, rowId)!;
+        const rowAuditEvent: AuditEventToPersist = {
+          id: `${bulkEvent.id}:${rowId}`,
+          action: "BulkReconciliationAcceptedAsDocumented" as BudgetReviewAuditAction,
+          actor: bulkEvent.actor,
+          occurredAt: bulkEvent.occurredAt,
+          fieldChanges: [],
+          justification: command.justification,
+          metadata: { bulkEventId: bulkEvent.id },
+        };
+        return {
+          rowId,
+          status: "AcceptedAsDocumented" as const,
+          justification: command.justification,
+          decidedAt: occurredAt,
+          auditEvent: rowAuditEvent,
+        };
+      });
+      const decidedCount = await repository.bulkRecordReconciliationDecisions(
         context.organizationId,
         context.actor,
         command.sessionId,
         decisions,
-        occurredAt,
       );
+      if (decidedCount !== acceptedRowIds.size) {
+        return { outcome: "persistence_failure", message: `Count mismatch: expected ${acceptedRowIds.size}, got ${decidedCount}` };
+      }
     } else {
       for (const rowId of acceptedRowIds) {
         const row = findRow(domainResult.session, rowId)!;

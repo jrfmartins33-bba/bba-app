@@ -12,8 +12,9 @@ import { BUDGET_XLSX_IMPORTER_VERSION } from "../../domain/budget-official-revie
 import {
   createBudgetReviewSession,
   importBudgetReviewRows,
+  calculateOfficialBudgetTotalText,
 } from "../../domain/budget-official-review";
-import type { BudgetReviewSession } from "../../domain/budget-official-review";
+import type { BudgetReviewRow, BudgetReviewSession } from "../../domain/budget-official-review";
 import {
   BudgetVersionOriginKind,
   createBudgetVersion,
@@ -68,6 +69,7 @@ export interface ImportStructuredBudgetXlsxResult {
   readonly procurementLotId?: string;
   readonly rowCount?: number;
   readonly summary?: BudgetXlsxImportSummary;
+  readonly officialBudgetTotalText?: string;
   readonly diagnostics?: ReadonlyArray<BudgetXlsxImportDiagnostic>;
   readonly message?: string;
   readonly errors?: ReadonlyArray<string>;
@@ -200,6 +202,7 @@ function computeSummaryFromRows(rows: ReadonlyArray<{ kind: string }>): BudgetXl
         procurementLotId: command.procurementLotId,
         rowCount: existingSession.rows.length,
         summary: computeSummaryFromRows(existingSession.rows),
+        officialBudgetTotalText: calculateOfficialBudgetTotalText(existingSession.rows),
       };
     }
   } catch (error) {
@@ -383,6 +386,7 @@ function computeSummaryFromRows(rows: ReadonlyArray<{ kind: string }>): BudgetXl
   }
 
   // 8. Import Rows as Pending
+  let importedRows: ReadonlyArray<BudgetReviewRow> = [];
   try {
     const occurredAt = nowIso();
     const rowsDomainResult = importBudgetReviewRows({
@@ -396,11 +400,13 @@ function computeSummaryFromRows(rows: ReadonlyArray<{ kind: string }>): BudgetXl
       return { outcome: "domain_error", errors: rowsDomainResult.errors.map((e) => `${e.field}: ${e.message}`) };
     }
 
+    importedRows = rowsDomainResult.session.rows;
+
     await reviewRepository.importRows(
       context.organizationId,
       context.actor,
       reviewSession.id,
-      rowsDomainResult.session.rows,
+      importedRows,
       occurredAt,
     );
   } catch (error) {
@@ -418,6 +424,7 @@ function computeSummaryFromRows(rows: ReadonlyArray<{ kind: string }>): BudgetXl
     procurementLotId: command.procurementLotId,
     rowCount: importResult.rows.length,
     summary: importResult.summary,
+    officialBudgetTotalText: calculateOfficialBudgetTotalText(importedRows),
     diagnostics: importResult.diagnostics,
   };
 }

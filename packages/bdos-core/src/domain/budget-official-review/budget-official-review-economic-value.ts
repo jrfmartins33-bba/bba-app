@@ -104,3 +104,37 @@ function normalizeBrazilianDecimal(text: string | null): string | null {
   const withDotDecimal = withoutThousands.replace(",", ".");
   return withDotDecimal;
 }
+
+/**
+ * Soma exata em centavos de todas as linhas de tipo ServiceItem do orçamento oficial importado
+ * (`extracted.totalPriceText`). Ignora Groups e Subgroups para evitar dupla contagem.
+ */
+export function calculateOfficialBudgetCents(
+  rows: ReadonlyArray<{
+    readonly kind: string;
+    readonly extracted?: { readonly totalPriceText?: string | null } | null;
+  }>,
+): bigint {
+  let totalCents = 0n;
+  for (const row of rows) {
+    if (row.kind === "ServiceItem" && row.extracted?.totalPriceText) {
+      const cents = moneyCentsFromBrazilianText(row.extracted.totalPriceText);
+      if (cents !== null) {
+        totalCents += BigInt(cents);
+      }
+    }
+  }
+  return totalCents;
+}
+
+export function calculateOfficialBudgetTotalText(
+  rows: ReadonlyArray<{
+    readonly kind: string;
+    readonly extracted?: { readonly totalPriceText?: string | null } | null;
+  }>,
+): string {
+  const totalCents = calculateOfficialBudgetCents(rows);
+  const dollars = totalCents / 100n;
+  const cents = totalCents % 100n;
+  return `${dollars.toString()}.${cents.toString().padStart(2, "0")}`;
+}

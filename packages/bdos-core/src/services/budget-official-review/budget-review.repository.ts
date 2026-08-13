@@ -96,13 +96,13 @@ export interface BudgetReviewRepository {
     actor: string,
     sessionId: string,
     mutations: ReadonlyArray<{
-      id: string;
-      state: string;
+      rowId: string;
+      newState: string;
       revised: unknown;
       justification: string | null;
       evidenceText: string | null;
+      auditEvent: AuditEventToPersist;
     }>,
-    occurredAt: string,
   ): Promise<number>;
 
   /** Decisões de reconciliação em lote — persiste N decisões em uma única transação/chamada RPC. */
@@ -112,8 +112,10 @@ export interface BudgetReviewRepository {
     sessionId: string,
     decisions: ReadonlyArray<{
       rowId: string;
+      status: string;
       justification: string;
+      decidedAt: string;
+      auditEvent: AuditEventToPersist;
     }>,
-    occurredAt: string,
   ): Promise<number>;
 }

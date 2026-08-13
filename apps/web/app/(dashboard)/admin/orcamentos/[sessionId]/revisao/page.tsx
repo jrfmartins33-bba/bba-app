@@ -196,25 +196,7 @@ function ReconciliationBadge({ item, decision }: { item: ReconciliationItem | un
   }
 
   if (item.status === "matches") {
-    return (
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "0.25rem",
-          padding: "0.15rem 0.45rem",
-          borderRadius: "4px",
-          fontSize: "0.7rem",
-          fontWeight: 500,
-          backgroundColor: "rgba(16, 185, 129, 0.08)",
-          border: "1px solid rgba(16, 185, 129, 0.2)",
-          color: "#a7f3d0",
-          whiteSpace: "nowrap",
-        }}
-      >
-        ✓ Conciliado
-      </span>
-    );
+    return null;
   }
 
   return null;
@@ -223,9 +205,13 @@ function ReconciliationBadge({ item, decision }: { item: ReconciliationItem | un
 const PAGE_SIZE = 50;
 
 interface ReviewContext {
+  readonly companyName: string;
   readonly procurementCaseTitle: string;
   readonly procurementCaseReference: string | null;
   readonly procurementLotTitle: string;
+  readonly procurementLotReference: string | null;
+  readonly originalFileName: string;
+  readonly officialBudgetTotalText: string;
 }
 
 interface DialogState {
@@ -592,18 +578,113 @@ export default function OrcamentoRevisaoPage() {
     whiteSpace: "nowrap",
   };
 
+  const divergentCount = Array.from(reconciliationByRowId.values()).filter((r) => r.status === "diverges").length;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-      <section className="page-header">
-        <div>
-          <h1>Revisão do Orçamento Oficial</h1>
-          <p>
-            {reviewContext
-              ? `${reviewContext.procurementCaseTitle}${reviewContext.procurementLotTitle ? ` — ${reviewContext.procurementLotTitle}` : ""}`
-              : "Documento oficial"}
-          </p>
+      {/* Hero Premium Header */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+          borderRadius: "12px",
+          padding: "1.5rem 1.75rem",
+          border: "1px solid #334155",
+          color: "#ffffff",
+          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.25)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1.25rem" }}>
+          <div style={{ flex: 1, minWidth: "280px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.6rem" }}>
+              <span
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "#f59e0b",
+                  backgroundColor: "rgba(245, 158, 11, 0.15)",
+                  border: "1px solid rgba(245, 158, 11, 0.35)",
+                  padding: "0.2rem 0.65rem",
+                  borderRadius: "4px",
+                }}
+              >
+                Orçamento Oficial
+              </span>
+              <span
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  color: session.status === "Consolidated" ? "#34d399" : "#60a5fa",
+                  backgroundColor: session.status === "Consolidated" ? "rgba(52, 211, 153, 0.15)" : "rgba(96, 165, 250, 0.15)",
+                  padding: "0.2rem 0.65rem",
+                  borderRadius: "4px",
+                }}
+              >
+                {session.status === "Consolidated" ? "Consolidado" : "Em revisão"}
+              </span>
+            </div>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 800, margin: "0 0 0.35rem 0", color: "#f8fafc", lineHeight: 1.3 }}>
+              {reviewContext?.procurementCaseTitle ?? "Processo de Licitação"}
+            </h1>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.85rem", flexWrap: "wrap", fontSize: "0.875rem", color: "#94a3b8" }}>
+              <span>
+                <strong style={{ color: "#cbd5e1" }}>Lote:</strong> {reviewContext?.procurementLotTitle ?? "Lote"}
+              </span>
+              <span>•</span>
+              <span>
+                <strong style={{ color: "#cbd5e1" }}>Empresa:</strong> {reviewContext?.companyName ?? "BBA"}
+              </span>
+              <span>•</span>
+              <span>
+                <strong style={{ color: "#cbd5e1" }}>Arquivo:</strong> {reviewContext?.originalFileName ?? "Planilha.xlsx"}
+              </span>
+            </div>
+          </div>
+
+          <div
+            style={{
+              backgroundColor: "rgba(15, 23, 42, 0.75)",
+              border: "1px solid #334155",
+              borderRadius: "10px",
+              padding: "0.875rem 1.25rem",
+              textAlign: "right",
+              minWidth: "220px",
+            }}
+          >
+            <div style={{ fontSize: "0.75rem", textTransform: "uppercase", color: "#94a3b8", fontWeight: 600, letterSpacing: "0.05em" }}>
+              Valor Oficial Identificado
+            </div>
+            <div style={{ fontSize: "1.65rem", fontWeight: 800, color: "#f59e0b", marginTop: "0.2rem", letterSpacing: "-0.02em" }}>
+              R$ {formatBudgetMoneyPtBr(reviewContext?.officialBudgetTotalText)}
+            </div>
+          </div>
         </div>
-      </section>
+
+        {/* Progress Bar & Metrics */}
+        <div style={{ marginTop: "1.25rem", paddingTop: "1rem", borderTop: "1px solid #334155", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", fontSize: "0.8rem", color: "#94a3b8" }}>
+            <span>
+              <strong style={{ color: "#f8fafc" }}>Progresso da Revisão:</strong> {confirmedCount} de {totalRows} linhas revisadas ({Math.round((confirmedCount / Math.max(1, totalRows)) * 100)}%)
+            </span>
+            <div style={{ display: "flex", gap: "1rem" }}>
+              <span style={{ color: "#fbbf24" }}>● {pendingCount} pendente(s)</span>
+              {divergentCount > 0 && <span style={{ color: "#f87171" }}>⚠ {divergentCount} diferença(s)</span>}
+            </div>
+          </div>
+          <div style={{ height: "6px", width: "100%", backgroundColor: "#334155", borderRadius: "3px", overflow: "hidden" }}>
+            <div
+              style={{
+                height: "100%",
+                width: `${(confirmedCount / Math.max(1, totalRows)) * 100}%`,
+                backgroundColor: "#34d399",
+                borderRadius: "3px",
+                transition: "width 0.3s ease",
+              }}
+            />
+          </div>
+        </div>
+      </div>
 
       {toast && (
         <div
@@ -762,7 +843,7 @@ export default function OrcamentoRevisaoPage() {
             <thead>
               <tr style={{ textAlign: "left" }}>
                 <th style={{ ...thStyle, width: "32px" }}></th>
-                <th style={thStyle}>Estado / Conciliação</th>
+                <th style={thStyle}>Revisão</th>
                 <th style={thStyle}>Lote</th>
                 <th style={thStyle}>Item</th>
                 <th style={thStyle}>Descrição</th>
