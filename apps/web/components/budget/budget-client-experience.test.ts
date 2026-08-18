@@ -502,9 +502,9 @@ async function main(): Promise<void> {
     assertTrue((worksheet.match(/data-label=/g) ?? []).length >= 6, "cada célula da tabela deve ter data-label para o layout de celular");
   });
 
-  await runTest("estado vazio ('Nenhum orçamento real disponível') não promete envio/seleção indisponíveis", () => {
+  await runTest("estado vazio informa que nenhum orçamento foi preparado", () => {
     const emptyState = sourceOf("budget-empty-state.tsx");
-    assertTrue(emptyState.includes("Nenhum orçamento real disponível"), "título do estado vazio corrigido");
+    assertTrue(emptyState.includes("Nenhum orçamento preparado"), "título do estado vazio atualizado");
     assertTrue(
       !/envie ou selecione|selecionar um orçamento|enviar um orçamento/i.test(emptyState),
       "estado vazio não deve prometer envio ou seleção -- ações que ainda não existem nesta Sprint"

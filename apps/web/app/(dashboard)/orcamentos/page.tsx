@@ -4,15 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BudgetPageHeader } from "@/components/budget/budget-page-header";
 import { BudgetEmptyState } from "@/components/budget/budget-empty-state";
+import scenarioStyles from "@/components/budget/proposal-scenarios.module.css";
+import { formatBasisPointsPtBr, formatCentsPtBr, type ProposalScenarioDto } from "@/lib/proposal-scenarios";
 
 // Epic 21.5A — /orcamentos deixa de ser sempre vazio (enunciado §43):
-// quando existe uma BudgetVersion Consolidated acessível à organização
-// do usuário autenticado, mostra o orçamento real; senão, mantém o
-// estado vazio existente. Human-first (enunciado §44/§45): nenhum campo
-// técnico (fingerprint, grammarId, evidence, engineVersion) aparece
-// aqui — só o que a fonte documental realmente contém.
+// Quando existe um orçamento oficial consolidado acessível à organização
+// do usuário autenticado, mostra o retrato real; senão, mantém o estado
+// vazio. A tela exibe somente informação documental útil ao cliente.
 
-interface BudgetLine {
+interface OfficialLine {
   readonly id: string;
   readonly kind: "Group" | "Subgroup" | "ServiceItem";
   readonly description: { readonly status: "Confirmed"; readonly text: string } | { readonly status: "AbsentFromSource" };
@@ -23,42 +23,58 @@ interface BudgetLine {
   readonly metadata: Readonly<Record<string, unknown>>;
 }
 
-interface BudgetVersionDto {
+interface OfficialBudgetDto {
   readonly id: string;
   readonly status: "Draft" | "Consolidated";
-  readonly lines: ReadonlyArray<BudgetLine>;
+  readonly lines: ReadonlyArray<OfficialLine>;
 }
 
 function centsToBRL(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-function calculateTotal(lines: ReadonlyArray<BudgetLine>, lineId: string): number {
+function calculateTotal(lines: ReadonlyArray<OfficialLine>, lineId: string): number {
   const line = lines.find((l) => l.id === lineId);
   if (!line) return 0;
   if (line.kind === "ServiceItem") return line.totalCents ?? 0;
   return lines.filter((l) => l.parentLineId === lineId).reduce((sum, child) => sum + calculateTotal(lines, child.id), 0);
 }
 
-function orderedChildren(lines: ReadonlyArray<BudgetLine>, parentId: string | null): ReadonlyArray<BudgetLine> {
+function orderedChildren(lines: ReadonlyArray<OfficialLine>, parentId: string | null): ReadonlyArray<OfficialLine> {
   return lines.filter((l) => l.parentLineId === parentId).slice().sort((a, b) => a.position - b.position);
 }
 
-function lineText(line: BudgetLine): string {
+function lineText(line: OfficialLine): string {
   return line.description.status === "Confirmed" ? line.description.text : "—";
 }
 
 export default function OrcamentosPage() {
-  const [budgetVersion, setBudgetVersion] = useState<BudgetVersionDto | null | undefined>(undefined);
+  const [officialBudget, setOfficialBudget] = useState<OfficialBudgetDto | null | undefined>(undefined);
+  const [scenarios, setScenarios] = useState<ReadonlyArray<ProposalScenarioDto> | undefined>(undefined);
 
   useEffect(() => {
-    fetch("/api/orcamentos/consolidado")
-      .then((res) => (res.ok ? res.json() : { budgetVersion: null }))
-      .then((data) => setBudgetVersion(data.budgetVersion))
-      .catch(() => setBudgetVersion(null));
+    const controller = new AbortController();
+    fetch("/api/orcamentos/consolidado", { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : { budget: null }))
+      .then((data) => setOfficialBudget(data.budget))
+      .catch((cause: Error) => {
+        if (cause.name !== "AbortError") setOfficialBudget(null);
+      });
+    return () => controller.abort();
   }, []);
 
-  if (budgetVersion === undefined) {
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/orcamentos/cenarios", { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : { scenarios: [] })
+      .then((data: { scenarios: ReadonlyArray<ProposalScenarioDto> }) => setScenarios(data.scenarios))
+      .catch((cause: Error) => {
+        if (cause.name !== "AbortError") setScenarios([]);
+      });
+    return () => controller.abort();
+  }, []);
+
+  if (officialBudget === undefined) {
     return (
       <>
         <BudgetPageHeader isDemonstration={false} />
@@ -69,7 +85,7 @@ export default function OrcamentosPage() {
     );
   }
 
-  if (budgetVersion === null) {
+  if (officialBudget === null) {
     return (
       <>
         <BudgetPageHeader isDemonstration={false} />
@@ -80,10 +96,10 @@ export default function OrcamentosPage() {
     );
   }
 
-  const lotGroups = orderedChildren(budgetVersion.lines, null).filter(
+  const lotGroups = orderedChildren(officialBudget.lines, null).filter(
     (line) => typeof line.metadata.lotReference === "string",
   );
-  const lotesByReference = new Map<string, BudgetLine[]>();
+  const lotesByReference = new Map<string, OfficialLine[]>();
   lotGroups.forEach((line) => {
     const lot = String(line.metadata.lotReference);
     const list = lotesByReference.get(lot) ?? [];
@@ -93,7 +109,8 @@ export default function OrcamentosPage() {
 
   const totalGeral = Array.from(lotesByReference.values())
     .flat()
-    .reduce((sum, line) => sum + calculateTotal(budgetVersion.lines, line.id), 0);
+    .reduce((sum, line) => sum + calculateTotal(officialBudget.lines, line.id), 0);
+  const currentScenarios = (scenarios ?? []).filter((scenario) => scenario.sourceBudgetId === officialBudget.id);
 
   return (
     <>
@@ -118,13 +135,13 @@ export default function OrcamentosPage() {
             </div>
             <div>
               <div style={{ fontSize: "0.75rem", color: "#666" }}>Estado</div>
-              <div>{budgetVersion.status === "Consolidated" ? "Revisado e consolidado" : "Em revisão"}</div>
+              <div>{officialBudget.status === "Consolidated" ? "Revisado e consolidado" : "Em revisão"}</div>
             </div>
             {Array.from(lotesByReference.entries()).map(([lot, groups]) => (
               <div key={lot}>
                 <div style={{ fontSize: "0.75rem", color: "#666" }}>{lot}</div>
                 <div style={{ fontWeight: 700 }}>
-                  {centsToBRL(groups.reduce((sum, line) => sum + calculateTotal(budgetVersion.lines, line.id), 0))}
+                  {centsToBRL(groups.reduce((sum, line) => sum + calculateTotal(officialBudget.lines, line.id), 0))}
                 </div>
               </div>
             ))}
@@ -135,6 +152,46 @@ export default function OrcamentosPage() {
           </div>
         </div>
 
+        <div className="bba-card">
+          <div className={scenarioStyles.sectionTitle}>
+            <div>
+              <p className={scenarioStyles.eyebrow}>Decisão de preço</p>
+              <h2>Cenários de Proposta</h2>
+              <p>Compare valores comerciais preservando o orçamento oficial.</p>
+            </div>
+            <div className={scenarioStyles.actions}>
+              {currentScenarios.length > 0 ? <Link href="/orcamentos/cenarios/comparar" className={scenarioStyles.secondary}>Comparar cenários</Link> : null}
+              <Link href={`/orcamentos/cenarios/novo?orcamento=${officialBudget.id}`} className={scenarioStyles.primary}>Criar cenário</Link>
+            </div>
+          </div>
+          <div style={{ marginTop: "1rem" }}>
+            {scenarios === undefined ? <p style={{ color: "#68746f" }}>Carregando cenários…</p> : null}
+            {scenarios && currentScenarios.length === 0 ? (
+              <div className={scenarioStyles.notice}><strong>Nenhum cenário criado</strong>O primeiro cenário registra um valor de proposta sem alterar o orçamento oficial.</div>
+            ) : null}
+            {currentScenarios.length > 0 ? (
+              <div className={scenarioStyles.list}>
+                {currentScenarios.map((scenario) => (
+                  <div className={scenarioStyles.listItem} key={scenario.id}>
+                    <div>
+                      <h3>{scenario.name}</h3>
+                      <div className={scenarioStyles.listMeta}>
+                        <strong>{formatCentsPtBr(scenario.targetValueCents)}</strong>
+                        <span>{formatBasisPointsPtBr(scenario.differenceBasisPoints, scenario.comparisonKind)}</span>
+                        <span>Criado em {new Date(scenario.createdAt).toLocaleDateString("pt-BR")}</span>
+                      </div>
+                    </div>
+                    <div className={scenarioStyles.listActions}>
+                      <Link href={`/orcamentos/cenarios/${scenario.id}`} className={scenarioStyles.secondary}>Abrir</Link>
+                      <Link href={`/orcamentos/cenarios/novo?orcamento=${officialBudget.id}&duplicar=${scenario.id}`} className={scenarioStyles.secondary}>Duplicar</Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
         {Array.from(lotesByReference.entries()).map(([lot, groups]) => (
           <div className="bba-card" key={lot}>
             <h3>{lot}</h3>
@@ -142,7 +199,7 @@ export default function OrcamentosPage() {
               .slice()
               .sort((a, b) => a.position - b.position)
               .map((group) => (
-                <BudgetLineTree key={group.id} lines={budgetVersion.lines} line={group} depth={0} />
+                <OfficialLineTree key={group.id} lines={officialBudget.lines} line={group} depth={0} />
               ))}
           </div>
         ))}
@@ -151,7 +208,7 @@ export default function OrcamentosPage() {
   );
 }
 
-function BudgetLineTree({ lines, line, depth }: { lines: ReadonlyArray<BudgetLine>; line: BudgetLine; depth: number }) {
+function OfficialLineTree({ lines, line, depth }: { lines: ReadonlyArray<OfficialLine>; line: OfficialLine; depth: number }) {
   const [expanded, setExpanded] = useState(depth < 1);
   const children = orderedChildren(lines, line.id);
   const total = calculateTotal(lines, line.id);
@@ -173,7 +230,7 @@ function BudgetLineTree({ lines, line, depth }: { lines: ReadonlyArray<BudgetLin
         </div>
         <span style={{ fontWeight: line.kind !== "ServiceItem" ? 700 : 400 }}>{centsToBRL(total)}</span>
       </div>
-      {expanded && children.map((child) => <BudgetLineTree key={child.id} lines={lines} line={child} depth={depth + 1} />)}
+      {expanded && children.map((child) => <OfficialLineTree key={child.id} lines={lines} line={child} depth={depth + 1} />)}
     </div>
   );
 }

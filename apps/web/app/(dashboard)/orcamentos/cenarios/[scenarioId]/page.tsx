@@ -1,0 +1,67 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { BudgetPageHeader } from "@/components/budget/budget-page-header";
+import styles from "@/components/budget/proposal-scenarios.module.css";
+import { comparisonLabel, formatBasisPointsPtBr, formatCentsPtBr, formatDifferencePtBr, type ProposalScenarioDto } from "@/lib/proposal-scenarios";
+
+export default function ProposalScenarioPage({ params }: { readonly params: { readonly scenarioId: string } }) {
+  const [scenario, setScenario] = useState<ProposalScenarioDto | null | undefined>(undefined);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`/api/orcamentos/cenarios/${params.scenarioId}`, { signal: controller.signal })
+      .then(async (response) => response.ok ? ((await response.json()) as { scenario: ProposalScenarioDto }).scenario : null)
+      .then(setScenario)
+      .catch((cause: Error) => {
+        if (cause.name !== "AbortError") setScenario(null);
+      });
+    return () => controller.abort();
+  }, [params.scenarioId]);
+
+  const tone = scenario?.comparisonKind === "Reduction" ? styles.reduction : scenario?.comparisonKind === "Increase" ? styles.increase : styles.equal;
+
+  return (
+    <>
+      <BudgetPageHeader isDemonstration={false} />
+      <section className="section-grid">
+        <div className={styles.page}>
+          {scenario === undefined ? <div className={styles.loading}>Abrindo cenário…</div> : null}
+          {scenario === null ? <div className={styles.notice}><strong>Cenário não encontrado</strong>Ele pode não existir ou não estar disponível para sua organização.</div> : null}
+          {scenario ? (
+            <>
+              <div className={styles.hero}>
+                <div className={styles.heroTop}>
+                  <div><p className={styles.eyebrow}>Cenário de Proposta</p><h1>{scenario.name}</h1></div>
+                  <div className={styles.actions}>
+                    <Link className={styles.secondary} href={`/orcamentos/cenarios/novo?orcamento=${scenario.sourceBudgetId}&duplicar=${scenario.id}`}>Duplicar cenário</Link>
+                    <Link className={styles.primary} href={`/orcamentos/cenarios/comparar?ids=${scenario.id}`}>Comparar cenários</Link>
+                  </div>
+                </div>
+                <p className={styles.proposalLabel}>Valor da proposta</p>
+                <p className={styles.proposalValue}>{formatCentsPtBr(scenario.targetValueCents)}</p>
+                <div className={`${styles.delta} ${tone}`}>
+                  <strong>{formatDifferencePtBr(scenario)}</strong>
+                  <strong>{formatBasisPointsPtBr(scenario.differenceBasisPoints, scenario.comparisonKind)}</strong>
+                  <span>{comparisonLabel(scenario.comparisonKind)} em relação ao oficial</span>
+                </div>
+                <p className={styles.base}>Baseado no Orçamento Oficial Revisado</p>
+              </div>
+              <div className={styles.summary}>
+                <div className={styles.summaryItem}><span>Orçamento Oficial</span><strong>{formatCentsPtBr(scenario.officialValueCents)}</strong></div>
+                <div className={styles.summaryItem}><span>Valor do cenário</span><strong>{formatCentsPtBr(scenario.targetValueCents)}</strong></div>
+                <div className={styles.summaryItem}><span>Diferença</span><strong className={tone}>{formatDifferencePtBr(scenario)}</strong></div>
+                <div className={styles.summaryItem}><span>Percentual</span><strong className={tone}>{formatBasisPointsPtBr(scenario.differenceBasisPoints, scenario.comparisonKind)}</strong></div>
+                <div className={styles.summaryItem}><span>Criado em</span><strong>{new Date(scenario.createdAt).toLocaleString("pt-BR")}</strong></div>
+                <div className={styles.summaryItem}><span>Origem</span><strong>Orçamento Oficial Revisado</strong></div>
+              </div>
+              <div className={styles.notice}><strong>Margem e custo ainda não avaliados</strong>Este cenário compara o valor da proposta com o orçamento oficial. A análise de margem depende de custos e composições econômicas que ainda não foram informados.</div>
+              <div className={styles.actions}><Link href="/orcamentos" className={styles.secondary}>Voltar ao orçamento</Link></div>
+            </>
+          ) : null}
+        </div>
+      </section>
+    </>
+  );
+}
