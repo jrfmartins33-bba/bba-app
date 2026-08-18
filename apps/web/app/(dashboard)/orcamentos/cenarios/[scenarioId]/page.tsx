@@ -4,16 +4,25 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BudgetPageHeader } from "@/components/budget/budget-page-header";
 import styles from "@/components/budget/proposal-scenarios.module.css";
+import { lotPresentation, type ConsolidatedBudgetSummaryDto } from "@/lib/budget/consolidated-budget-catalog";
 import { comparisonLabel, formatBasisPointsPtBr, formatCentsPtBr, formatDifferencePtBr, type ProposalScenarioDto } from "@/lib/proposal-scenarios";
 
 export default function ProposalScenarioPage({ params }: { readonly params: { readonly scenarioId: string } }) {
   const [scenario, setScenario] = useState<ProposalScenarioDto | null | undefined>(undefined);
+  const [sourceBudget, setSourceBudget] = useState<ConsolidatedBudgetSummaryDto | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     fetch(`/api/orcamentos/cenarios/${params.scenarioId}`, { signal: controller.signal })
       .then(async (response) => response.ok ? ((await response.json()) as { scenario: ProposalScenarioDto }).scenario : null)
-      .then(setScenario)
+      .then(async (nextScenario) => {
+        setScenario(nextScenario);
+        if (!nextScenario) return;
+        const response = await fetch(`/api/orcamentos/consolidado/resumo?orcamento=${encodeURIComponent(nextScenario.sourceBudgetId)}`, { signal: controller.signal });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { budget: ConsolidatedBudgetSummaryDto | null };
+        setSourceBudget(payload.budget);
+      })
       .catch((cause: Error) => {
         if (cause.name !== "AbortError") setScenario(null);
       });
@@ -21,6 +30,7 @@ export default function ProposalScenarioPage({ params }: { readonly params: { re
   }, [params.scenarioId]);
 
   const tone = scenario?.comparisonKind === "Reduction" ? styles.reduction : scenario?.comparisonKind === "Increase" ? styles.increase : styles.equal;
+  const sourcePresentation = sourceBudget ? lotPresentation(sourceBudget.procurementLotTitle, sourceBudget.scopeKind) : null;
 
   return (
     <>
@@ -46,7 +56,7 @@ export default function ProposalScenarioPage({ params }: { readonly params: { re
                   <strong>{formatBasisPointsPtBr(scenario.differenceBasisPoints, scenario.comparisonKind)}</strong>
                   <span>{comparisonLabel(scenario.comparisonKind)} em relação ao oficial</span>
                 </div>
-                <p className={styles.base}>Baseado no Orçamento Oficial Revisado</p>
+                <p className={styles.base}>Base do cenário: Orçamento Oficial{sourcePresentation ? ` — ${sourcePresentation.title}` : ""}</p>
               </div>
               <div className={styles.summary}>
                 <div className={styles.summaryItem}><span>Orçamento Oficial</span><strong>{formatCentsPtBr(scenario.officialValueCents)}</strong></div>
@@ -54,7 +64,7 @@ export default function ProposalScenarioPage({ params }: { readonly params: { re
                 <div className={styles.summaryItem}><span>Diferença</span><strong className={tone}>{formatDifferencePtBr(scenario)}</strong></div>
                 <div className={styles.summaryItem}><span>Percentual</span><strong className={tone}>{formatBasisPointsPtBr(scenario.differenceBasisPoints, scenario.comparisonKind)}</strong></div>
                 <div className={styles.summaryItem}><span>Criado em</span><strong>{new Date(scenario.createdAt).toLocaleString("pt-BR")}</strong></div>
-                <div className={styles.summaryItem}><span>Origem</span><strong>Orçamento Oficial Revisado</strong></div>
+                <div className={styles.summaryItem}><span>Origem</span><strong>{sourcePresentation?.title ?? "Orçamento Oficial"}</strong></div>
               </div>
               <div className={styles.notice}><strong>Margem e custo ainda não avaliados</strong>Este cenário compara o valor da proposta com o orçamento oficial. A análise de margem depende de custos e composições econômicas que ainda não foram informados.</div>
               <div className={styles.actions}><Link href="/orcamentos" className={styles.secondary}>Voltar ao orçamento</Link></div>

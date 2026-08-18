@@ -47,8 +47,13 @@
 .selector { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .65rem; }
 .choice { display: flex; gap: .7rem; align-items: flex-start; border: 1px solid #dbe4e0; border-radius: 12px; padding: .9rem; background: #fff; cursor: pointer; }
 .choice input { margin-top: .2rem; accent-color: #176b55; }
+.choice[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
 .choice strong, .choice span { display: block; }
 .choice span { color: #68746f; font-size: .84rem; margin-top: .2rem; }
+.budgetSelector { display: grid; gap: 1rem; margin: 0; padding: 1rem; border: 1px solid #dbe4e0; border-radius: 14px; background: #f8faf9; }
+.budgetSelector legend { padding: 0 .4rem; color: #22372f; font-weight: 800; }
+.budgetGroup { display: grid; gap: .6rem; }
+.budgetGroup > p { margin: 0; color: #596a64; font-size: .82rem; font-weight: 700; }
 @media (max-width: 640px) {
   .hero { border-radius: 14px; padding: 1.2rem; }
   .proposalValue { font-size: 2.3rem; }

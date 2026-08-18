@@ -70,7 +70,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       {
         error: "invalid_scenario",
         message: sourcePending
-          ? "O orçamento de origem precisa estar consolidado antes de criar um cenário."
+          ? "O orçamento de origem precisa estar confirmado antes de criar um cenário."
           : "O valor informado não é válido.",
       },
       { status: 422 },

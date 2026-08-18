@@ -12,13 +12,6 @@ export interface ProposalScenarioDto {
   readonly createdAt: string;
 }
 
-export interface ConsolidatedBudgetSummaryDto {
-  readonly id: string;
-  readonly status: "Consolidated";
-  readonly officialValueCents: number;
-  readonly updatedAt: string;
-}
-
 export function formatCentsPtBr(cents: number): string {
   const value = BigInt(cents);
   const reais = value / 100n;
@@ -57,4 +50,8 @@ export function comparisonLabel(kind: ScenarioComparisonKind): string {
   if (kind === "Reduction") return "Redução";
   if (kind === "Increase") return "Acréscimo";
   return "Sem diferença";
+}
+
+export function canCompareScenarioSource(selectedSourceBudgetId: string | null, candidateSourceBudgetId: string): boolean {
+  return selectedSourceBudgetId === null || selectedSourceBudgetId === candidateSourceBudgetId;
 }

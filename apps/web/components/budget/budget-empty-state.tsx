@@ -4,11 +4,8 @@ import { Card } from "@bba/ui";
 
 /**
  * Epic 21, Sprint 21.4B.1 (corrigido em 21.4B.2) — estado vazio de
- * `/orcamentos`: nenhuma leitura real de orçamento está disponível ainda
- * (não existe rota de servidor para `BudgetVersion` em `apps/web`).
- * Título/texto reescritos para não prometer envio ou seleção — ações que
- * ainda não existem nesta Sprint; a única ação real hoje é abrir a
- * demonstração.
+ * Estado vazio da experiência real. A importação permanece sempre
+ * descobrível; a demonstração continua disponível como apoio interno.
  */
 export function BudgetEmptyState() {
   return (

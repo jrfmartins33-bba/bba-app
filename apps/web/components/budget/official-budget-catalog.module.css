@@ -1,0 +1,55 @@
+.page { display: flex; flex-direction: column; gap: 1.5rem; }
+.topActions { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.importAction { display: flex; flex-direction: column; align-items: flex-end; gap: .4rem; color: #68746f; font-size: .78rem; }
+.process { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 1rem; }
+.processHeader { display: flex; justify-content: space-between; align-items: flex-end; gap: 1.5rem; flex-wrap: wrap; padding: 1.4rem; border: 1px solid #dce6e2; border-radius: 18px; background: #fff; }
+.processHeader h2 { max-width: 760px; margin: 0; color: #17231f; font-size: clamp(1.35rem, 3vw, 2rem); line-height: 1.2; }
+.eyebrow, .lotScope { margin: 0 0 .4rem; color: #176b55; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.processSummary { display: grid; grid-template-columns: repeat(2, minmax(150px, auto)); gap: .75rem; margin: 0; }
+.processSummary div { padding: .75rem 1rem; border-radius: 12px; background: #f3f7f5; }
+.processSummary dt { color: #69756f; font-size: .75rem; }
+.processSummary dd { margin: .25rem 0 0; color: #183128; font-size: 1.05rem; font-weight: 800; white-space: nowrap; }
+.contextNote { margin: -.35rem 0 0; color: #69756f; font-size: .86rem; }
+.lotGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr)); gap: 1rem; align-items: start; }
+.lotCard { min-width: 0; padding: 1.25rem; border: 1px solid #dce6e2; border-radius: 16px; background: #fff; box-shadow: 0 10px 26px rgba(19,53,45,.05); }
+.lotHeader { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.lotHeader h3 { margin: 0; color: #17231f; font-size: 1.25rem; }
+.lotHeader p:not(.lotScope) { margin: .3rem 0 0; color: #68746f; }
+.confirmed { flex: 0 0 auto; border: 1px solid #a9d3c2; border-radius: 999px; padding: .3rem .65rem; background: #edf8f3; color: #176b55; font-size: .76rem; font-weight: 800; }
+.value { margin: 1.3rem 0 .8rem; color: #14251f; font-size: clamp(1.65rem, 4vw, 2.3rem); line-height: 1; letter-spacing: -.04em; font-weight: 850; white-space: nowrap; }
+.metrics { display: flex; gap: .8rem; flex-wrap: wrap; color: #66736e; font-size: .82rem; }
+.metrics strong { color: #21372f; }
+.cardActions { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: 1.1rem; }
+.cardActions > * { flex: 1 1 145px; }
+.scenarios { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #e5ebe8; }
+.scenarioHeading { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+.scenarioHeading h4 { margin: 0; color: #253a33; }
+.scenarios > p { margin: .65rem 0 0; color: #6a7671; font-size: .86rem; }
+.scenarios ul { display: grid; gap: .55rem; margin: .75rem 0 0; padding: 0; list-style: none; }
+.scenarios li { display: flex; justify-content: space-between; align-items: center; gap: .8rem; padding: .7rem; border-radius: 10px; background: #f6f8f7; }
+.scenarios li strong, .scenarios li span { display: block; }
+.scenarios li span { margin-top: .18rem; color: #68746f; font-size: .76rem; }
+.scenarios li > div:last-child { display: flex; gap: .6rem; }
+.scenarios a, .textLink { color: #176b55; font-size: .8rem; font-weight: 750; text-decoration: none; }
+.detail { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #dfe7e3; }
+.detailHeader { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .6rem; color: #293d36; }
+.treeNode { min-width: 0; border-bottom: 1px solid #edf1ef; }
+.treeRow { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .55rem 0; }
+.treeRow > div { display: flex; min-width: 0; align-items: center; gap: .35rem; }
+.treeRow button { flex: 0 0 32px; min-height: 32px; border: 0; border-radius: 6px; background: transparent; color: #176b55; cursor: pointer; }
+.treeRow button:focus-visible { outline: 3px solid rgba(23,107,85,.2); }
+.treeRow span { overflow-wrap: anywhere; }
+.treeRow > strong { flex: 0 0 auto; white-space: nowrap; color: #263b34; }
+.treeSpacer { width: 32px; flex: 0 0 32px; }
+.strongLine { font-weight: 800; }
+.error { grid-column: 1 / -1; display: grid; gap: .3rem; padding: 1rem; border-left: 3px solid #b64a3e; border-radius: 0 12px 12px 0; background: #fff2f0; color: #77352e; }
+
+@media (max-width: 640px) {
+  .topActions, .importAction { align-items: stretch; }
+  .topActions > *, .importAction > a { width: 100%; }
+  .processSummary { width: 100%; grid-template-columns: 1fr; }
+  .processSummary dd, .value { white-space: normal; overflow-wrap: anywhere; }
+  .lotCard { padding: 1rem; }
+  .scenarios li, .treeRow { align-items: flex-start; flex-direction: column; }
+  .treeRow > strong { padding-left: 2.35rem; }
+}

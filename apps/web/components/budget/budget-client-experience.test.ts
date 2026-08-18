@@ -356,15 +356,15 @@ async function main(): Promise<void> {
     assertTrue(!/const itemActive = pathname === item\.href$/m.test(sidebarSource), "não deve mais existir a comparação ingênua por igualdade exata");
   });
 
-  await runTest("27. card do Workspace leva diretamente à demonstração ('Ver orçamento')", () => {
+  await runTest("27. card do Workspace leva diretamente ao orçamento real ('Ver orçamento')", () => {
     assertTrue(engenhariaPageSource.includes('id: "orcamento"'), "card de capacidade Orçamento deve existir");
     assertTrue(
       engenhariaPageSource.includes("Veja o orçamento oficial, a proposta e como os itens são organizados para análise."),
       "descrição atualizada do card de Orçamento"
     );
     assertTrue(engenhariaPageSource.includes('actionLabel: "Ver orçamento"'), "ação do card deve ser 'Ver orçamento'");
-    assertTrue(engenhariaPageSource.includes('href: "/orcamentos/demonstracao"'), "card deve linkar diretamente para a demonstração");
-    assertTrue(engenhariaPageSource.includes('status: "Demonstração disponível"'), "status do card deve permanecer 'Demonstração disponível'");
+    assertTrue(engenhariaPageSource.includes('href: "/orcamentos"'), "card deve linkar diretamente para a experiência real");
+    assertTrue(engenhariaPageSource.includes('status: "Pronto"'), "card real deve estar Pronto");
     assertTrue(
       /label:\s*"Orçamento",\s*icon:\s*Wallet,\s*href:\s*"\/orcamentos"/.test(navConfigSource),
       "menu contextual do Workspace deve continuar apontando para /orcamentos"
@@ -519,7 +519,7 @@ async function main(): Promise<void> {
     assertTrue(!/stack|sql|exception|errno|traceback/i.test(stripComments(errorState)), "estado de erro não deve expor detalhe técnico");
   });
 
-  await runTest("rota /orcamentos usa o estado vazio real (nenhuma leitura de orçamento real ainda existe)", () => {
+  await runTest("rota /orcamentos usa estado vazio quando o catálogo não tem versões e não acessa Supabase no cliente", () => {
     const orcamentosPage = pageSources[0];
     assertTrue(orcamentosPage.includes("BudgetEmptyState"), "página /orcamentos deve usar o estado vazio real");
     assertTrue(

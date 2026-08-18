@@ -6,10 +6,14 @@ import { FormEvent, Suspense, useEffect, useState } from "react";
 import { BudgetPageHeader } from "@/components/budget/budget-page-header";
 import styles from "@/components/budget/proposal-scenarios.module.css";
 import {
+  lotPresentation,
+  resolveScenarioSourceBudget,
+  type ConsolidatedBudgetCatalogDto,
+} from "@/lib/budget/consolidated-budget-catalog";
+import {
   formatCentsPtBr,
   inputValueFromCents,
   parseBrlToCents,
-  type ConsolidatedBudgetSummaryDto,
   type ProposalScenarioDto,
 } from "@/lib/proposal-scenarios";
 
@@ -22,7 +26,9 @@ function NewProposalScenarioContent() {
   const searchParams = useSearchParams();
   const requestedBudgetId = searchParams.get("orcamento");
   const duplicateId = searchParams.get("duplicar");
-  const [budget, setBudget] = useState<ConsolidatedBudgetSummaryDto | null | undefined>(undefined);
+  const [catalog, setCatalog] = useState<ConsolidatedBudgetCatalogDto | null | undefined>(undefined);
+  const [duplicateScenario, setDuplicateScenario] = useState<ProposalScenarioDto | null | undefined>(() => duplicateId ? undefined : null);
+  const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [targetValue, setTargetValue] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -32,15 +38,15 @@ function NewProposalScenarioContent() {
     const controller = new AbortController();
     fetch("/api/orcamentos/consolidado/resumo", { signal: controller.signal })
       .then(async (response) => {
-        if (!response.ok) throw new Error("Não foi possível carregar o orçamento oficial.");
-        const payload = (await response.json()) as { budget: ConsolidatedBudgetSummaryDto | null };
-        return payload.budget;
+        if (!response.ok) throw new Error("Não foi possível carregar os orçamentos oficiais.");
+        const payload = (await response.json()) as ConsolidatedBudgetCatalogDto;
+        return { budgets: payload.budgets, processes: payload.processes };
       })
-      .then((summary) => setBudget(summary))
+      .then(setCatalog)
       .catch((cause: Error) => {
         if (cause.name !== "AbortError") {
           setError(cause.message);
-          setBudget(null);
+          setCatalog(null);
         }
       });
     return () => controller.abort();
@@ -49,20 +55,37 @@ function NewProposalScenarioContent() {
   useEffect(() => {
     if (!duplicateId) return;
     const controller = new AbortController();
-    fetch(`/api/orcamentos/cenarios/${duplicateId}`, { signal: controller.signal })
+    fetch(`/api/orcamentos/cenarios/${encodeURIComponent(duplicateId)}`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error("Não foi possível abrir o cenário de referência.");
-        return (await response.json()) as { scenario: ProposalScenarioDto };
+        return ((await response.json()) as { scenario: ProposalScenarioDto }).scenario;
       })
-      .then(({ scenario }) => {
+      .then((scenario) => {
+        setDuplicateScenario(scenario);
         setName(`Cópia de ${scenario.name}`.slice(0, 120));
         setTargetValue(inputValueFromCents(scenario.targetValueCents));
       })
       .catch((cause: Error) => {
-        if (cause.name !== "AbortError") setError(cause.message);
+        if (cause.name !== "AbortError") {
+          setError(cause.message);
+          setDuplicateScenario(null);
+        }
       });
     return () => controller.abort();
   }, [duplicateId]);
+
+  const requestedBudget = catalog?.budgets.find((budget) => budget.id === requestedBudgetId) ?? null;
+  const duplicateBudget = catalog?.budgets.find((budget) => budget.id === duplicateScenario?.sourceBudgetId) ?? null;
+  const budget = catalog ? resolveScenarioSourceBudget(catalog.budgets, {
+    requestedBudgetId,
+    selectedBudgetId,
+    duplicateSourceBudgetId: duplicateId ? duplicateScenario?.sourceBudgetId ?? null : null,
+  }) : null;
+  const needsChoice = Boolean(catalog && catalog.budgets.length > 1 && !budget && !duplicateId);
+  const invalidRequestedBudget = Boolean(catalog && requestedBudgetId && !requestedBudget && !selectedBudgetId && !duplicateId);
+  const missingDuplicateSource = Boolean(catalog && duplicateScenario && !duplicateBudget);
+
+  const budgetsByProcess = catalog?.processes ?? [];
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -70,10 +93,6 @@ function NewProposalScenarioContent() {
     const targetValueCents = parseBrlToCents(targetValue);
     if (targetValueCents === null) {
       setError("Informe um valor válido em reais, com no máximo dois centavos.");
-      return;
-    }
-    if (requestedBudgetId && requestedBudgetId !== budget.id) {
-      setError("O orçamento selecionado não é mais o orçamento oficial consolidado disponível.");
       return;
     }
 
@@ -94,6 +113,8 @@ function NewProposalScenarioContent() {
     }
   }
 
+  const presentation = budget ? lotPresentation(budget.procurementLotTitle, budget.scopeKind) : null;
+
   return (
     <>
       <BudgetPageHeader isDemonstration={false} />
@@ -102,21 +123,56 @@ function NewProposalScenarioContent() {
           <div className={styles.sectionTitle}>
             <div>
               <p className={styles.eyebrow}>Cenários de Proposta</p>
-              <h2>Criar cenário</h2>
+              <h2>{needsChoice ? "Escolha o lote da proposta" : duplicateId ? "Duplicar cenário" : "Criar cenário"}</h2>
               <p>Registre um valor de proposta sem alterar o orçamento oficial.</p>
             </div>
-            <Link href="/orcamentos" className={styles.secondary}>Voltar ao orçamento</Link>
+            <Link href="/orcamentos" className={styles.secondary}>Voltar para Orçamentos</Link>
           </div>
 
-          {budget === undefined ? <div className={styles.loading}>Carregando orçamento oficial…</div> : null}
-          {budget === null ? <div className={styles.notice}><strong>Orçamento indisponível</strong>É necessário um orçamento consolidado para criar cenários.</div> : null}
-          {budget ? (
+          {catalog === undefined || duplicateScenario === undefined ? <div className={styles.loading}>Carregando orçamentos oficiais…</div> : null}
+          {catalog === null || catalog?.budgets.length === 0 ? <div className={styles.notice}><strong>Orçamento indisponível</strong>É necessário um orçamento confirmado para criar cenários.</div> : null}
+          {invalidRequestedBudget ? <div className={styles.notice} role="alert"><strong>Orçamento não encontrado</strong>A origem informada não está disponível para sua organização. Escolha explicitamente outro lote.</div> : null}
+          {missingDuplicateSource ? <div className={styles.notice} role="alert"><strong>Origem indisponível</strong>O cenário não pode ser duplicado porque seu orçamento de origem não está disponível.</div> : null}
+
+          {catalog && catalog.budgets.length > 1 && !duplicateId ? (
+            <fieldset className={styles.budgetSelector}>
+              <legend>Escolha o lote da proposta</legend>
+              {budgetsByProcess.map((process) => (
+                <div className={styles.budgetGroup} key={process.procurementCaseId}>
+                  <p>{process.title}</p>
+                  <div className={styles.selector}>
+                    {process.budgets.map((option) => {
+                      const optionPresentation = lotPresentation(option.procurementLotTitle, option.scopeKind);
+                      return (
+                        <label className={styles.choice} key={option.id}>
+                          <input
+                            type="radio"
+                            name="source-budget"
+                            value={option.id}
+                            checked={budget?.id === option.id}
+                            onChange={() => { setSelectedBudgetId(option.id); setError(null); }}
+                          />
+                          <span><strong>{optionPresentation.title}</strong><span>{optionPresentation.detail ? `${optionPresentation.detail} · ` : ""}{formatCentsPtBr(option.officialValueCents)}</span></span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </fieldset>
+          ) : null}
+
+          {budget && !missingDuplicateSource ? (
             <div className={styles.hero}>
+              <p className={styles.eyebrow}>Base do cenário</p>
+              <h2>Orçamento Oficial — {presentation?.title}</h2>
+              {presentation?.detail ? <p className={styles.base}>{presentation.detail}</p> : null}
               <div className={styles.summary}>
                 <div className={styles.summaryItem}><span>Orçamento Oficial</span><strong>{formatCentsPtBr(budget.officialValueCents)}</strong></div>
-                <div className={styles.summaryItem}><span>Estado</span><strong>Revisado e consolidado</strong></div>
-                <div className={styles.summaryItem}><span>Regra desta criação</span><strong>Valor-alvo em centavos exatos</strong></div>
+                <div className={styles.summaryItem}><span>Estado</span><strong>Revisado e confirmado</strong></div>
+                <div className={styles.summaryItem}><span>Origem</span><strong>{presentation?.title}</strong></div>
               </div>
+              {duplicateId ? <div className={styles.notice}><strong>Origem preservada</strong>A cópia permanece vinculada ao mesmo lote do cenário original.</div> : null}
               <form className={styles.form} onSubmit={submit} style={{ marginTop: "1.5rem" }}>
                 <div className={styles.field}>
                   <label htmlFor="scenario-name">Nome do cenário</label>

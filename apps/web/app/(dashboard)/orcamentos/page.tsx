@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { BudgetPageHeader } from "@/components/budget/budget-page-header";
 import { BudgetEmptyState } from "@/components/budget/budget-empty-state";
+import catalogStyles from "@/components/budget/official-budget-catalog.module.css";
 import scenarioStyles from "@/components/budget/proposal-scenarios.module.css";
+import {
+  lotPresentation,
+  type ConsolidatedBudgetCatalogDto,
+  type ConsolidatedBudgetSummaryDto,
+} from "@/lib/budget/consolidated-budget-catalog";
 import { formatBasisPointsPtBr, formatCentsPtBr, type ProposalScenarioDto } from "@/lib/proposal-scenarios";
-
-// Epic 21.5A — /orcamentos deixa de ser sempre vazio (enunciado §43):
-// Quando existe um orçamento oficial consolidado acessível à organização
-// do usuário autenticado, mostra o retrato real; senão, mantém o estado
-// vazio. A tela exibe somente informação documental útil ao cliente.
 
 interface OfficialLine {
   readonly id: string;
@@ -20,217 +21,256 @@ interface OfficialLine {
   readonly parentLineId: string | null;
   readonly position: number;
   readonly totalCents: number | null;
-  readonly metadata: Readonly<Record<string, unknown>>;
 }
 
 interface OfficialBudgetDto {
   readonly id: string;
-  readonly status: "Draft" | "Consolidated";
+  readonly status: "Consolidated";
   readonly lines: ReadonlyArray<OfficialLine>;
 }
 
-function centsToBRL(cents: number): string {
-  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-function calculateTotal(lines: ReadonlyArray<OfficialLine>, lineId: string): number {
-  const line = lines.find((l) => l.id === lineId);
-  if (!line) return 0;
-  if (line.kind === "ServiceItem") return line.totalCents ?? 0;
-  return lines.filter((l) => l.parentLineId === lineId).reduce((sum, child) => sum + calculateTotal(lines, child.id), 0);
-}
-
-function orderedChildren(lines: ReadonlyArray<OfficialLine>, parentId: string | null): ReadonlyArray<OfficialLine> {
-  return lines.filter((l) => l.parentLineId === parentId).slice().sort((a, b) => a.position - b.position);
-}
-
-function lineText(line: OfficialLine): string {
-  return line.description.status === "Confirmed" ? line.description.text : "—";
-}
+type DetailState =
+  | { readonly status: "loading" }
+  | { readonly status: "loaded"; readonly budget: OfficialBudgetDto }
+  | { readonly status: "error"; readonly message: string };
 
 export default function OrcamentosPage() {
-  const [officialBudget, setOfficialBudget] = useState<OfficialBudgetDto | null | undefined>(undefined);
-  const [scenarios, setScenarios] = useState<ReadonlyArray<ProposalScenarioDto> | undefined>(undefined);
+  const [catalog, setCatalog] = useState<ConsolidatedBudgetCatalogDto | undefined>(undefined);
+  const [scenarios, setScenarios] = useState<ReadonlyArray<ProposalScenarioDto>>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [details, setDetails] = useState<Readonly<Record<string, DetailState>>>({});
+  const [openBudgetId, setOpenBudgetId] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/orcamentos/consolidado", { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() : { budget: null }))
-      .then((data) => setOfficialBudget(data.budget))
+    Promise.all([
+      fetch("/api/orcamentos/consolidado/resumo", { signal: controller.signal }).then(async (response) => {
+        if (!response.ok) throw new Error("Não foi possível carregar os orçamentos oficiais.");
+        const payload = (await response.json()) as ConsolidatedBudgetCatalogDto;
+        return { budgets: payload.budgets, processes: payload.processes };
+      }),
+      fetch("/api/orcamentos/cenarios", { signal: controller.signal }).then(async (response) => {
+        if (!response.ok) throw new Error("Não foi possível carregar os cenários de proposta.");
+        return ((await response.json()) as { scenarios: ReadonlyArray<ProposalScenarioDto> }).scenarios;
+      }),
+    ])
+      .then(([nextCatalog, nextScenarios]) => {
+        setCatalog(nextCatalog);
+        setScenarios(nextScenarios);
+      })
       .catch((cause: Error) => {
-        if (cause.name !== "AbortError") setOfficialBudget(null);
+        if (cause.name !== "AbortError") {
+          setLoadError(cause.message);
+          setCatalog({ budgets: [], processes: [] });
+        }
       });
     return () => controller.abort();
   }, []);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch("/api/orcamentos/cenarios", { signal: controller.signal })
-      .then((response) => response.ok ? response.json() : { scenarios: [] })
-      .then((data: { scenarios: ReadonlyArray<ProposalScenarioDto> }) => setScenarios(data.scenarios))
-      .catch((cause: Error) => {
-        if (cause.name !== "AbortError") setScenarios([]);
-      });
-    return () => controller.abort();
-  }, []);
+  const scenariosByBudget = useMemo(() => {
+    const grouped = new Map<string, ProposalScenarioDto[]>();
+    for (const scenario of scenarios) {
+      const current = grouped.get(scenario.sourceBudgetId) ?? [];
+      current.push(scenario);
+      grouped.set(scenario.sourceBudgetId, current);
+    }
+    return grouped;
+  }, [scenarios]);
 
-  if (officialBudget === undefined) {
+  async function toggleBudgetDetail(budgetId: string) {
+    if (openBudgetId === budgetId) {
+      setOpenBudgetId(null);
+      return;
+    }
+    setOpenBudgetId(budgetId);
+    if (details[budgetId]) return;
+
+    setDetails((current) => ({ ...current, [budgetId]: { status: "loading" } }));
+    try {
+      const response = await fetch(`/api/orcamentos/consolidado?orcamento=${encodeURIComponent(budgetId)}`);
+      if (!response.ok) throw new Error("Não foi possível abrir este orçamento.");
+      const payload = (await response.json()) as { budget: OfficialBudgetDto | null };
+      if (!payload.budget) throw new Error("Este orçamento não está disponível.");
+      setDetails((current) => ({ ...current, [budgetId]: { status: "loaded", budget: payload.budget! } }));
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Não foi possível abrir este orçamento.";
+      setDetails((current) => ({ ...current, [budgetId]: { status: "error", message } }));
+    }
+  }
+
+  if (catalog === undefined) {
+    return <><BudgetPageHeader isDemonstration={false} /><section className="section-grid"><p>Carregando orçamentos…</p></section></>;
+  }
+
+  if (loadError) {
     return (
       <>
         <BudgetPageHeader isDemonstration={false} />
         <section className="section-grid">
-          <p>Carregando...</p>
+          <div className={catalogStyles.error} role="alert"><strong>Não foi possível abrir Orçamentos.</strong><span>{loadError}</span></div>
         </section>
       </>
     );
   }
 
-  if (officialBudget === null) {
-    return (
-      <>
-        <BudgetPageHeader isDemonstration={false} />
-        <section className="section-grid">
-          <BudgetEmptyState />
-        </section>
-      </>
-    );
+  if (catalog.budgets.length === 0) {
+    return <><BudgetPageHeader isDemonstration={false} /><section className="section-grid"><BudgetEmptyState /></section></>;
   }
-
-  const lotGroups = orderedChildren(officialBudget.lines, null).filter(
-    (line) => typeof line.metadata.lotReference === "string",
-  );
-  const lotesByReference = new Map<string, OfficialLine[]>();
-  lotGroups.forEach((line) => {
-    const lot = String(line.metadata.lotReference);
-    const list = lotesByReference.get(lot) ?? [];
-    list.push(line);
-    lotesByReference.set(lot, list);
-  });
-
-  const totalGeral = Array.from(lotesByReference.values())
-    .flat()
-    .reduce((sum, line) => sum + calculateTotal(officialBudget.lines, line.id), 0);
-  const currentScenarios = (scenarios ?? []).filter((scenario) => scenario.sourceBudgetId === officialBudget.id);
 
   return (
     <>
       <BudgetPageHeader isDemonstration={false} />
-      <section className="section-grid" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-        <div className="bba-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
-            <div>
-              <h2>Orçamento Oficial Revisado</h2>
-              <p style={{ color: "#666" }}>
-                Representação estruturada do orçamento publicado pelo órgão, conferida no BBA.
-              </p>
-            </div>
-            <Link href="/orcamentos/importar" className="bba-button bba-button--secondary bba-button--sm">
-              Importar outro orçamento
-            </Link>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "1rem", marginTop: "1rem" }}>
-            <div>
-              <div style={{ fontSize: "0.75rem", color: "#666" }}>Origem</div>
-              <div>Documento oficial</div>
-            </div>
-            <div>
-              <div style={{ fontSize: "0.75rem", color: "#666" }}>Estado</div>
-              <div>{officialBudget.status === "Consolidated" ? "Revisado e consolidado" : "Em revisão"}</div>
-            </div>
-            {Array.from(lotesByReference.entries()).map(([lot, groups]) => (
-              <div key={lot}>
-                <div style={{ fontSize: "0.75rem", color: "#666" }}>{lot}</div>
-                <div style={{ fontWeight: 700 }}>
-                  {centsToBRL(groups.reduce((sum, line) => sum + calculateTotal(officialBudget.lines, line.id), 0))}
-                </div>
-              </div>
-            ))}
-            <div>
-              <div style={{ fontSize: "0.75rem", color: "#666" }}>Total geral</div>
-              <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>{centsToBRL(totalGeral)}</div>
-            </div>
+      <section className={`section-grid ${catalogStyles.page}`}>
+        <div className={catalogStyles.topActions}>
+          <Link href="/workspaces/engenharia" className="bba-button bba-button--ghost bba-button--sm">Voltar ao Workspace Engenharia</Link>
+          <div className={catalogStyles.importAction}>
+            <Link href="/orcamentos/importar" className="bba-button bba-button--secondary bba-button--sm">Importar outro orçamento</Link>
+            <span>Inicia outro fluxo documental e não substitui os orçamentos confirmados.</span>
           </div>
         </div>
 
-        <div className="bba-card">
-          <div className={scenarioStyles.sectionTitle}>
-            <div>
-              <p className={scenarioStyles.eyebrow}>Decisão de preço</p>
-              <h2>Cenários de Proposta</h2>
-              <p>Compare valores comerciais preservando o orçamento oficial.</p>
+        {catalog.processes.map((process) => (
+          <section className={catalogStyles.process} key={process.procurementCaseId} aria-labelledby={`process-${process.procurementCaseId}`}>
+            <div className={catalogStyles.processHeader}>
+              <div>
+                <p className={catalogStyles.eyebrow}>Orçamento Oficial</p>
+                <h2 id={`process-${process.procurementCaseId}`}>{process.title}</h2>
+              </div>
+              <dl className={catalogStyles.processSummary}>
+                <div><dt>Lotes confirmados</dt><dd>{process.budgets.length}</dd></div>
+                <div><dt>Valor total dos lotes</dt><dd>{formatCentsPtBr(process.totalOfficialValueCents)}</dd></div>
+              </dl>
             </div>
-            <div className={scenarioStyles.actions}>
-              {currentScenarios.length > 0 ? <Link href="/orcamentos/cenarios/comparar" className={scenarioStyles.secondary}>Comparar cenários</Link> : null}
-              <Link href={`/orcamentos/cenarios/novo?orcamento=${officialBudget.id}`} className={scenarioStyles.primary}>Criar cenário</Link>
-            </div>
-          </div>
-          <div style={{ marginTop: "1rem" }}>
-            {scenarios === undefined ? <p style={{ color: "#68746f" }}>Carregando cenários…</p> : null}
-            {scenarios && currentScenarios.length === 0 ? (
-              <div className={scenarioStyles.notice}><strong>Nenhum cenário criado</strong>O primeiro cenário registra um valor de proposta sem alterar o orçamento oficial.</div>
-            ) : null}
-            {currentScenarios.length > 0 ? (
-              <div className={scenarioStyles.list}>
-                {currentScenarios.map((scenario) => (
-                  <div className={scenarioStyles.listItem} key={scenario.id}>
-                    <div>
-                      <h3>{scenario.name}</h3>
-                      <div className={scenarioStyles.listMeta}>
-                        <strong>{formatCentsPtBr(scenario.targetValueCents)}</strong>
-                        <span>{formatBasisPointsPtBr(scenario.differenceBasisPoints, scenario.comparisonKind)}</span>
-                        <span>Criado em {new Date(scenario.createdAt).toLocaleDateString("pt-BR")}</span>
+            <p className={catalogStyles.contextNote}>O total é apenas a soma visual dos lotes. Cada orçamento e cada cenário continuam independentes.</p>
+
+            <div className={catalogStyles.lotGrid}>
+              {process.budgets.map((budget) => {
+                const presentation = lotPresentation(budget.procurementLotTitle, budget.scopeKind);
+                const budgetScenarios = scenariosByBudget.get(budget.id) ?? [];
+                const detail = details[budget.id];
+                const isOpen = openBudgetId === budget.id;
+                return (
+                  <article className={catalogStyles.lotCard} key={budget.id}>
+                    <div className={catalogStyles.lotHeader}>
+                      <div>
+                        <p className={catalogStyles.lotScope}>{budget.scopeKind === "Lot" ? "Lote independente" : "Processo completo"}</p>
+                        <h3>{presentation.title}</h3>
+                        {presentation.detail ? <p>{presentation.detail}</p> : null}
                       </div>
+                      <span className={catalogStyles.confirmed}>Confirmado</span>
                     </div>
-                    <div className={scenarioStyles.listActions}>
-                      <Link href={`/orcamentos/cenarios/${scenario.id}`} className={scenarioStyles.secondary}>Abrir</Link>
-                      <Link href={`/orcamentos/cenarios/novo?orcamento=${officialBudget.id}&duplicar=${scenario.id}`} className={scenarioStyles.secondary}>Duplicar</Link>
+                    <p className={catalogStyles.value}>{formatCentsPtBr(budget.officialValueCents)}</p>
+                    <div className={catalogStyles.metrics}>
+                      <span><strong>{budget.serviceItemCount}</strong> itens de serviço</span>
+                      {budget.lineCount !== null ? <span><strong>{budget.lineCount}</strong> linhas</span> : null}
+                      <span>Revisão {budget.revision}</span>
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
+                    <div className={catalogStyles.cardActions}>
+                      <button type="button" className={scenarioStyles.secondary} aria-expanded={isOpen} aria-controls={`budget-detail-${budget.id}`} onClick={() => void toggleBudgetDetail(budget.id)}>
+                        {isOpen ? "Fechar orçamento" : "Ver orçamento"}
+                      </button>
+                      <Link href={`/orcamentos/cenarios/novo?orcamento=${budget.id}`} className={scenarioStyles.primary}>Criar cenário</Link>
+                    </div>
 
-        {Array.from(lotesByReference.entries()).map(([lot, groups]) => (
-          <div className="bba-card" key={lot}>
-            <h3>{lot}</h3>
-            {groups
-              .slice()
-              .sort((a, b) => a.position - b.position)
-              .map((group) => (
-                <OfficialLineTree key={group.id} lines={officialBudget.lines} line={group} depth={0} />
-              ))}
-          </div>
+                    <section className={catalogStyles.scenarios} aria-labelledby={`scenarios-${budget.id}`}>
+                      <div className={catalogStyles.scenarioHeading}>
+                        <h4 id={`scenarios-${budget.id}`}>Cenários de Proposta</h4>
+                        {budgetScenarios.length > 1 ? <Link href={`/orcamentos/cenarios/comparar?orcamento=${budget.id}`} className={catalogStyles.textLink}>Comparar</Link> : null}
+                      </div>
+                      {budgetScenarios.length === 0 ? <p>Nenhum cenário criado para este lote.</p> : (
+                        <ul>
+                          {budgetScenarios.map((scenario) => (
+                            <li key={scenario.id}>
+                              <div><strong>{scenario.name}</strong><span>{formatCentsPtBr(scenario.targetValueCents)} · {formatBasisPointsPtBr(scenario.differenceBasisPoints, scenario.comparisonKind)}</span></div>
+                              <div><Link href={`/orcamentos/cenarios/${scenario.id}`}>Abrir</Link><Link href={`/orcamentos/cenarios/novo?duplicar=${scenario.id}`}>Duplicar</Link></div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </section>
+
+                    {isOpen ? (
+                      <div className={catalogStyles.detail} id={`budget-detail-${budget.id}`}>
+                        {detail?.status === "loading" ? <p>Carregando os detalhes deste lote…</p> : null}
+                        {detail?.status === "error" ? <p role="alert">{detail.message}</p> : null}
+                        {detail?.status === "loaded" ? <OfficialBudgetDetail budget={detail.budget} summary={budget} /> : null}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          </section>
         ))}
       </section>
     </>
   );
 }
 
-function OfficialLineTree({ lines, line, depth }: { lines: ReadonlyArray<OfficialLine>; line: OfficialLine; depth: number }) {
-  const [expanded, setExpanded] = useState(depth < 1);
-  const children = orderedChildren(lines, line.id);
-  const total = calculateTotal(lines, line.id);
-  const isLeaf = line.kind === "ServiceItem";
-
+function OfficialBudgetDetail({ budget, summary }: { readonly budget: OfficialBudgetDto; readonly summary: ConsolidatedBudgetSummaryDto }) {
+  const { childrenByParent, totalsByLine } = useMemo(() => buildLineIndex(budget.lines), [budget.lines]);
+  const roots = childrenByParent.get(null) ?? [];
   return (
-    <div style={{ marginLeft: `${depth * 1.25}rem`, borderBottom: depth === 0 ? "1px solid #eee" : undefined, padding: "0.35rem 0" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          {!isLeaf && children.length > 0 && (
-            <button onClick={() => setExpanded((v) => !v)} style={{ border: "none", background: "none", cursor: "pointer" }}>
-              {expanded ? "▾" : "▸"}
-            </button>
-          )}
-          <span style={{ fontWeight: line.kind !== "ServiceItem" ? 700 : 400 }}>
-            {line.externalCode ? `${line.externalCode} — ` : ""}
-            {lineText(line)}
-          </span>
-        </div>
-        <span style={{ fontWeight: line.kind !== "ServiceItem" ? 700 : 400 }}>{centsToBRL(total)}</span>
-      </div>
-      {expanded && children.map((child) => <OfficialLineTree key={child.id} lines={lines} line={child} depth={depth + 1} />)}
+    <div>
+      <div className={catalogStyles.detailHeader}><strong>Itens do orçamento</strong><span>{formatCentsPtBr(summary.officialValueCents)}</span></div>
+      {roots.map((line) => <OfficialLineTree key={line.id} line={line} depth={0} childrenByParent={childrenByParent} totalsByLine={totalsByLine} />)}
     </div>
   );
+}
+
+function OfficialLineTree({
+  line,
+  depth,
+  childrenByParent,
+  totalsByLine,
+}: {
+  readonly line: OfficialLine;
+  readonly depth: number;
+  readonly childrenByParent: ReadonlyMap<string | null, ReadonlyArray<OfficialLine>>;
+  readonly totalsByLine: ReadonlyMap<string, number>;
+}) {
+  const [expanded, setExpanded] = useState(depth === 0);
+  const children = childrenByParent.get(line.id) ?? [];
+  const isLeaf = line.kind === "ServiceItem";
+  const description = line.description.status === "Confirmed" ? line.description.text : "Descrição não informada";
+  return (
+    <div className={catalogStyles.treeNode} style={{ paddingLeft: `${Math.min(depth, 5) * 1.1}rem` }}>
+      <div className={catalogStyles.treeRow}>
+        <div>
+          {!isLeaf && children.length > 0 ? (
+            <button type="button" aria-expanded={expanded} aria-label={`${expanded ? "Recolher" : "Expandir"} ${description}`} onClick={() => setExpanded((current) => !current)}>{expanded ? "▾" : "▸"}</button>
+          ) : <span className={catalogStyles.treeSpacer} />}
+          <span className={line.kind !== "ServiceItem" ? catalogStyles.strongLine : undefined}>{line.externalCode ? `${line.externalCode} — ` : ""}{description}</span>
+        </div>
+        <strong>{formatCentsPtBr(totalsByLine.get(line.id) ?? 0)}</strong>
+      </div>
+      {expanded ? children.map((child) => <OfficialLineTree key={child.id} line={child} depth={depth + 1} childrenByParent={childrenByParent} totalsByLine={totalsByLine} />) : null}
+    </div>
+  );
+}
+
+function buildLineIndex(lines: ReadonlyArray<OfficialLine>): {
+  readonly childrenByParent: ReadonlyMap<string | null, ReadonlyArray<OfficialLine>>;
+  readonly totalsByLine: ReadonlyMap<string, number>;
+} {
+  const childrenByParent = new Map<string | null, OfficialLine[]>();
+  for (const line of lines) {
+    const current = childrenByParent.get(line.parentLineId) ?? [];
+    current.push(line);
+    childrenByParent.set(line.parentLineId, current);
+  }
+  for (const children of childrenByParent.values()) children.sort((left, right) => left.position - right.position);
+
+  const totalsByLine = new Map<string, number>();
+  const calculate = (line: OfficialLine): number => {
+    const cached = totalsByLine.get(line.id);
+    if (cached !== undefined) return cached;
+    const total = line.kind === "ServiceItem"
+      ? line.totalCents ?? 0
+      : (childrenByParent.get(line.id) ?? []).reduce((sum, child) => sum + calculate(child), 0);
+    totalsByLine.set(line.id, total);
+    return total;
+  };
+  for (const line of lines) calculate(line);
+  return { childrenByParent, totalsByLine };
 }
