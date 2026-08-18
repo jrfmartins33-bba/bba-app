@@ -31,15 +31,15 @@ export async function GET(): Promise<NextResponse> {
   }
 
   if (latest === null) {
-    return NextResponse.json({ budgetVersion: null });
+    return NextResponse.json({ budget: null });
   }
 
   const repository = createBudgetVersionRepository(supabase);
   const persisted = await repository.loadBudgetVersion(auth.companyId, latest.id);
 
   if (persisted === null) {
-    return NextResponse.json({ budgetVersion: null });
+    return NextResponse.json({ budget: null });
   }
 
-  return NextResponse.json({ budgetVersion: persisted.entity });
+  return NextResponse.json({ budget: persisted.entity });
 }

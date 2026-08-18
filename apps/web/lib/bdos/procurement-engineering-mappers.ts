@@ -75,6 +75,9 @@ export interface BudgetLineRow {
   readonly scope_kind: string;
   readonly scope_procurement_lot_id: string | null;
   readonly total_cents: string | number | null;
+  readonly quantity_decimal?: string | null;
+  readonly unit?: string | null;
+  readonly official_unit_price_cents?: string | number | null;
   readonly metadata: Record<string, unknown> | null;
 }
 
@@ -154,6 +157,7 @@ export function mapBudgetVersionAggregate(
 function mapBudgetLineRow(row: BudgetLineRow, procurementCaseId: string): BudgetLine {
   const kind = mapBudgetLineKind(row.kind);
   const totalCents = parseMoneyCents(row.total_cents, "budget_lines.total_cents");
+  const officialUnitPriceCents = parseMoneyCents(row.official_unit_price_cents ?? null, "budget_lines.official_unit_price_cents");
 
   if (kind === BudgetLineKind.ServiceItem && totalCents === null) {
     throw new ProcurementEngineeringReconstructionError(`budget_lines "${row.id}": kind "ServiceItem" requires a non-null total_cents.`);
@@ -173,6 +177,9 @@ function mapBudgetLineRow(row: BudgetLineRow, procurementCaseId: string): Budget
     position: assertNonNegativeInteger(row.position, "budget_lines.position"),
     scope: mapScope(procurementCaseId, row.scope_kind, row.scope_procurement_lot_id, "budget_lines"),
     totalCents,
+    quantity: row.quantity_decimal ?? null,
+    unit: row.unit ?? null,
+    officialUnitPriceCents,
     metadata: row.metadata ?? {},
   };
 }
@@ -441,6 +448,9 @@ function lineToJsonPayload(line: BudgetLine): Record<string, unknown> {
     scopeKind: line.scope.kind,
     scopeProcurementLotId: lotIdOfScope(line.scope),
     totalCents: line.totalCents,
+    quantity: line.quantity ?? null,
+    unit: line.unit ?? null,
+    officialUnitPriceCents: line.officialUnitPriceCents ?? null,
     metadata: line.metadata,
   };
 }

@@ -64,8 +64,7 @@ export function createBudgetReviewServerRepository(
     },
 
     async loadSession(organizationId, sessionId) {
-      const { data: sessionRow, error: sessionError } = await readClient
-        .from("budget_review_sessions")
+      const { data: sessionRow, error: sessionError } = await readClient.from("budget_review_sessions")
         .select(SESSION_COLUMNS)
         .eq("company_id", organizationId)
         .eq("id", sessionId)
@@ -79,8 +78,7 @@ export function createBudgetReviewServerRepository(
     },
 
     async findSessionByAcquisition(organizationId, procurementCaseId, sourceSha256, acquisitionMechanism, procurementLotId) {
-      let query = readClient
-        .from("budget_review_sessions")
+      let query = readClient.from("budget_review_sessions")
         .select(SESSION_COLUMNS)
         .eq("company_id", organizationId)
         .eq("procurement_case_id", procurementCaseId)
