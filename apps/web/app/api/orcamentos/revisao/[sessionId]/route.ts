@@ -224,8 +224,16 @@ export async function POST(request: Request, { params }: RouteParams): Promise<N
       break;
     }
     case "consolidate": {
-      const budgetVersionRepository = createBudgetVersionRepository(getSupabaseServiceRoleClient());
-      result = await consolidateBudgetReviewSessionService(context, { sessionId }, repository, budgetVersionRepository);
+      const serviceRoleClient = getSupabaseServiceRoleClient();
+      const budgetVersionRepository = createBudgetVersionRepository(serviceRoleClient);
+      const procurementCaseRepository = createProcurementCaseRepository(serviceRoleClient);
+      result = await consolidateBudgetReviewSessionService(
+        context,
+        { sessionId },
+        repository,
+        budgetVersionRepository,
+        procurementCaseRepository,
+      );
       break;
     }
     default:

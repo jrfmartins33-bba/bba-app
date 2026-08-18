@@ -15,7 +15,10 @@ import {
 import type { BudgetReviewAuditAction, BudgetReviewAuditEvent, BudgetReviewRow, BudgetReviewSession } from "../../domain/budget-official-review";
 import { BudgetVersionStatus, consolidateBudgetVersion } from "../../domain/budget-version";
 import type { BudgetVersion } from "../../domain/budget-version";
+import { ProcurementScopeKind } from "../../domain/procurement-case";
+import type { ProcurementLot } from "../../domain/procurement-case";
 import type { BudgetVersionRepository, PersistedEntity } from "../procurement-engineering/budget-version.repository";
+import type { ProcurementCaseRepository } from "../procurement-engineering/procurement-case.repository";
 import { projectBudgetReviewSessionToBudgetVersion } from "./budget-review-projection";
 import type { ApplicationContext } from "./application-context";
 import { toInfrastructureErrorMessage } from "./application-context";
@@ -439,6 +442,7 @@ export async function consolidateBudgetReviewSessionService(
   command: ConsolidateBudgetReviewSessionCommand,
   repository: BudgetReviewRepository,
   budgetVersionRepository: BudgetVersionRepository,
+  procurementCaseRepository: ProcurementCaseRepository,
 ): Promise<ConsolidateBudgetReviewSessionServiceResult> {
   const loaded = await repository.loadSession(context.organizationId, command.sessionId);
   if (loaded === null) return { outcome: "not_found" };
@@ -473,7 +477,7 @@ export async function consolidateBudgetReviewSessionService(
   // anterior ao flip). As linhas da Sessão já consolidada são imutáveis —
   // reprojeta e persiste agora, sem repetir o flip (já feito).
   if (loaded.status === BudgetReviewSessionStatus.Consolidated && loadedVersion.entity.status !== BudgetVersionStatus.Consolidated) {
-    return projectAndPersistBudgetVersion(context, budgetVersionRepository, loaded, loadedVersion);
+    return projectAndPersistBudgetVersion(context, budgetVersionRepository, procurementCaseRepository, loaded, loadedVersion);
   }
 
   // Caminho normal: os dois agregados ainda em estado inicial.
@@ -481,7 +485,13 @@ export async function consolidateBudgetReviewSessionService(
   const domainResult = consolidateBudgetReviewSession({ session: loaded, actor: context.actor, occurredAt });
   if (!domainResult.success) return { outcome: "domain_error", errors: domainResult.errors };
 
-  const projectAndPersistResult = await projectAndPersistBudgetVersion(context, budgetVersionRepository, domainResult.session, loadedVersion);
+  const projectAndPersistResult = await projectAndPersistBudgetVersion(
+    context,
+    budgetVersionRepository,
+    procurementCaseRepository,
+    domainResult.session,
+    loadedVersion,
+  );
   if (projectAndPersistResult.outcome !== "success") {
     return projectAndPersistResult;
   }
@@ -493,10 +503,33 @@ export async function consolidateBudgetReviewSessionService(
 async function projectAndPersistBudgetVersion(
   context: ApplicationContext,
   budgetVersionRepository: BudgetVersionRepository,
+  procurementCaseRepository: ProcurementCaseRepository,
   session: BudgetReviewSession,
   loadedVersion: PersistedEntity<BudgetVersion>,
 ): Promise<ConsolidateBudgetReviewSessionServiceResult> {
-  const projectionResult = projectBudgetReviewSessionToBudgetVersion(session, loadedVersion.entity);
+  let procurementLot: ProcurementLot | undefined;
+  if (loadedVersion.entity.scope.kind === ProcurementScopeKind.Lot) {
+    let loadedProcurementLot: ProcurementLot | null;
+    try {
+      loadedProcurementLot = await procurementCaseRepository.findProcurementLotById(
+        context.organizationId,
+        loadedVersion.entity.procurementCaseId,
+        loadedVersion.entity.scope.procurementLotId,
+      );
+    } catch (error) {
+      return { outcome: "persistence_failure", message: toInfrastructureErrorMessage(error) };
+    }
+
+    if (loadedProcurementLot === null) {
+      return {
+        outcome: "persistence_failure",
+        message: `Lote "${loadedVersion.entity.scope.procurementLotId}" referenced by this budget version was not found.`,
+      };
+    }
+    procurementLot = loadedProcurementLot;
+  }
+
+  const projectionResult = projectBudgetReviewSessionToBudgetVersion(session, loadedVersion.entity, procurementLot);
   if (!projectionResult.success) {
     return { outcome: "persistence_failure", message: `Falha ao projetar a Sessão de Revisão para a Versão do Orçamento: ${JSON.stringify(projectionResult.errors)}` };
   }

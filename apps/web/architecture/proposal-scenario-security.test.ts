@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(__dirname, "..", "..", "..");
-const migration = readFileSync(resolve(root, "supabase/migrations/20260818134055_add_proposal_scenarios.sql"), "utf8");
+const migration = readFileSync(resolve(root, "supabase/migrations/20260818142923_add_proposal_scenarios.sql"), "utf8");
 const route = readFileSync(resolve(root, "apps/web/app/api/orcamentos/cenarios/route.ts"), "utf8");
 
 assert("proposal_scenarios enables RLS", migration.includes("ALTER TABLE public.proposal_scenarios ENABLE ROW LEVEL SECURITY"));
