@@ -183,9 +183,9 @@ async function buildReadySession(reviewRepository: BudgetReviewRepository, budge
       sessionId: created.session.id,
       rows: [
         { id: "group-1", kind: BudgetLineKind.Group, lotReference: "Lote 01", parentRowId: null, position: 0, fields: fields({ description: "GRUPO 1" }), page: 16 },
-        { id: "item-confirmed", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "group-1", position: 0, fields: fields({ description: "Item confirmado", totalPriceText: "100,00" }), page: 16 },
-        { id: "item-corrected", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "group-1", position: 1, fields: fields({ description: "Item a corrigir", totalPriceText: "50,00" }), page: 16 },
-        { id: "item-excluded", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "group-1", position: 2, fields: fields({ description: "Título de página promovido por erro", totalPriceText: "1,00" }), page: 16 },
+        { id: "item-confirmed", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "group-1", position: 0, fields: fields({ description: "Item confirmado", totalPriceText: "100.00" }), page: 16 },
+        { id: "item-corrected", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "group-1", position: 1, fields: fields({ description: "Item a corrigir", totalPriceText: "50.00" }), page: 16 },
+        { id: "item-excluded", kind: BudgetLineKind.ServiceItem, lotReference: "Lote 01", parentRowId: "group-1", position: 2, fields: fields({ description: "Título de página promovido por erro", totalPriceText: "1.00" }), page: 16 },
       ],
     },
     reviewRepository,
@@ -199,7 +199,7 @@ async function buildReadySession(reviewRepository: BudgetReviewRepository, budge
 
   const corrected = await correctBudgetReviewRowService(
     contextFor(),
-    { sessionId: created.session.id, rowId: "item-corrected", fields: { totalPriceText: "55,00" }, justification: "Ajuste conferido contra a fonte." },
+    { sessionId: created.session.id, rowId: "item-corrected", fields: { totalPriceText: "55.00" }, justification: "Ajuste conferido contra a fonte." },
     reviewRepository,
   );
   if (corrected.outcome !== "success") throw new Error("expected correction success");

@@ -223,6 +223,7 @@ export function addBudgetLine(input: AddBudgetLineInput): BudgetVersionResult {
 
   const totalErrors = validateLineTotal(input.kind, input.totalCents, metadata);
   errors.push(...totalErrors);
+  errors.push(...validateServiceItemEconomics(input.kind, input.quantity, input.unit, input.officialUnitPriceCents, metadata));
 
   if (!isValidBudgetLinePosition(input.position)) {
     errors.push(createVersionError("invalid_position", "position", "Position must be a non-negative safe integer.", metadata));
@@ -259,6 +260,9 @@ export function addBudgetLine(input: AddBudgetLineInput): BudgetVersionResult {
     position: input.position,
     scope: input.scope,
     totalCents: input.kind === BudgetLineKind.ServiceItem ? (input.totalCents ?? null) : null,
+    quantity: input.kind === BudgetLineKind.ServiceItem ? (input.quantity ?? null) : null,
+    unit: input.kind === BudgetLineKind.ServiceItem ? (input.unit ?? null) : null,
+    officialUnitPriceCents: input.kind === BudgetLineKind.ServiceItem ? (input.officialUnitPriceCents ?? null) : null,
     metadata,
   };
 
@@ -795,6 +799,41 @@ function validateLineTotal(
   }
 
   return [];
+}
+
+const EXACT_QUANTITY_PATTERN = /^\d+(?:\.\d{1,6})?$/;
+
+function validateServiceItemEconomics(
+  kind: BudgetLineKind,
+  quantity: string | null | undefined,
+  unit: string | null | undefined,
+  officialUnitPriceCents: MoneyCents | null | undefined,
+  metadata: BudgetVersionMetadata,
+): ReadonlyArray<BudgetVersionError> {
+  const errors: BudgetVersionError[] = [];
+
+  if (kind !== BudgetLineKind.ServiceItem) {
+    if (quantity != null) errors.push(createVersionError("invalid_quantity", "quantity", "Grupo and Subgrupo cannot carry quantity.", metadata));
+    if (unit != null) errors.push(createVersionError("invalid_unit", "unit", "Grupo and Subgrupo cannot carry unit.", metadata));
+    if (officialUnitPriceCents != null) {
+      errors.push(createVersionError("invalid_official_unit_price_cents", "officialUnitPriceCents", "Grupo and Subgrupo cannot carry unit price.", metadata));
+    }
+    return errors;
+  }
+
+  if (quantity !== undefined && quantity !== null && !EXACT_QUANTITY_PATTERN.test(quantity)) {
+    errors.push(createVersionError("invalid_quantity", "quantity", "Quantity must be an exact non-negative canonical decimal with at most six decimal places.", metadata));
+  }
+
+  if (unit !== undefined && unit !== null && unit.trim().length === 0) {
+    errors.push(createVersionError("invalid_unit", "unit", "Unit, when provided, must not be blank.", metadata));
+  }
+
+  if (officialUnitPriceCents !== undefined && officialUnitPriceCents !== null && !isValidMoneyCents(officialUnitPriceCents)) {
+    errors.push(createVersionError("invalid_official_unit_price_cents", "officialUnitPriceCents", "Official unit price must be valid non-negative integer cents.", metadata));
+  }
+
+  return errors;
 }
 
 /** Posição válida: `number` finito, inteiro seguro, maior ou igual a zero. */

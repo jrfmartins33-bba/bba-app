@@ -99,6 +99,15 @@ export interface BudgetLine {
   readonly position: BudgetLinePosition;
   readonly scope: ProcurementScope;
   readonly totalCents: MoneyCents | null;
+  /**
+   * Ponte econômica canônica para Itens de Serviço. Os campos opcionais
+   * preservam compatibilidade com versões históricas que continham apenas
+   * o total oficial. A quantidade é texto decimal canônico exato, nunca
+   * um `number` de ponto flutuante.
+   */
+  readonly quantity?: string | null;
+  readonly unit?: string | null;
+  readonly officialUnitPriceCents?: MoneyCents | null;
   readonly metadata: BudgetVersionMetadata;
 }
 
@@ -172,6 +181,9 @@ export interface AddBudgetLineInput {
   readonly scope: ProcurementScope;
   readonly procurementLot?: ProcurementLot;
   readonly totalCents?: MoneyCents | null;
+  readonly quantity?: string | null;
+  readonly unit?: string | null;
+  readonly officialUnitPriceCents?: MoneyCents | null;
   readonly metadata?: BudgetVersionMetadata;
 }
 
@@ -243,6 +255,9 @@ export type BudgetVersionErrorCode =
   | "line_scope_incompatible"
   | "child_scope_incompatible_with_parent"
   | "invalid_total_cents"
+  | "invalid_quantity"
+  | "invalid_unit"
+  | "invalid_official_unit_price_cents"
   | "unknown_line"
   | "line_has_children"
   | "missing_lineage_relation_id"

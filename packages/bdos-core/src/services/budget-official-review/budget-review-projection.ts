@@ -57,12 +57,19 @@ function projectRowAndDescendants(session: BudgetReviewSession, row: BudgetRevie
     position: row.position,
     scope: budgetVersion.scope,
     totalCents: row.kind === BudgetLineKind.ServiceItem ? moneyCentsFromCanonicalDecimalText(row.revised.totalPriceText) : null,
+    quantity: row.kind === BudgetLineKind.ServiceItem ? row.revised.quantityText : null,
+    unit: row.kind === BudgetLineKind.ServiceItem ? row.revised.unit : null,
+    officialUnitPriceCents:
+      row.kind === BudgetLineKind.ServiceItem ? moneyCentsFromCanonicalDecimalText(row.revised.unitPriceWithBdiText) : null,
     metadata: {
       lotReference: row.lotReference,
       sourcePage: row.page,
       reviewRowId: row.id,
       reviewSessionId: session.id,
       sourceEvidenceText: row.evidenceText,
+      sourceUnitCostWithoutBdiText: row.revised.unitCostWithoutBdiText,
+      sourceBdiPercentText: row.revised.bdiPercentText,
+      sourceCalculationRule: row.calculationRule ?? null,
     },
   });
 

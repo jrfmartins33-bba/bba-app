@@ -222,9 +222,9 @@ function buildValidTestXlsxBytes(): Uint8Array {
       name: "Orçamento",
       rows: [
         ["ITEM", "CÓDIGO", "DESCRIÇÃO", "UNID", "QUANT", "BDI", "PREÇO UNIT", "PREÇO TOTAL"],
-        ["X", "1", "SERVIÇOS PRELIMINARES E ADMINISTRAÇÃO LOCAL", "", "", "", "", "100.000,00"],
-        ["01.01", "", "SERVIÇOS PRELIMINARES", "", "", "", "", "10.000,00"],
-        ["01.01.01", "TRANSP-1", "MOBILIZAÇÃO E DESMOBILIZAÇÃO", "UNID", "1,00", "24,18%", "10.000,00", "10.000,00"],
+        ["X", "1", "SERVIÇOS PRELIMINARES E ADMINISTRAÇÃO LOCAL", "", "", "", "", 100000],
+        ["01.01", "", "SERVIÇOS PRELIMINARES", "", "", "", "", 10000],
+        ["01.01.01", "TRANSP-1", "MOBILIZAÇÃO E DESMOBILIZAÇÃO", "UNID", 1, "24,18%", 10000, 10000],
       ],
     },
   ]);
