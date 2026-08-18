@@ -10,7 +10,7 @@ assert("authenticated receives SELECT only", migration.includes("GRANT SELECT ON
 assert("direct writes are revoked", migration.includes("REVOKE ALL ON TABLE public.proposal_scenarios FROM PUBLIC, anon, authenticated"));
 assert("create RPC is unavailable to browser roles", migration.includes("FROM authenticated") && migration.includes("TO service_role"));
 assert("create RPC validates actor against organization", migration.includes("get_company_id_for_actor(p_actor_id)") && migration.includes("is_bba_admin_actor(p_actor_id)"));
-assert("API derives company from authenticated context", route.includes("requireAuthenticatedCompany") && !route.includes("body.companyId"));
+assert("API derives company from authenticated actor and source budget", route.includes("authenticateBudgetOrganizationActor") && route.includes("resolveBudgetVersionContext") && !route.includes("body.companyId"));
 assert("API writes through server-only client", route.includes("getSupabaseServiceRoleClient"));
 
 function assert(name: string, condition: boolean): void {

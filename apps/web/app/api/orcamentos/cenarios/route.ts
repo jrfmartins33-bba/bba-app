@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { createProposalScenarioService, listProposalScenariosService } from "@bba/bdos-core/services/proposal-scenarios";
 import { createBudgetVersionRepository } from "@/lib/bdos/procurement-engineering-server-repository";
 import { createProposalScenarioRepository } from "@/lib/bdos/proposal-scenario-server-repository";
-import { getSupabaseRouteHandlerClient, getSupabaseServiceRoleClient, requireAuthenticatedCompany } from "@/lib/supabase/server";
+import { getSupabaseRouteHandlerClient, getSupabaseServiceRoleClient } from "@/lib/supabase/server";
+import {
+  authenticateBudgetOrganizationActor,
+  resolveBudgetCatalogContextForActor,
+  resolveBudgetVersionContext,
+} from "@/lib/bdos/budget-organization-context-server";
 
 interface CreateBody {
   readonly budgetId?: string;
@@ -12,13 +17,26 @@ interface CreateBody {
 
 export async function GET(request: Request): Promise<NextResponse> {
   const readClient = getSupabaseRouteHandlerClient();
-  const auth = await requireAuthenticatedCompany(readClient);
-  if (!auth) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const url = new URL(request.url);
+  const sourceBudgetVersionId = url.searchParams.get("orcamento") ?? undefined;
+  const requestedOrganizationId = url.searchParams.get("empresa");
+  const authentication = await authenticateBudgetOrganizationActor(readClient);
+  if (authentication.status === "unauthenticated") return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  if (authentication.status === "forbidden") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const sourceBudgetVersionId = new URL(request.url).searchParams.get("orcamento") ?? undefined;
-  const repository = createProposalScenarioRepository(readClient, getSupabaseServiceRoleClient());
+  const context = sourceBudgetVersionId
+    ? await resolveBudgetVersionContext(readClient, authentication.actor, sourceBudgetVersionId, requestedOrganizationId)
+    : await resolveBudgetCatalogContextForActor(readClient, authentication.actor, requestedOrganizationId);
+  if (context.status === "forbidden") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (context.status === "unauthenticated") return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  if (context.status === "not_found") return NextResponse.json({ error: "source_not_found" }, { status: 404 });
+  if (context.status === "selection_required") {
+    return NextResponse.json({ scenarios: [], organizationSelectionRequired: true, organizations: context.organizations });
+  }
+
+  const repository = createProposalScenarioRepository(context.queryClient, getSupabaseServiceRoleClient());
   const result = await listProposalScenariosService(
-    { organizationId: auth.companyId, actor: auth.userId },
+    { organizationId: context.organization.id, actor: context.actor.userId },
     sourceBudgetVersionId,
     repository,
   );
@@ -26,13 +44,18 @@ export async function GET(request: Request): Promise<NextResponse> {
     console.error("[orcamentos/cenarios] Falha ao listar cenários.", result.message);
     return NextResponse.json({ error: "query_failed" }, { status: 500 });
   }
-  return NextResponse.json({ scenarios: result.scenarios.map(toDto) });
+  return NextResponse.json({
+    scenarios: result.scenarios.map(toDto),
+    organization: context.organization,
+    organizationSelectionRequired: false,
+  });
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
   const readClient = getSupabaseRouteHandlerClient();
-  const auth = await requireAuthenticatedCompany(readClient);
-  if (!auth) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const authentication = await authenticateBudgetOrganizationActor(readClient);
+  if (authentication.status === "unauthenticated") return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  if (authentication.status === "forbidden") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   let body: CreateBody;
   try {
@@ -45,9 +68,22 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "invalid_fields", message: "Preencha o nome e o valor da proposta." }, { status: 400 });
   }
 
+  const requestedOrganizationId = new URL(request.url).searchParams.get("empresa");
+  const context = await resolveBudgetVersionContext(
+    readClient,
+    authentication.actor,
+    body.budgetId,
+    requestedOrganizationId,
+  );
+  if (context.status === "forbidden") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (context.status === "not_found") {
+    return NextResponse.json({ error: "source_not_found", message: "O orçamento oficial não foi encontrado." }, { status: 404 });
+  }
+  if (context.status !== "resolved") return NextResponse.json({ error: context.status }, { status: 401 });
+
   const writeClient = getSupabaseServiceRoleClient();
   const result = await createProposalScenarioService(
-    { organizationId: auth.companyId, actor: auth.userId },
+    { organizationId: context.organization.id, actor: context.actor.userId },
     {
       id: crypto.randomUUID(),
       sourceBudgetVersionId: body.budgetId,
@@ -56,8 +92,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       createdAt: new Date().toISOString(),
     },
     {
-      budgetVersions: createBudgetVersionRepository(readClient),
-      scenarios: createProposalScenarioRepository(readClient, writeClient),
+      budgetVersions: createBudgetVersionRepository(context.queryClient),
+      scenarios: createProposalScenarioRepository(context.queryClient, writeClient),
     },
   );
 

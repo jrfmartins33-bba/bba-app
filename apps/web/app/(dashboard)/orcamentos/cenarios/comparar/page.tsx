@@ -20,6 +20,7 @@ function CompareProposalScenariosContent() {
   const searchParams = useSearchParams();
   const initialIds = useMemo(() => (searchParams.get("ids") ?? "").split(",").filter(Boolean).slice(0, 3), [searchParams]);
   const requestedBudgetId = searchParams.get("orcamento");
+  const requestedOrganizationId = searchParams.get("empresa");
   const [scenarios, setScenarios] = useState<ReadonlyArray<ProposalScenarioDto> | undefined>(undefined);
   const [catalog, setCatalog] = useState<ConsolidatedBudgetCatalogDto | undefined>(undefined);
   const [selectedIds, setSelectedIds] = useState<ReadonlyArray<string>>(initialIds);
@@ -28,11 +29,11 @@ function CompareProposalScenariosContent() {
   useEffect(() => {
     const controller = new AbortController();
     Promise.all([
-      fetch("/api/orcamentos/cenarios", { signal: controller.signal }).then(async (response) => {
+      fetch(withOrganization("/api/orcamentos/cenarios", requestedOrganizationId), { signal: controller.signal }).then(async (response) => {
         if (!response.ok) throw new Error("Não foi possível carregar os cenários.");
         return ((await response.json()) as { scenarios: ReadonlyArray<ProposalScenarioDto> }).scenarios;
       }),
-      fetch("/api/orcamentos/consolidado/resumo", { signal: controller.signal }).then(async (response) => {
+      fetch(withOrganization("/api/orcamentos/consolidado/resumo", requestedOrganizationId), { signal: controller.signal }).then(async (response) => {
         if (!response.ok) throw new Error("Não foi possível carregar os lotes.");
         const payload = (await response.json()) as ConsolidatedBudgetCatalogDto;
         return { budgets: payload.budgets, processes: payload.processes };
@@ -55,7 +56,7 @@ function CompareProposalScenariosContent() {
         }
       });
     return () => controller.abort();
-  }, [requestedBudgetId]);
+  }, [requestedBudgetId, requestedOrganizationId]);
 
   const selected = (scenarios ?? []).filter((scenario) => selectedIds.includes(scenario.id));
   const selectedSourceId = selected[0]?.sourceBudgetId ?? requestedBudgetId;
@@ -98,7 +99,7 @@ function CompareProposalScenariosContent() {
         <div className={styles.page}>
           <div className={styles.sectionTitle}>
             <div><p className={styles.eyebrow}>Cenários de Proposta</p><h2>Comparar cenários</h2><p>Escolha até três valores criados para o mesmo lote.</p></div>
-            <Link href="/orcamentos" className={styles.secondary}>Voltar para Orçamentos</Link>
+            <Link href={withOrganization("/orcamentos", requestedOrganizationId)} className={styles.secondary}>Voltar para Orçamentos</Link>
           </div>
           {scenarios === undefined || catalog === undefined ? <div className={styles.loading}>Carregando cenários…</div> : null}
           {scenarios?.length === 0 ? <div className={styles.notice}><strong>Nenhum cenário salvo</strong>Crie ao menos um cenário para iniciar a comparação.</div> : null}
@@ -122,6 +123,11 @@ function CompareProposalScenariosContent() {
       </section>
     </>
   );
+}
+
+function withOrganization(path: string, organizationId: string | null): string {
+  if (!organizationId) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}empresa=${encodeURIComponent(organizationId)}`;
 }
 
 function ScenarioLotGroup({

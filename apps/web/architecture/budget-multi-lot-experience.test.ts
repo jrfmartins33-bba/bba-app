@@ -16,8 +16,8 @@ assert("catálogo lista todas as versões consolidadas sem limit(1)", serverCata
 assert("identidade multi-lote usa colunas canônicas", serverCatalog.includes("procurement_case_id") && serverCatalog.includes("procurement_lot_id") && !serverCatalog.includes("lotReference"));
 assert("todas as leituras são escopadas pela organização autenticada", (serverCatalog.match(/\.eq\("company_id", organizationId\)/g) ?? []).length >= 4);
 assert("read model não cria ou altera BudgetVersion", !/\.insert\(|\.update\(|createDraftBudgetVersion|persist_budget/.test(serverCatalog));
-assert("detalhe usa exatamente o orçamento solicitado", detailRoute.includes('searchParams.get("orcamento")') && detailRoute.includes('.eq("id", budgetVersionId)'));
-assert("detalhe exige Consolidated e company_id", detailRoute.includes('.eq("status", "Consolidated")') && detailRoute.includes('.eq("company_id", auth.companyId)'));
+assert("detalhe usa exatamente o orçamento solicitado", detailRoute.includes('searchParams.get("orcamento")') && detailRoute.includes("resolveBudgetVersionContext"));
+assert("detalhe exige contexto server-side de BudgetVersion consolidada", detailRoute.includes("resolveBudgetVersionContext") && detailRoute.includes("organizationId"));
 assert("resumo compatível retorna catálogo e seleção exata", summaryRoute.includes("loadConsolidatedBudgetCatalog") && summaryRoute.includes("requestedBudgetId"));
 assert("página oferece importação sempre visível", budgetsPage.includes('href="/orcamentos/importar"') && budgetsPage.includes("Importar outro orçamento"));
 assert("árvore completa é carregada somente sob demanda", budgetsPage.includes("toggleBudgetDetail") && budgetsPage.includes("/api/orcamentos/consolidado?orcamento="));

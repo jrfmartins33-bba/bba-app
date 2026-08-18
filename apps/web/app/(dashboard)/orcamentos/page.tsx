@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { BudgetPageHeader } from "@/components/budget/budget-page-header";
 import { BudgetEmptyState } from "@/components/budget/budget-empty-state";
 import catalogStyles from "@/components/budget/official-budget-catalog.module.css";
@@ -12,6 +13,7 @@ import {
   type ConsolidatedBudgetSummaryDto,
 } from "@/lib/budget/consolidated-budget-catalog";
 import { formatBasisPointsPtBr, formatCentsPtBr, type ProposalScenarioDto } from "@/lib/proposal-scenarios";
+import type { BudgetOrganizationAccessKind, BudgetOrganizationOption } from "@/lib/budget/budget-organization-policy";
 
 interface OfficialLine {
   readonly id: string;
@@ -34,29 +36,57 @@ type DetailState =
   | { readonly status: "loaded"; readonly budget: OfficialBudgetDto }
   | { readonly status: "error"; readonly message: string };
 
+interface CatalogPayload extends ConsolidatedBudgetCatalogDto {
+  readonly accessKind: BudgetOrganizationAccessKind;
+  readonly organization: BudgetOrganizationOption | null;
+  readonly organizations: ReadonlyArray<BudgetOrganizationOption>;
+  readonly organizationSelectionRequired: boolean;
+}
+
 export default function OrcamentosPage() {
+  return <Suspense fallback={<><BudgetPageHeader isDemonstration={false} /><section className="section-grid"><p>Carregando orçamentos…</p></section></>}><OrcamentosContent /></Suspense>;
+}
+
+function OrcamentosContent() {
+  const searchParams = useSearchParams();
+  const requestedOrganizationId = searchParams.get("empresa");
   const [catalog, setCatalog] = useState<ConsolidatedBudgetCatalogDto | undefined>(undefined);
   const [scenarios, setScenarios] = useState<ReadonlyArray<ProposalScenarioDto>>([]);
+  const [accessKind, setAccessKind] = useState<BudgetOrganizationAccessKind | null>(null);
+  const [organization, setOrganization] = useState<BudgetOrganizationOption | null>(null);
+  const [organizations, setOrganizations] = useState<ReadonlyArray<BudgetOrganizationOption>>([]);
+  const [organizationSelectionRequired, setOrganizationSelectionRequired] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [details, setDetails] = useState<Readonly<Record<string, DetailState>>>({});
   const [openBudgetId, setOpenBudgetId] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
+    setCatalog(undefined);
+    setScenarios([]);
+    setOrganization(null);
+    setOrganizationSelectionRequired(false);
+    setDetails({});
+    setOpenBudgetId(null);
+    const organizationQuery = requestedOrganizationId ? `?empresa=${encodeURIComponent(requestedOrganizationId)}` : "";
     Promise.all([
-      fetch("/api/orcamentos/consolidado/resumo", { signal: controller.signal }).then(async (response) => {
+      fetch(`/api/orcamentos/consolidado/resumo${organizationQuery}`, { signal: controller.signal }).then(async (response) => {
         if (!response.ok) throw new Error("Não foi possível carregar os orçamentos oficiais.");
-        const payload = (await response.json()) as ConsolidatedBudgetCatalogDto;
-        return { budgets: payload.budgets, processes: payload.processes };
+        return (await response.json()) as CatalogPayload;
       }),
-      fetch("/api/orcamentos/cenarios", { signal: controller.signal }).then(async (response) => {
+      fetch(`/api/orcamentos/cenarios${organizationQuery}`, { signal: controller.signal }).then(async (response) => {
         if (!response.ok) throw new Error("Não foi possível carregar os cenários de proposta.");
         return ((await response.json()) as { scenarios: ReadonlyArray<ProposalScenarioDto> }).scenarios;
       }),
     ])
-      .then(([nextCatalog, nextScenarios]) => {
-        setCatalog(nextCatalog);
+      .then(([payload, nextScenarios]) => {
+        setCatalog({ budgets: payload.budgets, processes: payload.processes });
         setScenarios(nextScenarios);
+        setAccessKind(payload.accessKind);
+        setOrganization(payload.organization);
+        setOrganizations(payload.organizations);
+        setOrganizationSelectionRequired(payload.organizationSelectionRequired);
+        setLoadError(null);
       })
       .catch((cause: Error) => {
         if (cause.name !== "AbortError") {
@@ -65,7 +95,9 @@ export default function OrcamentosPage() {
         }
       });
     return () => controller.abort();
-  }, []);
+  }, [requestedOrganizationId]);
+
+  const organizationIdForLinks = accessKind === "bba_admin" ? organization?.id ?? null : null;
 
   const scenariosByBudget = useMemo(() => {
     const grouped = new Map<string, ProposalScenarioDto[]>();
@@ -87,7 +119,7 @@ export default function OrcamentosPage() {
 
     setDetails((current) => ({ ...current, [budgetId]: { status: "loading" } }));
     try {
-      const response = await fetch(`/api/orcamentos/consolidado?orcamento=${encodeURIComponent(budgetId)}`);
+      const response = await fetch(withOrganization(`/api/orcamentos/consolidado?orcamento=${encodeURIComponent(budgetId)}`, organizationIdForLinks));
       if (!response.ok) throw new Error("Não foi possível abrir este orçamento.");
       const payload = (await response.json()) as { budget: OfficialBudgetDto | null };
       if (!payload.budget) throw new Error("Este orçamento não está disponível.");
@@ -113,14 +145,26 @@ export default function OrcamentosPage() {
     );
   }
 
+  if (organizationSelectionRequired) {
+    return (
+      <>
+        <BudgetPageHeader isDemonstration={false} />
+        <section className={`section-grid ${catalogStyles.page}`}>
+          <OrganizationSelector organizations={organizations} />
+        </section>
+      </>
+    );
+  }
+
   if (catalog.budgets.length === 0) {
-    return <><BudgetPageHeader isDemonstration={false} /><section className="section-grid"><BudgetEmptyState /></section></>;
+    return <><BudgetPageHeader isDemonstration={false} /><section className="section-grid">{accessKind === "bba_admin" && organization ? <OrganizationContext organization={organization} organizations={organizations} /> : null}<BudgetEmptyState /></section></>;
   }
 
   return (
     <>
       <BudgetPageHeader isDemonstration={false} />
       <section className={`section-grid ${catalogStyles.page}`}>
+        {accessKind === "bba_admin" && organization ? <OrganizationContext organization={organization} organizations={organizations} /> : null}
         <div className={catalogStyles.topActions}>
           <Link href="/workspaces/engenharia" className="bba-button bba-button--ghost bba-button--sm">Voltar ao Workspace Engenharia</Link>
           <div className={catalogStyles.importAction}>
@@ -137,7 +181,7 @@ export default function OrcamentosPage() {
                 <h2 id={`process-${process.procurementCaseId}`}>{process.title}</h2>
               </div>
               <dl className={catalogStyles.processSummary}>
-                <div><dt>Lotes confirmados</dt><dd>{process.budgets.length}</dd></div>
+                <div><dt>Escopo confirmado</dt><dd>{process.budgets.length} {process.budgets.length === 1 ? "lote confirmado" : "lotes confirmados"}</dd></div>
                 <div><dt>Valor total dos lotes</dt><dd>{formatCentsPtBr(process.totalOfficialValueCents)}</dd></div>
               </dl>
             </div>
@@ -169,20 +213,20 @@ export default function OrcamentosPage() {
                       <button type="button" className={scenarioStyles.secondary} aria-expanded={isOpen} aria-controls={`budget-detail-${budget.id}`} onClick={() => void toggleBudgetDetail(budget.id)}>
                         {isOpen ? "Fechar orçamento" : "Ver orçamento"}
                       </button>
-                      <Link href={`/orcamentos/cenarios/novo?orcamento=${budget.id}`} className={scenarioStyles.primary}>Criar cenário</Link>
+                      <Link href={withOrganization(`/orcamentos/cenarios/novo?orcamento=${budget.id}`, organizationIdForLinks)} className={scenarioStyles.primary}>Criar cenário</Link>
                     </div>
 
                     <section className={catalogStyles.scenarios} aria-labelledby={`scenarios-${budget.id}`}>
                       <div className={catalogStyles.scenarioHeading}>
                         <h4 id={`scenarios-${budget.id}`}>Cenários de Proposta</h4>
-                        {budgetScenarios.length > 1 ? <Link href={`/orcamentos/cenarios/comparar?orcamento=${budget.id}`} className={catalogStyles.textLink}>Comparar</Link> : null}
+                        {budgetScenarios.length > 1 ? <Link href={withOrganization(`/orcamentos/cenarios/comparar?orcamento=${budget.id}`, organizationIdForLinks)} className={catalogStyles.textLink}>Comparar</Link> : null}
                       </div>
                       {budgetScenarios.length === 0 ? <p>Nenhum cenário criado para este lote.</p> : (
                         <ul>
                           {budgetScenarios.map((scenario) => (
                             <li key={scenario.id}>
                               <div><strong>{scenario.name}</strong><span>{formatCentsPtBr(scenario.targetValueCents)} · {formatBasisPointsPtBr(scenario.differenceBasisPoints, scenario.comparisonKind)}</span></div>
-                              <div><Link href={`/orcamentos/cenarios/${scenario.id}`}>Abrir</Link><Link href={`/orcamentos/cenarios/novo?duplicar=${scenario.id}`}>Duplicar</Link></div>
+                              <div><Link href={withOrganization(`/orcamentos/cenarios/${scenario.id}`, organizationIdForLinks)}>Abrir</Link><Link href={withOrganization(`/orcamentos/cenarios/novo?duplicar=${scenario.id}`, organizationIdForLinks)}>Duplicar</Link></div>
                             </li>
                           ))}
                         </ul>
@@ -205,6 +249,39 @@ export default function OrcamentosPage() {
       </section>
     </>
   );
+}
+
+function OrganizationContext({
+  organization,
+  organizations,
+}: {
+  readonly organization: BudgetOrganizationOption;
+  readonly organizations: ReadonlyArray<BudgetOrganizationOption>;
+}) {
+  return (
+    <section className={catalogStyles.organizationContext} aria-label="Empresa selecionada">
+      <div><span>Empresa</span><strong>{organization.name}</strong></div>
+      {organizations.length > 1 ? <Link href="/orcamentos" className={catalogStyles.textLink}>Trocar empresa</Link> : null}
+    </section>
+  );
+}
+
+function OrganizationSelector({ organizations }: { readonly organizations: ReadonlyArray<BudgetOrganizationOption> }) {
+  return (
+    <section className={catalogStyles.organizationSelector} aria-labelledby="organization-selector-title">
+      <div><p className={catalogStyles.eyebrow}>Orçamentos Oficiais</p><h2 id="organization-selector-title">Selecione a empresa</h2><p>Escolha a empresa cliente cujos processos, lotes e cenários você deseja visualizar.</p></div>
+      {organizations.length === 0 ? <p>Nenhuma empresa possui orçamento confirmado neste momento.</p> : (
+        <div className={catalogStyles.organizationGrid}>
+          {organizations.map((option) => <Link key={option.id} href={`/orcamentos?empresa=${encodeURIComponent(option.id)}`}><span>Empresa cliente</span><strong>{option.name}</strong></Link>)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function withOrganization(path: string, organizationId: string | null): string {
+  if (!organizationId) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}empresa=${encodeURIComponent(organizationId)}`;
 }
 
 function OfficialBudgetDetail({ budget, summary }: { readonly budget: OfficialBudgetDto; readonly summary: ConsolidatedBudgetSummaryDto }) {

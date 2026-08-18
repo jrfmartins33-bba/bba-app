@@ -16,6 +16,11 @@ import {
   parseBrlToCents,
   type ProposalScenarioDto,
 } from "@/lib/proposal-scenarios";
+import type { BudgetOrganizationOption } from "@/lib/budget/budget-organization-policy";
+
+interface CatalogPayload extends ConsolidatedBudgetCatalogDto {
+  readonly organization: BudgetOrganizationOption | null;
+}
 
 export default function NewProposalScenarioPage() {
   return <Suspense fallback={<div className={styles.loading}>Preparando criação…</div>}><NewProposalScenarioContent /></Suspense>;
@@ -26,7 +31,9 @@ function NewProposalScenarioContent() {
   const searchParams = useSearchParams();
   const requestedBudgetId = searchParams.get("orcamento");
   const duplicateId = searchParams.get("duplicar");
+  const requestedOrganizationId = searchParams.get("empresa");
   const [catalog, setCatalog] = useState<ConsolidatedBudgetCatalogDto | null | undefined>(undefined);
+  const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(requestedOrganizationId);
   const [duplicateScenario, setDuplicateScenario] = useState<ProposalScenarioDto | null | undefined>(() => duplicateId ? undefined : null);
   const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -36,13 +43,15 @@ function NewProposalScenarioContent() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/orcamentos/consolidado/resumo", { signal: controller.signal })
+    fetch(withOrganization("/api/orcamentos/consolidado/resumo", requestedOrganizationId), { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error("Não foi possível carregar os orçamentos oficiais.");
-        const payload = (await response.json()) as ConsolidatedBudgetCatalogDto;
-        return { budgets: payload.budgets, processes: payload.processes };
+        return (await response.json()) as CatalogPayload;
       })
-      .then(setCatalog)
+      .then((payload) => {
+        setCatalog({ budgets: payload.budgets, processes: payload.processes });
+        setActiveOrganizationId(payload.organization?.id ?? requestedOrganizationId);
+      })
       .catch((cause: Error) => {
         if (cause.name !== "AbortError") {
           setError(cause.message);
@@ -50,17 +59,18 @@ function NewProposalScenarioContent() {
         }
       });
     return () => controller.abort();
-  }, []);
+  }, [requestedOrganizationId]);
 
   useEffect(() => {
     if (!duplicateId) return;
     const controller = new AbortController();
-    fetch(`/api/orcamentos/cenarios/${encodeURIComponent(duplicateId)}`, { signal: controller.signal })
+    fetch(withOrganization(`/api/orcamentos/cenarios/${encodeURIComponent(duplicateId)}`, requestedOrganizationId), { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error("Não foi possível abrir o cenário de referência.");
-        return ((await response.json()) as { scenario: ProposalScenarioDto }).scenario;
+        return (await response.json()) as { scenario: ProposalScenarioDto; organization?: BudgetOrganizationOption };
       })
-      .then((scenario) => {
+      .then(({ scenario, organization }) => {
+        if (organization) setActiveOrganizationId(organization.id);
         setDuplicateScenario(scenario);
         setName(`Cópia de ${scenario.name}`.slice(0, 120));
         setTargetValue(inputValueFromCents(scenario.targetValueCents));
@@ -72,7 +82,7 @@ function NewProposalScenarioContent() {
         }
       });
     return () => controller.abort();
-  }, [duplicateId]);
+  }, [duplicateId, requestedOrganizationId]);
 
   const requestedBudget = catalog?.budgets.find((budget) => budget.id === requestedBudgetId) ?? null;
   const duplicateBudget = catalog?.budgets.find((budget) => budget.id === duplicateScenario?.sourceBudgetId) ?? null;
@@ -99,14 +109,14 @@ function NewProposalScenarioContent() {
     setSaving(true);
     setError(null);
     try {
-      const response = await fetch("/api/orcamentos/cenarios", {
+      const response = await fetch(withOrganization("/api/orcamentos/cenarios", activeOrganizationId), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ budgetId: budget.id, name, targetValueCents }),
       });
       const payload = (await response.json()) as { scenario?: ProposalScenarioDto; message?: string };
       if (!response.ok || !payload.scenario) throw new Error(payload.message ?? "Não foi possível criar este cenário.");
-      router.push(`/orcamentos/cenarios/${payload.scenario.id}`);
+      router.push(withOrganization(`/orcamentos/cenarios/${payload.scenario.id}`, activeOrganizationId));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível criar este cenário.");
       setSaving(false);
@@ -126,7 +136,7 @@ function NewProposalScenarioContent() {
               <h2>{needsChoice ? "Escolha o lote da proposta" : duplicateId ? "Duplicar cenário" : "Criar cenário"}</h2>
               <p>Registre um valor de proposta sem alterar o orçamento oficial.</p>
             </div>
-            <Link href="/orcamentos" className={styles.secondary}>Voltar para Orçamentos</Link>
+            <Link href={withOrganization("/orcamentos", activeOrganizationId)} className={styles.secondary}>Voltar para Orçamentos</Link>
           </div>
 
           {catalog === undefined || duplicateScenario === undefined ? <div className={styles.loading}>Carregando orçamentos oficiais…</div> : null}
@@ -186,7 +196,7 @@ function NewProposalScenarioContent() {
                 {error ? <p className={styles.error} role="alert">{error}</p> : null}
                 <div className={styles.actions}>
                   <button className={styles.primary} type="submit" disabled={saving}>{saving ? "Salvando…" : "Salvar cenário"}</button>
-                  <Link href="/orcamentos" className={styles.secondary}>Cancelar</Link>
+                  <Link href={withOrganization("/orcamentos", activeOrganizationId)} className={styles.secondary}>Cancelar</Link>
                 </div>
               </form>
             </div>
@@ -195,4 +205,9 @@ function NewProposalScenarioContent() {
       </section>
     </>
   );
+}
+
+function withOrganization(path: string, organizationId: string | null): string {
+  if (!organizationId) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}empresa=${encodeURIComponent(organizationId)}`;
 }

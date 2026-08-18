@@ -1,5 +1,15 @@
 .page { display: flex; flex-direction: column; gap: 1.5rem; }
 .topActions { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
+.organizationContext { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .9rem 1rem; border: 1px solid #dce6e2; border-radius: 14px; background: #f7faf8; }
+.organizationContext div { display: grid; gap: .2rem; }
+.organizationContext span, .organizationGrid span { color: #68746f; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.organizationContext strong { color: #183128; font-size: 1rem; }
+.organizationSelector { grid-column: 1 / -1; display: grid; gap: 1.2rem; padding: 1.4rem; border: 1px solid #dce6e2; border-radius: 18px; background: #fff; }
+.organizationSelector h2 { margin: 0; color: #17231f; }
+.organizationSelector p { margin: .35rem 0 0; color: #68746f; }
+.organizationGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: .75rem; }
+.organizationGrid a { display: grid; gap: .35rem; padding: 1rem; border: 1px solid #dce6e2; border-radius: 12px; color: #183128; text-decoration: none; }
+.organizationGrid a:hover, .organizationGrid a:focus-visible { border-color: #79b59f; background: #f3f8f5; outline: none; }
 .importAction { display: flex; flex-direction: column; align-items: flex-end; gap: .4rem; color: #68746f; font-size: .78rem; }
 .process { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 1rem; }
 .processHeader { display: flex; justify-content: space-between; align-items: flex-end; gap: 1.5rem; flex-wrap: wrap; padding: 1.4rem; border: 1px solid #dce6e2; border-radius: 18px; background: #fff; }
@@ -45,6 +55,7 @@
 .error { grid-column: 1 / -1; display: grid; gap: .3rem; padding: 1rem; border-left: 3px solid #b64a3e; border-radius: 0 12px 12px 0; background: #fff2f0; color: #77352e; }
 
 @media (max-width: 640px) {
+  .organizationContext { align-items: flex-start; flex-direction: column; }
   .topActions, .importAction { align-items: stretch; }
   .topActions > *, .importAction > a { width: 100%; }
   .processSummary { width: 100%; grid-template-columns: 1fr; }
