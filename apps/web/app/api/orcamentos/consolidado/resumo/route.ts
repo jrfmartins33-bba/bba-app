@@ -50,7 +50,7 @@ export async function GET(request: Request): Promise<NextResponse> {
         scenarioRepository,
       ),
     ]);
-    const scenarios = scenarioResult.outcome === "success" ? scenarioResult.scenarios.map(toDto) : [];
+    const scenarios = scenarioResult.outcome === "listed" ? scenarioResult.scenarios.map(toDto) : [];
     const budget = requestedBudgetId
       ? catalog.budgets.find((candidate) => candidate.id === requestedBudgetId) ?? null
       : catalog.budgets.length === 1 ? catalog.budgets[0] : null;
