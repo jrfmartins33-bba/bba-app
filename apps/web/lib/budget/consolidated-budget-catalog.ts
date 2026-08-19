@@ -110,20 +110,40 @@ export function buildConsolidatedBudgetCatalog(input: {
   }
 
   const processes = Array.from(grouped.entries()).map(([procurementCaseId, processBudgets]) => {
-    const totalOfficialValueCents = processBudgets.reduce((total, budget) => {
+    const sortedBudgets = sortBudgetsByLotAscending(processBudgets);
+    const totalOfficialValueCents = sortedBudgets.reduce((total, budget) => {
       const next = total + budget.officialValueCents;
       if (!Number.isSafeInteger(next)) throw new Error("Total dos lotes fora do intervalo seguro.");
       return next;
     }, 0);
     return {
       procurementCaseId,
-      title: processBudgets[0].procurementCaseTitle,
-      budgets: processBudgets,
+      title: sortedBudgets[0].procurementCaseTitle,
+      budgets: sortedBudgets,
       totalOfficialValueCents,
     };
   });
 
   return { budgets, processes };
+}
+
+export function extractLotNumber(title: string | null): number {
+  if (!title) return Number.MAX_SAFE_INTEGER;
+  const match = title.match(/lote\s*(\d+)/i);
+  return match ? parseInt(match[1], 10) : Number.MAX_SAFE_INTEGER;
+}
+
+export function sortBudgetsByLotAscending(
+  budgets: ReadonlyArray<ConsolidatedBudgetSummaryDto>,
+): ReadonlyArray<ConsolidatedBudgetSummaryDto> {
+  return [...budgets].sort((left, right) => {
+    const numLeft = extractLotNumber(left.procurementLotTitle);
+    const numRight = extractLotNumber(right.procurementLotTitle);
+    if (numLeft !== numRight) return numLeft - numRight;
+    const titleLeft = left.procurementLotTitle ?? left.id;
+    const titleRight = right.procurementLotTitle ?? right.id;
+    return titleLeft.localeCompare(titleRight, "pt-BR", { numeric: true });
+  });
 }
 
 export function lotPresentation(title: string | null, scopeKind: "WholeCase" | "Lot"): LotPresentation {

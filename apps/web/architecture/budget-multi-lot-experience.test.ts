@@ -12,6 +12,8 @@ const sidebar = source("apps/web/components/sidebar.tsx");
 const workspace = source("apps/web/app/(dashboard)/workspaces/engenharia/page.tsx");
 const reviewPage = source("apps/web/app/(dashboard)/admin/orcamentos/[sessionId]/revisao/page.tsx");
 
+const catalogCss = source("apps/web/components/budget/official-budget-catalog.module.css");
+
 assert("catálogo lista todas as versões consolidadas sem limit(1)", serverCatalog.includes('.eq("status", "Consolidated")') && !serverCatalog.includes(".limit(1)"));
 assert("identidade multi-lote usa colunas canônicas", serverCatalog.includes("procurement_case_id") && serverCatalog.includes("procurement_lot_id") && !serverCatalog.includes("lotReference"));
 assert("todas as leituras são escopadas pela organização autenticada", (serverCatalog.match(/\.eq\("company_id", organizationId\)/g) ?? []).length >= 4);
@@ -23,6 +25,8 @@ assert("página oferece importação sempre visível", budgetsPage.includes('hre
 assert("árvore completa é carregada somente sob demanda", budgetsPage.includes("toggleBudgetDetail") && budgetsPage.includes("/api/orcamentos/consolidado?orcamento="));
 assert("cenários são agrupados pelo BudgetVersion do lote", budgetsPage.includes("scenariosByBudget.get(budget.id)"));
 assert("Criar cenário envia a origem do card", budgetsPage.includes("/orcamentos/cenarios/novo?orcamento=") && budgetsPage.includes("budget.id"));
+assert("ordenação visual dos lotes é determinística em ordem crescente", budgetsPage.includes("sortBudgetsByLotAscending(process.budgets)"));
+assert("grid de lotes usa layout padrão em grid LTR para posicionar Lote 01 na esquerda e Lote 02 na direita", catalogCss.includes(".lotGrid") && !catalogCss.includes("direction: rtl;"));
 assert("duplicação preserva sourceBudgetId", newScenarioPage.includes("duplicateScenario?.sourceBudgetId") && newScenarioPage.includes("duplicateBudget"));
 assert("acesso direto não substitui o id solicitado pela versão mais recente", newScenarioPage.includes("requestedBudgetId") && !newScenarioPage.includes("mais recente"));
 assert("comparação cross-lot tem mensagem humana", comparePage.includes("Compare cenários criados para o mesmo lote."));

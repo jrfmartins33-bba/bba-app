@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { getSupabaseRouteHandlerClient } from "@/lib/supabase/server";
+import { getSupabaseRouteHandlerClient, getSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { loadConsolidatedBudgetCatalog } from "@/lib/bdos/consolidated-budget-catalog-server";
+import { createProposalScenarioRepository } from "@/lib/bdos/proposal-scenario-server-repository";
+import { listProposalScenariosService } from "@bba/bdos-core/services/proposal-scenarios";
 import {
   authenticateBudgetOrganizationActor,
   resolveBudgetCatalogContext,
@@ -39,12 +41,22 @@ export async function GET(request: Request): Promise<NextResponse> {
       });
     }
 
-    const catalog = await loadConsolidatedBudgetCatalog(context.queryClient, context.organization.id);
+    const scenarioRepository = createProposalScenarioRepository(context.queryClient, getSupabaseServiceRoleClient());
+    const [catalog, scenarioResult] = await Promise.all([
+      loadConsolidatedBudgetCatalog(context.queryClient, context.organization.id),
+      listProposalScenariosService(
+        { organizationId: context.organization.id, actor: context.actor.userId },
+        requestedBudgetId ?? undefined,
+        scenarioRepository,
+      ),
+    ]);
+    const scenarios = scenarioResult.outcome === "success" ? scenarioResult.scenarios.map(toDto) : [];
     const budget = requestedBudgetId
       ? catalog.budgets.find((candidate) => candidate.id === requestedBudgetId) ?? null
       : catalog.budgets.length === 1 ? catalog.budgets[0] : null;
     return NextResponse.json({
       ...catalog,
+      scenarios,
       budget,
       accessKind: context.actor.accessKind,
       organization: context.organization,
@@ -55,6 +67,24 @@ export async function GET(request: Request): Promise<NextResponse> {
     console.error("[orcamentos/consolidado/resumo] Falha ao carregar resumo.", error);
     return NextResponse.json({ error: "query_failed" }, { status: 500 });
   }
+}
+
+function toDto(scenario: {
+  readonly id: string; readonly sourceBudgetVersionId: string; readonly name: string;
+  readonly officialValueCents: number; readonly targetValueCents: number; readonly differenceCents: number;
+  readonly differenceBasisPoints: string; readonly comparisonKind: string; readonly createdAt: string;
+}) {
+  return {
+    id: scenario.id,
+    sourceBudgetId: scenario.sourceBudgetVersionId,
+    name: scenario.name,
+    officialValueCents: scenario.officialValueCents,
+    targetValueCents: scenario.targetValueCents,
+    differenceCents: scenario.differenceCents,
+    differenceBasisPoints: scenario.differenceBasisPoints,
+    comparisonKind: scenario.comparisonKind,
+    createdAt: scenario.createdAt,
+  };
 }
 
 async function resolveExactBudgetContext(

@@ -53,31 +53,39 @@ export async function loadConsolidatedBudgetCatalog(
       .select("id, procurement_case_id, title")
       .eq("company_id", organizationId)
       .in("id", lotIds);
-  const serviceItemsPromise = client
+  const budgetLinesPromise = client
     .from("budget_lines")
-    .select("budget_version_id, total_cents")
+    .select("budget_version_id, kind, total_cents")
     .eq("company_id", organizationId)
-    .eq("kind", "ServiceItem")
     .in("budget_version_id", budgetIds);
-  const lineCountPromises = budgetIds.map(async (budgetVersionId) => {
-    const { count, error } = await client
-      .from("budget_lines")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", organizationId)
-      .eq("budget_version_id", budgetVersionId);
-    if (error) throw error;
-    return [budgetVersionId, count] as const;
-  });
 
-  const [casesResult, lotsResult, serviceItemsResult, lineCountEntries] = await Promise.all([
+  const [casesResult, lotsResult, linesResult] = await Promise.all([
     casesPromise,
     lotsPromise,
-    serviceItemsPromise,
-    Promise.all(lineCountPromises),
+    budgetLinesPromise,
   ]);
   if (casesResult.error) throw casesResult.error;
   if (lotsResult.error) throw lotsResult.error;
-  if (serviceItemsResult.error) throw serviceItemsResult.error;
+  if (linesResult.error) throw linesResult.error;
+
+  const rawLines = (linesResult.data ?? []) as Array<{
+    readonly budget_version_id: string;
+    readonly kind: string;
+    readonly total_cents: string | number | null;
+  }>;
+
+  const lineCounts: Record<string, number> = {};
+  const serviceItems: ServiceItemEconomyRow[] = [];
+
+  for (const row of rawLines) {
+    lineCounts[row.budget_version_id] = (lineCounts[row.budget_version_id] ?? 0) + 1;
+    if (row.kind === "ServiceItem" && row.total_cents !== null && row.total_cents !== undefined) {
+      serviceItems.push({
+        budgetVersionId: row.budget_version_id,
+        totalCents: parseMoney(row.total_cents),
+      });
+    }
+  }
 
   const versions: ConsolidatedBudgetVersionRow[] = versionRows.map((row) => ({
     id: row.id,
@@ -94,17 +102,13 @@ export async function loadConsolidatedBudgetCatalog(
     procurementCaseId: row.procurement_case_id,
     title: row.title,
   }));
-  const serviceItems: ServiceItemEconomyRow[] = ((serviceItemsResult.data ?? []) as ServiceItemDbRow[]).map((row) => ({
-    budgetVersionId: row.budget_version_id,
-    totalCents: parseMoney(row.total_cents),
-  }));
 
   return buildConsolidatedBudgetCatalog({
     versions,
     procurementCases,
     procurementLots,
     serviceItems,
-    lineCounts: Object.fromEntries(lineCountEntries),
+    lineCounts,
   });
 }
 

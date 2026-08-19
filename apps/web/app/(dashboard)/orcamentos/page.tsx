@@ -9,6 +9,7 @@ import catalogStyles from "@/components/budget/official-budget-catalog.module.cs
 import scenarioStyles from "@/components/budget/proposal-scenarios.module.css";
 import {
   lotPresentation,
+  sortBudgetsByLotAscending,
   type ConsolidatedBudgetCatalogDto,
   type ConsolidatedBudgetSummaryDto,
 } from "@/lib/budget/consolidated-budget-catalog";
@@ -41,6 +42,7 @@ interface CatalogPayload extends ConsolidatedBudgetCatalogDto {
   readonly organization: BudgetOrganizationOption | null;
   readonly organizations: ReadonlyArray<BudgetOrganizationOption>;
   readonly organizationSelectionRequired: boolean;
+  readonly scenarios?: ReadonlyArray<ProposalScenarioDto>;
 }
 
 export default function OrcamentosPage() {
@@ -69,19 +71,14 @@ function OrcamentosContent() {
     setDetails({});
     setOpenBudgetId(null);
     const organizationQuery = requestedOrganizationId ? `?empresa=${encodeURIComponent(requestedOrganizationId)}` : "";
-    Promise.all([
-      fetch(`/api/orcamentos/consolidado/resumo${organizationQuery}`, { signal: controller.signal }).then(async (response) => {
+    fetch(`/api/orcamentos/consolidado/resumo${organizationQuery}`, { signal: controller.signal })
+      .then(async (response) => {
         if (!response.ok) throw new Error("Não foi possível carregar os orçamentos oficiais.");
         return (await response.json()) as CatalogPayload;
-      }),
-      fetch(`/api/orcamentos/cenarios${organizationQuery}`, { signal: controller.signal }).then(async (response) => {
-        if (!response.ok) throw new Error("Não foi possível carregar os cenários de proposta.");
-        return ((await response.json()) as { scenarios: ReadonlyArray<ProposalScenarioDto> }).scenarios;
-      }),
-    ])
-      .then(([payload, nextScenarios]) => {
+      })
+      .then((payload) => {
         setCatalog({ budgets: payload.budgets, processes: payload.processes });
-        setScenarios(nextScenarios);
+        setScenarios(payload.scenarios ?? []);
         setAccessKind(payload.accessKind);
         setOrganization(payload.organization);
         setOrganizations(payload.organizations);
@@ -188,7 +185,7 @@ function OrcamentosContent() {
             <p className={catalogStyles.contextNote}>O total é apenas a soma visual dos lotes. Cada orçamento e cada cenário continuam independentes.</p>
 
             <div className={catalogStyles.lotGrid}>
-              {process.budgets.map((budget) => {
+              {sortBudgetsByLotAscending(process.budgets).map((budget) => {
                 const presentation = lotPresentation(budget.procurementLotTitle, budget.scopeKind);
                 const budgetScenarios = scenariosByBudget.get(budget.id) ?? [];
                 const detail = details[budget.id];

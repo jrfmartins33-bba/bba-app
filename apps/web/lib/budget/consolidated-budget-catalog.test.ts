@@ -1,7 +1,9 @@
 import {
   buildConsolidatedBudgetCatalog,
+  extractLotNumber,
   lotPresentation,
   resolveScenarioSourceBudget,
+  sortBudgetsByLotAscending,
   type ConsolidatedBudgetVersionRow,
 } from "./consolidated-budget-catalog";
 
@@ -117,6 +119,29 @@ run("duplicação preserva a origem mesmo diante de outro orçamento solicitado"
     selectedBudgetId: "budget-lot-2",
     duplicateSourceBudgetId: "budget-lot-1",
   })?.id, "budget-lot-1");
+});
+
+run("extrai número de lote de forma determinística", () => {
+  equal(extractLotNumber("Lote 01 (14 barragens)"), 1);
+  equal(extractLotNumber("Lote 02 (7 barragens)"), 2);
+  equal(extractLotNumber("Lote 10"), 10);
+  equal(extractLotNumber("Lote Especial"), Number.MAX_SAFE_INTEGER);
+  equal(extractLotNumber(null), Number.MAX_SAFE_INTEGER);
+});
+
+run("lotes são ordenados de forma crescente pelo número do lote", () => {
+  const catalog = fixture(
+    [lotTwo, lotOne], // Passados invertidos propositalmente
+    [
+      { budgetVersionId: "budget-lot-2", totalCents: 200 },
+      { budgetVersionId: "budget-lot-1", totalCents: 100 },
+    ],
+  );
+  equal(catalog.processes[0].budgets[0].id, "budget-lot-1");
+  equal(catalog.processes[0].budgets[1].id, "budget-lot-2");
+  const sorted = sortBudgetsByLotAscending([catalog.budgets[0], catalog.budgets[1]]);
+  equal(sorted[0].procurementLotId, "lot-1");
+  equal(sorted[1].procurementLotId, "lot-2");
 });
 
 function fixture(versions: ReadonlyArray<ConsolidatedBudgetVersionRow>, serviceItems: ReadonlyArray<{ budgetVersionId: string; totalCents: number }>) {
