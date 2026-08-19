@@ -6,6 +6,7 @@ const serverCatalog = source("apps/web/lib/bdos/consolidated-budget-catalog-serv
 const detailRoute = source("apps/web/app/api/orcamentos/consolidado/route.ts");
 const summaryRoute = source("apps/web/app/api/orcamentos/consolidado/resumo/route.ts");
 const budgetsPage = source("apps/web/app/(dashboard)/orcamentos/page.tsx");
+const individualBudgetPage = source("apps/web/app/(dashboard)/orcamentos/[budgetId]/page.tsx");
 const newScenarioPage = source("apps/web/app/(dashboard)/orcamentos/cenarios/novo/page.tsx");
 const comparePage = source("apps/web/app/(dashboard)/orcamentos/cenarios/comparar/page.tsx");
 const sidebar = source("apps/web/components/sidebar.tsx");
@@ -22,7 +23,8 @@ assert("detalhe usa exatamente o orçamento solicitado", detailRoute.includes('s
 assert("detalhe exige contexto server-side de BudgetVersion consolidada", detailRoute.includes("resolveBudgetVersionContext") && detailRoute.includes("organizationId"));
 assert("resumo compatível retorna catálogo e seleção exata", summaryRoute.includes("loadConsolidatedBudgetCatalog") && summaryRoute.includes("requestedBudgetId"));
 assert("página oferece importação sempre visível", budgetsPage.includes('href="/orcamentos/importar"') && budgetsPage.includes("Importar outro orçamento"));
-assert("árvore completa é carregada somente sob demanda", budgetsPage.includes("toggleBudgetDetail") && budgetsPage.includes("/api/orcamentos/consolidado?orcamento="));
+assert("catálogo oferece navegação individual para cada lote", budgetsPage.includes("/orcamentos/${budget.id}") && budgetsPage.includes("Ver orçamento"));
+assert("árvore completa é carregada sob demanda na página individual", individualBudgetPage.includes("/api/orcamentos/consolidado?orcamento=") && individualBudgetPage.includes("OfficialBudgetDetail"));
 assert("cenários são agrupados pelo BudgetVersion do lote", budgetsPage.includes("scenariosByBudget.get(budget.id)"));
 assert("Criar cenário envia a origem do card", budgetsPage.includes("/orcamentos/cenarios/novo?orcamento=") && budgetsPage.includes("budget.id"));
 assert("ordenação visual dos lotes é determinística em ordem crescente", budgetsPage.includes("sortBudgetsByLotAscending(process.budgets)"));

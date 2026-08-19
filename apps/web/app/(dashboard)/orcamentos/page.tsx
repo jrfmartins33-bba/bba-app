@@ -11,31 +11,9 @@ import {
   lotPresentation,
   sortBudgetsByLotAscending,
   type ConsolidatedBudgetCatalogDto,
-  type ConsolidatedBudgetSummaryDto,
 } from "@/lib/budget/consolidated-budget-catalog";
 import { formatBasisPointsPtBr, formatCentsPtBr, type ProposalScenarioDto } from "@/lib/proposal-scenarios";
 import type { BudgetOrganizationAccessKind, BudgetOrganizationOption } from "@/lib/budget/budget-organization-policy";
-
-interface OfficialLine {
-  readonly id: string;
-  readonly kind: "Group" | "Subgroup" | "ServiceItem";
-  readonly description: { readonly status: "Confirmed"; readonly text: string } | { readonly status: "AbsentFromSource" };
-  readonly externalCode: string | null;
-  readonly parentLineId: string | null;
-  readonly position: number;
-  readonly totalCents: number | null;
-}
-
-interface OfficialBudgetDto {
-  readonly id: string;
-  readonly status: "Consolidated";
-  readonly lines: ReadonlyArray<OfficialLine>;
-}
-
-type DetailState =
-  | { readonly status: "loading" }
-  | { readonly status: "loaded"; readonly budget: OfficialBudgetDto }
-  | { readonly status: "error"; readonly message: string };
 
 interface CatalogPayload extends ConsolidatedBudgetCatalogDto {
   readonly accessKind: BudgetOrganizationAccessKind;
@@ -46,7 +24,11 @@ interface CatalogPayload extends ConsolidatedBudgetCatalogDto {
 }
 
 export default function OrcamentosPage() {
-  return <Suspense fallback={<><BudgetPageHeader isDemonstration={false} /><section className="section-grid"><p>Carregando orçamentos…</p></section></>}><OrcamentosContent /></Suspense>;
+  return (
+    <Suspense fallback={<><BudgetPageHeader isDemonstration={false} /><section className="section-grid"><p>Carregando orçamentos…</p></section></>}>
+      <OrcamentosContent />
+    </Suspense>
+  );
 }
 
 function OrcamentosContent() {
@@ -59,8 +41,6 @@ function OrcamentosContent() {
   const [organizations, setOrganizations] = useState<ReadonlyArray<BudgetOrganizationOption>>([]);
   const [organizationSelectionRequired, setOrganizationSelectionRequired] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [details, setDetails] = useState<Readonly<Record<string, DetailState>>>({});
-  const [openBudgetId, setOpenBudgetId] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -68,8 +48,6 @@ function OrcamentosContent() {
     setScenarios([]);
     setOrganization(null);
     setOrganizationSelectionRequired(false);
-    setDetails({});
-    setOpenBudgetId(null);
     const organizationQuery = requestedOrganizationId ? `?empresa=${encodeURIComponent(requestedOrganizationId)}` : "";
     fetch(`/api/orcamentos/consolidado/resumo${organizationQuery}`, { signal: controller.signal })
       .then(async (response) => {
@@ -105,27 +83,6 @@ function OrcamentosContent() {
     }
     return grouped;
   }, [scenarios]);
-
-  async function toggleBudgetDetail(budgetId: string) {
-    if (openBudgetId === budgetId) {
-      setOpenBudgetId(null);
-      return;
-    }
-    setOpenBudgetId(budgetId);
-    if (details[budgetId]) return;
-
-    setDetails((current) => ({ ...current, [budgetId]: { status: "loading" } }));
-    try {
-      const response = await fetch(withOrganization(`/api/orcamentos/consolidado?orcamento=${encodeURIComponent(budgetId)}`, organizationIdForLinks));
-      if (!response.ok) throw new Error("Não foi possível abrir este orçamento.");
-      const payload = (await response.json()) as { budget: OfficialBudgetDto | null };
-      if (!payload.budget) throw new Error("Este orçamento não está disponível.");
-      setDetails((current) => ({ ...current, [budgetId]: { status: "loaded", budget: payload.budget! } }));
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : "Não foi possível abrir este orçamento.";
-      setDetails((current) => ({ ...current, [budgetId]: { status: "error", message } }));
-    }
-  }
 
   if (catalog === undefined) {
     return <><BudgetPageHeader isDemonstration={false} /><section className="section-grid"><p>Carregando orçamentos…</p></section></>;
@@ -188,8 +145,6 @@ function OrcamentosContent() {
               {sortBudgetsByLotAscending(process.budgets).map((budget) => {
                 const presentation = lotPresentation(budget.procurementLotTitle, budget.scopeKind);
                 const budgetScenarios = scenariosByBudget.get(budget.id) ?? [];
-                const detail = details[budget.id];
-                const isOpen = openBudgetId === budget.id;
                 return (
                   <article className={catalogStyles.lotCard} key={budget.id}>
                     <div className={catalogStyles.lotHeader}>
@@ -207,9 +162,12 @@ function OrcamentosContent() {
                       <span>Revisão {budget.revision}</span>
                     </div>
                     <div className={catalogStyles.cardActions}>
-                      <button type="button" className={scenarioStyles.secondary} aria-expanded={isOpen} aria-controls={`budget-detail-${budget.id}`} onClick={() => void toggleBudgetDetail(budget.id)}>
-                        {isOpen ? "Fechar orçamento" : "Ver orçamento"}
-                      </button>
+                      <Link
+                        href={withOrganization(`/orcamentos/${budget.id}`, organizationIdForLinks)}
+                        className={scenarioStyles.secondary}
+                      >
+                        Ver orçamento
+                      </Link>
                       <Link href={withOrganization(`/orcamentos/cenarios/novo?orcamento=${budget.id}`, organizationIdForLinks)} className={scenarioStyles.primary}>Criar cenário</Link>
                     </div>
 
@@ -229,14 +187,6 @@ function OrcamentosContent() {
                         </ul>
                       )}
                     </section>
-
-                    {isOpen ? (
-                      <div className={catalogStyles.detail} id={`budget-detail-${budget.id}`}>
-                        {detail?.status === "loading" ? <p>Carregando os detalhes deste lote…</p> : null}
-                        {detail?.status === "error" ? <p role="alert">{detail.message}</p> : null}
-                        {detail?.status === "loaded" ? <OfficialBudgetDetail budget={detail.budget} summary={budget} /> : null}
-                      </div>
-                    ) : null}
                   </article>
                 );
               })}
@@ -279,72 +229,4 @@ function OrganizationSelector({ organizations }: { readonly organizations: Reado
 function withOrganization(path: string, organizationId: string | null): string {
   if (!organizationId) return path;
   return `${path}${path.includes("?") ? "&" : "?"}empresa=${encodeURIComponent(organizationId)}`;
-}
-
-function OfficialBudgetDetail({ budget, summary }: { readonly budget: OfficialBudgetDto; readonly summary: ConsolidatedBudgetSummaryDto }) {
-  const { childrenByParent, totalsByLine } = useMemo(() => buildLineIndex(budget.lines), [budget.lines]);
-  const roots = childrenByParent.get(null) ?? [];
-  return (
-    <div>
-      <div className={catalogStyles.detailHeader}><strong>Itens do orçamento</strong><span>{formatCentsPtBr(summary.officialValueCents)}</span></div>
-      {roots.map((line) => <OfficialLineTree key={line.id} line={line} depth={0} childrenByParent={childrenByParent} totalsByLine={totalsByLine} />)}
-    </div>
-  );
-}
-
-function OfficialLineTree({
-  line,
-  depth,
-  childrenByParent,
-  totalsByLine,
-}: {
-  readonly line: OfficialLine;
-  readonly depth: number;
-  readonly childrenByParent: ReadonlyMap<string | null, ReadonlyArray<OfficialLine>>;
-  readonly totalsByLine: ReadonlyMap<string, number>;
-}) {
-  const [expanded, setExpanded] = useState(depth === 0);
-  const children = childrenByParent.get(line.id) ?? [];
-  const isLeaf = line.kind === "ServiceItem";
-  const description = line.description.status === "Confirmed" ? line.description.text : "Descrição não informada";
-  return (
-    <div className={catalogStyles.treeNode} style={{ paddingLeft: `${Math.min(depth, 5) * 1.1}rem` }}>
-      <div className={catalogStyles.treeRow}>
-        <div>
-          {!isLeaf && children.length > 0 ? (
-            <button type="button" aria-expanded={expanded} aria-label={`${expanded ? "Recolher" : "Expandir"} ${description}`} onClick={() => setExpanded((current) => !current)}>{expanded ? "▾" : "▸"}</button>
-          ) : <span className={catalogStyles.treeSpacer} />}
-          <span className={line.kind !== "ServiceItem" ? catalogStyles.strongLine : undefined}>{line.externalCode ? `${line.externalCode} — ` : ""}{description}</span>
-        </div>
-        <strong>{formatCentsPtBr(totalsByLine.get(line.id) ?? 0)}</strong>
-      </div>
-      {expanded ? children.map((child) => <OfficialLineTree key={child.id} line={child} depth={depth + 1} childrenByParent={childrenByParent} totalsByLine={totalsByLine} />) : null}
-    </div>
-  );
-}
-
-function buildLineIndex(lines: ReadonlyArray<OfficialLine>): {
-  readonly childrenByParent: ReadonlyMap<string | null, ReadonlyArray<OfficialLine>>;
-  readonly totalsByLine: ReadonlyMap<string, number>;
-} {
-  const childrenByParent = new Map<string | null, OfficialLine[]>();
-  for (const line of lines) {
-    const current = childrenByParent.get(line.parentLineId) ?? [];
-    current.push(line);
-    childrenByParent.set(line.parentLineId, current);
-  }
-  for (const children of childrenByParent.values()) children.sort((left, right) => left.position - right.position);
-
-  const totalsByLine = new Map<string, number>();
-  const calculate = (line: OfficialLine): number => {
-    const cached = totalsByLine.get(line.id);
-    if (cached !== undefined) return cached;
-    const total = line.kind === "ServiceItem"
-      ? line.totalCents ?? 0
-      : (childrenByParent.get(line.id) ?? []).reduce((sum, child) => sum + calculate(child), 0);
-    totalsByLine.set(line.id, total);
-    return total;
-  };
-  for (const line of lines) calculate(line);
-  return { childrenByParent, totalsByLine };
 }
