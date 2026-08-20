@@ -905,3 +905,67 @@ export * from "./engines/decision/action-plan";
 export * from "./domain/procurement-case";
 export * from "./domain/budget-version";
 export * from "./domain/budget-table-reconstruction";
+export {
+  ConsortiumCompositionStatus,
+  ConsortiumValidationError,
+  TOTAL_SHARE_BASIS_POINTS,
+  calculateTotalSharesBasisPoints,
+  validateConsortiumMemberInput,
+  validateConsortiumComposition,
+  createConsortium,
+  addMemberToConsortium,
+  consolidateConsortiumComposition,
+  formatSharePercentagePtBr,
+  getConsortiumLeader,
+} from "./domain/consortium";
+export type {
+  Consortium,
+  ConsortiumId,
+  ConsortiumMember,
+  ConsortiumMemberId,
+  CreateConsortiumInput,
+  CreateConsortiumMemberInput,
+} from "./domain/consortium";
+
+export {
+  CostCenterStatus,
+  CostCenterValidationError,
+  validateCostCenterInput,
+  createProjectCostCenter,
+  getCostCenterPolicy,
+} from "./domain/cost-center";
+export type {
+  CostCenterId,
+  ProjectCostCenter,
+  CreateProjectCostCenterInput,
+  CostAllocationRule,
+  CostAttributionPolicy,
+} from "./domain/cost-center";
+
+export {
+  ContractBaselineStatus,
+  ContractBaselineValidationError,
+  parseToFixedBigInt,
+  formatFromFixedBigInt,
+  reconcileContractBaselineMath,
+  createContractBaseline as createProjectContractBaseline,
+  formatContractedValuePtBr,
+  formatRoundingAdjustmentPtBr,
+  formatDerivedItemsTotalPtBr,
+  formatHistoricalOfficialBudgetPtBr,
+} from "./domain/contract-baseline";
+export type {
+  ContractBaseline as ProjectContractBaseline,
+  ContractBaselineId as ProjectContractBaselineId,
+  CreateContractBaselineInput as CreateProjectContractBaselineInput,
+} from "./domain/contract-baseline";
+
+export {
+  getProjectContractualFoundationService,
+} from "./services/contract-baseline";
+export type {
+  ContractBaselineRepository,
+  ConsortiumRepository,
+  CostCenterRepository,
+  ProjectContractualFoundationDto,
+} from "./services/contract-baseline";
