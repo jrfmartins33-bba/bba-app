@@ -222,14 +222,26 @@
 .costCenterTag {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  width: fit-content;
   font-size: 0.75rem;
-  background: rgba(96, 165, 250, 0.12);
-  color: var(--status-blue);
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-family: monospace;
+  background: rgba(185, 149, 79, 0.08);
+  color: var(--text-secondary-strong);
+  border: 1px solid rgba(185, 149, 79, 0.22);
+  padding: 0.35rem 0.55rem;
+  border-radius: 6px;
   margin-top: 0.25rem;
+}
+
+.costCenterLabel {
+  font-weight: 600;
+}
+
+.costCenterCode {
+  font-family: monospace;
+  color: var(--bba-gold-soft);
+  font-weight: 700;
 }
 
 .operationalCardBody {
@@ -368,4 +380,161 @@
   align-items: center;
   padding-top: 1rem;
   border-top: 1px solid var(--app-divider);
+}
+
+.valueComparison {
+  margin-top: 1rem;
+  padding: 1.15rem;
+  border: 1px solid rgba(185, 149, 79, 0.26);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(185, 149, 79, 0.055), rgba(12, 31, 63, 0.08));
+}
+
+.valueComparisonHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.valueComparisonEyebrow {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-gold);
+  font-weight: 700;
+  margin-bottom: 0.2rem;
+}
+
+.valueComparisonTitle {
+  display: block;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.valueComparisonDelta {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(185, 149, 79, 0.28);
+  background: rgba(185, 149, 79, 0.08);
+  color: var(--bba-gold-soft);
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.valueComparisonGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: stretch;
+}
+
+.valueComparisonMetric {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--app-divider);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.valueComparisonMetricContract {
+  border-color: rgba(185, 149, 79, 0.28);
+  background: rgba(185, 149, 79, 0.045);
+}
+
+.valueComparisonMetricLabel {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.valueComparisonMetricValue {
+  color: var(--text-primary);
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+.valueComparisonMetricHint {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+}
+
+.valueComparisonArrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bba-gold-soft);
+}
+
+.valueComparisonBars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--app-divider);
+}
+
+.valueComparisonBarRow {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.valueComparisonTrack {
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.valueComparisonFill {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.valueComparisonFillReference {
+  background: rgba(148, 163, 184, 0.48);
+}
+
+.valueComparisonFillContract {
+  background: var(--bba-gold);
+}
+
+.valueComparisonFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-top: 0.85rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.valueComparisonFooter strong {
+  color: var(--text-primary);
+}
+
+@media (max-width: 720px) {
+  .valueComparisonGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .valueComparisonArrow {
+    transform: rotate(90deg);
+    min-height: 24px;
+  }
 }

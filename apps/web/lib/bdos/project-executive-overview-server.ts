@@ -344,7 +344,7 @@ export async function loadProjectExecutiveOverview(
     },
     planning: {
       hasPlanning,
-      statusLabel: hasPlanning ? "Curva S disponível" : "Sem planejamento importado",
+      statusLabel: hasPlanning ? "Curva S disponível" : "Sem Planejamento",
       latestFileName: latestPlanningImport?.file_name ?? null,
       latestImportDate: latestPlanningImport?.created_at ?? null,
       snapshotCount: snapshotsCountRes.count ?? 0,

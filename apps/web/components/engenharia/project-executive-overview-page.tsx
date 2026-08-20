@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
+  ArrowRight,
   Banknote,
   Building2,
   Calendar,
@@ -16,7 +17,6 @@ import {
   Layers,
   RotateCw,
   Ruler,
-  Scale,
   Sparkles,
   Users,
   Wallet,
@@ -139,6 +139,33 @@ export function ProjectExecutiveOverviewPage({ projectId }: ProjectExecutiveOver
   const contractNumber = contractualFoundation.contractNumber ?? project.contractNumber ?? "—";
   const contractorName = contractualFoundation.contractorName ?? project.contractorName ?? "—";
   const projectStudioHref = `/bba-project?projeto=${encodeURIComponent(project.id)}${requestedOrganizationId ? `&empresa=${encodeURIComponent(requestedOrganizationId)}` : ""}`;
+  const historicalBudgetCents = contractualFoundation.historicalOfficialBudgetCents;
+  const contractedValueCents = contractualFoundation.contractedValueCents;
+  const hasFinancialComparison =
+    historicalBudgetCents !== null &&
+    historicalBudgetCents > 0 &&
+    contractedValueCents !== null;
+  const historicalBudgetValue = historicalBudgetCents ?? 0;
+  const contractedValue = contractedValueCents ?? 0;
+  const financialDifferenceCents = hasFinancialComparison
+    ? historicalBudgetValue - contractedValue
+    : 0;
+  const financialDifferenceFormatted = (Math.abs(financialDifferenceCents) / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+  const financialVariationPercent = hasFinancialComparison
+    ? (Math.abs(financialDifferenceCents) / historicalBudgetValue) * 100
+    : 0;
+  const financialVariationFormatted = financialVariationPercent.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const contractedSharePercent = hasFinancialComparison
+    ? Math.min((contractedValue / historicalBudgetValue) * 100, 100)
+    : 0;
+  const financialVariationLabel =
+    financialDifferenceCents > 0 ? "Redução" : financialDifferenceCents < 0 ? "Acréscimo" : "Sem variação";
 
   return (
     <div className={styles.container}>
@@ -182,7 +209,7 @@ export function ProjectExecutiveOverviewPage({ projectId }: ProjectExecutiveOver
         <div className={styles.heroMetricCard}>
           <span className={styles.heroMetricLabel}>Planejamento</span>
           <span className={styles.heroMetricValue}>
-            {planning.hasPlanning ? "Curva S" : "Pendente"}
+            {planning.hasPlanning ? "Curva S" : "Sem Planejamento"}
           </span>
           <span className={styles.heroMetricSub}>
             {planning.statusLabel}
@@ -206,7 +233,7 @@ export function ProjectExecutiveOverviewPage({ projectId }: ProjectExecutiveOver
         <Card className={`${styles.cardFull} workspace-card`} title="Base Contratual da Obra">
           <div className={styles.baselineHero}>
             <div>
-              <span className={styles.baselineHeroTitle}>Valor Contratado (Autoridade Monetária)</span>
+              <span className={styles.baselineHeroTitle}>Valor Contratado</span>
               <div className={styles.baselineHeroAmount}>
                 {contractualFoundation.contractedValueFormatted ?? "—"}
               </div>
@@ -237,21 +264,71 @@ export function ProjectExecutiveOverviewPage({ projectId }: ProjectExecutiveOver
             O valor contratual considera o ajuste de arredondamento previsto na base da obra.
           </div>
 
-          {contractualFoundation.historicalOfficialBudgetFormatted && (
-            <div className={styles.historicalBudgetBox}>
-              <span className={styles.historicalBudgetLabel}>
-                Orçamento oficial da licitação (referência histórica):
-              </span>
-              <span className={styles.historicalBudgetValue}>
-                {contractualFoundation.historicalOfficialBudgetFormatted}
-              </span>
+          {hasFinancialComparison &&
+            contractualFoundation.historicalOfficialBudgetFormatted &&
+            contractualFoundation.contractedValueFormatted && (
+            <div className={styles.valueComparison}>
+              <div className={styles.valueComparisonHeader}>
+                <div>
+                  <span className={styles.valueComparisonEyebrow}>Licitação x Contrato</span>
+                  <strong className={styles.valueComparisonTitle}>Comparação financeira da contratação</strong>
+                </div>
+                <span className={styles.valueComparisonDelta}>
+                  {financialVariationLabel} {financialVariationFormatted}%
+                </span>
+              </div>
+
+              <div className={styles.valueComparisonGrid}>
+                <div className={styles.valueComparisonMetric}>
+                  <span className={styles.valueComparisonMetricLabel}>Valor da Licitação</span>
+                  <strong className={styles.valueComparisonMetricValue}>
+                    {contractualFoundation.historicalOfficialBudgetFormatted}
+                  </strong>
+                  <span className={styles.valueComparisonMetricHint}>Referência oficial</span>
+                </div>
+
+                <div className={styles.valueComparisonArrow} aria-hidden="true">
+                  <ArrowRight size={20} />
+                </div>
+
+                <div className={`${styles.valueComparisonMetric} ${styles.valueComparisonMetricContract}`}>
+                  <span className={styles.valueComparisonMetricLabel}>Valor Contratado</span>
+                  <strong className={styles.valueComparisonMetricValue}>
+                    {contractualFoundation.contractedValueFormatted}
+                  </strong>
+                  <span className={styles.valueComparisonMetricHint}>Base vigente da obra</span>
+                </div>
+              </div>
+
+              <div className={styles.valueComparisonBars} aria-label="Comparação visual entre licitação e contrato">
+                <div className={styles.valueComparisonBarRow}>
+                  <span>Licitação</span>
+                  <div className={styles.valueComparisonTrack}>
+                    <div className={`${styles.valueComparisonFill} ${styles.valueComparisonFillReference}`} style={{ width: "100%" }} />
+                  </div>
+                </div>
+                <div className={styles.valueComparisonBarRow}>
+                  <span>Contrato</span>
+                  <div className={styles.valueComparisonTrack}>
+                    <div
+                      className={`${styles.valueComparisonFill} ${styles.valueComparisonFillContract}`}
+                      style={{ width: `${contractedSharePercent}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className={styles.valueComparisonFooter}>
+                Diferença em relação à licitação:
+                <strong>{financialDifferenceFormatted}</strong>
+              </div>
             </div>
           )}
         </Card>
 
         {/* SEÇÃO B: CONSÓRCIO E CENTROS DE CUSTO */}
         {contractualFoundation.consortium && (
-          <Card className={`${styles.cardHalf} workspace-card`} title="Consórcio Responsável">
+          <Card className={`${styles.cardHalf} workspace-card`} title="Consórcio e Centros de Custo">
             <div className={styles.operationalCardBody}>
               <div>
                 <strong style={{ color: "var(--text-primary)", fontSize: "1rem" }}>
@@ -290,8 +367,9 @@ export function ProjectExecutiveOverviewPage({ projectId }: ProjectExecutiveOver
 
                     {member.costCenter && (
                       <div className={styles.costCenterTag}>
-                        <Scale size={13} />
-                        {member.costCenter.code}
+                        <Banknote size={14} aria-hidden="true" />
+                        <span className={styles.costCenterLabel}>Centro de Custo</span>
+                        <span className={styles.costCenterCode}>{member.costCenter.code}</span>
                       </div>
                     )}
                   </div>
@@ -353,7 +431,7 @@ export function ProjectExecutiveOverviewPage({ projectId }: ProjectExecutiveOver
         </Card>
 
         {/* SEÇÃO D: PLANEJAMENTO E CURVA S */}
-        <Card className={`${styles.cardHalf} workspace-card`} title="Planejamento & Curva S">
+        <Card className={`${styles.cardHalf} workspace-card`} title="Planejamento e Curva S">
           <div className={styles.operationalCardBody}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
@@ -366,13 +444,15 @@ export function ProjectExecutiveOverviewPage({ projectId }: ProjectExecutiveOver
                   </div>
                 )}
               </div>
-              <StatusBadge status="completed">{planning.statusLabel}</StatusBadge>
+              <StatusBadge status={planning.hasPlanning ? "completed" : "pending"}>
+                {planning.statusLabel}
+              </StatusBadge>
             </div>
 
             <div className={styles.operationalFacts}>
               <div className={styles.operationalFact}>
                 <span className={styles.operationalFactLabel}>Curva S</span>
-                <span className={styles.operationalFactValue}>Disponível</span>
+                <span className={styles.operationalFactValue}>{planning.hasPlanning ? "Disponível" : "Não disponível"}</span>
               </div>
               <div className={styles.operationalFact}>
                 <span className={styles.operationalFactLabel}>Snapshots de Decisão</span>
