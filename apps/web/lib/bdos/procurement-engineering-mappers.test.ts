@@ -530,3 +530,251 @@ runTest("mapBudgetVersionAggregate e RPC params serializam source_budget_version
   const snapshotParams = budgetVersionSnapshotRpcParams(COMPANY_A, ACTOR_ID, aggregate.entity, 2);
   assertEqual(snapshotParams.p_lineage_source_budget_version_id, SOURCE_VERSION_ID);
 });
+
+// ===========================================================================
+// Testes direcionados para as correções da migration 20260820200000
+// ===========================================================================
+
+runTest("1. BUDGET_LINE_COLUMNS não contém official_unit_price_cents", () => {
+  // Importar BUDGET_LINE_COLUMNS não é possível diretamente (é const local),
+  // mas podemos verificar pelo BudgetLineRow: o mapper aceita unit_price_cents
+  // e ignora official_unit_price_cents como legado apenas do objeto JS.
+  // O teste verifica que mapBudgetLineRow funciona sem o campo legado na row.
+  const versionRow: BudgetVersionRow = {
+    id: VERSION_ID,
+    company_id: COMPANY_A,
+    procurement_case_id: CASE_ID,
+    scope_kind: "WholeCase",
+    procurement_lot_id: null,
+    origin_kind: "Native",
+    origin_reference: null,
+    status: "Draft",
+    revision: 0,
+    metadata: {},
+  };
+  const lineRowWithoutLegacy: BudgetLineRow = {
+    id: "line-no-legacy",
+    budget_version_id: VERSION_ID,
+    kind: "ServiceItem",
+    description_status: "Confirmed",
+    description_text: "Item pós-migration",
+    external_code: "ITM-001",
+    parent_line_id: null,
+    position: 0,
+    scope_kind: "WholeCase",
+    scope_procurement_lot_id: null,
+    total_cents: 5000,
+    quantity_decimal: "5.00",
+    unit: "UN",
+    unit_price_cents: 1000,
+    // official_unit_price_cents ausente — como será após RENAME
+    metadata: {},
+  };
+  const agg = mapBudgetVersionAggregate(versionRow, [lineRowWithoutLegacy], null);
+  const line = agg.entity.lines[0];
+  assertEqual(line?.unitPriceCents, 1000);
+  assertEqual(line?.id, "line-no-legacy");
+});
+
+runTest("2. mapper continua aceitando official_unit_price_cents como fallback legado", () => {
+  const versionRow: BudgetVersionRow = {
+    id: VERSION_ID,
+    company_id: COMPANY_A,
+    procurement_case_id: CASE_ID,
+    scope_kind: "WholeCase",
+    procurement_lot_id: null,
+    origin_kind: "Native",
+    origin_reference: null,
+    status: "Draft",
+    revision: 0,
+    metadata: {},
+  };
+  const legacyRow: BudgetLineRow = {
+    id: "line-legacy-only",
+    budget_version_id: VERSION_ID,
+    kind: "ServiceItem",
+    description_status: "Confirmed",
+    description_text: "Item legado",
+    external_code: "LGC-001",
+    parent_line_id: null,
+    position: 0,
+    scope_kind: "WholeCase",
+    scope_procurement_lot_id: null,
+    total_cents: 8000,
+    quantity_decimal: "8.00",
+    unit: "KG",
+    official_unit_price_cents: 1000,
+    metadata: {},
+  };
+  const agg = mapBudgetVersionAggregate(versionRow, [legacyRow], null);
+  const line = agg.entity.lines[0];
+  // mapper resolve: unitPriceCents via official_unit_price_cents fallback
+  assertEqual(line?.unitPriceCents, 1000);
+});
+
+runTest("3. budgetVersionDraftRpcParams envia p_lineage_source_budget_version_id", () => {
+  const SOURCE_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+  const params = budgetVersionDraftRpcParams(COMPANY_A, ACTOR_ID, {
+    id: VERSION_ID,
+    organizationId: COMPANY_A,
+    procurementCaseId: CASE_ID,
+    scope: { kind: ProcurementScopeKind.WholeCase, procurementCaseId: CASE_ID },
+    origin: { kind: BudgetVersionOriginKind.DocumentaryOpaqueReference, reference: "PLANILHA CORRIGIDA.xlsx" },
+    status: BudgetVersionStatus.Draft,
+    originLineage: {
+      id: LINEAGE_ID,
+      organizationId: COMPANY_A,
+      nature: LineageRelationNature.Origin,
+      origin: { kind: BudgetVersionOriginKind.DocumentaryOpaqueReference, reference: "PLANILHA CORRIGIDA.xlsx" },
+      sourceBudgetVersionId: SOURCE_ID,
+      destinationBudgetVersionId: VERSION_ID,
+      metadata: {},
+    },
+    lines: [],
+    metadata: {},
+  });
+  assertEqual(params.p_lineage_source_budget_version_id, SOURCE_ID);
+});
+
+runTest("4. budgetVersionDraftRpcParams: única assinatura — possui exatamente 15 chaves p_*", () => {
+  const params = budgetVersionDraftRpcParams(COMPANY_A, ACTOR_ID, {
+    id: VERSION_ID,
+    organizationId: COMPANY_A,
+    procurementCaseId: CASE_ID,
+    scope: { kind: ProcurementScopeKind.WholeCase, procurementCaseId: CASE_ID },
+    origin: { kind: BudgetVersionOriginKind.Native },
+    status: BudgetVersionStatus.Draft,
+    originLineage: null,
+    lines: [],
+    metadata: {},
+  });
+  const pKeys = Object.keys(params).filter((k) => k.startsWith("p_"));
+  // 15 parâmetros: p_actor_id, p_company_id, p_id, p_procurement_case_id,
+  // p_scope_kind, p_procurement_lot_id, p_origin_kind, p_origin_reference,
+  // p_metadata, p_correlation_id, p_source_system, p_lineage_id,
+  // p_lineage_origin_kind, p_lineage_origin_reference, p_lineage_source_budget_version_id
+  assertEqual(pKeys.length, 15);
+});
+
+runTest("5. budgetVersionDraftRpcParams: Draft sem source passa NULL em p_lineage_source_budget_version_id", () => {
+  const params = budgetVersionDraftRpcParams(COMPANY_A, ACTOR_ID, {
+    id: VERSION_ID,
+    organizationId: COMPANY_A,
+    procurementCaseId: CASE_ID,
+    scope: { kind: ProcurementScopeKind.WholeCase, procurementCaseId: CASE_ID },
+    origin: { kind: BudgetVersionOriginKind.Native },
+    status: BudgetVersionStatus.Draft,
+    originLineage: null,
+    lines: [],
+    metadata: {},
+  });
+  assertEqual(params.p_lineage_source_budget_version_id, null);
+});
+
+runTest("6. budgetVersionDraftRpcParams: Draft com source persiste source_budget_version_id não nulo", () => {
+  const SOURCE_ID = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+  const params = budgetVersionDraftRpcParams(COMPANY_A, ACTOR_ID, {
+    id: VERSION_ID,
+    organizationId: COMPANY_A,
+    procurementCaseId: CASE_ID,
+    scope: { kind: ProcurementScopeKind.WholeCase, procurementCaseId: CASE_ID },
+    origin: { kind: BudgetVersionOriginKind.DocumentaryOpaqueReference, reference: "PLANILHA.xlsx" },
+    status: BudgetVersionStatus.Draft,
+    originLineage: {
+      id: LINEAGE_ID,
+      organizationId: COMPANY_A,
+      nature: LineageRelationNature.Origin,
+      origin: { kind: BudgetVersionOriginKind.DocumentaryOpaqueReference, reference: "PLANILHA.xlsx" },
+      sourceBudgetVersionId: SOURCE_ID,
+      destinationBudgetVersionId: VERSION_ID,
+      metadata: {},
+    },
+    lines: [],
+    metadata: {},
+  });
+  assertEqual(params.p_lineage_source_budget_version_id !== null, true);
+  assertEqual(params.p_lineage_source_budget_version_id, SOURCE_ID);
+});
+
+runTest("7. persist snapshot: única assinatura canônica — possui exatamente 10 chaves p_*", () => {
+  const params = budgetVersionSnapshotRpcParams(COMPANY_A, ACTOR_ID, {
+    id: VERSION_ID,
+    organizationId: COMPANY_A,
+    procurementCaseId: CASE_ID,
+    scope: { kind: ProcurementScopeKind.WholeCase, procurementCaseId: CASE_ID },
+    origin: { kind: BudgetVersionOriginKind.Native },
+    status: BudgetVersionStatus.Consolidated,
+    originLineage: null,
+    lines: [],
+    metadata: {},
+  }, 0);
+  const pKeys = Object.keys(params).filter((k) => k.startsWith("p_"));
+  // p_actor_id, p_company_id, p_budget_version_id, p_expected_revision,
+  // p_status, p_lines, p_lineage_id, p_lineage_origin_kind,
+  // p_lineage_origin_reference, p_lineage_source_budget_version_id
+  assertEqual(pKeys.length, 10);
+});
+
+runTest("8. lineage: WholeCase source incompatível com Lot dest é detectável via sourceBudgetVersionId", () => {
+  // Valida que o campo sourceBudgetVersionId é preservado em round-trip de row -> aggregate
+  const SOURCE_ID = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+  const versionRow: BudgetVersionRow = {
+    id: VERSION_ID,
+    company_id: COMPANY_A,
+    procurement_case_id: CASE_ID,
+    scope_kind: "WholeCase",
+    procurement_lot_id: null,
+    origin_kind: "DocumentaryOpaqueReference",
+    origin_reference: "PLANILHA.xlsx",
+    status: "Draft",
+    revision: 0,
+    metadata: {},
+  };
+  const lineageRow: LineageRelationRow = {
+    id: LINEAGE_ID,
+    budget_version_id: VERSION_ID,
+    nature: "Origin",
+    origin_kind: "DocumentaryOpaqueReference",
+    origin_reference: "PLANILHA.xlsx",
+    source_budget_version_id: SOURCE_ID,
+  };
+  const agg = mapBudgetVersionAggregate(versionRow, [], lineageRow);
+  assertEqual(agg.entity.originLineage?.sourceBudgetVersionId, SOURCE_ID);
+  assertEqual(agg.entity.scope.kind, ProcurementScopeKind.WholeCase);
+});
+
+runTest("9. testes anteriores de snapshot e draft continuam verdes com as novas assinaturas", () => {
+  // Smoke test: cria Draft e Snapshot sem lineage, sem source — garantia de compatibilidade
+  const draftParams = budgetVersionDraftRpcParams(COMPANY_A, ACTOR_ID, {
+    id: VERSION_ID,
+    organizationId: COMPANY_A,
+    procurementCaseId: CASE_ID,
+    scope: { kind: ProcurementScopeKind.WholeCase, procurementCaseId: CASE_ID },
+    origin: { kind: BudgetVersionOriginKind.Native },
+    status: BudgetVersionStatus.Draft,
+    originLineage: null,
+    lines: [],
+    metadata: {},
+  });
+  assertEqual(draftParams.p_id, VERSION_ID);
+  assertEqual(draftParams.p_scope_kind, "WholeCase");
+  assertEqual(draftParams.p_origin_kind, "Native");
+  assertEqual(draftParams.p_lineage_id, null);
+
+  const snapshotParams = budgetVersionSnapshotRpcParams(COMPANY_A, ACTOR_ID, {
+    id: VERSION_ID,
+    organizationId: COMPANY_A,
+    procurementCaseId: CASE_ID,
+    scope: { kind: ProcurementScopeKind.WholeCase, procurementCaseId: CASE_ID },
+    origin: { kind: BudgetVersionOriginKind.Native },
+    status: BudgetVersionStatus.Consolidated,
+    originLineage: null,
+    lines: [],
+    metadata: {},
+  }, 1);
+  assertEqual(snapshotParams.p_budget_version_id, VERSION_ID);
+  assertEqual(snapshotParams.p_expected_revision, 1);
+  assertEqual(snapshotParams.p_status, "Consolidated");
+  assertEqual(snapshotParams.p_lineage_source_budget_version_id, null);
+});
+

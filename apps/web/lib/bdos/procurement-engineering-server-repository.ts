@@ -56,7 +56,7 @@ const PROCUREMENT_LOT_COLUMNS = "id, company_id, procurement_case_id, title, ext
 const BUDGET_VERSION_COLUMNS =
   "id, company_id, procurement_case_id, scope_kind, procurement_lot_id, origin_kind, origin_reference, status, revision, metadata";
 const BUDGET_LINE_COLUMNS =
-  "id, budget_version_id, kind, description_status, description_text, external_code, parent_line_id, position, scope_kind, scope_procurement_lot_id, total_cents, quantity_decimal, unit, unit_price_cents, official_unit_price_cents, metadata";
+  "id, budget_version_id, kind, description_status, description_text, external_code, parent_line_id, position, scope_kind, scope_procurement_lot_id, total_cents, quantity_decimal, unit, unit_price_cents, metadata";
 const LINEAGE_RELATION_COLUMNS = "id, budget_version_id, nature, origin_kind, origin_reference, source_budget_version_id";
 
 export function createProcurementCaseRepository(supabase: SupabaseClient): ProcurementCaseRepository {

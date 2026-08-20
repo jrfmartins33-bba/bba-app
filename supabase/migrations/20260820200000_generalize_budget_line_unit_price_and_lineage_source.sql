@@ -1,8 +1,25 @@
--- Migration: 20260820191500_generalize_budget_line_unit_price_and_lineage_source.sql
--- Epic 21 — Generalização do Preço Unitário de BudgetLine e Rastreabilidade entre BudgetVersions.
--- 1. Generaliza official_unit_price_cents -> unit_price_cents de forma backward-compatible.
+﻿-- Migration: 20260820200000_generalize_budget_line_unit_price_and_lineage_source.sql
+-- Epic 21 — Generalizacao do Preco Unitario de BudgetLine e Rastreabilidade entre BudgetVersions.
+-- 1. Generaliza official_unit_price_cents -> unit_price_cents (rename backward-compatible).
 -- 2. Adiciona source_budget_version_id em budget_version_lineage_relations.
--- 3. Atualiza persist_budget_version_snapshot.
+-- 3. Atualiza enforce_lineage_relation_version_consistency (usa procurement_lot_id real).
+-- 4. Remove assinatura legada de 9 parametros de persist_budget_version_snapshot.
+-- 5. Remove assinatura legada de 14 parametros de create_budget_version_draft.
+-- 6. Cria assinatura canonica de 15 parametros para create_budget_version_draft.
+--
+-- PRE-VERIFICACAO (executar antes de aplicar):
+--   SELECT count(*) FROM public.budget_lines;
+--   SELECT count(official_unit_price_cents) FROM public.budget_lines;
+--   SELECT count(*) FROM public.budget_version_lineage_relations;
+--
+-- POS-VERIFICACAO (executar depois de aplicar):
+--   SELECT count(*) FROM public.budget_lines;
+--   SELECT count(unit_price_cents) FROM public.budget_lines;
+--   SELECT count(*), count(source_budget_version_id) FROM public.budget_version_lineage_relations;
+
+-- ===========================================================================
+-- BLOCO 1: official_unit_price_cents -> unit_price_cents (budget_lines)
+-- ===========================================================================
 
 DO $$
 BEGIN
@@ -37,7 +54,11 @@ ALTER TABLE public.budget_lines
     );
 
 COMMENT ON COLUMN public.budget_lines.unit_price_cents IS
-  'Preço unitário canônico em centavos exatos (oficial, proposta vencedora ou outra versão econômica); não representa custo interno e pode ser nulo em versões históricas.';
+  'Preco unitario canonico em centavos exatos (oficial, proposta vencedora ou outra versao economica); nao representa custo interno e pode ser nulo em versoes historicas.';
+
+-- ===========================================================================
+-- BLOCO 2: source_budget_version_id em budget_version_lineage_relations
+-- ===========================================================================
 
 ALTER TABLE public.budget_version_lineage_relations
   ADD COLUMN IF NOT EXISTS source_budget_version_id UUID REFERENCES public.budget_versions(id);
@@ -45,6 +66,11 @@ ALTER TABLE public.budget_version_lineage_relations
 CREATE INDEX IF NOT EXISTS budget_version_lineage_relations_source_budget_version_idx
   ON public.budget_version_lineage_relations (source_budget_version_id)
   WHERE source_budget_version_id IS NOT NULL;
+
+-- ===========================================================================
+-- BLOCO 3: enforce_lineage_relation_version_consistency
+-- Usa procurement_lot_id (nome real da coluna em budget_versions).
+-- ===========================================================================
 
 CREATE OR REPLACE FUNCTION public.enforce_lineage_relation_version_consistency() RETURNS TRIGGER AS $$
 DECLARE
@@ -96,7 +122,12 @@ CREATE TRIGGER enforce_lineage_relations_version_consistency
 BEFORE INSERT OR UPDATE ON public.budget_version_lineage_relations
 FOR EACH ROW EXECUTE FUNCTION public.enforce_lineage_relation_version_consistency();
 
--- Remove a assinatura legada de 9 parâmetros para manter apenas a assinatura canônica
+-- ===========================================================================
+-- BLOCO 4: persist_budget_version_snapshot
+-- Remove assinatura legada de 9 parametros. Mantem apenas a assinatura
+-- canonica de 10 parametros (+ p_lineage_source_budget_version_id DEFAULT NULL).
+-- ===========================================================================
+
 DROP FUNCTION IF EXISTS public.persist_budget_version_snapshot(UUID, UUID, UUID, INTEGER, TEXT, JSONB, UUID, TEXT, TEXT);
 
 CREATE OR REPLACE FUNCTION public.persist_budget_version_snapshot(
@@ -197,3 +228,88 @@ REVOKE ALL ON FUNCTION public.persist_budget_version_snapshot(UUID, UUID, UUID, 
 REVOKE ALL ON FUNCTION public.persist_budget_version_snapshot(UUID, UUID, UUID, INTEGER, TEXT, JSONB, UUID, TEXT, TEXT, UUID) FROM anon;
 REVOKE ALL ON FUNCTION public.persist_budget_version_snapshot(UUID, UUID, UUID, INTEGER, TEXT, JSONB, UUID, TEXT, TEXT, UUID) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.persist_budget_version_snapshot(UUID, UUID, UUID, INTEGER, TEXT, JSONB, UUID, TEXT, TEXT, UUID) TO service_role;
+
+-- ===========================================================================
+-- BLOCO 5: create_budget_version_draft
+-- Remove assinatura legada de 14 parametros. Cria assinatura canonica de 15
+-- parametros com p_lineage_source_budget_version_id UUID DEFAULT NULL.
+-- Preserva: verificacoes de actor, company, procurement case, scope, metadata,
+-- revision, source_system e todos os invariantes existentes.
+-- ===========================================================================
+
+DROP FUNCTION IF EXISTS public.create_budget_version_draft(
+  UUID, UUID, UUID, UUID, TEXT, UUID, TEXT, TEXT, JSONB, TEXT, TEXT, UUID, TEXT, TEXT
+);
+
+CREATE FUNCTION public.create_budget_version_draft(
+  p_actor_id UUID,
+  p_company_id UUID,
+  p_id UUID,
+  p_procurement_case_id UUID,
+  p_scope_kind TEXT,
+  p_procurement_lot_id UUID,
+  p_origin_kind TEXT,
+  p_origin_reference TEXT,
+  p_metadata JSONB,
+  p_correlation_id TEXT,
+  p_source_system TEXT,
+  p_lineage_id UUID,
+  p_lineage_origin_kind TEXT,
+  p_lineage_origin_reference TEXT,
+  p_lineage_source_budget_version_id UUID DEFAULT NULL
+) RETURNS JSONB
+SECURITY INVOKER
+SET search_path = public, pg_temp
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_revision INTEGER;
+BEGIN
+  IF p_actor_id IS NULL THEN
+    RAISE EXCEPTION 'Actor is required.' USING ERRCODE = '28000';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = p_actor_id) THEN
+    RAISE EXCEPTION 'Actor % does not exist.', p_actor_id USING ERRCODE = '28000';
+  END IF;
+
+  IF p_company_id IS DISTINCT FROM get_company_id_for_actor(p_actor_id) AND NOT is_bba_admin_actor(p_actor_id) THEN
+    RAISE EXCEPTION 'Actor % is not authorized to create a Versao do Orcamento for this organizacao usuaria.', p_actor_id USING ERRCODE = '42501';
+  END IF;
+
+  INSERT INTO budget_versions (
+    id, company_id, procurement_case_id, scope_kind, procurement_lot_id,
+    origin_kind, origin_reference, status, metadata, correlation_id, created_by, source_system
+  ) VALUES (
+    p_id, p_company_id, p_procurement_case_id, p_scope_kind, p_procurement_lot_id,
+    p_origin_kind, p_origin_reference, 'Draft', COALESCE(p_metadata, '{}'::JSONB), p_correlation_id, p_actor_id, p_source_system
+  )
+  RETURNING revision INTO v_revision;
+
+  IF p_lineage_id IS NOT NULL THEN
+    INSERT INTO budget_version_lineage_relations (
+      id, company_id, budget_version_id, nature, origin_kind, origin_reference, source_budget_version_id
+    ) VALUES (
+      p_lineage_id, p_company_id, p_id, 'Origin', p_lineage_origin_kind, p_lineage_origin_reference, p_lineage_source_budget_version_id
+    );
+  END IF;
+
+  RETURN jsonb_build_object('revision', v_revision);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.create_budget_version_draft(
+  UUID, UUID, UUID, UUID, TEXT, UUID, TEXT, TEXT, JSONB, TEXT, TEXT, UUID, TEXT, TEXT, UUID
+) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.create_budget_version_draft(
+  UUID, UUID, UUID, UUID, TEXT, UUID, TEXT, TEXT, JSONB, TEXT, TEXT, UUID, TEXT, TEXT, UUID
+) FROM anon;
+REVOKE ALL ON FUNCTION public.create_budget_version_draft(
+  UUID, UUID, UUID, UUID, TEXT, UUID, TEXT, TEXT, JSONB, TEXT, TEXT, UUID, TEXT, TEXT, UUID
+) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.create_budget_version_draft(
+  UUID, UUID, UUID, UUID, TEXT, UUID, TEXT, TEXT, JSONB, TEXT, TEXT, UUID, TEXT, TEXT, UUID
+) TO service_role;
+
+COMMENT ON FUNCTION public.create_budget_version_draft IS
+  'Epic 21.3C (rev. 20260820200000) — operacao exclusiva de servidor. Persiste BudgetVersion em Draft e, quando fornecida, a Relacao de Rastreabilidade de origem incluindo source_budget_version_id para rastreabilidade de proposta -> oficial.';
