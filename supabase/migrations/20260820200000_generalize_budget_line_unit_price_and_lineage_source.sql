@@ -1,4 +1,4 @@
-﻿-- Migration: 20260820200000_generalize_budget_line_unit_price_and_lineage_source.sql
+-- Migration: 20260820200000_generalize_budget_line_unit_price_and_lineage_source.sql
 -- Epic 21 — Generalizacao do Preco Unitario de BudgetLine e Rastreabilidade entre BudgetVersions.
 -- 1. Generaliza official_unit_price_cents -> unit_price_cents (rename backward-compatible).
 -- 2. Adiciona source_budget_version_id em budget_version_lineage_relations.
