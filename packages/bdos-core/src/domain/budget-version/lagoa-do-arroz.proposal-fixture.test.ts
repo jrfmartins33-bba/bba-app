@@ -1,4 +1,4 @@
-﻿import {
+import {
   addBudgetLine,
   calculateBudgetVersionTotal,
   consolidateBudgetVersion,
@@ -213,3 +213,51 @@ runTest("12. Barragens de Alagoas Lote 01 e Lote 02 permanecem isolados e sem re
   const lot2 = createProcurementLot({ id: "lot-2", procurementCase: caseBarragens.procurementCase, title: "Lote 02" });
   assertEqual(lot1.success && lot2.success, true, "lotes criados com sucesso");
 });
+
+// ===========================================================================
+// Testes direcionados: canonicalDecimalQuantity — comparação textual determinística
+// ===========================================================================
+
+import { canonicalDecimalQuantity } from "./lagoa-do-arroz.proposal-fixture-loader";
+
+runTest("canonicalDecimalQuantity: '60' vs '60.0' são iguais", () => {
+  assertEqual(canonicalDecimalQuantity("60"), canonicalDecimalQuantity("60.0"), "'60' e '60.0' devem ter a mesma forma canônica");
+});
+
+runTest("canonicalDecimalQuantity: '1.500' vs '1.5' são iguais", () => {
+  assertEqual(canonicalDecimalQuantity("1.500"), canonicalDecimalQuantity("1.5"), "'1.500' e '1.5' devem ter a mesma forma canônica");
+});
+
+runTest("canonicalDecimalQuantity: '0.250000' vs '0.25' são iguais", () => {
+  assertEqual(canonicalDecimalQuantity("0.250000"), canonicalDecimalQuantity("0.25"), "'0.250000' e '0.25' devem ter a mesma forma canônica");
+});
+
+runTest("canonicalDecimalQuantity: '1.5' vs '1.500001' são DIFERENTES", () => {
+  const a = canonicalDecimalQuantity("1.5");
+  const b = canonicalDecimalQuantity("1.500001");
+  assertEqual(a !== b, true, "'1.5' e '1.500001' devem ser diferentes");
+});
+
+runTest("canonicalDecimalQuantity: '001.50' é normalizado para '1.5'", () => {
+  assertEqual(canonicalDecimalQuantity("001.50"), "1.5", "zeros à esquerda e à direita devem ser removidos");
+});
+
+runTest("canonicalDecimalQuantity: '0' preserva '0' como mínimo da parte inteira", () => {
+  assertEqual(canonicalDecimalQuantity("0"), "0", "zero sozinho deve permanecer '0'");
+  assertEqual(canonicalDecimalQuantity("0.00"), "0", "'0.00' deve normalizar para '0'");
+});
+
+runTest("canonicalDecimalQuantity: '60.000000' é normalizado para '60'", () => {
+  assertEqual(canonicalDecimalQuantity("60.000000"), "60", "'60.000000' deve normalizar para '60'");
+});
+
+runTest("canonicalDecimalQuantity: quantidades reais oficial x proposta têm 0 mismatches", () => {
+  const officialScenario = buildLagoaDoArrozOfficialScenario();
+  const proposalScenario = buildLagoaDoArrozProposalScenario({
+    procurementCase: officialScenario.procurementCase,
+    officialBudgetVersion: officialScenario.consolidatedBudgetVersion,
+  });
+  const result = reconcileLagoaProposalAgainstOfficial(officialScenario, proposalScenario);
+  assertEqual(result.quantityMismatches, 0, "nenhum mismatch de quantidade entre oficial e proposta");
+});
+

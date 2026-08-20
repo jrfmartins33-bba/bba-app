@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Carrega a fixture real da Proposta Vencedora (PLANILHA CORRIGIDA.xlsx)
  * no modelo de domínio de BudgetVersion, e executa a reconciliação canônica
  * item a item contra o Orçamento Oficial existente.
@@ -18,6 +18,50 @@ import {
   type LagoaDoArrozProposalLine,
 } from "./lagoa-do-arroz.proposal-fixture";
 import type { LagoaDoArrozOfficialScenario } from "./lagoa-do-arroz.official-fixture-loader";
+
+/**
+ * Normaliza uma string de quantidade decimal para sua forma canônica mínima,
+ * permitindo comparação determinística sem uso de ponto flutuante.
+ *
+ * Regras:
+ * - Remove zeros à esquerda da parte inteira, preservando "0" como mínimo.
+ * - Remove zeros à direita da parte fracionária.
+ * - Se a parte fracionária ficar vazia após o trim, omite o separador decimal.
+ *
+ * Exemplos:
+ *   "60"         → "60"
+ *   "60.0"       → "60"
+ *   "60.000000"  → "60"
+ *   "001.50"     → "1.5"
+ *   "0.250000"   → "0.25"
+ *   "1.500001"   → "1.500001"
+ */
+export function canonicalDecimalQuantity(s: string): string {
+  const dotIdx = s.indexOf(".");
+  let intPart: string;
+  let fracPart: string;
+
+  if (dotIdx === -1) {
+    intPart = s;
+    fracPart = "";
+  } else {
+    intPart = s.slice(0, dotIdx);
+    fracPart = s.slice(dotIdx + 1);
+  }
+
+  // Normaliza parte inteira: remove zeros à esquerda, mantém ao menos "0"
+  intPart = intPart.replace(/^0+/, "") || "0";
+
+  // Normaliza parte fracionária: remove zeros à direita
+  fracPart = fracPart.replace(/0+$/, "");
+
+  return fracPart.length > 0 ? `${intPart}.${fracPart}` : intPart;
+}
+
+/** Retorna true se dois textos decimais representam o mesmo valor. */
+function decimalQuantityEqual(a: string, b: string): boolean {
+  return canonicalDecimalQuantity(a) === canonicalDecimalQuantity(b);
+}
 
 export interface LagoaDoArrozProposalScenario {
   readonly procurementCase: ProcurementCase;
@@ -231,10 +275,8 @@ export function reconcileLagoaProposalAgainstOfficial(
           if (o.unit !== null && p.unit !== null && p.unit !== o.unit) {
             unitMismatches++;
           }
-          if (o.quantity !== null && p.quantity !== null) {
-            const qO = parseFloat(o.quantity);
-            const qP = parseFloat(p.quantity);
-            if (Math.abs(qO - qP) > 1e-6) {
+          if (o.quantity !== null && o.quantity !== undefined && p.quantity !== null && p.quantity !== undefined) {
+            if (!decimalQuantityEqual(o.quantity, p.quantity)) {
               quantityMismatches++;
             }
           }
@@ -255,8 +297,8 @@ export function reconcileLagoaProposalAgainstOfficial(
               if (p.description.text.trim() !== o.description.text.trim()) descriptionMismatches++;
             }
             if (o.unit !== null && p.unit !== null && p.unit !== o.unit) unitMismatches++;
-            if (o.quantity !== null && p.quantity !== null) {
-              if (Math.abs(parseFloat(o.quantity) - parseFloat(p.quantity)) > 1e-6) quantityMismatches++;
+            if (o.quantity !== null && o.quantity !== undefined && p.quantity !== null && p.quantity !== undefined) {
+              if (!decimalQuantityEqual(o.quantity, p.quantity)) quantityMismatches++;
             }
           }
         }
