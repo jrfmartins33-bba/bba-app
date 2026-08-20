@@ -507,11 +507,11 @@
 }
 
 .valueComparisonFillReference {
-  background: rgba(148, 163, 184, 0.48);
+  background: #FFD400;
 }
 
 .valueComparisonFillContract {
-  background: var(--bba-gold);
+  background: #22C55E;
 }
 
 .valueComparisonFooter {
