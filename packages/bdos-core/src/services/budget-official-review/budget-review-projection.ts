@@ -65,7 +65,7 @@ function projectRowAndDescendants(
     totalCents: row.kind === BudgetLineKind.ServiceItem ? moneyCentsFromCanonicalDecimalText(row.revised.totalPriceText) : null,
     quantity: row.kind === BudgetLineKind.ServiceItem ? row.revised.quantityText : null,
     unit: row.kind === BudgetLineKind.ServiceItem ? row.revised.unit : null,
-    officialUnitPriceCents:
+    unitPriceCents:
       row.kind === BudgetLineKind.ServiceItem ? moneyCentsFromCanonicalDecimalText(row.revised.unitPriceWithBdiText) : null,
     metadata: {
       lotReference: row.lotReference,

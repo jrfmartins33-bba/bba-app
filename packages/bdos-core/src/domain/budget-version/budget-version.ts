@@ -78,6 +78,14 @@ export function createBudgetVersion(input: CreateBudgetVersionInput): BudgetVers
     errors.push(createVersionError("missing_lineage_relation_id", "originLineageId", "Lineage relation identity, when provided, must not be blank.", metadata));
   }
 
+  const lineageErrors = validateBudgetVersionLineage(
+    { id: input.id, organizationId: input.procurementCase.organizationId, procurementCaseId: input.procurementCase.id, scope: input.scope },
+    input.sourceBudgetVersion,
+    input.sourceBudgetVersionId,
+    metadata,
+  );
+  errors.push(...lineageErrors);
+
   if (errors.length > 0) {
     return freezeDomainObject<BudgetVersionFailure>({
       success: false,
@@ -97,6 +105,7 @@ export function createBudgetVersion(input: CreateBudgetVersionInput): BudgetVers
           nature: LineageRelationNature.Origin,
           origin: input.origin,
           destinationBudgetVersionId: input.id,
+          sourceBudgetVersionId: input.sourceBudgetVersion?.id ?? input.sourceBudgetVersionId ?? null,
           metadata,
         };
 
@@ -160,12 +169,29 @@ export function registerLineageRelation(input: RegisterLineageRelationInput): Bu
     });
   }
 
+  const lineageErrors = validateBudgetVersionLineage(
+    budgetVersion,
+    input.sourceBudgetVersion,
+    input.sourceBudgetVersionId,
+    metadata,
+  );
+  if (lineageErrors.length > 0) {
+    return freezeDomainObject<BudgetVersionFailure>({
+      success: false,
+      budgetVersion: null,
+      errors: lineageErrors,
+      warnings: [],
+      metadata,
+    });
+  }
+
   const originLineage: LineageRelation = {
     id: input.id,
     organizationId: budgetVersion.organizationId,
     nature: LineageRelationNature.Origin,
     origin: budgetVersion.origin,
     destinationBudgetVersionId: budgetVersion.id,
+    sourceBudgetVersionId: input.sourceBudgetVersion?.id ?? input.sourceBudgetVersionId ?? null,
     metadata,
   };
 
@@ -223,7 +249,8 @@ export function addBudgetLine(input: AddBudgetLineInput): BudgetVersionResult {
 
   const totalErrors = validateLineTotal(input.kind, input.totalCents, metadata);
   errors.push(...totalErrors);
-  errors.push(...validateServiceItemEconomics(input.kind, input.quantity, input.unit, input.officialUnitPriceCents, metadata));
+  const unitPrice = input.unitPriceCents ?? input.officialUnitPriceCents;
+  errors.push(...validateServiceItemEconomics(input.kind, input.quantity, input.unit, unitPrice, metadata));
 
   if (!isValidBudgetLinePosition(input.position)) {
     errors.push(createVersionError("invalid_position", "position", "Position must be a non-negative safe integer.", metadata));
@@ -262,7 +289,8 @@ export function addBudgetLine(input: AddBudgetLineInput): BudgetVersionResult {
     totalCents: input.kind === BudgetLineKind.ServiceItem ? (input.totalCents ?? null) : null,
     quantity: input.kind === BudgetLineKind.ServiceItem ? (input.quantity ?? null) : null,
     unit: input.kind === BudgetLineKind.ServiceItem ? (input.unit ?? null) : null,
-    officialUnitPriceCents: input.kind === BudgetLineKind.ServiceItem ? (input.officialUnitPriceCents ?? null) : null,
+    unitPriceCents: input.kind === BudgetLineKind.ServiceItem ? (unitPrice ?? null) : null,
+    officialUnitPriceCents: input.kind === BudgetLineKind.ServiceItem ? (unitPrice ?? null) : null,
     metadata,
   };
 
@@ -326,6 +354,13 @@ export function updateBudgetLine(input: UpdateBudgetLineInput): BudgetVersionRes
   const nextTotalCents = input.totalCents !== undefined ? input.totalCents : target.totalCents;
   errors.push(...validateLineTotal(target.kind, nextTotalCents, metadata));
 
+  const nextQuantity = input.quantity !== undefined ? input.quantity : target.quantity;
+  const nextUnit = input.unit !== undefined ? input.unit : target.unit;
+  const nextUnitPrice = input.unitPriceCents !== undefined
+    ? input.unitPriceCents
+    : (input.officialUnitPriceCents !== undefined ? input.officialUnitPriceCents : (target.unitPriceCents ?? target.officialUnitPriceCents));
+  errors.push(...validateServiceItemEconomics(target.kind, nextQuantity, nextUnit, nextUnitPrice, metadata));
+
   if (errors.length > 0) {
     return freezeDomainObject<BudgetVersionFailure>({
       success: false,
@@ -342,6 +377,10 @@ export function updateBudgetLine(input: UpdateBudgetLineInput): BudgetVersionRes
     externalCode: input.externalCode !== undefined ? input.externalCode : target.externalCode,
     scope: nextScope,
     totalCents: target.kind === BudgetLineKind.ServiceItem ? nextTotalCents : null,
+    quantity: target.kind === BudgetLineKind.ServiceItem ? (nextQuantity ?? null) : null,
+    unit: target.kind === BudgetLineKind.ServiceItem ? (nextUnit ?? null) : null,
+    unitPriceCents: target.kind === BudgetLineKind.ServiceItem ? (nextUnitPrice ?? null) : null,
+    officialUnitPriceCents: target.kind === BudgetLineKind.ServiceItem ? (nextUnitPrice ?? null) : null,
   };
 
   return freezeDomainObject<BudgetVersionSuccess>({
@@ -645,12 +684,35 @@ function validateParent(
     return [];
   }
 
+  if (kind === BudgetLineKind.Subgroup) {
+    if (parentLineId === null) {
+      return [createVersionError("missing_parent_line", "parentLineId", "Subgrupo requires a parent line.", metadata)];
+    }
+
+    const parent = budgetVersion.lines.find((line) => line.id === parentLineId);
+    if (parent === undefined) {
+      return [createVersionError("missing_parent_line", "parentLineId", `No line with id "${parentLineId}" exists in this version.`, metadata)];
+    }
+
+    if (parent.budgetVersionId !== budgetVersion.id) {
+      return [
+        createVersionError("parent_from_another_version", "parentLineId", "The parent line belongs to a different Versão do Orçamento.", metadata),
+      ];
+    }
+
+    if (parent.kind !== BudgetLineKind.Group) {
+      return [createVersionError("incompatible_parent_kind", "parentLineId", "Subgrupo must have a Grupo as parent.", metadata)];
+    }
+
+    return [];
+  }
+
+  // kind === BudgetLineKind.ServiceItem
   if (parentLineId === null) {
-    return [createVersionError("missing_parent_line", "parentLineId", `${kind} requires a parent line.`, metadata)];
+    return [];
   }
 
   const parent = budgetVersion.lines.find((line) => line.id === parentLineId);
-
   if (parent === undefined) {
     return [createVersionError("missing_parent_line", "parentLineId", `No line with id "${parentLineId}" exists in this version.`, metadata)];
   }
@@ -661,11 +723,7 @@ function validateParent(
     ];
   }
 
-  if (kind === BudgetLineKind.Subgroup && parent.kind !== BudgetLineKind.Group) {
-    return [createVersionError("incompatible_parent_kind", "parentLineId", "Subgrupo must have a Grupo as parent.", metadata)];
-  }
-
-  if (kind === BudgetLineKind.ServiceItem && parent.kind !== BudgetLineKind.Group && parent.kind !== BudgetLineKind.Subgroup) {
+  if (parent.kind !== BudgetLineKind.Group && parent.kind !== BudgetLineKind.Subgroup) {
     return [
       createVersionError("incompatible_parent_kind", "parentLineId", "Item de Serviço must have a Grupo or Subgrupo as parent.", metadata),
     ];
@@ -807,7 +865,7 @@ function validateServiceItemEconomics(
   kind: BudgetLineKind,
   quantity: string | null | undefined,
   unit: string | null | undefined,
-  officialUnitPriceCents: MoneyCents | null | undefined,
+  unitPriceCents: MoneyCents | null | undefined,
   metadata: BudgetVersionMetadata,
 ): ReadonlyArray<BudgetVersionError> {
   const errors: BudgetVersionError[] = [];
@@ -815,8 +873,8 @@ function validateServiceItemEconomics(
   if (kind !== BudgetLineKind.ServiceItem) {
     if (quantity != null) errors.push(createVersionError("invalid_quantity", "quantity", "Grupo and Subgrupo cannot carry quantity.", metadata));
     if (unit != null) errors.push(createVersionError("invalid_unit", "unit", "Grupo and Subgrupo cannot carry unit.", metadata));
-    if (officialUnitPriceCents != null) {
-      errors.push(createVersionError("invalid_official_unit_price_cents", "officialUnitPriceCents", "Grupo and Subgrupo cannot carry unit price.", metadata));
+    if (unitPriceCents != null) {
+      errors.push(createVersionError("invalid_unit_price_cents", "unitPriceCents", "Grupo and Subgrupo cannot carry unit price.", metadata));
     }
     return errors;
   }
@@ -829,8 +887,47 @@ function validateServiceItemEconomics(
     errors.push(createVersionError("invalid_unit", "unit", "Unit, when provided, must not be blank.", metadata));
   }
 
-  if (officialUnitPriceCents !== undefined && officialUnitPriceCents !== null && !isValidMoneyCents(officialUnitPriceCents)) {
-    errors.push(createVersionError("invalid_official_unit_price_cents", "officialUnitPriceCents", "Official unit price must be valid non-negative integer cents.", metadata));
+  if (unitPriceCents !== undefined && unitPriceCents !== null && !isValidMoneyCents(unitPriceCents)) {
+    errors.push(createVersionError("invalid_unit_price_cents", "unitPriceCents", "Unit price must be valid non-negative integer cents.", metadata));
+  }
+
+  return errors;
+}
+
+export function validateBudgetVersionLineage(
+  destination: { readonly id: string; readonly organizationId: string; readonly procurementCaseId: string; readonly scope: ProcurementScope },
+  source: BudgetVersion | null | undefined,
+  sourceId: string | null | undefined,
+  metadata: BudgetVersionMetadata,
+): ReadonlyArray<BudgetVersionError> {
+  const errors: BudgetVersionError[] = [];
+
+  const effectiveSourceId = source?.id ?? sourceId;
+  if (!effectiveSourceId) {
+    return errors;
+  }
+
+  if (effectiveSourceId === destination.id) {
+    errors.push(createVersionError("self_lineage_relation", "sourceBudgetVersionId", "A BudgetVersion cannot have a lineage relation to itself.", metadata));
+    return errors;
+  }
+
+  if (source) {
+    if (source.organizationId !== destination.organizationId) {
+      errors.push(createVersionError("lineage_organization_mismatch", "sourceBudgetVersion.organizationId", "Lineage source must belong to the same organization.", metadata));
+    }
+
+    if (source.procurementCaseId !== destination.procurementCaseId) {
+      errors.push(createVersionError("lineage_procurement_case_mismatch", "sourceBudgetVersion.procurementCaseId", "Lineage source must belong to the same Processo de Licitação e Contratação.", metadata));
+    }
+
+    if (source.scope.kind !== destination.scope.kind) {
+      errors.push(createVersionError("lineage_scope_mismatch", "sourceBudgetVersion.scope", "Lineage source and destination must have compatible scope kinds (WholeCase vs Lot cannot be connected silently).", metadata));
+    } else if (source.scope.kind === ProcurementScopeKind.Lot && destination.scope.kind === ProcurementScopeKind.Lot) {
+      if (source.scope.procurementLotId !== destination.scope.procurementLotId) {
+        errors.push(createVersionError("lineage_scope_mismatch", "sourceBudgetVersion.scope.procurementLotId", "Lineage source Lot cannot cross another Lot.", metadata));
+      }
+    }
   }
 
   return errors;

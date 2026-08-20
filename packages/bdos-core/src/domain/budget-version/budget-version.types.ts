@@ -60,6 +60,7 @@ export interface LineageRelation {
   readonly nature: LineageRelationNature;
   readonly origin: BudgetVersionOrigin;
   readonly destinationBudgetVersionId: BudgetVersionId;
+  readonly sourceBudgetVersionId?: BudgetVersionId | null;
   readonly metadata: BudgetVersionMetadata;
 }
 
@@ -107,6 +108,8 @@ export interface BudgetLine {
    */
   readonly quantity?: string | null;
   readonly unit?: string | null;
+  readonly unitPriceCents?: MoneyCents | null;
+  /** @deprecated use unitPriceCents */
   readonly officialUnitPriceCents?: MoneyCents | null;
   readonly metadata: BudgetVersionMetadata;
 }
@@ -160,6 +163,8 @@ export interface CreateBudgetVersionInput {
   readonly scope: ProcurementScope;
   readonly origin: BudgetVersionOrigin;
   readonly originLineageId?: string;
+  readonly sourceBudgetVersion?: BudgetVersion | null;
+  readonly sourceBudgetVersionId?: BudgetVersionId | null;
   readonly correlationId?: BudgetCorrelationId;
   readonly createdBy?: BudgetCreatedBy;
   readonly sourceSystem?: BudgetSourceSystem;
@@ -183,6 +188,8 @@ export interface AddBudgetLineInput {
   readonly totalCents?: MoneyCents | null;
   readonly quantity?: string | null;
   readonly unit?: string | null;
+  readonly unitPriceCents?: MoneyCents | null;
+  /** @deprecated use unitPriceCents */
   readonly officialUnitPriceCents?: MoneyCents | null;
   readonly metadata?: BudgetVersionMetadata;
 }
@@ -200,6 +207,11 @@ export interface UpdateBudgetLineInput {
   readonly scope?: ProcurementScope;
   readonly procurementLot?: ProcurementLot;
   readonly totalCents?: MoneyCents | null;
+  readonly quantity?: string | null;
+  readonly unit?: string | null;
+  readonly unitPriceCents?: MoneyCents | null;
+  /** @deprecated use unitPriceCents */
+  readonly officialUnitPriceCents?: MoneyCents | null;
 }
 
 /** Remoção controlada de uma Linha sem filhos — somente em rascunho. */
@@ -230,6 +242,8 @@ export interface ConsolidateBudgetVersionInput {
 export interface RegisterLineageRelationInput {
   readonly budgetVersion: BudgetVersion;
   readonly id: string;
+  readonly sourceBudgetVersion?: BudgetVersion | null;
+  readonly sourceBudgetVersionId?: BudgetVersionId | null;
 }
 
 export type BudgetVersionErrorCode =
@@ -257,11 +271,16 @@ export type BudgetVersionErrorCode =
   | "invalid_total_cents"
   | "invalid_quantity"
   | "invalid_unit"
+  | "invalid_unit_price_cents"
   | "invalid_official_unit_price_cents"
   | "unknown_line"
   | "line_has_children"
   | "missing_lineage_relation_id"
-  | "origin_lineage_already_registered";
+  | "origin_lineage_already_registered"
+  | "self_lineage_relation"
+  | "lineage_organization_mismatch"
+  | "lineage_procurement_case_mismatch"
+  | "lineage_scope_mismatch";
 
 export interface BudgetVersionError {
   readonly code: BudgetVersionErrorCode;

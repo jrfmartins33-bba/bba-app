@@ -77,6 +77,7 @@ export interface BudgetLineRow {
   readonly total_cents: string | number | null;
   readonly quantity_decimal?: string | null;
   readonly unit?: string | null;
+  readonly unit_price_cents?: string | number | null;
   readonly official_unit_price_cents?: string | number | null;
   readonly metadata: Record<string, unknown> | null;
 }
@@ -87,6 +88,7 @@ export interface LineageRelationRow {
   readonly nature: string;
   readonly origin_kind: string;
   readonly origin_reference: string | null;
+  readonly source_budget_version_id?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +159,7 @@ export function mapBudgetVersionAggregate(
 function mapBudgetLineRow(row: BudgetLineRow, procurementCaseId: string): BudgetLine {
   const kind = mapBudgetLineKind(row.kind);
   const totalCents = parseMoneyCents(row.total_cents, "budget_lines.total_cents");
-  const officialUnitPriceCents = parseMoneyCents(row.official_unit_price_cents ?? null, "budget_lines.official_unit_price_cents");
+  const unitPriceCents = parseMoneyCents(row.unit_price_cents ?? row.official_unit_price_cents ?? null, "budget_lines.unit_price_cents");
 
   if (kind === BudgetLineKind.ServiceItem && totalCents === null) {
     throw new ProcurementEngineeringReconstructionError(`budget_lines "${row.id}": kind "ServiceItem" requires a non-null total_cents.`);
@@ -179,7 +181,8 @@ function mapBudgetLineRow(row: BudgetLineRow, procurementCaseId: string): Budget
     totalCents,
     quantity: row.quantity_decimal ?? null,
     unit: row.unit ?? null,
-    officialUnitPriceCents,
+    unitPriceCents,
+    officialUnitPriceCents: unitPriceCents,
     metadata: row.metadata ?? {},
   };
 }
@@ -195,6 +198,7 @@ function mapLineageRelationRow(row: LineageRelationRow, organizationId: string, 
     nature: LineageRelationNature.Origin,
     origin: mapOrigin(row.origin_kind, row.origin_reference, "budget_version_lineage_relations"),
     destinationBudgetVersionId: assertNonBlankString(row.budget_version_id, "budget_version_lineage_relations.budget_version_id"),
+    sourceBudgetVersionId: row.source_budget_version_id ?? null,
     metadata: versionMetadata,
   };
 }
@@ -376,6 +380,7 @@ export function budgetVersionDraftRpcParams(organizationId: string, actor: strin
     p_lineage_id: budgetVersion.originLineage?.id ?? null,
     p_lineage_origin_kind: budgetVersion.originLineage?.origin.kind ?? null,
     p_lineage_origin_reference: budgetVersion.originLineage ? originReferenceOf(budgetVersion.originLineage.origin) : null,
+    p_lineage_source_budget_version_id: budgetVersion.originLineage?.sourceBudgetVersionId ?? null,
   };
 }
 
@@ -437,6 +442,7 @@ function sortLinesTopologically(lines: ReadonlyArray<BudgetLine>): ReadonlyArray
 }
 
 function lineToJsonPayload(line: BudgetLine): Record<string, unknown> {
+  const unitPrice = line.unitPriceCents ?? line.officialUnitPriceCents ?? null;
   return {
     id: line.id,
     kind: line.kind,
@@ -450,7 +456,8 @@ function lineToJsonPayload(line: BudgetLine): Record<string, unknown> {
     totalCents: line.totalCents,
     quantity: line.quantity ?? null,
     unit: line.unit ?? null,
-    officialUnitPriceCents: line.officialUnitPriceCents ?? null,
+    unitPriceCents: unitPrice,
+    officialUnitPriceCents: unitPrice,
     metadata: line.metadata,
   };
 }
@@ -479,5 +486,6 @@ export function budgetVersionSnapshotRpcParams(
     p_lineage_id: budgetVersion.originLineage?.id ?? null,
     p_lineage_origin_kind: budgetVersion.originLineage?.origin.kind ?? null,
     p_lineage_origin_reference: budgetVersion.originLineage ? originReferenceOf(budgetVersion.originLineage.origin) : null,
+    p_lineage_source_budget_version_id: budgetVersion.originLineage?.sourceBudgetVersionId ?? null,
   };
 }

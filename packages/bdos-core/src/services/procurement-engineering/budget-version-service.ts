@@ -69,6 +69,7 @@ export async function createBudgetVersionDraftService(
     scope: resolvedScope.scope,
     origin: command.origin,
     originLineageId: command.originLineageId,
+    sourceBudgetVersionId: command.sourceBudgetVersionId,
     correlationId: context.correlationId,
     createdBy: context.actor,
     sourceSystem: context.sourceSystem,
@@ -125,6 +126,9 @@ export async function addBudgetLineService(
     scope: resolvedScope.scope,
     procurementLot: resolvedScope.procurementLot,
     totalCents: command.totalCents,
+    quantity: command.quantity,
+    unit: command.unit,
+    unitPriceCents: command.unitPriceCents ?? command.officialUnitPriceCents,
     metadata: command.metadata,
   });
 
@@ -167,6 +171,9 @@ export async function updateBudgetLineService(
     scope: resolvedScope?.scope,
     procurementLot: resolvedScope?.procurementLot,
     totalCents: command.totalCents,
+    quantity: command.quantity,
+    unit: command.unit,
+    unitPriceCents: command.unitPriceCents ?? command.officialUnitPriceCents,
   });
 
   if (!domainResult.success) {
@@ -234,7 +241,11 @@ export async function registerLineageRelationService(
     return { outcome: "not_found" };
   }
 
-  const domainResult = registerLineageRelation({ budgetVersion: loaded.entity, id: crypto.randomUUID() });
+  const domainResult = registerLineageRelation({
+    budgetVersion: loaded.entity,
+    id: crypto.randomUUID(),
+    sourceBudgetVersionId: command.sourceBudgetVersionId,
+  });
 
   if (!domainResult.success) {
     return { outcome: "domain_error", errors: domainResult.errors };

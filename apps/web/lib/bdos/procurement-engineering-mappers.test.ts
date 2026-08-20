@@ -432,3 +432,101 @@ runTest("budgetVersionSnapshotRpcParams rejeita explicitamente um ciclo entre Li
     "a cycle between two lines must be rejected explicitly, never silently serialized",
   );
 });
+
+runTest("mapBudgetLineRow mapeia unit_price_cents e preserva fallback de official_unit_price_cents", () => {
+  const versionRow: BudgetVersionRow = {
+    id: VERSION_ID,
+    company_id: COMPANY_A,
+    procurement_case_id: CASE_ID,
+    scope_kind: "WholeCase",
+    procurement_lot_id: null,
+    origin_kind: "Native",
+    origin_reference: null,
+    status: "Draft",
+    revision: 1,
+    metadata: {},
+  };
+
+  const lineWithNewField: BudgetLineRow = {
+    id: "line-new-field",
+    budget_version_id: VERSION_ID,
+    kind: "ServiceItem",
+    description_status: "Confirmed",
+    description_text: "Item com unit_price_cents",
+    external_code: "COD-1",
+    parent_line_id: null,
+    position: 0,
+    scope_kind: "WholeCase",
+    scope_procurement_lot_id: null,
+    total_cents: 10000,
+    quantity_decimal: "10.00",
+    unit: "UN",
+    unit_price_cents: 1000,
+    metadata: {},
+  };
+
+  const lineWithLegacyField: BudgetLineRow = {
+    id: "line-legacy-field",
+    budget_version_id: VERSION_ID,
+    kind: "ServiceItem",
+    description_status: "Confirmed",
+    description_text: "Item com official_unit_price_cents",
+    external_code: "COD-2",
+    parent_line_id: null,
+    position: 1,
+    scope_kind: "WholeCase",
+    scope_procurement_lot_id: null,
+    total_cents: 20000,
+    quantity_decimal: "20.00",
+    unit: "M2",
+    official_unit_price_cents: 1000,
+    metadata: {},
+  };
+
+  const aggregate = mapBudgetVersionAggregate(versionRow, [lineWithNewField, lineWithLegacyField], null);
+  const line1 = aggregate.entity.lines.find((l) => l.id === "line-new-field");
+  assertEqual(line1?.unitPriceCents, 1000);
+  assertEqual(line1?.officialUnitPriceCents, 1000);
+  assertEqual(line1?.quantity, "10.00");
+  assertEqual(line1?.unit, "UN");
+  assertEqual(line1?.totalCents, 10000);
+
+  const line2 = aggregate.entity.lines.find((l) => l.id === "line-legacy-field");
+  assertEqual(line2?.unitPriceCents, 1000);
+  assertEqual(line2?.officialUnitPriceCents, 1000);
+});
+
+runTest("mapBudgetVersionAggregate e RPC params serializam source_budget_version_id e unitPriceCents corretamente", () => {
+  const SOURCE_VERSION_ID = "77777777-7777-7777-7777-777777777777";
+  const versionRow: BudgetVersionRow = {
+    id: VERSION_ID,
+    company_id: COMPANY_A,
+    procurement_case_id: CASE_ID,
+    scope_kind: "WholeCase",
+    procurement_lot_id: null,
+    origin_kind: "DocumentaryOpaqueReference",
+    origin_reference: "PLANILHA CORRIGIDA.xlsx",
+    status: "Draft",
+    revision: 2,
+    metadata: { correlationId: "corr-proposal" },
+  };
+
+  const lineageRow: LineageRelationRow = {
+    id: LINEAGE_ID,
+    budget_version_id: VERSION_ID,
+    nature: "Origin",
+    origin_kind: "DocumentaryOpaqueReference",
+    origin_reference: "PLANILHA CORRIGIDA.xlsx",
+    source_budget_version_id: SOURCE_VERSION_ID,
+  };
+
+  const aggregate = mapBudgetVersionAggregate(versionRow, [], lineageRow);
+  assertEqual(aggregate.entity.originLineage?.sourceBudgetVersionId, SOURCE_VERSION_ID);
+
+  // Verificação nos RPC params
+  const draftParams = budgetVersionDraftRpcParams(COMPANY_A, ACTOR_ID, aggregate.entity);
+  assertEqual(draftParams.p_lineage_source_budget_version_id, SOURCE_VERSION_ID);
+
+  const snapshotParams = budgetVersionSnapshotRpcParams(COMPANY_A, ACTOR_ID, aggregate.entity, 2);
+  assertEqual(snapshotParams.p_lineage_source_budget_version_id, SOURCE_VERSION_ID);
+});
