@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { BudgetPageHeader } from "@/components/budget/budget-page-header";
 import { BudgetEmptyState } from "@/components/budget/budget-empty-state";
 import catalogStyles from "@/components/budget/official-budget-catalog.module.css";
 import scenarioStyles from "@/components/budget/proposal-scenarios.module.css";
 import {
   contractStatusLabel,
+  formatPercentageBasisPointsPtBr,
   lotPresentation,
   resolveContractedDocumentChain,
   sortBudgetsByLotAscending,
@@ -161,9 +162,13 @@ function LotsProcess({
   readonly organizationIdForLinks: string | null;
 }) {
   return (
-    <section className={catalogStyles.process} aria-labelledby={`process-${process.procurementCaseId}`}>
-      <div className={catalogStyles.processHeader}>
-        <div><p className={catalogStyles.eyebrow}>Orçamento Oficial</p><h2 id={`process-${process.procurementCaseId}`}>{process.title}</h2></div>
+    <section className={`${catalogStyles.process} ${catalogStyles.lotsProcess}`} aria-labelledby={`process-${process.procurementCaseId}`}>
+      <div className={`${catalogStyles.processHeader} ${catalogStyles.lotsProcessHeader}`}>
+        <div>
+          <p className={catalogStyles.eyebrow}>Orçamento Oficial</p>
+          <h2 id={`process-${process.procurementCaseId}`}>{process.title}</h2>
+          <p className={catalogStyles.processMode}>Análise por lotes e cenários</p>
+        </div>
         <dl className={catalogStyles.processSummary}>
           <div><dt>Escopo confirmado</dt><dd>{process.budgets.length} {process.budgets.length === 1 ? "lote confirmado" : "lotes confirmados"}</dd></div>
           <div><dt>Valor total dos lotes</dt><dd>{formatCentsPtBr(process.totalOfficialValueCents)}</dd></div>
@@ -197,7 +202,15 @@ function DocumentChainProcess({
   const contractedChain = resolveContractedDocumentChain(process);
 
   if (contractedChain) {
-    const { officialBudget, winningProposal, differenceCents, comparisonKind } = contractedChain;
+    const {
+      officialBudget,
+      winningProposal,
+      differenceCents,
+      differenceBasisPoints,
+      officialBarBasisPoints,
+      contractedBarBasisPoints,
+      comparisonKind,
+    } = contractedChain;
     const comparisonLabel = comparisonKind === "Reduction"
       ? "Redução contratada"
       : comparisonKind === "Increase" ? "Acréscimo contratado" : "Sem diferença contratual";
@@ -208,6 +221,7 @@ function DocumentChainProcess({
           <div>
             <p className={catalogStyles.eyebrow}>Processo de Licitação e Contratação</p>
             <h2 id={`process-${process.procurementCaseId}`}>{process.title}</h2>
+            <p className={catalogStyles.processMode}>Contrato vigente · Referência econômica da execução</p>
           </div>
         </div>
 
@@ -238,19 +252,44 @@ function DocumentChainProcess({
           </div>
         </article>
 
-        <section className={catalogStyles.contractComparison} aria-label="Comparação entre orçamento oficial e proposta vencedora">
-          <div>
-            <span>Orçamento oficial</span>
-            <strong>{formatCentsPtBr(officialBudget.officialValueCents)}</strong>
+        <section className={catalogStyles.contractComparison} aria-labelledby={`comparison-${winningProposal.id}`}>
+          <div className={catalogStyles.comparisonHeading}>
+            <div>
+              <p className={catalogStyles.comparisonEyebrow}>Comparação da contratação</p>
+              <h3 id={`comparison-${winningProposal.id}`}>Da referência da licitação ao valor contratado</h3>
+            </div>
+            <div className={catalogStyles.comparisonResult}>
+              <span>{comparisonLabel}</span>
+              <strong>{formatCentsPtBr(differenceCents)}</strong>
+              <em>{formatPercentageBasisPointsPtBr(differenceBasisPoints)}</em>
+            </div>
           </div>
-          <span className={catalogStyles.comparisonArrow} aria-hidden="true">→</span>
-          <div>
-            <span>Valor contratado</span>
-            <strong>{formatCentsPtBr(winningProposal.officialValueCents)}</strong>
+
+          <div className={catalogStyles.comparisonFlow}>
+            <div>
+              <span>Orçamento oficial</span>
+              <strong>{formatCentsPtBr(officialBudget.officialValueCents)}</strong>
+            </div>
+            <span className={catalogStyles.comparisonArrow} aria-hidden="true">→</span>
+            <div>
+              <span>Valor contratado</span>
+              <strong>{formatCentsPtBr(winningProposal.officialValueCents)}</strong>
+            </div>
           </div>
-          <div className={catalogStyles.comparisonResult}>
-            <span>{comparisonLabel}</span>
-            <strong>{formatCentsPtBr(differenceCents)}</strong>
+
+          <div className={catalogStyles.comparisonBars} aria-label="Barras proporcionais do orçamento oficial e do valor contratado">
+            <div className={catalogStyles.comparisonBarRow}>
+              <div><span>Orçamento oficial</span><strong>{formatCentsPtBr(officialBudget.officialValueCents)}</strong></div>
+              <div className={catalogStyles.comparisonTrack}>
+                <span className={`${catalogStyles.comparisonFill} ${catalogStyles.officialComparisonFill}`} style={comparisonBarStyle(officialBarBasisPoints)} />
+              </div>
+            </div>
+            <div className={catalogStyles.comparisonBarRow}>
+              <div><span>Valor contratado</span><strong>{formatCentsPtBr(winningProposal.officialValueCents)}</strong></div>
+              <div className={catalogStyles.comparisonTrack}>
+                <span className={`${catalogStyles.comparisonFill} ${catalogStyles.contractedComparisonFill}`} style={comparisonBarStyle(contractedBarBasisPoints)} />
+              </div>
+            </div>
           </div>
         </section>
 
@@ -407,4 +446,9 @@ function withOrganization(path: string, organizationId: string | null): string {
 function formatContractorName(name: string | null): string {
   if (!name?.trim()) return "Contratada";
   return name.trim().replace(/^CONSÓRCIO\b/u, "Consórcio");
+}
+
+function comparisonBarStyle(basisPoints: number): CSSProperties {
+  const width = Math.max(0, Math.min(10_000, basisPoints)) / 100;
+  return { "--comparison-width": `${width}%` } as CSSProperties;
 }

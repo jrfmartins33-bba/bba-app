@@ -37,6 +37,10 @@ assert("cenários são agrupados pelo BudgetVersion do lote", budgetsPage.includ
 assert("Criar cenário envia a origem do card", budgetsPage.includes("/orcamentos/cenarios/novo?orcamento=") && budgetsPage.includes("budget.id"));
 assert("proposta vencedora é protagonista da cadeia contratada", budgetsPage.includes("resolveContractedDocumentChain(process)") && budgetsPage.includes("Ver proposta e itens contratados") && budgetsPage.includes("Valor contratado"));
 assert("comparação contratual mostra origem, contratado e diferença", budgetsPage.includes("Orçamento oficial") && budgetsPage.includes("comparisonLabel") && budgetsPage.includes("differenceCents"));
+assert("percentual contratual é derivado e formatado sem constante de Lagoa", budgetsPage.includes("formatPercentageBasisPointsPtBr(differenceBasisPoints)") && !budgetsPage.includes("22,40%"));
+assert("comparação possui duas barras proporcionais e acessíveis", budgetsPage.includes("officialBarBasisPoints") && budgetsPage.includes("contractedBarBasisPoints") && budgetsPage.includes("Barras proporcionais do orçamento oficial e do valor contratado"));
+assert("barras diferenciam orçamento oficial dourado e valor contratado verde", catalogCss.includes(".officialComparisonFill") && catalogCss.includes("#d7b65e") && catalogCss.includes(".contractedComparisonFill") && catalogCss.includes("#36a178"));
+assert("processos consecutivos ganham respiro e contextos visualmente distintos", catalogCss.includes(".process + .process") && catalogCss.includes(".documentProcess") && catalogCss.includes(".lotsProcess"));
 assert("orçamento oficial contratado é referência secundária", budgetsPage.includes("Referência da licitação") && budgetsPage.includes("Consultar orçamento oficial"));
 assert("criação de cenário respeita a política calculada para o escopo", budgetsPage.includes("budget.scenarioCreationAllowed") && individualBudgetPage.includes("summary.scenarioCreationAllowed"));
 assert("experiência contratada exibe número e estado do contrato", budgetsPage.includes("Contrato nº") && budgetsPage.includes("contractStatusLabel(winningProposal.contractStatus)"));

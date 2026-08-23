@@ -1,6 +1,7 @@
 import {
   buildConsolidatedBudgetCatalog,
   contractStatusLabel,
+  formatPercentageBasisPointsPtBr,
   extractLotNumber,
   lotPresentation,
   resolveScenarioSourceBudget,
@@ -123,7 +124,11 @@ run("processo completo usa rastreabilidade para separar orçamento oficial e pro
   equal(contractedChain?.winningProposal.id, proposal.id);
   equal(contractedChain?.officialBudget.id, official.id);
   equal(contractedChain?.differenceCents, 219_723_553);
+  equal(contractedChain?.differenceBasisPoints, 2_240);
+  equal(contractedChain?.officialBarBasisPoints, 10_000);
+  equal(contractedChain?.contractedBarBasisPoints, 7_760);
   equal(contractedChain?.comparisonKind, "Reduction");
+  equal(formatPercentageBasisPointsPtBr(contractedChain?.differenceBasisPoints ?? null), "22,40%");
   equal(contractStatusLabel(contractedChain?.winningProposal.contractStatus ?? null), "Em execução");
 });
 

@@ -85,6 +85,9 @@ export interface ContractedDocumentChain {
   readonly officialBudget: ConsolidatedBudgetSummaryDto;
   readonly winningProposal: ConsolidatedBudgetSummaryDto;
   readonly differenceCents: number;
+  readonly differenceBasisPoints: number | null;
+  readonly officialBarBasisPoints: number;
+  readonly contractedBarBasisPoints: number;
   readonly comparisonKind: "Reduction" | "Increase" | "Equal";
 }
 
@@ -203,12 +206,31 @@ export function resolveContractedDocumentChain(
 
   const signedDifference = officialBudget.officialValueCents - winningProposal.officialValueCents;
   if (!Number.isSafeInteger(signedDifference)) throw new Error("Diferença contratual fora do intervalo seguro.");
+  const differenceCents = Math.abs(signedDifference);
+  const comparisonMaximumCents = Math.max(
+    officialBudget.officialValueCents,
+    winningProposal.officialValueCents,
+    1,
+  );
   return {
     officialBudget,
     winningProposal,
-    differenceCents: Math.abs(signedDifference),
+    differenceCents,
+    differenceBasisPoints: officialBudget.officialValueCents === 0
+      ? null
+      : percentageBasisPoints(differenceCents, officialBudget.officialValueCents),
+    officialBarBasisPoints: percentageBasisPoints(officialBudget.officialValueCents, comparisonMaximumCents),
+    contractedBarBasisPoints: percentageBasisPoints(winningProposal.officialValueCents, comparisonMaximumCents),
     comparisonKind: signedDifference > 0 ? "Reduction" : signedDifference < 0 ? "Increase" : "Equal",
   };
+}
+
+export function formatPercentageBasisPointsPtBr(basisPoints: number | null): string {
+  if (basisPoints === null) return "—";
+  if (!Number.isSafeInteger(basisPoints) || basisPoints < 0) throw new Error("Percentual contratual inválido.");
+  const whole = Math.floor(basisPoints / 100);
+  const fraction = (basisPoints % 100).toString().padStart(2, "0");
+  return `${whole.toLocaleString("pt-BR")},${fraction}%`;
 }
 
 export function contractStatusLabel(status: ContractStatus | null): string {
@@ -226,6 +248,13 @@ function budgetScopeKey(budget: Pick<ConsolidatedBudgetSummaryDto, "procurementC
   return budget.scopeKind === "Lot"
     ? `${budget.procurementCaseId}:lot:${budget.procurementLotId ?? "missing"}`
     : `${budget.procurementCaseId}:whole`;
+}
+
+function percentageBasisPoints(value: number, total: number): number {
+  if (!Number.isSafeInteger(value) || value < 0 || !Number.isSafeInteger(total) || total <= 0) {
+    throw new Error("Base percentual contratual inválida.");
+  }
+  return Math.round((value / total) * 10_000);
 }
 
 export function sortBudgetsByDocumentChain(
