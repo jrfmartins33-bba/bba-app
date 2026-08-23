@@ -66,7 +66,7 @@ export function OfficialBudgetDetail({
     <div className={catalogStyles.detailWrapper}>
       <div className={catalogStyles.detailHeader}>
         <div>
-          <h3>Itens do orçamento</h3>
+          <h3>{summary.documentKind === "WinningProposal" ? "Itens da proposta" : "Itens do orçamento"}</h3>
           <span className={catalogStyles.detailCount}>
             {summary.serviceItemCount} itens de serviço{summary.lineCount !== null ? ` · ${summary.lineCount} linhas` : ""}
           </span>

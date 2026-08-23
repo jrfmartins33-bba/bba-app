@@ -152,6 +152,12 @@ function IndividualBudgetContent({ budgetId }: { readonly budgetId: string }) {
   }
 
   const presentation = lotPresentation(summary.procurementLotTitle, summary.scopeKind);
+  const isWinningProposal = summary.documentKind === "WinningProposal";
+  const isDerived = summary.documentKind === "DerivedVersion";
+  const permitsScenarios = summary.scopeKind === "Lot" || summary.documentKind === "OfficialBudget";
+  const documentTitle = summary.scopeKind === "Lot"
+    ? presentation.title
+    : isWinningProposal ? "Proposta Vencedora" : isDerived ? "Versão Derivada" : "Orçamento Oficial";
 
   return (
     <>
@@ -174,17 +180,18 @@ function IndividualBudgetContent({ budgetId }: { readonly budgetId: string }) {
           <div className={catalogStyles.individualHeroTop}>
             <div>
               <p className={catalogStyles.lotScope}>
-                {summary.scopeKind === "Lot" ? "Lote independente" : "Processo completo"}
+                {summary.scopeKind === "Lot" ? "Lote independente" : isWinningProposal ? "Proposta contratada" : isDerived ? "Documento derivado" : "Documento de origem"}
               </p>
-              <h2>{presentation.title}</h2>
+              <h2>{documentTitle}</h2>
               {presentation.detail ? <p className={catalogStyles.individualProcessTitle}>{presentation.detail}</p> : null}
+              {summary.contractorName ? <p className={catalogStyles.contractorName}>{summary.contractorName}</p> : null}
               <p className={catalogStyles.individualProcessTitle}>{summary.procurementCaseTitle}</p>
             </div>
-            <span className={catalogStyles.confirmed}>Confirmado</span>
+            <span className={catalogStyles.confirmed}>{isWinningProposal ? "Confirmada" : "Confirmado"}</span>
           </div>
 
           <div className={catalogStyles.individualValueBlock}>
-            <span className={catalogStyles.individualValueLabel}>Valor total do orçamento oficial</span>
+            <span className={catalogStyles.individualValueLabel}>{isWinningProposal ? "Valor total da proposta vencedora" : isDerived ? "Valor total da versão derivada" : "Valor total do orçamento oficial"}</span>
             <p className={catalogStyles.individualValue}>{formatCentsPtBr(summary.officialValueCents)}</p>
           </div>
 
@@ -200,17 +207,17 @@ function IndividualBudgetContent({ budgetId }: { readonly budgetId: string }) {
             <span>Revisão {summary.revision}</span>
           </div>
 
-          <div className={catalogStyles.individualCardActions}>
+          {permitsScenarios ? <div className={catalogStyles.individualCardActions}>
             <Link
               href={withOrganization(`/orcamentos/cenarios/novo?orcamento=${summary.id}`, organizationIdForLinks)}
               className={scenarioStyles.primary}
             >
               Criar cenário
             </Link>
-          </div>
+          </div> : null}
         </article>
 
-        {scenarios.length > 0 ? (
+        {permitsScenarios && scenarios.length > 0 ? (
           <section className={catalogStyles.individualScenariosCard} aria-labelledby="lot-scenarios-heading">
             <div className={catalogStyles.scenarioHeading}>
               <h4 id="lot-scenarios-heading">Cenários de Proposta ({scenarios.length})</h4>

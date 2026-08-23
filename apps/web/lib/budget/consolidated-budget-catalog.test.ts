@@ -12,6 +12,7 @@ const lotOne: ConsolidatedBudgetVersionRow = {
   procurementCaseId: "case-al",
   procurementLotId: "lot-1",
   scopeKind: "Lot",
+  originKind: "DocumentaryOpaqueReference",
   status: "Consolidated",
   revision: 1,
   updatedAt: "2026-08-18T19:19:59.000Z",
@@ -50,9 +51,61 @@ run("dois lotes aparecem como BudgetVersions distintas e o total é apenas de ap
   equal(new Set(catalog.budgets.map((budget) => budget.id)).size, 2);
   equal(catalog.processes.length, 1);
   equal(catalog.processes[0].budgets.length, 2);
+  equal(catalog.processes[0].presentationKind, "Lots");
   equal(catalog.processes[0].totalOfficialValueCents, 1_365_119_673);
   equal(catalog.budgets.some((budget) => budget.id === "budget-lot-1" && budget.procurementLotId === "lot-1"), true);
   equal(catalog.budgets.some((budget) => budget.id === "budget-lot-2" && budget.procurementLotId === "lot-2"), true);
+});
+
+run("processo completo usa rastreabilidade para separar orçamento oficial e proposta vencedora", () => {
+  const official: ConsolidatedBudgetVersionRow = {
+    id: "budget-official",
+    procurementCaseId: "case-whole",
+    procurementLotId: null,
+    scopeKind: "WholeCase",
+    originKind: "DocumentaryOpaqueReference",
+    status: "Consolidated",
+    revision: 2,
+    updatedAt: "2026-08-20T10:00:00.000Z",
+  };
+  const proposal: ConsolidatedBudgetVersionRow = {
+    ...official,
+    id: "budget-proposal",
+    updatedAt: "2026-08-20T11:00:00.000Z",
+  };
+  const officialItems = Array.from({ length: 300 }, (_, index) => ({
+    budgetVersionId: official.id,
+    totalCents: index === 0 ? 980_908_718 : 0,
+  }));
+  const proposalItems = Array.from({ length: 300 }, (_, index) => ({
+    budgetVersionId: proposal.id,
+    totalCents: index === 0 ? 761_185_165 : 0,
+  }));
+  const catalog = buildConsolidatedBudgetCatalog({
+    versions: [proposal, official],
+    procurementCases: [{ id: "case-whole", title: "Processo de barragem" }],
+    procurementLots: [],
+    serviceItems: [...officialItems, ...proposalItems],
+    lineCounts: { [official.id]: 336, [proposal.id]: 336 },
+    lineageRelations: [
+      { budgetVersionId: official.id, sourceBudgetVersionId: null },
+      { budgetVersionId: proposal.id, sourceBudgetVersionId: official.id },
+    ],
+    contractedVersions: [{ budgetVersionId: proposal.id, contractorName: "Consórcio Alfa-Beta" }],
+  });
+
+  equal(catalog.processes.length, 1);
+  equal(catalog.processes[0].presentationKind, "DocumentChain");
+  equal(catalog.processes[0].budgets[0].documentKind, "OfficialBudget");
+  equal(catalog.processes[0].budgets[0].lineCount, 336);
+  equal(catalog.processes[0].budgets[0].serviceItemCount, 300);
+  equal(catalog.processes[0].budgets[0].officialValueCents, 980_908_718);
+  equal(catalog.processes[0].budgets[1].documentKind, "WinningProposal");
+  equal(catalog.processes[0].budgets[1].sourceBudgetVersionId, official.id);
+  equal(catalog.processes[0].budgets[1].contractorName, "Consórcio Alfa-Beta");
+  equal(catalog.processes[0].budgets[1].lineCount, 336);
+  equal(catalog.processes[0].budgets[1].serviceItemCount, 300);
+  equal(catalog.processes[0].budgets[1].officialValueCents, 761_185_165);
 });
 
 run("itens e linhas são contabilizados no lote correto", () => {

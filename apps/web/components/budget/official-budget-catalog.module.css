@@ -20,6 +20,14 @@
 .processSummary dt { color: #69756f; font-size: .75rem; }
 .processSummary dd { margin: .25rem 0 0; color: #183128; font-size: 1.05rem; font-weight: 800; white-space: nowrap; }
 .contextNote { margin: -.35rem 0 0; color: #69756f; font-size: .86rem; }
+.documentProcess .processHeader { align-items: flex-start; }
+.documentChain { display: grid; gap: 0; width: min(100%, 920px); margin: 0 auto; }
+.documentStep { display: grid; }
+.documentConnector { display: flex; flex-direction: column; align-items: center; gap: .15rem; min-height: 4.4rem; justify-content: center; color: #176b55; }
+.documentConnector span { font-size: 1.45rem; line-height: 1; }
+.documentConnector strong { font-size: .76rem; letter-spacing: .04em; text-transform: uppercase; }
+.documentCard { width: 100%; padding: 1.5rem; border-color: #cbded6; }
+.contractorName { margin: .45rem 0 0; color: #435b52; font-size: .95rem; font-weight: 700; }
 .lotGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr)); gap: 1rem; align-items: start; }
 .lotCard { min-width: 0; padding: 1.25rem; border: 1px solid #dce6e2; border-radius: 16px; background: #fff; box-shadow: 0 10px 26px rgba(19,53,45,.05); }
 .lotHeader { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }

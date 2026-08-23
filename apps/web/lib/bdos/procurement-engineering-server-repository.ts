@@ -13,6 +13,7 @@ import {
   procurementCaseCreateRpcParams,
   procurementLotRegisterRpcParams,
 } from "./procurement-engineering-mappers";
+import { readAllSupabasePages } from "./supabase-complete-read";
 
 // Adaptador de persistência (Sprint 21.3C) — implementa os contratos de
 // packages/bdos-core/src/services/procurement-engineering/*.repository.ts.
@@ -171,15 +172,13 @@ export function createBudgetVersionRepository(supabase: SupabaseClient): BudgetV
         return null;
       }
 
-      const { data: lineRows, error: linesError } = await supabase
+      const lineRows = await readAllSupabasePages((from, to) => supabase
         .from("budget_lines")
         .select(BUDGET_LINE_COLUMNS)
         .eq("company_id", organizationId)
-        .eq("budget_version_id", id);
-
-      if (linesError) {
-        throw linesError;
-      }
+        .eq("budget_version_id", id)
+        .order("id", { ascending: true })
+        .range(from, to));
 
       const { data: lineageRow, error: lineageError } = await supabase
         .from("budget_version_lineage_relations")
@@ -192,7 +191,7 @@ export function createBudgetVersionRepository(supabase: SupabaseClient): BudgetV
         throw lineageError;
       }
 
-      return mapBudgetVersionAggregate(versionRow, lineRows ?? [], lineageRow);
+      return mapBudgetVersionAggregate(versionRow, lineRows, lineageRow);
     },
 
     async saveBudgetVersion(organizationId, actor, budgetVersion, expectedRevision): Promise<SaveBudgetVersionResult> {

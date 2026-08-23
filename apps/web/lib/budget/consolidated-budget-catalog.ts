@@ -3,10 +3,24 @@ export interface ConsolidatedBudgetVersionRow {
   readonly procurementCaseId: string;
   readonly procurementLotId: string | null;
   readonly scopeKind: "WholeCase" | "Lot";
+  readonly originKind: "Native" | "DocumentaryOpaqueReference";
   readonly status: "Consolidated";
   readonly revision: number;
   readonly updatedAt: string;
 }
+
+export interface BudgetVersionLineageSummaryRow {
+  readonly budgetVersionId: string;
+  readonly sourceBudgetVersionId: string | null;
+}
+
+export interface ContractedBudgetVersionSummaryRow {
+  readonly budgetVersionId: string;
+  readonly contractorName: string | null;
+}
+
+export type BudgetDocumentKind = "OfficialBudget" | "WinningProposal" | "DerivedVersion";
+export type BudgetProcessPresentationKind = "Lots" | "DocumentChain";
 
 export interface ProcurementCaseSummaryRow {
   readonly id: string;
@@ -31,6 +45,10 @@ export interface ConsolidatedBudgetSummaryDto {
   readonly procurementCaseTitle: string;
   readonly procurementLotTitle: string | null;
   readonly scopeKind: "WholeCase" | "Lot";
+  readonly originKind: "Native" | "DocumentaryOpaqueReference";
+  readonly documentKind: BudgetDocumentKind;
+  readonly sourceBudgetVersionId: string | null;
+  readonly contractorName: string | null;
   readonly status: "Consolidated";
   readonly revision: number;
   readonly officialValueCents: number;
@@ -43,6 +61,7 @@ export interface ConsolidatedBudgetProcessDto {
   readonly procurementCaseId: string;
   readonly title: string;
   readonly budgets: ReadonlyArray<ConsolidatedBudgetSummaryDto>;
+  readonly presentationKind: BudgetProcessPresentationKind;
   readonly totalOfficialValueCents: number;
 }
 
@@ -62,10 +81,14 @@ export function buildConsolidatedBudgetCatalog(input: {
   readonly procurementLots: ReadonlyArray<ProcurementLotSummaryRow>;
   readonly serviceItems: ReadonlyArray<ServiceItemEconomyRow>;
   readonly lineCounts: Readonly<Record<string, number | null>>;
+  readonly lineageRelations?: ReadonlyArray<BudgetVersionLineageSummaryRow>;
+  readonly contractedVersions?: ReadonlyArray<ContractedBudgetVersionSummaryRow>;
 }): ConsolidatedBudgetCatalogDto {
   const casesById = new Map(input.procurementCases.map((item) => [item.id, item]));
   const lotsById = new Map(input.procurementLots.map((item) => [item.id, item]));
   const economicsByBudgetId = new Map<string, { total: number; count: number }>();
+  const lineageByBudgetId = new Map((input.lineageRelations ?? []).map((relation) => [relation.budgetVersionId, relation]));
+  const contractByBudgetId = new Map((input.contractedVersions ?? []).map((contract) => [contract.budgetVersionId, contract]));
 
   for (const item of input.serviceItems) {
     const current = economicsByBudgetId.get(item.budgetVersionId) ?? { total: 0, count: 0 };
@@ -86,6 +109,11 @@ export function buildConsolidatedBudgetCatalog(input: {
     }
 
     const economics = economicsByBudgetId.get(version.id) ?? { total: 0, count: 0 };
+    const sourceBudgetVersionId = lineageByBudgetId.get(version.id)?.sourceBudgetVersionId ?? null;
+    const contract = contractByBudgetId.get(version.id) ?? null;
+    const documentKind: BudgetDocumentKind = sourceBudgetVersionId === null
+      ? "OfficialBudget"
+      : contract === null ? "DerivedVersion" : "WinningProposal";
     return {
       id: version.id,
       procurementCaseId: version.procurementCaseId,
@@ -93,6 +121,10 @@ export function buildConsolidatedBudgetCatalog(input: {
       procurementCaseTitle: procurementCase.title,
       procurementLotTitle: procurementLot?.title ?? null,
       scopeKind: version.scopeKind,
+      originKind: version.originKind,
+      documentKind,
+      sourceBudgetVersionId,
+      contractorName: contract?.contractorName ?? null,
       status: version.status,
       revision: version.revision,
       officialValueCents: economics.total,
@@ -110,7 +142,10 @@ export function buildConsolidatedBudgetCatalog(input: {
   }
 
   const processes = Array.from(grouped.entries()).map(([procurementCaseId, processBudgets]) => {
-    const sortedBudgets = sortBudgetsByLotAscending(processBudgets);
+    const presentationKind: BudgetProcessPresentationKind = processBudgets.some((budget) => budget.scopeKind === "Lot") ? "Lots" : "DocumentChain";
+    const sortedBudgets = presentationKind === "Lots"
+      ? sortBudgetsByLotAscending(processBudgets)
+      : sortBudgetsByDocumentChain(processBudgets);
     const totalOfficialValueCents = sortedBudgets.reduce((total, budget) => {
       const next = total + budget.officialValueCents;
       if (!Number.isSafeInteger(next)) throw new Error("Total dos lotes fora do intervalo seguro.");
@@ -120,11 +155,32 @@ export function buildConsolidatedBudgetCatalog(input: {
       procurementCaseId,
       title: sortedBudgets[0].procurementCaseTitle,
       budgets: sortedBudgets,
+      presentationKind,
       totalOfficialValueCents,
     };
   });
 
   return { budgets, processes };
+}
+
+export function sortBudgetsByDocumentChain(
+  budgets: ReadonlyArray<ConsolidatedBudgetSummaryDto>,
+): ReadonlyArray<ConsolidatedBudgetSummaryDto> {
+  const remaining = new Map(budgets.map((budget) => [budget.id, budget]));
+  const sorted: ConsolidatedBudgetSummaryDto[] = [];
+  const included = new Set<string>();
+
+  while (remaining.size > 0) {
+    const next = [...remaining.values()]
+      .filter((budget) => budget.sourceBudgetVersionId === null || included.has(budget.sourceBudgetVersionId))
+      .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt) || left.id.localeCompare(right.id))[0]
+      ?? [...remaining.values()].sort((left, right) => left.id.localeCompare(right.id))[0];
+    sorted.push(next);
+    included.add(next.id);
+    remaining.delete(next.id);
+  }
+
+  return sorted;
 }
 
 export function extractLotNumber(title: string | null): number {

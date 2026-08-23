@@ -10,6 +10,8 @@ import scenarioStyles from "@/components/budget/proposal-scenarios.module.css";
 import {
   lotPresentation,
   sortBudgetsByLotAscending,
+  type ConsolidatedBudgetProcessDto,
+  type ConsolidatedBudgetSummaryDto,
   type ConsolidatedBudgetCatalogDto,
 } from "@/lib/budget/consolidated-budget-catalog";
 import { formatBasisPointsPtBr, formatCentsPtBr, type ProposalScenarioDto } from "@/lib/proposal-scenarios";
@@ -127,74 +129,162 @@ function OrcamentosContent() {
           </div>
         </div>
 
-        {catalog.processes.map((process) => (
-          <section className={catalogStyles.process} key={process.procurementCaseId} aria-labelledby={`process-${process.procurementCaseId}`}>
-            <div className={catalogStyles.processHeader}>
-              <div>
-                <p className={catalogStyles.eyebrow}>Orçamento Oficial</p>
-                <h2 id={`process-${process.procurementCaseId}`}>{process.title}</h2>
-              </div>
-              <dl className={catalogStyles.processSummary}>
-                <div><dt>Escopo confirmado</dt><dd>{process.budgets.length} {process.budgets.length === 1 ? "lote confirmado" : "lotes confirmados"}</dd></div>
-                <div><dt>Valor total dos lotes</dt><dd>{formatCentsPtBr(process.totalOfficialValueCents)}</dd></div>
-              </dl>
-            </div>
-            <p className={catalogStyles.contextNote}>O total é apenas a soma visual dos lotes. Cada orçamento e cada cenário continuam independentes.</p>
-
-            <div className={catalogStyles.lotGrid}>
-              {sortBudgetsByLotAscending(process.budgets).map((budget) => {
-                const presentation = lotPresentation(budget.procurementLotTitle, budget.scopeKind);
-                const budgetScenarios = scenariosByBudget.get(budget.id) ?? [];
-                return (
-                  <article className={catalogStyles.lotCard} key={budget.id}>
-                    <div className={catalogStyles.lotHeader}>
-                      <div>
-                        <p className={catalogStyles.lotScope}>{budget.scopeKind === "Lot" ? "Lote independente" : "Processo completo"}</p>
-                        <h3>{presentation.title}</h3>
-                        {presentation.detail ? <p>{presentation.detail}</p> : null}
-                      </div>
-                      <span className={catalogStyles.confirmed}>Confirmado</span>
-                    </div>
-                    <p className={catalogStyles.value}>{formatCentsPtBr(budget.officialValueCents)}</p>
-                    <div className={catalogStyles.metrics}>
-                      <span><strong>{budget.serviceItemCount}</strong> itens de serviço</span>
-                      {budget.lineCount !== null ? <span><strong>{budget.lineCount}</strong> linhas</span> : null}
-                      <span>Revisão {budget.revision}</span>
-                    </div>
-                    <div className={catalogStyles.cardActions}>
-                      <Link
-                        href={withOrganization(`/orcamentos/${budget.id}`, organizationIdForLinks)}
-                        className={scenarioStyles.secondary}
-                      >
-                        Ver orçamento
-                      </Link>
-                      <Link href={withOrganization(`/orcamentos/cenarios/novo?orcamento=${budget.id}`, organizationIdForLinks)} className={scenarioStyles.primary}>Criar cenário</Link>
-                    </div>
-
-                    <section className={catalogStyles.scenarios} aria-labelledby={`scenarios-${budget.id}`}>
-                      <div className={catalogStyles.scenarioHeading}>
-                        <h4 id={`scenarios-${budget.id}`}>Cenários de Proposta</h4>
-                        {budgetScenarios.length > 1 ? <Link href={withOrganization(`/orcamentos/cenarios/comparar?orcamento=${budget.id}`, organizationIdForLinks)} className={catalogStyles.textLink}>Comparar</Link> : null}
-                      </div>
-                      {budgetScenarios.length === 0 ? <p>Nenhum cenário criado para este lote.</p> : (
-                        <ul>
-                          {budgetScenarios.map((scenario) => (
-                            <li key={scenario.id}>
-                              <div><strong>{scenario.name}</strong><span>{formatCentsPtBr(scenario.targetValueCents)} · {formatBasisPointsPtBr(scenario.differenceBasisPoints, scenario.comparisonKind)}</span></div>
-                              <div><Link href={withOrganization(`/orcamentos/cenarios/${scenario.id}`, organizationIdForLinks)}>Abrir</Link><Link href={withOrganization(`/orcamentos/cenarios/novo?duplicar=${scenario.id}`, organizationIdForLinks)}>Duplicar</Link></div>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </section>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
+        {catalog.processes.map((process) => process.presentationKind === "Lots" ? (
+          <LotsProcess
+            key={process.procurementCaseId}
+            process={process}
+            scenariosByBudget={scenariosByBudget}
+            organizationIdForLinks={organizationIdForLinks}
+          />
+        ) : (
+          <DocumentChainProcess
+            key={process.procurementCaseId}
+            process={process}
+            scenariosByBudget={scenariosByBudget}
+            organizationIdForLinks={organizationIdForLinks}
+          />
         ))}
       </section>
     </>
+  );
+}
+
+function LotsProcess({
+  process,
+  scenariosByBudget,
+  organizationIdForLinks,
+}: {
+  readonly process: ConsolidatedBudgetProcessDto;
+  readonly scenariosByBudget: ReadonlyMap<string, ReadonlyArray<ProposalScenarioDto>>;
+  readonly organizationIdForLinks: string | null;
+}) {
+  return (
+    <section className={catalogStyles.process} aria-labelledby={`process-${process.procurementCaseId}`}>
+      <div className={catalogStyles.processHeader}>
+        <div><p className={catalogStyles.eyebrow}>Orçamento Oficial</p><h2 id={`process-${process.procurementCaseId}`}>{process.title}</h2></div>
+        <dl className={catalogStyles.processSummary}>
+          <div><dt>Escopo confirmado</dt><dd>{process.budgets.length} {process.budgets.length === 1 ? "lote confirmado" : "lotes confirmados"}</dd></div>
+          <div><dt>Valor total dos lotes</dt><dd>{formatCentsPtBr(process.totalOfficialValueCents)}</dd></div>
+        </dl>
+      </div>
+      <p className={catalogStyles.contextNote}>O total é apenas a soma visual dos lotes. Cada orçamento e cada cenário continuam independentes.</p>
+      <div className={catalogStyles.lotGrid}>
+        {sortBudgetsByLotAscending(process.budgets).map((budget) => (
+          <BudgetCard
+            key={budget.id}
+            budget={budget}
+            scenarios={scenariosByBudget.get(budget.id) ?? []}
+            organizationIdForLinks={organizationIdForLinks}
+            scenarioEmptyMessage="Nenhum cenário criado para este lote."
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DocumentChainProcess({
+  process,
+  scenariosByBudget,
+  organizationIdForLinks,
+}: {
+  readonly process: ConsolidatedBudgetProcessDto;
+  readonly scenariosByBudget: ReadonlyMap<string, ReadonlyArray<ProposalScenarioDto>>;
+  readonly organizationIdForLinks: string | null;
+}) {
+  return (
+    <section className={`${catalogStyles.process} ${catalogStyles.documentProcess}`} aria-labelledby={`process-${process.procurementCaseId}`}>
+      <div className={catalogStyles.processHeader}>
+        <div><p className={catalogStyles.eyebrow}>Processo de Licitação e Contratação</p><h2 id={`process-${process.procurementCaseId}`}>{process.title}</h2></div>
+      </div>
+      <div className={catalogStyles.documentChain}>
+        {process.budgets.map((budget, index) => (
+          <div className={catalogStyles.documentStep} key={budget.id}>
+            {index > 0 ? <div className={catalogStyles.documentConnector} aria-label={budget.documentKind === "WinningProposal" ? "Proposta vencedora" : "Versão derivada"}><span>↓</span><strong>{budget.documentKind === "WinningProposal" ? "Proposta vencedora" : "Versão derivada"}</strong></div> : null}
+            <BudgetCard
+              budget={budget}
+              scenarios={scenariosByBudget.get(budget.id) ?? []}
+              organizationIdForLinks={organizationIdForLinks}
+              scenarioEmptyMessage="Nenhum cenário criado para este orçamento oficial."
+            />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BudgetCard({
+  budget,
+  scenarios,
+  organizationIdForLinks,
+  scenarioEmptyMessage,
+}: {
+  readonly budget: ConsolidatedBudgetSummaryDto;
+  readonly scenarios: ReadonlyArray<ProposalScenarioDto>;
+  readonly organizationIdForLinks: string | null;
+  readonly scenarioEmptyMessage: string;
+}) {
+  const isLot = budget.scopeKind === "Lot";
+  const isWinningProposal = budget.documentKind === "WinningProposal";
+  const isDerived = budget.documentKind === "DerivedVersion";
+  const permitsScenarios = isLot || budget.documentKind === "OfficialBudget";
+  const presentation = lotPresentation(budget.procurementLotTitle, budget.scopeKind);
+  const title = isLot ? presentation.title : isWinningProposal ? "Proposta Vencedora" : isDerived ? "Versão Derivada" : "Orçamento Oficial";
+  const scopeLabel = isLot ? "Lote independente" : isWinningProposal ? "Proposta contratada" : isDerived ? "Documento derivado" : "Documento de origem";
+
+  return (
+    <article className={`${catalogStyles.lotCard} ${!isLot ? catalogStyles.documentCard : ""}`}>
+      <div className={catalogStyles.lotHeader}>
+        <div>
+          <p className={catalogStyles.lotScope}>{scopeLabel}</p>
+          <h3>{title}</h3>
+          {isLot && presentation.detail ? <p>{presentation.detail}</p> : null}
+          {!isLot && budget.contractorName ? <p className={catalogStyles.contractorName}>{budget.contractorName}</p> : null}
+        </div>
+        <span className={catalogStyles.confirmed}>{isWinningProposal ? "Confirmada" : "Confirmado"}</span>
+      </div>
+      <p className={catalogStyles.value}>{formatCentsPtBr(budget.officialValueCents)}</p>
+      <div className={catalogStyles.metrics}>
+        <span><strong>{budget.serviceItemCount}</strong> itens de serviço</span>
+        {budget.lineCount !== null ? <span><strong>{budget.lineCount}</strong> linhas</span> : null}
+        {isLot ? <span>Revisão {budget.revision}</span> : null}
+      </div>
+      <div className={catalogStyles.cardActions}>
+        <Link href={withOrganization(`/orcamentos/${budget.id}`, organizationIdForLinks)} className={scenarioStyles.secondary}>
+          {isWinningProposal ? "Ver proposta" : "Ver orçamento"}
+        </Link>
+        {permitsScenarios ? <Link href={withOrganization(`/orcamentos/cenarios/novo?orcamento=${budget.id}`, organizationIdForLinks)} className={scenarioStyles.primary}>Criar cenário</Link> : null}
+      </div>
+      {permitsScenarios ? <ScenarioList budgetId={budget.id} scenarios={scenarios} organizationIdForLinks={organizationIdForLinks} emptyMessage={scenarioEmptyMessage} /> : null}
+    </article>
+  );
+}
+
+function ScenarioList({
+  budgetId,
+  scenarios,
+  organizationIdForLinks,
+  emptyMessage,
+}: {
+  readonly budgetId: string;
+  readonly scenarios: ReadonlyArray<ProposalScenarioDto>;
+  readonly organizationIdForLinks: string | null;
+  readonly emptyMessage: string;
+}) {
+  return (
+    <section className={catalogStyles.scenarios} aria-labelledby={`scenarios-${budgetId}`}>
+      <div className={catalogStyles.scenarioHeading}>
+        <h4 id={`scenarios-${budgetId}`}>Cenários de Proposta</h4>
+        {scenarios.length > 1 ? <Link href={withOrganization(`/orcamentos/cenarios/comparar?orcamento=${budgetId}`, organizationIdForLinks)} className={catalogStyles.textLink}>Comparar</Link> : null}
+      </div>
+      {scenarios.length === 0 ? <p>{emptyMessage}</p> : <ul>{scenarios.map((scenario) => (
+        <li key={scenario.id}>
+          <div><strong>{scenario.name}</strong><span>{formatCentsPtBr(scenario.targetValueCents)} · {formatBasisPointsPtBr(scenario.differenceBasisPoints, scenario.comparisonKind)}</span></div>
+          <div><Link href={withOrganization(`/orcamentos/cenarios/${scenario.id}`, organizationIdForLinks)}>Abrir</Link><Link href={withOrganization(`/orcamentos/cenarios/novo?duplicar=${scenario.id}`, organizationIdForLinks)}>Duplicar</Link></div>
+        </li>
+      ))}</ul>}
+    </section>
   );
 }
 
