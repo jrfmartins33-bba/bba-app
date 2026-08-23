@@ -1,8 +1,10 @@
 import {
   buildConsolidatedBudgetCatalog,
+  contractStatusLabel,
   extractLotNumber,
   lotPresentation,
   resolveScenarioSourceBudget,
+  resolveContractedDocumentChain,
   sortBudgetsByLotAscending,
   type ConsolidatedBudgetVersionRow,
 } from "./consolidated-budget-catalog";
@@ -37,6 +39,7 @@ run("uma versão consolidada permanece uma única origem", () => {
   equal(catalog.budgets.length, 1);
   equal(catalog.budgets[0].id, "budget-lot-1");
   equal(catalog.budgets[0].procurementLotId, "lot-1");
+  equal(catalog.budgets[0].scenarioCreationAllowed, true);
 });
 
 run("dois lotes aparecem como BudgetVersions distintas e o total é apenas de apresentação", () => {
@@ -91,7 +94,12 @@ run("processo completo usa rastreabilidade para separar orçamento oficial e pro
       { budgetVersionId: official.id, sourceBudgetVersionId: null },
       { budgetVersionId: proposal.id, sourceBudgetVersionId: official.id },
     ],
-    contractedVersions: [{ budgetVersionId: proposal.id, contractorName: "Consórcio Alfa-Beta" }],
+    contractedVersions: [{
+      budgetVersionId: proposal.id,
+      contractorName: "Consórcio Alfa-Beta",
+      contractNumber: "22/2025",
+      contractStatus: "InExecution",
+    }],
   });
 
   equal(catalog.processes.length, 1);
@@ -100,12 +108,47 @@ run("processo completo usa rastreabilidade para separar orçamento oficial e pro
   equal(catalog.processes[0].budgets[0].lineCount, 336);
   equal(catalog.processes[0].budgets[0].serviceItemCount, 300);
   equal(catalog.processes[0].budgets[0].officialValueCents, 980_908_718);
+  equal(catalog.processes[0].budgets[0].scenarioCreationAllowed, false);
   equal(catalog.processes[0].budgets[1].documentKind, "WinningProposal");
   equal(catalog.processes[0].budgets[1].sourceBudgetVersionId, official.id);
   equal(catalog.processes[0].budgets[1].contractorName, "Consórcio Alfa-Beta");
+  equal(catalog.processes[0].budgets[1].contractNumber, "22/2025");
+  equal(catalog.processes[0].budgets[1].contractStatus, "InExecution");
+  equal(catalog.processes[0].budgets[1].scenarioCreationAllowed, false);
   equal(catalog.processes[0].budgets[1].lineCount, 336);
   equal(catalog.processes[0].budgets[1].serviceItemCount, 300);
   equal(catalog.processes[0].budgets[1].officialValueCents, 761_185_165);
+
+  const contractedChain = resolveContractedDocumentChain(catalog.processes[0]);
+  equal(contractedChain?.winningProposal.id, proposal.id);
+  equal(contractedChain?.officialBudget.id, official.id);
+  equal(contractedChain?.differenceCents, 219_723_553);
+  equal(contractedChain?.comparisonKind, "Reduction");
+  equal(contractStatusLabel(contractedChain?.winningProposal.contractStatus ?? null), "Em execução");
+});
+
+run("sem proposta contratada o orçamento oficial continua protagonista e permite cenários", () => {
+  const official: ConsolidatedBudgetVersionRow = {
+    id: "budget-official-open",
+    procurementCaseId: "case-open",
+    procurementLotId: null,
+    scopeKind: "WholeCase",
+    originKind: "DocumentaryOpaqueReference",
+    status: "Consolidated",
+    revision: 1,
+    updatedAt: "2026-08-21T10:00:00.000Z",
+  };
+  const catalog = buildConsolidatedBudgetCatalog({
+    versions: [official],
+    procurementCases: [{ id: "case-open", title: "Processo ainda em licitação" }],
+    procurementLots: [],
+    serviceItems: [{ budgetVersionId: official.id, totalCents: 100_000 }],
+    lineCounts: { [official.id]: 1 },
+  });
+
+  equal(catalog.processes[0].presentationKind, "DocumentChain");
+  equal(resolveContractedDocumentChain(catalog.processes[0]), null);
+  equal(catalog.budgets[0].scenarioCreationAllowed, true);
 });
 
 run("itens e linhas são contabilizados no lote correto", () => {

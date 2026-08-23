@@ -11,6 +11,7 @@ import {
 import catalogStyles from "@/components/budget/official-budget-catalog.module.css";
 import scenarioStyles from "@/components/budget/proposal-scenarios.module.css";
 import {
+  contractStatusLabel,
   lotPresentation,
   type ConsolidatedBudgetSummaryDto,
 } from "@/lib/budget/consolidated-budget-catalog";
@@ -154,7 +155,7 @@ function IndividualBudgetContent({ budgetId }: { readonly budgetId: string }) {
   const presentation = lotPresentation(summary.procurementLotTitle, summary.scopeKind);
   const isWinningProposal = summary.documentKind === "WinningProposal";
   const isDerived = summary.documentKind === "DerivedVersion";
-  const permitsScenarios = summary.scopeKind === "Lot" || summary.documentKind === "OfficialBudget";
+  const permitsScenarios = summary.scenarioCreationAllowed;
   const documentTitle = summary.scopeKind === "Lot"
     ? presentation.title
     : isWinningProposal ? "Proposta Vencedora" : isDerived ? "Versão Derivada" : "Orçamento Oficial";
@@ -184,10 +185,13 @@ function IndividualBudgetContent({ budgetId }: { readonly budgetId: string }) {
               </p>
               <h2>{documentTitle}</h2>
               {presentation.detail ? <p className={catalogStyles.individualProcessTitle}>{presentation.detail}</p> : null}
-              {summary.contractorName ? <p className={catalogStyles.contractorName}>{summary.contractorName}</p> : null}
+              {summary.contractorName ? <p className={catalogStyles.contractorName}>{formatContractorName(summary.contractorName)}</p> : null}
+              {summary.contractNumber ? <p className={catalogStyles.contractNumber}>Contrato nº {summary.contractNumber}</p> : null}
               <p className={catalogStyles.individualProcessTitle}>{summary.procurementCaseTitle}</p>
             </div>
-            <span className={catalogStyles.confirmed}>{isWinningProposal ? "Confirmada" : "Confirmado"}</span>
+            <span className={isWinningProposal ? catalogStyles.executionBadge : catalogStyles.confirmed}>
+              {isWinningProposal ? contractStatusLabel(summary.contractStatus) : "Confirmado"}
+            </span>
           </div>
 
           <div className={catalogStyles.individualValueBlock}>
@@ -286,4 +290,8 @@ function OrganizationContext({
 function withOrganization(path: string, organizationId: string | null): string {
   if (!organizationId) return path;
   return `${path}${path.includes("?") ? "&" : "?"}empresa=${encodeURIComponent(organizationId)}`;
+}
+
+function formatContractorName(name: string): string {
+  return name.trim().replace(/^CONSÓRCIO\b/u, "Consórcio");
 }

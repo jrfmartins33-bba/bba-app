@@ -23,6 +23,7 @@ assert("detalhe pagina todas as linhas sem depender do limite de 1.000", budgetR
 assert("paginação avança pelo total realmente recebido e só termina em página vazia", completeRead.includes("const from = rows.length") && completeRead.includes("page.length === 0"));
 assert("identidade multi-lote usa colunas canônicas", serverCatalog.includes("procurement_case_id") && serverCatalog.includes("procurement_lot_id") && !serverCatalog.includes("lotReference"));
 assert("cadeia documental usa a origem persistida e a versão contratada", serverCatalog.includes("source_budget_version_id") && serverCatalog.includes("contract_baselines") && budgetsPage.includes('process.presentationKind === "Lots"'));
+assert("estado contratado vem do vínculo persistido", serverCatalog.includes("contract_number") && serverCatalog.includes("parseContractStatus(row.status)"));
 assert("classificação não contém regra especial pelo nome do caso", !serverCatalog.toLocaleLowerCase("pt-BR").includes("lagoa do arroz") && !budgetsPage.toLocaleLowerCase("pt-BR").includes("lagoa do arroz"));
 assert("todas as leituras são escopadas pela organização autenticada", (serverCatalog.match(/\.eq\("company_id", organizationId\)/g) ?? []).length >= 4);
 assert("read model não cria ou altera BudgetVersion", !/\.insert\(|\.update\(|createDraftBudgetVersion|persist_budget/.test(serverCatalog));
@@ -34,7 +35,11 @@ assert("catálogo oferece navegação individual para cada lote", budgetsPage.in
 assert("árvore completa é carregada sob demanda na página individual", individualBudgetPage.includes("/api/orcamentos/consolidado?orcamento=") && individualBudgetPage.includes("OfficialBudgetDetail"));
 assert("cenários são agrupados pelo BudgetVersion do lote", budgetsPage.includes("scenariosByBudget.get(budget.id)"));
 assert("Criar cenário envia a origem do card", budgetsPage.includes("/orcamentos/cenarios/novo?orcamento=") && budgetsPage.includes("budget.id"));
-assert("proposta vencedora só reutiliza o detalhe, sem criar cenário", budgetsPage.includes('isWinningProposal ? "Ver proposta"') && budgetsPage.includes("permitsScenarios"));
+assert("proposta vencedora é protagonista da cadeia contratada", budgetsPage.includes("resolveContractedDocumentChain(process)") && budgetsPage.includes("Ver proposta e itens contratados") && budgetsPage.includes("Valor contratado"));
+assert("comparação contratual mostra origem, contratado e diferença", budgetsPage.includes("Orçamento oficial") && budgetsPage.includes("comparisonLabel") && budgetsPage.includes("differenceCents"));
+assert("orçamento oficial contratado é referência secundária", budgetsPage.includes("Referência da licitação") && budgetsPage.includes("Consultar orçamento oficial"));
+assert("criação de cenário respeita a política calculada para o escopo", budgetsPage.includes("budget.scenarioCreationAllowed") && individualBudgetPage.includes("summary.scenarioCreationAllowed"));
+assert("experiência contratada exibe número e estado do contrato", budgetsPage.includes("Contrato nº") && budgetsPage.includes("contractStatusLabel(winningProposal.contractStatus)"));
 assert("ordenação visual dos lotes é determinística em ordem crescente", budgetsPage.includes("sortBudgetsByLotAscending(process.budgets)"));
 assert("grid de lotes usa layout padrão em grid LTR para posicionar Lote 01 na esquerda e Lote 02 na direita", catalogCss.includes(".lotGrid") && !catalogCss.includes("direction: rtl;"));
 assert("duplicação preserva sourceBudgetId", newScenarioPage.includes("duplicateScenario?.sourceBudgetId") && newScenarioPage.includes("duplicateBudget"));

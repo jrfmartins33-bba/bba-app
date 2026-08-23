@@ -17,10 +17,13 @@ export interface BudgetVersionLineageSummaryRow {
 export interface ContractedBudgetVersionSummaryRow {
   readonly budgetVersionId: string;
   readonly contractorName: string | null;
+  readonly contractNumber: string;
+  readonly contractStatus: ContractStatus;
 }
 
 export type BudgetDocumentKind = "OfficialBudget" | "WinningProposal" | "DerivedVersion";
 export type BudgetProcessPresentationKind = "Lots" | "DocumentChain";
+export type ContractStatus = "Draft" | "InExecution" | "Suspended" | "Completed" | "Cancelled";
 
 export interface ProcurementCaseSummaryRow {
   readonly id: string;
@@ -49,6 +52,9 @@ export interface ConsolidatedBudgetSummaryDto {
   readonly documentKind: BudgetDocumentKind;
   readonly sourceBudgetVersionId: string | null;
   readonly contractorName: string | null;
+  readonly contractNumber: string | null;
+  readonly contractStatus: ContractStatus | null;
+  readonly scenarioCreationAllowed: boolean;
   readonly status: "Consolidated";
   readonly revision: number;
   readonly officialValueCents: number;
@@ -75,6 +81,13 @@ export interface LotPresentation {
   readonly detail: string | null;
 }
 
+export interface ContractedDocumentChain {
+  readonly officialBudget: ConsolidatedBudgetSummaryDto;
+  readonly winningProposal: ConsolidatedBudgetSummaryDto;
+  readonly differenceCents: number;
+  readonly comparisonKind: "Reduction" | "Increase" | "Equal";
+}
+
 export function buildConsolidatedBudgetCatalog(input: {
   readonly versions: ReadonlyArray<ConsolidatedBudgetVersionRow>;
   readonly procurementCases: ReadonlyArray<ProcurementCaseSummaryRow>;
@@ -97,7 +110,7 @@ export function buildConsolidatedBudgetCatalog(input: {
     economicsByBudgetId.set(item.budgetVersionId, { total, count: current.count + 1 });
   }
 
-  const budgets = input.versions.map((version): ConsolidatedBudgetSummaryDto => {
+  const classifiedBudgets = input.versions.map((version): ConsolidatedBudgetSummaryDto => {
     const procurementCase = casesById.get(version.procurementCaseId);
     if (!procurementCase) throw new Error(`Processo não encontrado para a versão ${version.id}.`);
 
@@ -125,6 +138,9 @@ export function buildConsolidatedBudgetCatalog(input: {
       documentKind,
       sourceBudgetVersionId,
       contractorName: contract?.contractorName ?? null,
+      contractNumber: contract?.contractNumber ?? null,
+      contractStatus: contract?.contractStatus ?? null,
+      scenarioCreationAllowed: false,
       status: version.status,
       revision: version.revision,
       officialValueCents: economics.total,
@@ -133,6 +149,17 @@ export function buildConsolidatedBudgetCatalog(input: {
       updatedAt: version.updatedAt,
     };
   });
+
+  const contractedScopeKeys = new Set(
+    classifiedBudgets
+      .filter((budget) => budget.documentKind === "WinningProposal")
+      .map(budgetScopeKey),
+  );
+  const budgets = classifiedBudgets.map((budget): ConsolidatedBudgetSummaryDto => ({
+    ...budget,
+    scenarioCreationAllowed: budget.documentKind === "OfficialBudget"
+      && !contractedScopeKeys.has(budgetScopeKey(budget)),
+  }));
 
   const grouped = new Map<string, ConsolidatedBudgetSummaryDto[]>();
   for (const budget of budgets) {
@@ -161,6 +188,44 @@ export function buildConsolidatedBudgetCatalog(input: {
   });
 
   return { budgets, processes };
+}
+
+export function resolveContractedDocumentChain(
+  process: ConsolidatedBudgetProcessDto,
+): ContractedDocumentChain | null {
+  const winningProposal = process.budgets.find((budget) => budget.documentKind === "WinningProposal") ?? null;
+  if (!winningProposal?.sourceBudgetVersionId) return null;
+  const officialBudget = process.budgets.find((budget) => (
+    budget.id === winningProposal.sourceBudgetVersionId
+    && budget.documentKind === "OfficialBudget"
+  )) ?? null;
+  if (!officialBudget) return null;
+
+  const signedDifference = officialBudget.officialValueCents - winningProposal.officialValueCents;
+  if (!Number.isSafeInteger(signedDifference)) throw new Error("Diferença contratual fora do intervalo seguro.");
+  return {
+    officialBudget,
+    winningProposal,
+    differenceCents: Math.abs(signedDifference),
+    comparisonKind: signedDifference > 0 ? "Reduction" : signedDifference < 0 ? "Increase" : "Equal",
+  };
+}
+
+export function contractStatusLabel(status: ContractStatus | null): string {
+  switch (status) {
+    case "Draft": return "Em preparação";
+    case "InExecution": return "Em execução";
+    case "Suspended": return "Suspenso";
+    case "Completed": return "Concluído";
+    case "Cancelled": return "Cancelado";
+    default: return "Contratado";
+  }
+}
+
+function budgetScopeKey(budget: Pick<ConsolidatedBudgetSummaryDto, "procurementCaseId" | "procurementLotId" | "scopeKind">): string {
+  return budget.scopeKind === "Lot"
+    ? `${budget.procurementCaseId}:lot:${budget.procurementLotId ?? "missing"}`
+    : `${budget.procurementCaseId}:whole`;
 }
 
 export function sortBudgetsByDocumentChain(

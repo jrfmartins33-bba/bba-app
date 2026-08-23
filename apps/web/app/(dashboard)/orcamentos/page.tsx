@@ -8,7 +8,9 @@ import { BudgetEmptyState } from "@/components/budget/budget-empty-state";
 import catalogStyles from "@/components/budget/official-budget-catalog.module.css";
 import scenarioStyles from "@/components/budget/proposal-scenarios.module.css";
 import {
+  contractStatusLabel,
   lotPresentation,
+  resolveContractedDocumentChain,
   sortBudgetsByLotAscending,
   type ConsolidatedBudgetProcessDto,
   type ConsolidatedBudgetSummaryDto,
@@ -192,6 +194,87 @@ function DocumentChainProcess({
   readonly scenariosByBudget: ReadonlyMap<string, ReadonlyArray<ProposalScenarioDto>>;
   readonly organizationIdForLinks: string | null;
 }) {
+  const contractedChain = resolveContractedDocumentChain(process);
+
+  if (contractedChain) {
+    const { officialBudget, winningProposal, differenceCents, comparisonKind } = contractedChain;
+    const comparisonLabel = comparisonKind === "Reduction"
+      ? "Redução contratada"
+      : comparisonKind === "Increase" ? "Acréscimo contratado" : "Sem diferença contratual";
+
+    return (
+      <section className={`${catalogStyles.process} ${catalogStyles.documentProcess}`} aria-labelledby={`process-${process.procurementCaseId}`}>
+        <div className={`${catalogStyles.processHeader} ${catalogStyles.contractedProcessHeader}`}>
+          <div>
+            <p className={catalogStyles.eyebrow}>Processo de Licitação e Contratação</p>
+            <h2 id={`process-${process.procurementCaseId}`}>{process.title}</h2>
+          </div>
+        </div>
+
+        <article className={catalogStyles.contractHero} aria-labelledby={`winning-proposal-${winningProposal.id}`}>
+          <div className={catalogStyles.contractHeroTop}>
+            <div>
+              <p className={catalogStyles.contractHeroEyebrow}>Proposta Vencedora</p>
+              <h3 id={`winning-proposal-${winningProposal.id}`}>{formatContractorName(winningProposal.contractorName)}</h3>
+              {winningProposal.contractNumber ? <p className={catalogStyles.contractNumber}>Contrato nº {winningProposal.contractNumber}</p> : null}
+            </div>
+            <span className={catalogStyles.executionBadge}>{contractStatusLabel(winningProposal.contractStatus)}</span>
+          </div>
+          <div className={catalogStyles.contractHeroBody}>
+            <div>
+              <span className={catalogStyles.contractValueLabel}>Valor contratado</span>
+              <p className={catalogStyles.contractValue}>{formatCentsPtBr(winningProposal.officialValueCents)}</p>
+              <div className={catalogStyles.contractMetrics}>
+                <span><strong>{winningProposal.serviceItemCount}</strong> itens de serviço</span>
+                {winningProposal.lineCount !== null ? <span><strong>{winningProposal.lineCount}</strong> linhas</span> : null}
+              </div>
+            </div>
+            <Link
+              href={withOrganization(`/orcamentos/${winningProposal.id}`, organizationIdForLinks)}
+              className={catalogStyles.contractPrimaryAction}
+            >
+              Ver proposta e itens contratados
+            </Link>
+          </div>
+        </article>
+
+        <section className={catalogStyles.contractComparison} aria-label="Comparação entre orçamento oficial e proposta vencedora">
+          <div>
+            <span>Orçamento oficial</span>
+            <strong>{formatCentsPtBr(officialBudget.officialValueCents)}</strong>
+          </div>
+          <span className={catalogStyles.comparisonArrow} aria-hidden="true">→</span>
+          <div>
+            <span>Valor contratado</span>
+            <strong>{formatCentsPtBr(winningProposal.officialValueCents)}</strong>
+          </div>
+          <div className={catalogStyles.comparisonResult}>
+            <span>{comparisonLabel}</span>
+            <strong>{formatCentsPtBr(differenceCents)}</strong>
+          </div>
+        </section>
+
+        <article className={catalogStyles.officialReference} aria-labelledby={`official-reference-${officialBudget.id}`}>
+          <div>
+            <p className={catalogStyles.lotScope}>Referência da licitação</p>
+            <h3 id={`official-reference-${officialBudget.id}`}>Orçamento Oficial</h3>
+            <p>Documento de origem usado como referência para a contratação.</p>
+          </div>
+          <div className={catalogStyles.officialReferenceSummary}>
+            <strong>{formatCentsPtBr(officialBudget.officialValueCents)}</strong>
+            <span>{officialBudget.serviceItemCount} itens de serviço · {officialBudget.lineCount ?? "—"} linhas</span>
+          </div>
+          <Link
+            href={withOrganization(`/orcamentos/${officialBudget.id}`, organizationIdForLinks)}
+            className={scenarioStyles.secondary}
+          >
+            Consultar orçamento oficial
+          </Link>
+        </article>
+      </section>
+    );
+  }
+
   return (
     <section className={`${catalogStyles.process} ${catalogStyles.documentProcess}`} aria-labelledby={`process-${process.procurementCaseId}`}>
       <div className={catalogStyles.processHeader}>
@@ -228,7 +311,7 @@ function BudgetCard({
   const isLot = budget.scopeKind === "Lot";
   const isWinningProposal = budget.documentKind === "WinningProposal";
   const isDerived = budget.documentKind === "DerivedVersion";
-  const permitsScenarios = isLot || budget.documentKind === "OfficialBudget";
+  const permitsScenarios = budget.scenarioCreationAllowed;
   const presentation = lotPresentation(budget.procurementLotTitle, budget.scopeKind);
   const title = isLot ? presentation.title : isWinningProposal ? "Proposta Vencedora" : isDerived ? "Versão Derivada" : "Orçamento Oficial";
   const scopeLabel = isLot ? "Lote independente" : isWinningProposal ? "Proposta contratada" : isDerived ? "Documento derivado" : "Documento de origem";
@@ -252,7 +335,7 @@ function BudgetCard({
       </div>
       <div className={catalogStyles.cardActions}>
         <Link href={withOrganization(`/orcamentos/${budget.id}`, organizationIdForLinks)} className={scenarioStyles.secondary}>
-          {isWinningProposal ? "Ver proposta" : "Ver orçamento"}
+          {isWinningProposal ? "Ver proposta e itens contratados" : "Ver orçamento"}
         </Link>
         {permitsScenarios ? <Link href={withOrganization(`/orcamentos/cenarios/novo?orcamento=${budget.id}`, organizationIdForLinks)} className={scenarioStyles.primary}>Criar cenário</Link> : null}
       </div>
@@ -319,4 +402,9 @@ function OrganizationSelector({ organizations }: { readonly organizations: Reado
 function withOrganization(path: string, organizationId: string | null): string {
   if (!organizationId) return path;
   return `${path}${path.includes("?") ? "&" : "?"}empresa=${encodeURIComponent(organizationId)}`;
+}
+
+function formatContractorName(name: string | null): string {
+  if (!name?.trim()) return "Contratada";
+  return name.trim().replace(/^CONSÓRCIO\b/u, "Consórcio");
 }

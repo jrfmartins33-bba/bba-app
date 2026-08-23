@@ -28,6 +28,36 @@
 .documentConnector strong { font-size: .76rem; letter-spacing: .04em; text-transform: uppercase; }
 .documentCard { width: 100%; padding: 1.5rem; border-color: #cbded6; }
 .contractorName { margin: .45rem 0 0; color: #435b52; font-size: .95rem; font-weight: 700; }
+.contractedProcessHeader { padding-bottom: 1.15rem; border-bottom-color: #cfddd8; box-shadow: 0 12px 30px rgba(14, 45, 36, .06); }
+.contractHero { display: grid; gap: 1.75rem; padding: clamp(1.4rem, 3vw, 2.25rem); overflow: hidden; border: 1px solid rgba(171, 220, 198, .28); border-radius: 22px; background: radial-gradient(circle at 90% 8%, rgba(225, 190, 102, .18), transparent 28%), linear-gradient(135deg, #123a30 0%, #176b55 60%, #1b735b 100%); color: #fff; box-shadow: 0 22px 52px rgba(8, 42, 32, .2); }
+.contractHeroTop { display: flex; justify-content: space-between; align-items: flex-start; gap: 1.5rem; }
+.contractHeroEyebrow { margin: 0 0 .55rem; color: #dcefe7; font-size: .75rem; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
+.contractHero h3 { margin: 0; max-width: 760px; color: #fff; font-size: clamp(1.45rem, 3vw, 2.15rem); line-height: 1.15; }
+.contractNumber { margin: .55rem 0 0; color: inherit; font-size: .92rem; font-weight: 650; opacity: .82; }
+.executionBadge { flex: 0 0 auto; display: inline-flex; align-items: center; gap: .4rem; padding: .45rem .8rem; border: 1px solid rgba(225, 242, 234, .45); border-radius: 999px; background: rgba(229, 246, 238, .14); color: inherit; font-size: .78rem; font-weight: 850; backdrop-filter: blur(8px); }
+.executionBadge::before { width: .48rem; height: .48rem; border-radius: 50%; background: #95ddb9; box-shadow: 0 0 0 4px rgba(149, 221, 185, .13); content: ""; }
+.contractHeroBody { display: flex; justify-content: space-between; align-items: flex-end; gap: 1.5rem; }
+.contractValueLabel { color: #c9e3d8; font-size: .73rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.contractValue { margin: .45rem 0 .8rem; color: #fff; font-size: clamp(2.1rem, 6vw, 3.6rem); font-weight: 880; letter-spacing: -.055em; line-height: .95; }
+.contractMetrics { display: flex; flex-wrap: wrap; gap: .9rem; color: #dcece6; font-size: .86rem; }
+.contractMetrics strong { color: #fff; }
+.contractPrimaryAction { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: .75rem 1rem; border: 1px solid #fff; border-radius: 10px; background: #fff; color: #174b3d; font-size: .88rem; font-weight: 850; text-align: center; text-decoration: none; transition: transform .15s ease, box-shadow .15s ease; }
+.contractPrimaryAction:hover, .contractPrimaryAction:focus-visible { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(0, 0, 0, .18); outline: 3px solid rgba(255, 255, 255, .24); outline-offset: 2px; }
+.contractComparison { display: grid; grid-template-columns: minmax(160px, 1fr) auto minmax(160px, 1fr) minmax(190px, .9fr); align-items: center; gap: 1rem; padding: 1.15rem 1.25rem; border: 1px solid #d8e5e0; border-radius: 18px; background: #fff; box-shadow: 0 12px 32px rgba(19, 53, 45, .06); }
+.contractComparison > div { display: grid; gap: .3rem; min-width: 0; }
+.contractComparison span { color: #68746f; font-size: .72rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.contractComparison strong { color: #1a3028; font-size: clamp(1.05rem, 2vw, 1.3rem); white-space: nowrap; }
+.comparisonArrow { color: #4b7969 !important; font-size: 1.4rem !important; }
+.comparisonResult { align-self: stretch; justify-content: center; padding: .75rem .9rem; border-left: 3px solid #c39539; border-radius: 0 12px 12px 0; background: #fbf7ed; }
+.comparisonResult span { color: #745b27; }
+.comparisonResult strong { color: #5d481e; }
+.officialReference { display: grid; grid-template-columns: minmax(260px, 1.4fr) minmax(210px, .8fr) minmax(210px, auto); align-items: center; gap: 1.25rem; padding: 1.25rem 1.4rem; border: 1px solid #dce6e2; border-radius: 18px; background: #f8faf9; }
+.officialReference h3 { margin: 0; color: #24362f; font-size: 1.15rem; }
+.officialReference p:not(.lotScope) { margin: .35rem 0 0; color: #6a7671; font-size: .86rem; }
+.officialReferenceSummary { display: grid; gap: .3rem; }
+.officialReferenceSummary strong { color: #263a32; font-size: 1.2rem; }
+.officialReferenceSummary span { color: #6a7671; font-size: .8rem; }
+.officialReference > a { width: 100%; }
 .lotGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr)); gap: 1rem; align-items: start; }
 .lotCard { min-width: 0; padding: 1.25rem; border: 1px solid #dce6e2; border-radius: 16px; background: #fff; box-shadow: 0 10px 26px rgba(19,53,45,.05); }
 .lotHeader { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
@@ -108,4 +138,16 @@
   .treeRow > strong { padding-left: 2.35rem; }
   .individualHero { padding: 1.15rem; }
   .individualCardActions > * { width: 100%; }
+  .contractHeroTop, .contractHeroBody { align-items: stretch; flex-direction: column; }
+  .contractPrimaryAction { width: 100%; }
+  .contractComparison { grid-template-columns: 1fr; }
+  .comparisonArrow { transform: rotate(90deg); justify-self: center; }
+  .officialReference { grid-template-columns: 1fr; }
+}
+
+@media (min-width: 641px) and (max-width: 940px) {
+  .contractComparison { grid-template-columns: 1fr auto 1fr; }
+  .comparisonResult { grid-column: 1 / -1; }
+  .officialReference { grid-template-columns: 1fr 1fr; }
+  .officialReference > a { grid-column: 1 / -1; }
 }

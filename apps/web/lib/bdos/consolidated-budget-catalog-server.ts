@@ -3,6 +3,7 @@ import {
   buildConsolidatedBudgetCatalog,
   type ConsolidatedBudgetCatalogDto,
   type ConsolidatedBudgetVersionRow,
+  type ContractStatus,
   type ProcurementCaseSummaryRow,
   type ProcurementLotSummaryRow,
   type ServiceItemEconomyRow,
@@ -33,6 +34,8 @@ interface ContractBaselineDbRow {
   readonly source_budget_version_id: string | null;
   readonly contractor_name_snapshot: string;
   readonly consortium_id: string | null;
+  readonly contract_number: string;
+  readonly status: string;
 }
 interface ConsortiumDbRow { readonly id: string; readonly legal_name: string; readonly trade_name: string | null }
 
@@ -85,7 +88,7 @@ export async function loadConsolidatedBudgetCatalog(
     .range(from, to));
   const contractsPromise = readAllSupabasePages<ContractBaselineDbRow>((from, to) => client
     .from("contract_baselines")
-    .select("source_budget_version_id, contractor_name_snapshot, consortium_id")
+    .select("source_budget_version_id, contractor_name_snapshot, consortium_id, contract_number, status")
     .eq("company_id", organizationId)
     .in("source_budget_version_id", budgetIds)
     .order("created_at", { ascending: false })
@@ -154,7 +157,12 @@ export async function loadConsolidatedBudgetCatalog(
       budgetVersionId: row.budget_version_id,
       sourceBudgetVersionId: row.source_budget_version_id,
     })),
-    contractedVersions: contractRows.reduce<Array<{ budgetVersionId: string; contractorName: string | null }>>((contracts, row) => {
+    contractedVersions: contractRows.reduce<Array<{
+      budgetVersionId: string;
+      contractorName: string | null;
+      contractNumber: string;
+      contractStatus: ContractStatus;
+    }>>((contracts, row) => {
       if (row.source_budget_version_id === null || contracts.some((item) => item.budgetVersionId === row.source_budget_version_id)) {
         return contracts;
       }
@@ -162,6 +170,8 @@ export async function loadConsolidatedBudgetCatalog(
       contracts.push({
         budgetVersionId: row.source_budget_version_id,
         contractorName: consortium?.trade_name ?? consortium?.legal_name ?? row.contractor_name_snapshot ?? null,
+        contractNumber: row.contract_number,
+        contractStatus: parseContractStatus(row.status),
       });
       return contracts;
     }, []),
@@ -176,6 +186,13 @@ function parseScopeKind(value: string): "WholeCase" | "Lot" {
 function parseOriginKind(value: string): "Native" | "DocumentaryOpaqueReference" {
   if (value === "Native" || value === "DocumentaryOpaqueReference") return value;
   throw new Error(`Origem de orçamento desconhecida: ${value}.`);
+}
+
+function parseContractStatus(value: string): ContractStatus {
+  if (value === "Draft" || value === "InExecution" || value === "Suspended" || value === "Completed" || value === "Cancelled") {
+    return value;
+  }
+  throw new Error(`Estado contratual desconhecido: ${value}.`);
 }
 
 function parseMoney(value: string | number): number {
