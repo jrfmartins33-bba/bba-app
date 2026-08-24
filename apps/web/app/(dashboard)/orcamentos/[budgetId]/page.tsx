@@ -24,6 +24,7 @@ import type {
   BudgetOrganizationAccessKind,
   BudgetOrganizationOption,
 } from "@/lib/budget/budget-organization-policy";
+import type { BudgetVersionComparison } from "@bba/bdos-core/services/procurement-engineering";
 
 interface SummaryPayload {
   readonly budget: ConsolidatedBudgetSummaryDto | null;
@@ -64,6 +65,7 @@ function IndividualBudgetContent({ budgetId }: { readonly budgetId: string }) {
 
   const [summary, setSummary] = useState<ConsolidatedBudgetSummaryDto | null | undefined>(undefined);
   const [detailBudget, setDetailBudget] = useState<OfficialBudgetDto | null | undefined>(undefined);
+  const [comparison, setComparison] = useState<BudgetVersionComparison | null>(null);
   const [scenarios, setScenarios] = useState<ReadonlyArray<ProposalScenarioDto>>([]);
   const [accessKind, setAccessKind] = useState<BudgetOrganizationAccessKind | null>(null);
   const [organization, setOrganization] = useState<BudgetOrganizationOption | null>(null);
@@ -75,6 +77,7 @@ function IndividualBudgetContent({ budgetId }: { readonly budgetId: string }) {
     const controller = new AbortController();
     setSummary(undefined);
     setDetailBudget(undefined);
+    setComparison(null);
     setScenarios([]);
     setLoadError(null);
 
@@ -91,7 +94,7 @@ function IndividualBudgetContent({ budgetId }: { readonly budgetId: string }) {
         signal: controller.signal,
       }).then(async (response) => {
         if (!response.ok) throw new Error("Não foi possível carregar os itens deste orçamento.");
-        return (await response.json()) as { budget: OfficialBudgetDto | null };
+        return (await response.json()) as { budget: OfficialBudgetDto | null; comparison?: BudgetVersionComparison | null };
       }),
     ])
       .then(([summaryPayload, detailPayload]) => {
@@ -104,6 +107,7 @@ function IndividualBudgetContent({ budgetId }: { readonly budgetId: string }) {
         setOrganization(summaryPayload.organization ?? null);
         setOrganizations(summaryPayload.organizations ?? []);
         setDetailBudget(detailPayload.budget);
+        setComparison(detailPayload.comparison ?? null);
         setLoadError(null);
       })
       .catch((cause: Error) => {
@@ -258,7 +262,7 @@ function IndividualBudgetContent({ budgetId }: { readonly budgetId: string }) {
         ) : null}
 
         <div className={catalogStyles.treeCard}>
-          <OfficialBudgetDetail budget={detailBudget} summary={summary} />
+          <OfficialBudgetDetail budget={detailBudget} summary={summary} comparison={comparison} />
         </div>
       </section>
     </>

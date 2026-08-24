@@ -169,7 +169,7 @@ runTest("9. regras de scope continuam aplicadas quando existe parent", () => {
   const wholeScope = createWholeCaseScope({ procurementCase: caseRes.procurementCase }).scope!;
 
   const vRes = createBudgetVersion({ id: "v-9", procurementCase: caseRes.procurementCase, scope: wholeScope, origin: { kind: BudgetVersionOriginKind.Native } });
-  const gRes = addBudgetLine({ budgetVersion: vRes.budgetVersion!, id: "g-lot", kind: BudgetLineKind.Group, description: { status: "Confirmed", text: "G" }, parentLineId: null, position: 0, scope: lotScope, procurementLot: lotRes.procurementLot });
+  const gRes = addBudgetLine({ budgetVersion: vRes.budgetVersion!, id: "g-lot", kind: BudgetLineKind.Group, description: { status: "Confirmed", text: "G" }, parentLineId: null, position: 0, scope: lotScope, procurementLot: lotRes.procurementLot! });
   const itFail = addBudgetLine({ budgetVersion: gRes.budgetVersion!, id: "it-diff", kind: BudgetLineKind.ServiceItem, description: { status: "Confirmed", text: "Item" }, parentLineId: "g-lot", position: 0, scope: wholeScope, quantity: "1", unit: "UN", unitPriceCents: 100, totalCents: 100 });
   assertEqual(itFail.success, false, "Filho com escopo divergente do pai deve falhar");
 });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseRouteHandlerClient } from "@/lib/supabase/server";
 import { createBudgetVersionRepository } from "@/lib/bdos/procurement-engineering-server-repository";
+import { getBudgetComparisonService } from "@bba/bdos-core/services/procurement-engineering";
 import {
   authenticateBudgetOrganizationActor,
   resolveBudgetCatalogContextForActor,
@@ -79,7 +80,17 @@ export async function GET(request: Request): Promise<NextResponse> {
       return NextResponse.json({ budget: null }, { status: 404 });
     }
 
-    return NextResponse.json({ budget: persisted.entity });
+    const comparisonResult = await getBudgetComparisonService(
+      organizationId,
+      budgetVersionId,
+      repository,
+      persisted.entity,
+    );
+
+    return NextResponse.json({
+      budget: persisted.entity,
+      comparison: comparisonResult.outcome === "compared" ? comparisonResult.comparison : null,
+    });
   } catch (error) {
     console.error("[orcamentos/consolidado] falha ao abrir a Versão consolidada.", error);
     return NextResponse.json({ error: "query_failed" }, { status: 500 });

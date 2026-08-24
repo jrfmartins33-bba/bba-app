@@ -1,0 +1,6 @@
+.page { min-height: 100vh; padding: clamp(1rem, 3vw, 2.5rem); background: radial-gradient(circle at 10% 0%, rgba(184,143,71,.09), transparent 28%), #e5e5e1; }
+.shell { display: grid; gap: 1rem; width: min(1240px, 100%); margin: 0 auto; }
+.previewBar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .75rem 1rem; border: 1px solid #c8c7c1; border-radius: 12px; background: #f7f5ef; color: #59636b; font-size: .78rem; }
+.previewBar strong { color: #142c3c; }
+.card { overflow: hidden; border: 1px solid #c7c7c1; border-radius: 18px; background: #f8f6f1; box-shadow: 0 22px 58px rgba(15, 29, 40, .13); }
+@media (max-width: 640px) { .page { padding: .65rem; } .previewBar { align-items: flex-start; flex-direction: column; } }

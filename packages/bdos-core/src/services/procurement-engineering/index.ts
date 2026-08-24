@@ -12,6 +12,8 @@ export * from "./procurement-case-service.types";
 export * from "./procurement-case-service";
 export * from "./budget-version-service.types";
 export * from "./budget-version-service";
+export * from "./budget-comparison-service";
+export * from "./budget-comparison-validation-fixture";
 
 // Reexporta exatamente as identidades, enums e tipos de domínio que um
 // adaptador de persistência (apps/web/lib/bdos/procurement-engineering-*)
@@ -41,6 +43,12 @@ export type {
   BudgetVersionMetadata,
   BudgetVersionOrigin,
   LineageRelation,
+  BudgetVersionComparison,
+  BudgetComparedItem,
+  BudgetComparisonSummary,
+  BudgetComparisonClassification,
+  BudgetDocumentDivergenceKind,
+  BudgetLineMatchMethod,
 } from "../../domain/budget-version";
 export type { MoneyCents } from "../../domain/budget-version/budget-version-money";
 export { isValidMoneyCents } from "../../domain/budget-version/budget-version-money";
