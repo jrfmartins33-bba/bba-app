@@ -11,8 +11,7 @@ export interface ContractExecutionItemLinkEvidence {
   readonly unitPriceExact: boolean;
   readonly candidateUniqueInApplicableSet: boolean;
   readonly externalCodesAreEvidenceOnly: true;
-  readonly documentaryPositionShiftPreserved: boolean;
-  readonly cot015ParentlessPreserved: boolean;
+  readonly [caseSpecificEvidence: string]: unknown;
 }
 
 export interface PreparedContractExecutionItemLink {
@@ -89,18 +88,7 @@ export interface ContractExecutionItemLinkManifest {
     readonly subCentPrecisionItemCount: number;
     readonly mutationPlanned: false;
   };
-  readonly specialCases: {
-    readonly cot015: {
-      readonly proposalDocumentCode: "COT-015";
-      readonly quantityDecimal: "60";
-      readonly unit: "DIA";
-      readonly unitPriceCents: 294767;
-      readonly totalCents: 17686020;
-      readonly proposalParentMustRemainNull: true;
-      readonly operationalHierarchyMustRemainIndependent: true;
-    };
-    readonly documentaryPositionShiftPairCount: 14;
-  };
+  readonly specialCases?: Readonly<Record<string, unknown>>;
   readonly links: ReadonlyArray<PreparedContractExecutionItemLink>;
 }
 

@@ -174,6 +174,9 @@ DECLARE
   v_baseline_id UUID := (p_manifest->'scope'->>'contractBaselineId')::UUID;
   v_version_id UUID := (p_manifest->'scope'->>'proposalBudgetVersionId')::UUID;
   v_expected_integrity_id TEXT := p_manifest->'integrity'->>'validationSetIntegrityId';
+  v_expected_link_count INTEGER := (p_manifest->'integrity'->>'expectedLinkCount')::INTEGER;
+  v_expected_proposal_count INTEGER := (p_manifest->'integrity'->>'expectedDistinctProposalLineCount')::INTEGER;
+  v_expected_operational_count INTEGER := (p_manifest->'integrity'->>'expectedDistinctOperationalItemCount')::INTEGER;
   v_proposal_count INTEGER;
   v_operational_count INTEGER;
   v_manifest_count INTEGER;
@@ -184,6 +187,7 @@ DECLARE
   v_baseline_ok BOOLEAN;
   v_snapshots_ok BOOLEAN;
   v_economics_ok BOOLEAN;
+  v_expected_cardinalities_ok BOOLEAN;
   v_ready BOOLEAN;
 BEGIN
   SELECT count(*) INTO v_proposal_count
@@ -282,13 +286,19 @@ BEGIN
       AND COALESCE((p_manifest->'economics'->>'mutationPlanned')::BOOLEAN, true) IS FALSE
   ) INTO v_economics_ok;
 
+  v_expected_cardinalities_ok :=
+    v_expected_link_count >= 0
+    AND v_expected_link_count = v_expected_proposal_count
+    AND v_expected_link_count = v_expected_operational_count;
+
   v_ready :=
-    v_proposal_count = 300
-    AND v_operational_count = 300
-    AND v_manifest_count = 300
-    AND v_distinct_proposal_count = 300
-    AND v_distinct_operational_count = 300
-    AND v_valid_pair_count = 300
+    v_expected_cardinalities_ok
+    AND v_proposal_count = v_expected_proposal_count
+    AND v_operational_count = v_expected_operational_count
+    AND v_manifest_count = v_expected_link_count
+    AND v_distinct_proposal_count = v_expected_proposal_count
+    AND v_distinct_operational_count = v_expected_operational_count
+    AND v_valid_pair_count = v_expected_link_count
     AND v_current_integrity_id = v_expected_integrity_id
     AND v_baseline_ok
     AND v_snapshots_ok
@@ -297,12 +307,13 @@ BEGIN
   RETURN jsonb_build_object(
     'ready', v_ready,
     'violations', to_jsonb(array_remove(ARRAY[
-      CASE WHEN v_proposal_count <> 300 THEN 'Proposal service-item count drifted.' END,
-      CASE WHEN v_operational_count <> 300 THEN 'Operational service-item count drifted.' END,
-      CASE WHEN v_manifest_count <> 300 THEN 'Manifest does not contain exactly 300 links.' END,
-      CASE WHEN v_distinct_proposal_count <> 300 THEN 'Proposal identities are not unique.' END,
-      CASE WHEN v_distinct_operational_count <> 300 THEN 'Operational identities are not unique.' END,
-      CASE WHEN v_valid_pair_count <> 300 THEN 'At least one source item or deterministic evidence changed.' END,
+      CASE WHEN NOT v_expected_cardinalities_ok THEN 'Manifest expected cardinalities do not describe a one-to-one set.' END,
+      CASE WHEN v_proposal_count <> v_expected_proposal_count THEN 'Proposal service-item count drifted.' END,
+      CASE WHEN v_operational_count <> v_expected_operational_count THEN 'Operational service-item count drifted.' END,
+      CASE WHEN v_manifest_count <> v_expected_link_count THEN 'Manifest link count differs from its approved cardinality.' END,
+      CASE WHEN v_distinct_proposal_count <> v_expected_proposal_count THEN 'Proposal identities are not unique.' END,
+      CASE WHEN v_distinct_operational_count <> v_expected_operational_count THEN 'Operational identities are not unique.' END,
+      CASE WHEN v_valid_pair_count <> v_expected_link_count THEN 'At least one source item or deterministic evidence changed.' END,
       CASE WHEN v_current_integrity_id IS DISTINCT FROM v_expected_integrity_id THEN 'Validation-set integrity changed.' END,
       CASE WHEN NOT v_baseline_ok THEN 'Contract baseline no longer points to the same consolidated proposal.' END,
       CASE WHEN NOT v_snapshots_ok THEN 'Baseline or proposal version snapshot changed.' END,
@@ -326,8 +337,8 @@ REVOKE ALL ON FUNCTION public.revalidate_contract_execution_item_link_manifest(J
 REVOKE ALL ON FUNCTION public.revalidate_contract_execution_item_link_manifest(JSONB) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.revalidate_contract_execution_item_link_manifest(JSONB) TO service_role;
 
--- Única fronteira prevista para a futura escrita. A revalidação e os
--- 300 INSERTs acontecem na mesma transação; qualquer falha reverte tudo.
+-- Única fronteira prevista para a futura escrita. A revalidação e todos
+-- os INSERTs aprovados acontecem na mesma transação; qualquer falha reverte tudo.
 CREATE OR REPLACE FUNCTION public.persist_contract_execution_item_links_manifest(
   p_actor_id UUID,
   p_approval_reference TEXT,
@@ -342,6 +353,7 @@ DECLARE
   v_project_id UUID := (p_manifest->'scope'->>'engineeringProjectId')::UUID;
   v_baseline_id UUID := (p_manifest->'scope'->>'contractBaselineId')::UUID;
   v_version_id UUID := (p_manifest->'scope'->>'proposalBudgetVersionId')::UUID;
+  v_expected_link_count INTEGER := (p_manifest->'integrity'->>'expectedLinkCount')::INTEGER;
   v_preflight JSONB;
   v_inserted_count INTEGER;
 BEGIN
@@ -370,6 +382,8 @@ BEGIN
       v_preflight->'violations' USING ERRCODE = '23514';
   END IF;
 
+  -- Insere somente a relação. Hierarquias da proposta e da execução são
+  -- preservadas como evidência e nunca copiadas ou propagadas entre si.
   INSERT INTO public.contract_execution_item_links (
     company_id,
     engineering_project_id,
@@ -410,14 +424,15 @@ BEGIN
     (link->'proposalLine'->>'createdAtSnapshot')::TIMESTAMPTZ,
     (link->'operationalItem'->>'updatedAtSnapshot')::TIMESTAMPTZ,
     p_approval_reference,
-    'lagoa-do-arroz-traceability-manifest-v1',
+    'bdos-contract-execution-item-traceability',
     p_manifest->>'manifestId',
     p_actor_id
   FROM jsonb_array_elements(p_manifest->'links') AS link;
 
   GET DIAGNOSTICS v_inserted_count = ROW_COUNT;
-  IF v_inserted_count <> 300 THEN
-    RAISE EXCEPTION 'Atomic persistence expected 300 links but inserted %.', v_inserted_count
+  IF v_inserted_count <> v_expected_link_count THEN
+    RAISE EXCEPTION 'Atomic persistence expected % approved links but inserted %.',
+      v_expected_link_count, v_inserted_count
       USING ERRCODE = '23514';
   END IF;
 
@@ -438,4 +453,4 @@ COMMENT ON TABLE public.contract_execution_item_links IS
 COMMENT ON FUNCTION public.revalidate_contract_execution_item_link_manifest(JSONB) IS
   'Read-only authoritative preflight. Blocks persistence on any cardinality, scope, snapshot, evidence, integrity or economic drift.';
 COMMENT ON FUNCTION public.persist_contract_execution_item_links_manifest(UUID, TEXT, JSONB) IS
-  'Service-role-only atomic persistence boundary. Requires explicit actor and human approval reference; performs full in-transaction revalidation before inserting exactly 300 links.';
+  'Service-role-only atomic persistence boundary. Requires explicit actor and human approval reference; performs full in-transaction revalidation before inserting the manifest-approved link count.';

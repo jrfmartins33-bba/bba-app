@@ -19,6 +19,7 @@ export interface ContractExecutionItemLinkPersistencePreview {
     readonly changesExecution: false;
     readonly changesMeasurements: false;
     readonly changesEconomics: false;
+    readonly changesHierarchy: false;
   };
 }
 
@@ -29,15 +30,16 @@ export async function previewContractExecutionItemLinkPersistence(
   const local = validateContractExecutionItemLinkManifest(manifest);
   const remote = local.valid ? await repository.revalidateManifest(manifest) : null;
   const violations = [...local.violations, ...(remote?.violations ?? [])];
+  const expected = manifest.integrity;
   const ready =
     local.valid &&
     remote?.ready === true &&
     remote.currentIntegrityId === manifest.integrity.validationSetIntegrityId &&
-    remote.proposalItemCount === 300 &&
-    remote.operationalItemCount === 300 &&
-    remote.validPairCount === 300 &&
-    remote.distinctProposalLineCount === 300 &&
-    remote.distinctOperationalItemCount === 300 &&
+    remote.proposalItemCount === expected.expectedDistinctProposalLineCount &&
+    remote.operationalItemCount === expected.expectedDistinctOperationalItemCount &&
+    remote.validPairCount === expected.expectedLinkCount &&
+    remote.distinctProposalLineCount === expected.expectedDistinctProposalLineCount &&
+    remote.distinctOperationalItemCount === expected.expectedDistinctOperationalItemCount &&
     remote.sourceSnapshotsMatch &&
     remote.baselineStillPointsToProposal &&
     remote.economicsUnchanged;
@@ -58,6 +60,7 @@ export async function previewContractExecutionItemLinkPersistence(
       changesExecution: false,
       changesMeasurements: false,
       changesEconomics: false,
+      changesHierarchy: false,
     },
   };
 }

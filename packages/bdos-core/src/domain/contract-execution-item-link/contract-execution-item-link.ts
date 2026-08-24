@@ -15,8 +15,6 @@ export function validateContractExecutionItemLinkManifest(
   const operationalIds = new Set<string>();
   let structuralMatches = 0;
   let remainderMatches = 0;
-  let shiftedMatches = 0;
-  let cot015Count = 0;
 
   if (manifest.writeStatus !== "NOT_APPLIED") {
     violations.push("Manifest must remain NOT_APPLIED before approval.");
@@ -58,6 +56,15 @@ export function validateContractExecutionItemLinkManifest(
     if (!link.evidence.externalCodesAreEvidenceOnly) {
       violations.push("Pair " + link.sequence + " treats an external code as identity.");
     }
+    if (
+      link.validation.status !== "Validated" ||
+      link.validation.ambiguous !== false ||
+      link.validation.materialDivergence !== false ||
+      link.validation.proposalIdentityUsesInternalId !== true ||
+      link.validation.operationalIdentityUsesInternalId !== true
+    ) {
+      violations.push("Pair " + link.sequence + " contains an unresolved or non-internal validation result.");
+    }
     if (link.matchMethod === ContractExecutionItemMatchMethod.StructuralCodeAndExactMaterialFields) {
       structuralMatches += 1;
     } else if (link.matchMethod === ContractExecutionItemMatchMethod.UniqueExactDocumentaryRemainder) {
@@ -65,32 +72,20 @@ export function validateContractExecutionItemLinkManifest(
     } else {
       violations.push("Pair " + link.sequence + " has an unsupported match method.");
     }
-    if (link.evidence.documentaryPositionShiftPreserved) shiftedMatches += 1;
-
-    if (link.proposalLine.documentCode === "COT-015") {
-      cot015Count += 1;
-      if (link.proposalLine.parentLineId !== null || !link.evidence.cot015ParentlessPreserved) {
-        violations.push("COT-015 must remain parentless in the proposal.");
-      }
-      if (
-        link.proposalLine.quantityDecimal !== "60" ||
-        link.proposalLine.unit !== "DIA" ||
-        link.proposalLine.unitPriceCents !== 294767 ||
-        link.proposalLine.totalCents !== 17686020
-      ) {
-        violations.push("COT-015 economic evidence changed.");
-      }
-    }
   }
 
   const expected = manifest.integrity;
+  if (
+    expected.expectedLinkCount !== expected.expectedDistinctProposalLineCount ||
+    expected.expectedLinkCount !== expected.expectedDistinctOperationalItemCount
+  ) {
+    violations.push("Expected cardinalities must describe a one-to-one set.");
+  }
   if (manifest.links.length !== expected.expectedLinkCount) violations.push("Unexpected link count.");
   if (proposalIds.size !== expected.expectedDistinctProposalLineCount) violations.push("Proposal side is not one-to-one.");
   if (operationalIds.size !== expected.expectedDistinctOperationalItemCount) violations.push("Operational side is not one-to-one.");
   if (structuralMatches !== expected.structuralCodeAndExactMaterialFieldsCount) violations.push("Structural match count changed.");
   if (remainderMatches !== expected.uniqueExactDocumentaryRemainderCount) violations.push("Remainder match count changed.");
-  if (shiftedMatches !== manifest.specialCases.documentaryPositionShiftPairCount) violations.push("Documentary position-shift evidence changed.");
-  if (cot015Count !== 1) violations.push("COT-015 must occur exactly once.");
   if (
     expected.ambiguousCount !== 0 ||
     expected.unmatchedCount !== 0 ||
