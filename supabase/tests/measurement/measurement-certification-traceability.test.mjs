@@ -67,9 +67,45 @@ test("formal bulletin lines have immutable relational sources and internal item 
   assert.match(sql, /CREATE TABLE public\.measurement_bulletin_line_sources/);
   assert.match(sql, /measurement_workspace_line_id UUID NOT NULL REFERENCES public\.measurement_workspace_lines/);
   assert.match(sql, /formal_line->>'serviceItemId' = mwl\.managed_service_item_id::TEXT/);
+  assert.match(sql, /formal_line->>'serviceItemCode' = msi\.code/);
+  assert.match(sql, /formal_line->>'description' = msi\.description/);
+  assert.match(sql, /formal_line->>'unit' = msi\.unit/);
+  assert.match(sql, /formal_line->>'canonicalQuantity'\)::NUMERIC = mwl\.quantity/);
+  assert.match(sql, /formal_line->>'canonicalUnitValue'\)::NUMERIC = mwl\.unit_value/);
+  assert.match(sql, /formal_line->>'canonicalTotalValue'\)::NUMERIC = mwl\.total_value/);
   assert.match(sql, /measurement_bulletin_line_sources_line_once[\s\S]*UNIQUE \(measurement_bulletin_id, bulletin_line_id\)/);
   assert.match(sql, /measurement_bulletin_line_sources_source_once[\s\S]*UNIQUE \(measurement_bulletin_id, measurement_workspace_line_id\)/);
   assert.match(sql, /Formal measurement traceability and certification history are append-only/);
+});
+
+test("closed workspace lines are fully immutable and serialized with workspace closure", () => {
+  assert.match(sql, /CREATE OR REPLACE FUNCTION public\.enforce_measurement_workspace_line_mutability\(\)/);
+  assert.match(sql, /ORDER BY mw\.id\s+FOR SHARE/);
+  assert.match(sql, /mw\.status IN \('Closed', 'Cancelled'\)/);
+  assert.match(sql, /BEFORE INSERT OR UPDATE OR DELETE\s+ON public\.measurement_workspace_lines/);
+  assert.match(sql, /Measurement workspace lines are immutable after the workspace is closed or cancelled/);
+});
+
+test("persisted bulletin transitions mirror the domain and terminal states cannot revert", () => {
+  assert.match(sql, /NEW\.status <> 'Draft'/);
+  assert.match(sql, /OLD\.status IN \('Finalized', 'Cancelled'\)/);
+  assert.match(sql, /OLD\.status = 'Draft' AND NEW\.status IN \('Validated', 'Cancelled'\)/);
+  assert.match(sql, /OLD\.status = 'Validated' AND NEW\.status IN \('Finalized', 'Cancelled'\)/);
+  assert.match(sql, /OLD\.status <> 'Validated'/);
+  assert.match(sql, /validation_issue->>'severity' = 'blocking'/);
+  assert.match(sql, /Every finalized bulletin line must have exactly one immutable relational source/);
+  assert.match(sql, /BEFORE UPDATE ON public\.measurement_bulletins/);
+});
+
+test("source registration locks the bulletin and is atomic with material validation", () => {
+  const registrationRoutine = sql.slice(
+    sql.indexOf("CREATE OR REPLACE FUNCTION public.register_measurement_bulletin_line_sources"),
+    sql.indexOf("CREATE OR REPLACE FUNCTION public.create_measurement_cycle"),
+  );
+  assert.match(registrationRoutine, /FROM public\.measurement_bulletins mb[\s\S]*FOR UPDATE/);
+  assert.match(registrationRoutine, /FOR v_link IN SELECT value FROM jsonb_array_elements\(p_links\)/);
+  assert.match(registrationRoutine, /INSERT INTO public\.measurement_bulletin_line_sources/);
+  assert.doesNotMatch(registrationRoutine, /COMMIT|ROLLBACK/i);
 });
 
 test("official accumulated projections include only certified domain states", () => {
@@ -104,4 +140,20 @@ test("new tables are read-only to clients and writes use restricted atomic routi
   assert.match(sql, /SECURITY DEFINER\s+SET search_path = ''/);
   assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.advance_measurement_cycle[\s\S]*TO service_role/);
   assert.match(sql, /REVOKE ALL ON FUNCTION public\.advance_measurement_cycle[\s\S]*FROM PUBLIC, anon, authenticated/);
+  assert.match(
+    sql,
+    /REVOKE ALL ON TABLE public\.measurement_certified_item_period_totals FROM PUBLIC, anon, authenticated, service_role/,
+  );
+  assert.match(
+    sql,
+    /REVOKE ALL ON TABLE public\.measurement_certified_item_balances FROM PUBLIC, anon, authenticated, service_role/,
+  );
+  assert.match(
+    sql,
+    /GRANT SELECT ON TABLE public\.measurement_certified_item_period_totals TO authenticated, service_role/,
+  );
+  assert.match(
+    sql,
+    /GRANT SELECT ON TABLE public\.measurement_certified_item_balances TO authenticated, service_role/,
+  );
 });

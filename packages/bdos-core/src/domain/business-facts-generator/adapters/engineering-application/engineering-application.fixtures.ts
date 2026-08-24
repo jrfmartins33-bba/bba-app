@@ -19,6 +19,7 @@ import {
   validateMeasurementBulletin,
   type MeasurementBulletin,
 } from "../../../bulletin-generator";
+import { MeasurementDecimalQuantizationMode } from "../../../measurement-certification";
 import {
   EvidenceStatus,
   EvidenceType,
@@ -279,6 +280,15 @@ export function finalizedBulletinFixture(): MeasurementBulletin {
       technicalResponsibleName: "Marcos Ferreira",
       metadata: {},
     },
+    decimalContext: {
+      quantityScale: 2,
+      unitValueScale: 2,
+      monetaryPolicy: {
+        key: "fixture-round-2",
+        scale: 2,
+        quantizationMode: MeasurementDecimalQuantizationMode.RoundHalfAwayFromZero,
+      },
+    },
     lines: [
       {
         id: "line-1",
@@ -288,6 +298,7 @@ export function finalizedBulletinFixture(): MeasurementBulletin {
         unit: "m3",
         quantity: 10,
         unitValue: 150,
+        canonicalTotalValue: 1500,
         metadata: {},
       },
     ],
@@ -341,6 +352,15 @@ export function draftBulletinFixture(): MeasurementBulletin {
       technicalResponsibleName: "Marcos Ferreira",
       metadata: {},
     },
+    decimalContext: {
+      quantityScale: 2,
+      unitValueScale: 2,
+      monetaryPolicy: {
+        key: "fixture-round-2",
+        scale: 2,
+        quantizationMode: MeasurementDecimalQuantizationMode.RoundHalfAwayFromZero,
+      },
+    },
     lines: [
       {
         id: "line-1",
@@ -350,6 +370,7 @@ export function draftBulletinFixture(): MeasurementBulletin {
         unit: "m3",
         quantity: 5,
         unitValue: 150,
+        canonicalTotalValue: 750,
         metadata: {},
       },
     ],

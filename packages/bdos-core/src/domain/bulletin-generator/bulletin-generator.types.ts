@@ -1,3 +1,9 @@
+import type {
+  CanonicalMeasurementDecimal,
+  MeasurementDecimalInput,
+  MeasurementMonetaryPolicy,
+} from "../measurement-certification";
+
 export type MeasurementBulletinMetadata = Readonly<Record<string, unknown>>;
 
 export type MeasurementBulletinId = string;
@@ -61,6 +67,13 @@ export interface MeasurementBulletinLine {
   readonly quantity: number;
   readonly unitValue: number;
   readonly totalValue: number;
+  readonly canonicalQuantity: CanonicalMeasurementDecimal;
+  readonly canonicalUnitValue: CanonicalMeasurementDecimal;
+  readonly canonicalTotalValue: CanonicalMeasurementDecimal;
+  readonly quantityScale: number;
+  readonly unitValueScale: number;
+  readonly monetaryPolicyKey: string;
+  readonly monetaryScale: number;
   readonly metadata: MeasurementBulletinMetadata;
 }
 
@@ -70,15 +83,24 @@ export interface MeasurementBulletinLineInput {
   readonly serviceItemCode: string;
   readonly description: string;
   readonly unit: string;
-  readonly quantity: number;
-  readonly unitValue: number;
+  readonly quantity: MeasurementDecimalInput;
+  readonly unitValue: MeasurementDecimalInput;
+  readonly canonicalTotalValue: MeasurementDecimalInput;
   readonly metadata?: MeasurementBulletinMetadata;
+}
+
+export interface MeasurementBulletinDecimalContext {
+  readonly quantityScale: number;
+  readonly unitValueScale: number;
+  readonly monetaryPolicy: MeasurementMonetaryPolicy;
 }
 
 export interface MeasurementBulletinTotals {
   readonly totalLines: number;
   readonly totalQuantity: number;
   readonly totalValue: number;
+  readonly canonicalTotalQuantity: CanonicalMeasurementDecimal;
+  readonly canonicalTotalValue: CanonicalMeasurementDecimal;
 }
 
 export interface MeasurementBulletinTrace {
@@ -107,6 +129,7 @@ export interface MeasurementBulletin {
   readonly organizationId: MeasurementBulletinOrganizationId;
   readonly reference: MeasurementBulletinReference;
   readonly header: MeasurementBulletinHeader;
+  readonly decimalContext: MeasurementBulletinDecimalContext;
   readonly lines: ReadonlyArray<MeasurementBulletinLine>;
   readonly totals: MeasurementBulletinTotals;
   readonly status: MeasurementBulletinStatus;
@@ -120,6 +143,7 @@ export interface CreateMeasurementBulletinInput {
   readonly organizationId: MeasurementBulletinOrganizationId;
   readonly reference: MeasurementBulletinReference;
   readonly header: MeasurementBulletinHeader;
+  readonly decimalContext: MeasurementBulletinDecimalContext;
   readonly lines: ReadonlyArray<MeasurementBulletinLineInput>;
   readonly actor: MeasurementBulletinActor;
   readonly occurredAt: MeasurementBulletinOccurredAt;
@@ -159,6 +183,8 @@ export type MeasurementBulletinErrorCode =
   | "duplicate_line_id"
   | "negative_quantity"
   | "negative_unit_value"
+  | "invalid_decimal_material"
+  | "canonical_total_mismatch"
   | "bulletin_terminal"
   | "bulletin_not_validated"
   | "blocking_validation_issues";

@@ -323,6 +323,7 @@ export type {
   MeasurementBulletinActor,
   MeasurementBulletinCorrelationId,
   MeasurementBulletinCreatedBy,
+  MeasurementBulletinDecimalContext,
   MeasurementBulletinError,
   MeasurementBulletinErrorCode,
   MeasurementBulletinFailure,

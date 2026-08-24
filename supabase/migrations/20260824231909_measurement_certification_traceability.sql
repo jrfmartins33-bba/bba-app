@@ -80,6 +80,58 @@ ON public.measurement_workspace_lines
 FOR EACH ROW
 EXECUTE FUNCTION public.enforce_measurement_workspace_line_scope();
 
+-- A linha e o fechamento do workspace disputam o mesmo lock relacional.
+-- Assim, uma edição iniciada antes do fechamento termina primeiro; uma edição
+-- iniciada depois observa o estado terminal e falha. Nenhuma coluna material,
+-- de proveniência ou de política pode mudar após Closed/Cancelled.
+CREATE OR REPLACE FUNCTION public.enforce_measurement_workspace_line_mutability()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_terminal_workspace_id UUID;
+BEGIN
+  PERFORM 1
+  FROM public.measurement_workspaces mw
+  WHERE mw.id IN (
+    CASE WHEN TG_OP IN ('UPDATE', 'DELETE') THEN OLD.measurement_workspace_id ELSE NULL END,
+    CASE WHEN TG_OP IN ('INSERT', 'UPDATE') THEN NEW.measurement_workspace_id ELSE NULL END
+  )
+  ORDER BY mw.id
+  FOR SHARE;
+
+  SELECT mw.id INTO v_terminal_workspace_id
+  FROM public.measurement_workspaces mw
+  WHERE mw.id IN (
+    CASE WHEN TG_OP IN ('UPDATE', 'DELETE') THEN OLD.measurement_workspace_id ELSE NULL END,
+    CASE WHEN TG_OP IN ('INSERT', 'UPDATE') THEN NEW.measurement_workspace_id ELSE NULL END
+  )
+    AND mw.status IN ('Closed', 'Cancelled')
+  LIMIT 1;
+
+  IF v_terminal_workspace_id IS NOT NULL THEN
+    RAISE EXCEPTION 'Measurement workspace lines are immutable after the workspace is closed or cancelled.'
+      USING ERRCODE = '55000';
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS enforce_measurement_workspace_line_mutability_before_write
+  ON public.measurement_workspace_lines;
+CREATE TRIGGER enforce_measurement_workspace_line_mutability_before_write
+BEFORE INSERT OR UPDATE OR DELETE
+ON public.measurement_workspace_lines
+FOR EACH ROW
+EXECUTE FUNCTION public.enforce_measurement_workspace_line_mutability();
+
 -- 2. Persistência do agregado MeasurementCycle já existente no domínio.
 -- Os estados são exatamente os estados atuais; nenhum estado novo é criado.
 CREATE TABLE public.measurement_cycles (
@@ -307,9 +359,27 @@ BEGIN
         ) AS formal_line
         WHERE formal_line->>'id' = NEW.bulletin_line_id
           AND formal_line->>'serviceItemId' = mwl.managed_service_item_id::TEXT
+          AND formal_line->>'serviceItemCode' = msi.code
+          AND formal_line->>'description' = msi.description
+          AND formal_line->>'unit' = msi.unit
+          AND (formal_line->>'canonicalQuantity')::NUMERIC = mwl.quantity
+          AND (formal_line->>'canonicalUnitValue')::NUMERIC = mwl.unit_value
+          AND (formal_line->>'canonicalTotalValue')::NUMERIC = mwl.total_value
+          AND (
+            mwl.canonical_quantity_scale IS NULL
+            OR (formal_line->>'quantityScale')::SMALLINT = mwl.canonical_quantity_scale
+          )
+          AND (
+            mwl.monetary_policy_key IS NULL
+            OR formal_line->>'monetaryPolicyKey' = mwl.monetary_policy_key
+          )
+          AND (
+            mwl.monetary_scale IS NULL
+            OR (formal_line->>'monetaryScale')::SMALLINT = mwl.monetary_scale
+          )
       )
   ) THEN
-    RAISE EXCEPTION 'Formal bulletin line must reference its immutable source line and operational item in the same organization and project.'
+    RAISE EXCEPTION 'Formal bulletin line must be materially identical to its immutable source line and operational item in the same organization and project.'
       USING ERRCODE = '23514';
   END IF;
 
@@ -354,7 +424,17 @@ DECLARE
   v_json_line_count INTEGER;
   v_source_count INTEGER;
 BEGIN
+  IF TG_OP = 'INSERT' AND NEW.status <> 'Draft' THEN
+    RAISE EXCEPTION 'A persisted bulletin must be created in Draft state.'
+      USING ERRCODE = '23514';
+  END IF;
+
   IF TG_OP = 'UPDATE' THEN
+    IF OLD.status IN ('Finalized', 'Cancelled') THEN
+      RAISE EXCEPTION 'Finalized and Cancelled bulletins are terminal and immutable.'
+        USING ERRCODE = '55000';
+    END IF;
+
     IF NEW.lines IS DISTINCT FROM OLD.lines
        AND EXISTS (
          SELECT 1 FROM public.measurement_bulletin_line_sources s
@@ -363,16 +443,44 @@ BEGIN
       RAISE EXCEPTION 'Bulletin lines cannot change after relational sources are registered.'
         USING ERRCODE = '55000';
     END IF;
-  END IF;
 
-  IF TG_OP = 'INSERT' AND NEW.status = 'Finalized' THEN
-    RAISE EXCEPTION 'A bulletin must be created, linked to source lines, validated and only then finalized.'
-      USING ERRCODE = '23514';
+    IF OLD.status IS DISTINCT FROM NEW.status
+       AND NOT (
+         (OLD.status = 'Draft' AND NEW.status IN ('Validated', 'Cancelled'))
+         OR (OLD.status = 'Validated' AND NEW.status IN ('Finalized', 'Cancelled'))
+       ) THEN
+      RAISE EXCEPTION 'Invalid persisted bulletin transition from % to %.', OLD.status, NEW.status
+        USING ERRCODE = '23514';
+    END IF;
   END IF;
 
   IF TG_OP = 'UPDATE'
      AND NEW.status = 'Finalized'
      AND OLD.status IS DISTINCT FROM 'Finalized' THEN
+    IF OLD.status <> 'Validated' THEN
+      RAISE EXCEPTION 'A bulletin must be Validated before it can be Finalized.'
+        USING ERRCODE = '23514';
+    END IF;
+
+    IF jsonb_typeof(NEW.validation_issues) <> 'array' THEN
+      RAISE EXCEPTION 'Finalized bulletin validation issues must be a JSON array.'
+        USING ERRCODE = '23514';
+    END IF;
+
+    IF EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements(
+        CASE
+          WHEN jsonb_typeof(NEW.validation_issues) = 'array' THEN NEW.validation_issues
+          ELSE '[]'::JSONB
+        END
+      ) AS validation_issue
+      WHERE validation_issue->>'severity' = 'blocking'
+    ) THEN
+      RAISE EXCEPTION 'A bulletin with blocking validation issues cannot be Finalized.'
+        USING ERRCODE = '23514';
+    END IF;
+
     IF jsonb_typeof(NEW.lines) <> 'array' THEN
       RAISE EXCEPTION 'Finalized bulletin lines must be a JSON array.'
         USING ERRCODE = '23514';
@@ -399,7 +507,7 @@ FOR EACH ROW
 EXECUTE FUNCTION public.enforce_measurement_bulletin_traceability_before_finalization();
 
 CREATE TRIGGER enforce_measurement_bulletin_traceability_before_update
-BEFORE UPDATE OF status, lines ON public.measurement_bulletins
+BEFORE UPDATE ON public.measurement_bulletins
 FOR EACH ROW
 EXECUTE FUNCTION public.enforce_measurement_bulletin_traceability_before_finalization();
 
@@ -415,6 +523,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
+  v_bulletin public.measurement_bulletins%ROWTYPE;
   v_link JSONB;
   v_inserted INTEGER := 0;
 BEGIN
@@ -429,12 +538,13 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM public.measurement_bulletins mb
-    WHERE mb.id = p_measurement_bulletin_id
-      AND mb.company_id = p_company_id
-      AND mb.status IN ('Draft', 'Validated')
-  ) THEN
+  SELECT * INTO v_bulletin
+  FROM public.measurement_bulletins mb
+  WHERE mb.id = p_measurement_bulletin_id
+    AND mb.company_id = p_company_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR v_bulletin.status NOT IN ('Draft', 'Validated') THEN
     RAISE EXCEPTION 'Bulletin is not available for source registration in this organization.'
       USING ERRCODE = '23514';
   END IF;
@@ -760,8 +870,8 @@ GRANT SELECT ON TABLE public.measurement_cycle_events TO authenticated, service_
 GRANT SELECT ON TABLE public.measurement_certifications TO authenticated, service_role;
 GRANT SELECT ON TABLE public.measurement_bulletin_line_sources TO authenticated, service_role;
 
-REVOKE ALL ON TABLE public.measurement_certified_item_period_totals FROM PUBLIC, anon;
-REVOKE ALL ON TABLE public.measurement_certified_item_balances FROM PUBLIC, anon;
+REVOKE ALL ON TABLE public.measurement_certified_item_period_totals FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON TABLE public.measurement_certified_item_balances FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT ON TABLE public.measurement_certified_item_period_totals TO authenticated, service_role;
 GRANT SELECT ON TABLE public.measurement_certified_item_balances TO authenticated, service_role;
 
