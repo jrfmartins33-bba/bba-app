@@ -18,6 +18,8 @@
     "./domain/consortium": "./src/domain/consortium/index.ts",
     "./domain/cost-center": "./src/domain/cost-center/index.ts",
     "./domain/contract-baseline": "./src/domain/contract-baseline/index.ts",
+    "./domain/contract-execution-item-link": "./src/domain/contract-execution-item-link/index.ts",
+    "./services/contract-execution-item-traceability": "./src/services/contract-execution-item-traceability/index.ts",
     "./advisor/claude-narrator": "./src/advisor/claude-narrator.ts",
     "./advisor/advisor-context.types": "./src/advisor/advisor-context.types.ts",
     "./advisor/advisor-context-builder": "./src/advisor/advisor-context-builder.ts",
