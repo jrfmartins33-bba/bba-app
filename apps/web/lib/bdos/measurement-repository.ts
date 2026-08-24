@@ -395,6 +395,8 @@ export interface ManagedServiceItemRecord {
   readonly unit: string;
   readonly contractQuantity: number;
   readonly unitPrice: number;
+  readonly contractQuantityDecimal: string;
+  readonly unitPriceDecimal: string;
 }
 
 const selectManagedServiceItemColumns =
@@ -409,7 +411,9 @@ const toManagedServiceItemRecord = (data: Record<string, unknown>): ManagedServi
   description: data.description as string,
   unit: data.unit as string,
   contractQuantity: Number(data.contract_quantity),
-  unitPrice: Number(data.unit_price)
+  unitPrice: Number(data.unit_price),
+  contractQuantityDecimal: String(data.contract_quantity),
+  unitPriceDecimal: String(data.unit_price)
 });
 
 export type FindMatchingManagedServiceItemOutcome = "matched" | "created";
@@ -690,6 +694,9 @@ export interface MeasurementWorkspaceLineRecord {
   readonly quantity: number;
   readonly unitValue: number;
   readonly totalValue: number;
+  readonly quantityDecimal: string;
+  readonly unitValueDecimal: string;
+  readonly totalValueDecimal: string;
   readonly declaredQuantity: number | null;
   readonly declaredUnitValue: number | null;
   readonly declaredTotalValue: number | null;
@@ -700,10 +707,14 @@ export interface MeasurementWorkspaceLineRecord {
   readonly sourceRowNumber: number | null;
   readonly sourcePhysicalColumn: string | null;
   readonly sourceFinancialColumn: string | null;
+  readonly sourceQuantityRaw: string | null;
+  readonly canonicalQuantityScale: number | null;
+  readonly monetaryPolicyKey: string | null;
+  readonly monetaryScale: number | null;
 }
 
 const selectMeasurementWorkspaceLineColumns =
-  "id, measurement_workspace_id, managed_service_item_id, quantity, unit_value, total_value, declared_quantity, declared_unit_value, declared_total_value, source_sheet_name, source_row_number, source_physical_column, source_financial_column";
+  "id, measurement_workspace_id, managed_service_item_id, quantity, unit_value, total_value, declared_quantity, declared_unit_value, declared_total_value, source_sheet_name, source_row_number, source_physical_column, source_financial_column, source_quantity_raw, canonical_quantity_scale, monetary_policy_key, monetary_scale";
 
 const toMeasurementWorkspaceLineRecord = (data: Record<string, unknown>): MeasurementWorkspaceLineRecord => ({
   id: data.id as string,
@@ -712,13 +723,26 @@ const toMeasurementWorkspaceLineRecord = (data: Record<string, unknown>): Measur
   quantity: Number(data.quantity),
   unitValue: Number(data.unit_value),
   totalValue: Number(data.total_value),
+  quantityDecimal: String(data.quantity),
+  unitValueDecimal: String(data.unit_value),
+  totalValueDecimal: String(data.total_value),
   declaredQuantity: data.declared_quantity === null ? null : Number(data.declared_quantity),
   declaredUnitValue: data.declared_unit_value === null ? null : Number(data.declared_unit_value),
   declaredTotalValue: data.declared_total_value === null ? null : Number(data.declared_total_value),
   sourceSheetName: (data.source_sheet_name as string | null) ?? null,
   sourceRowNumber: data.source_row_number === null || data.source_row_number === undefined ? null : Number(data.source_row_number),
   sourcePhysicalColumn: (data.source_physical_column as string | null) ?? null,
-  sourceFinancialColumn: (data.source_financial_column as string | null) ?? null
+  sourceFinancialColumn: (data.source_financial_column as string | null) ?? null,
+  sourceQuantityRaw: (data.source_quantity_raw as string | null) ?? null,
+  canonicalQuantityScale:
+    data.canonical_quantity_scale === null || data.canonical_quantity_scale === undefined
+      ? null
+      : Number(data.canonical_quantity_scale),
+  monetaryPolicyKey: (data.monetary_policy_key as string | null) ?? null,
+  monetaryScale:
+    data.monetary_scale === null || data.monetary_scale === undefined
+      ? null
+      : Number(data.monetary_scale)
 });
 
 // total_value é sempre passado pelo Application Service já recalculado
@@ -740,9 +764,9 @@ export const insertMeasurementWorkspaceLine = async (
     id: string;
     measurementWorkspaceId: string;
     managedServiceItemId: string;
-    quantity: number;
-    unitValue: number;
-    totalValue: number;
+    quantity: number | string;
+    unitValue: number | string;
+    totalValue: number | string;
     declaredQuantity: number | null;
     declaredUnitValue: number | null;
     declaredTotalValue: number | null;
@@ -750,6 +774,10 @@ export const insertMeasurementWorkspaceLine = async (
     sourceRowNumber: number | null;
     sourcePhysicalColumn: string | null;
     sourceFinancialColumn: string | null;
+    sourceQuantityRaw: string | null;
+    canonicalQuantityScale: number;
+    monetaryPolicyKey: string;
+    monetaryScale: number;
     notes?: string;
   }
 ): Promise<MeasurementWorkspaceLineRecord> => {
@@ -769,6 +797,10 @@ export const insertMeasurementWorkspaceLine = async (
       source_row_number: params.sourceRowNumber,
       source_physical_column: params.sourcePhysicalColumn,
       source_financial_column: params.sourceFinancialColumn,
+      source_quantity_raw: params.sourceQuantityRaw,
+      canonical_quantity_scale: params.canonicalQuantityScale,
+      monetary_policy_key: params.monetaryPolicyKey,
+      monetary_scale: params.monetaryScale,
       ...(params.notes ? { notes: params.notes } : {})
     })
     .select(selectMeasurementWorkspaceLineColumns)
@@ -828,9 +860,9 @@ export const updateMeasurementWorkspaceLine = async (
   params: {
     id: string;
     measurementWorkspaceId: string;
-    quantity: number;
-    unitValue: number;
-    totalValue: number;
+    quantity: number | string;
+    unitValue: number | string;
+    totalValue: number | string;
     declaredQuantity: number | null;
     declaredUnitValue: number | null;
     declaredTotalValue: number | null;
@@ -838,6 +870,10 @@ export const updateMeasurementWorkspaceLine = async (
     sourceRowNumber: number | null;
     sourcePhysicalColumn: string | null;
     sourceFinancialColumn: string | null;
+    sourceQuantityRaw: string | null;
+    canonicalQuantityScale: number;
+    monetaryPolicyKey: string;
+    monetaryScale: number;
   }
 ): Promise<MeasurementWorkspaceLineRecord | null> => {
   const { data, error } = await supabase
@@ -852,7 +888,11 @@ export const updateMeasurementWorkspaceLine = async (
       source_sheet_name: params.sourceSheetName,
       source_row_number: params.sourceRowNumber,
       source_physical_column: params.sourcePhysicalColumn,
-      source_financial_column: params.sourceFinancialColumn
+      source_financial_column: params.sourceFinancialColumn,
+      source_quantity_raw: params.sourceQuantityRaw,
+      canonical_quantity_scale: params.canonicalQuantityScale,
+      monetary_policy_key: params.monetaryPolicyKey,
+      monetary_scale: params.monetaryScale
     })
     .eq("id", params.id)
     .eq("measurement_workspace_id", params.measurementWorkspaceId)
