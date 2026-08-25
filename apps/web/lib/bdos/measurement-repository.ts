@@ -979,6 +979,15 @@ const toMeasurementBulletinRecord = (data: Record<string, unknown>): Measurement
 // só grava o que recebe. O envelope formal completo (reference, header,
 // decimalContext, lines, totals, validationIssues, trace, metadata) é
 // gravado verbatim (JSONB) para garantir rastreabilidade determinística.
+//
+// reference/header/decimalContext/validationIssues/trace/metadata são
+// obrigatórios (não opcionais), sem fallback `?? {}`/`?? []` --
+// correção pós-3C.1C: um repository que inventa `{}`/`[]` quando o
+// chamador omite o envelope é exatamente o tipo de bypass que o
+// trigger de consistência do banco (enforce_measurement_bulletin_envelope_consistency)
+// foi corrigido para rejeitar. O chamador (Application Service) é
+// quem já produziu o envelope real via o domínio (bulletin-generator)
+// -- este repository nunca decide o que "vazio" deveria significar.
 export const insertMeasurementBulletin = async (
   supabase: SupabaseClient,
   params: {
@@ -989,14 +998,14 @@ export const insertMeasurementBulletin = async (
     bulletinNumber: number;
     periodNumber: number;
     issueDate: string;
-    reference?: unknown;
-    header?: unknown;
-    decimalContext?: unknown;
+    reference: unknown;
+    header: unknown;
+    decimalContext: unknown;
     lines: unknown;
     totals: unknown;
-    validationIssues?: unknown;
-    trace?: unknown;
-    metadata?: unknown;
+    validationIssues: unknown;
+    trace: unknown;
+    metadata: unknown;
   }
 ): Promise<MeasurementBulletinRecord> => {
   const { data, error } = await supabase
@@ -1009,14 +1018,14 @@ export const insertMeasurementBulletin = async (
       bulletin_number: params.bulletinNumber,
       period_number: params.periodNumber,
       issue_date: params.issueDate,
-      reference: params.reference ?? {},
-      header: params.header ?? {},
-      decimal_context: params.decimalContext ?? {},
+      reference: params.reference,
+      header: params.header,
+      decimal_context: params.decimalContext,
       lines: params.lines,
       totals: params.totals,
-      validation_issues: params.validationIssues ?? [],
-      trace: params.trace ?? [],
-      metadata: params.metadata ?? {}
+      validation_issues: params.validationIssues,
+      trace: params.trace,
+      metadata: params.metadata
     })
     .select(selectMeasurementBulletinColumns)
     .single();

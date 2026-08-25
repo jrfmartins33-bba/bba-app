@@ -44,10 +44,24 @@ COMMENT ON COLUMN public.measurement_bulletins.metadata IS
   'Metadados extensíveis do envelope formal (correlationId, sistema de origem, criador, etc.).';
 
 -- 3. Função e Trigger de Consistência entre Snapshot Formal e Colunas Relacionais
+--
+-- Correção (revisão pós-3C.1C): a versão anterior desta função só
+-- validava um campo do envelope "se presente" (`IF NEW.header <>
+-- '{}'::jsonb THEN ...`) -- um header/reference literalmente vazio
+-- (`{}`) contornava toda a obrigatoriedade, inclusive a do
+-- responsável técnico formal. O domínio (bulletin-generator) já exige
+-- reference.id, header.projectId/periodNumber/issueDate/
+-- technicalResponsibleId/technicalResponsibleName e decimalContext
+-- completos desde a criação do boletim (createMeasurementBulletin,
+-- ainda em status Draft) -- portanto esta função agora EXIGE e
+-- CONFRONTA cada campo material incondicionalmente, em qualquer
+-- status, sem nenhum gate de "se não estiver vazio". Ausência nunca é
+-- tratada como "não há nada para comparar": é sempre rejeição.
 CREATE OR REPLACE FUNCTION public.enforce_measurement_bulletin_envelope_consistency()
 RETURNS trigger
+SECURITY INVOKER
+SET search_path = public, pg_temp
 LANGUAGE plpgsql
-SECURITY DEFINER
 AS $$
 DECLARE
   v_header_project_id TEXT;
@@ -58,77 +72,103 @@ DECLARE
   v_ref_id TEXT;
   v_meta_org_id TEXT;
 BEGIN
-  -- Se o cabeçalho estiver presente e não for um objeto vazio, valida consistência
-  IF NEW.header IS NOT NULL AND NEW.header <> '{}'::jsonb THEN
-    v_header_project_id := NEW.header->>'projectId';
-    v_header_period_number := NEW.header->>'periodNumber';
-    v_header_issue_date := NEW.header->>'issueDate';
-    v_header_tech_id := NEW.header->>'technicalResponsibleId';
-    v_header_tech_name := NEW.header->>'technicalResponsibleName';
-
-    -- Consistência da Obra / Projeto
-    IF v_header_project_id IS NOT NULL AND v_header_project_id <> '' THEN
-      IF v_header_project_id::uuid <> NEW.engineering_project_id THEN
-        RAISE EXCEPTION 'Divergência no Boletim %: header.projectId (%) não coincide com engineering_project_id (%)',
-          NEW.id, v_header_project_id, NEW.engineering_project_id
-          USING ERRCODE = '23514';
-      END IF;
-    END IF;
-
-    -- Consistência do Número do Período
-    IF v_header_period_number IS NOT NULL AND v_header_period_number <> '' THEN
-      IF (v_header_period_number::int) <> NEW.period_number THEN
-        RAISE EXCEPTION 'Divergência no Boletim %: header.periodNumber (%) não coincide com period_number (%)',
-          NEW.id, v_header_period_number, NEW.period_number
-          USING ERRCODE = '23514';
-      END IF;
-    END IF;
-
-    -- Consistência da Data de Emissão Canônica
-    IF v_header_issue_date IS NOT NULL AND v_header_issue_date <> '' THEN
-      IF (v_header_issue_date::date) <> NEW.issue_date THEN
-        RAISE EXCEPTION 'Divergência no Boletim %: header.issueDate (%) não coincide com issue_date (%)',
-          NEW.id, v_header_issue_date, NEW.issue_date
-          USING ERRCODE = '23514';
-      END IF;
-    END IF;
-
-    -- Obrigatoriedade do Responsável Técnico Formal se status for Validated ou Finalized
-    IF NEW.status IN ('Validated', 'Finalized') THEN
-      IF v_header_tech_id IS NULL OR trim(v_header_tech_id) = '' OR
-         v_header_tech_name IS NULL OR trim(v_header_tech_name) = '' THEN
-        RAISE EXCEPTION 'Divergência no Boletim %: responsável técnico formal (ID e Nome) é obrigatório para status %',
-          NEW.id, NEW.status
-          USING ERRCODE = '23514';
-      END IF;
-    END IF;
+  -- Referência: obrigatória e materialmente completa sempre -- {} não
+  -- é uma referência válida, nunca contorna a exigência de reference.id.
+  v_ref_id := NEW.reference->>'id';
+  IF v_ref_id IS NULL OR trim(v_ref_id) = '' THEN
+    RAISE EXCEPTION 'Boletim %: reference.id é obrigatório e não pode estar ausente ou vazio (envelope formal incompleto)',
+      NEW.id
+      USING ERRCODE = '23514';
+  END IF;
+  IF v_ref_id !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN
+    RAISE EXCEPTION 'Boletim %: reference.id (%) não é um identificador válido (esperado o UUID do measurement_workspace)',
+      NEW.id, v_ref_id
+      USING ERRCODE = '23514';
+  END IF;
+  IF v_ref_id::uuid <> NEW.measurement_workspace_id THEN
+    RAISE EXCEPTION 'Divergência no Boletim %: reference.id (%) não coincide com measurement_workspace_id (%)',
+      NEW.id, v_ref_id, NEW.measurement_workspace_id
+      USING ERRCODE = '23514';
   END IF;
 
-  -- Se a referência estiver presente e não for vazia, valida consistência do workspace
-  IF NEW.reference IS NOT NULL AND NEW.reference <> '{}'::jsonb THEN
-    v_ref_id := NEW.reference->>'id';
-    IF v_ref_id IS NOT NULL AND v_ref_id <> '' THEN
-      -- Se for formato UUID válido, compara com measurement_workspace_id
-      IF v_ref_id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN
-        IF v_ref_id::uuid <> NEW.measurement_workspace_id THEN
-          RAISE EXCEPTION 'Divergência no Boletim %: reference.id (%) não coincide com measurement_workspace_id (%)',
-            NEW.id, v_ref_id, NEW.measurement_workspace_id
-            USING ERRCODE = '23514';
-        END IF;
-      END IF;
-    END IF;
+  -- Cabeçalho: obrigatório e materialmente completo sempre -- {} não
+  -- é um cabeçalho válido, nunca contorna projectId/periodNumber/
+  -- issueDate/responsável técnico.
+  v_header_project_id := NEW.header->>'projectId';
+  v_header_period_number := NEW.header->>'periodNumber';
+  v_header_issue_date := NEW.header->>'issueDate';
+  v_header_tech_id := NEW.header->>'technicalResponsibleId';
+  v_header_tech_name := NEW.header->>'technicalResponsibleName';
+
+  -- Consistência da Obra / Projeto
+  IF v_header_project_id IS NULL OR trim(v_header_project_id) = '' THEN
+    RAISE EXCEPTION 'Boletim %: header.projectId é obrigatório e não pode estar ausente ou vazio (envelope formal incompleto)',
+      NEW.id
+      USING ERRCODE = '23514';
+  END IF;
+  IF v_header_project_id::uuid <> NEW.engineering_project_id THEN
+    RAISE EXCEPTION 'Divergência no Boletim %: header.projectId (%) não coincide com engineering_project_id (%)',
+      NEW.id, v_header_project_id, NEW.engineering_project_id
+      USING ERRCODE = '23514';
+  END IF;
+
+  -- Consistência do Número do Período
+  IF v_header_period_number IS NULL OR trim(v_header_period_number) = '' THEN
+    RAISE EXCEPTION 'Boletim %: header.periodNumber é obrigatório e não pode estar ausente ou vazio (envelope formal incompleto)',
+      NEW.id
+      USING ERRCODE = '23514';
+  END IF;
+  IF (v_header_period_number::int) <> NEW.period_number THEN
+    RAISE EXCEPTION 'Divergência no Boletim %: header.periodNumber (%) não coincide com period_number (%)',
+      NEW.id, v_header_period_number, NEW.period_number
+      USING ERRCODE = '23514';
+  END IF;
+
+  -- Consistência da Data de Emissão Canônica
+  IF v_header_issue_date IS NULL OR trim(v_header_issue_date) = '' THEN
+    RAISE EXCEPTION 'Boletim %: header.issueDate é obrigatório e não pode estar ausente ou vazio (envelope formal incompleto)',
+      NEW.id
+      USING ERRCODE = '23514';
+  END IF;
+  IF (v_header_issue_date::date) <> NEW.issue_date THEN
+    RAISE EXCEPTION 'Divergência no Boletim %: header.issueDate (%) não coincide com issue_date (%)',
+      NEW.id, v_header_issue_date, NEW.issue_date
+      USING ERRCODE = '23514';
+  END IF;
+
+  -- Obrigatoriedade do Responsável Técnico Formal -- sempre, em
+  -- qualquer status (não apenas Validated/Finalized): o domínio já
+  -- exige os dois campos na criação do boletim, então um boletim novo
+  -- sem eles nunca é um envelope legítimo, em nenhum status.
+  IF v_header_tech_id IS NULL OR trim(v_header_tech_id) = '' THEN
+    RAISE EXCEPTION 'Boletim %: header.technicalResponsibleId é obrigatório e não pode estar ausente ou vazio (envelope formal incompleto)',
+      NEW.id
+      USING ERRCODE = '23514';
+  END IF;
+  IF v_header_tech_name IS NULL OR trim(v_header_tech_name) = '' THEN
+    RAISE EXCEPTION 'Boletim %: header.technicalResponsibleName é obrigatório e não pode estar ausente ou vazio (envelope formal incompleto)',
+      NEW.id
+      USING ERRCODE = '23514';
+  END IF;
+
+  -- Contexto decimal: obrigatório e materialmente completo sempre --
+  -- {} não é um contexto decimal válido.
+  IF NEW.decimal_context->>'quantityScale' IS NULL
+     OR NEW.decimal_context->>'unitValueScale' IS NULL
+     OR NEW.decimal_context->'monetaryPolicy' IS NULL THEN
+    RAISE EXCEPTION 'Boletim %: decimal_context é obrigatório e materialmente incompleto (quantityScale, unitValueScale e monetaryPolicy são exigidos)',
+      NEW.id
+      USING ERRCODE = '23514';
   END IF;
 
   -- Se metadata tiver organizationId ou companyId, valida consistência com company_id
-  IF NEW.metadata IS NOT NULL AND NEW.metadata <> '{}'::jsonb THEN
-    v_meta_org_id := COALESCE(NEW.metadata->>'organizationId', NEW.metadata->>'companyId');
-    IF v_meta_org_id IS NOT NULL AND v_meta_org_id <> '' THEN
-      IF v_meta_org_id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN
-        IF v_meta_org_id::uuid <> NEW.company_id THEN
-          RAISE EXCEPTION 'Divergência no Boletim %: metadata.organizationId (%) não coincide com company_id (%)',
-            NEW.id, v_meta_org_id, NEW.company_id
-            USING ERRCODE = '23514';
-        END IF;
+  v_meta_org_id := COALESCE(NEW.metadata->>'organizationId', NEW.metadata->>'companyId');
+  IF v_meta_org_id IS NOT NULL AND v_meta_org_id <> '' THEN
+    IF v_meta_org_id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN
+      IF v_meta_org_id::uuid <> NEW.company_id THEN
+        RAISE EXCEPTION 'Divergência no Boletim %: metadata.organizationId (%) não coincide com company_id (%)',
+          NEW.id, v_meta_org_id, NEW.company_id
+          USING ERRCODE = '23514';
       END IF;
     END IF;
   END IF;
