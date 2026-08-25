@@ -346,6 +346,17 @@ function validateBulletinShell(
       );
     }
 
+    if (isBlank(input.header.issueDate)) {
+      errors.push(
+        createBulletinError(
+          "missing_header_issue_date",
+          "header.issueDate",
+          "Header issue date is required.",
+          metadata,
+        ),
+      );
+    }
+
     if (
       isBlank(input.header.technicalResponsibleId) ||
       isBlank(input.header.technicalResponsibleName)
@@ -600,6 +611,7 @@ function cloneHeader(header: MeasurementBulletinHeader): MeasurementBulletinHead
     periodNumber: header.periodNumber,
     startDate: header.startDate,
     endDate: header.endDate,
+    issueDate: header.issueDate,
     technicalResponsibleId: header.technicalResponsibleId,
     technicalResponsibleName: header.technicalResponsibleName,
     metadata: header.metadata,
@@ -664,6 +676,7 @@ function createBulletinMetadata(
     contractId: input.header?.contractId ?? null,
     projectId: input.header?.projectId ?? null,
     measurementPeriodId: input.header?.measurementPeriodId ?? null,
+    issueDate: input.header?.issueDate ?? null,
     correlationId: input.correlationId,
     createdBy: input.createdBy,
     sourceSystem: input.sourceSystem,
@@ -684,6 +697,7 @@ function createMutationMetadata(
     contractId: bulletin.header.contractId,
     projectId: bulletin.header.projectId,
     measurementPeriodId: bulletin.header.measurementPeriodId,
+    issueDate: bulletin.header.issueDate,
   };
 }
 

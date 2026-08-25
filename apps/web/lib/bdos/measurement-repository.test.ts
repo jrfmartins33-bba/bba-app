@@ -1,8 +1,11 @@
 import {
   claimMeasurementBulletinImportForProcessing,
   finalizeMeasurementBulletinImportWithResult,
+  getMeasurementBulletinById,
+  insertMeasurementBulletin,
   insertMeasurementBulletinImport,
-  listMeasurementBulletinImportsByCompany
+  listMeasurementBulletinImportsByCompany,
+  updateMeasurementBulletinStatus
 } from "./measurement-repository";
 import { createFakeSupabaseClient } from "./test-helpers/fake-supabase-client";
 
@@ -19,7 +22,8 @@ import { createFakeSupabaseClient } from "./test-helpers/fake-supabase-client";
 function newClient() {
   return createFakeSupabaseClient({
     tables: {
-      measurement_bulletin_imports: { defaults: { status: "pending_upload" } }
+      measurement_bulletin_imports: { defaults: { status: "pending_upload" } },
+      measurement_bulletins: { defaults: { status: "Draft" } }
     }
   });
 }
@@ -286,6 +290,125 @@ async function main(): Promise<void> {
       threw = true;
     }
     assertTrue(threw, "erro da segunda consulta deveria propagar, nunca devolver lista parcial silenciosamente");
+  });
+
+  // Etapa 3C.1C -- Persistência completa do envelope formal do boletim
+  await runTest("insertMeasurementBulletin e getMeasurementBulletinById preservam envelope formal completo", async () => {
+    const supabase = newClient() as any;
+    const header = {
+      contractId: "contract-123",
+      contractNumber: "CT-2026-001",
+      projectId: "project-123",
+      projectName: "Lagoa do Arroz",
+      measurementPeriodId: "period-8",
+      periodNumber: 8,
+      startDate: "2026-06-01",
+      endDate: "2026-06-30",
+      issueDate: "2026-07-01",
+      technicalResponsibleId: "eng-marcos",
+      technicalResponsibleName: "Marcos Ferreira",
+      metadata: { source: "engineer-workspace" }
+    };
+    const reference = {
+      type: "measurement_workspace",
+      id: "workspace-123",
+      code: "MW-08",
+      name: "Medicao 8",
+      metadata: {}
+    };
+    const decimalContext = {
+      quantityScale: 2,
+      unitValueScale: 2,
+      monetaryPolicy: {
+        key: "source-document-truncation-to-cents",
+        scale: 2,
+        quantizationMode: "truncate_toward_zero"
+      }
+    };
+    const lines = [
+      {
+        id: "line-1",
+        serviceItemId: "si-1",
+        serviceItemCode: "SI-01",
+        description: "Servico A",
+        unit: "m3",
+        quantity: 10,
+        unitValue: 100,
+        canonicalTotalValue: 1000,
+        metadata: {}
+      }
+    ];
+    const totals = {
+      canonicalTotalValue: 1000,
+      totalQuantity: 10,
+      lineCount: 1,
+      currency: "BRL"
+    };
+    const trace = [
+      {
+        action: "bulletin_created",
+        actor: "system",
+        occurredAt: "2026-07-01T10:00:00Z",
+        description: "Boletim criado",
+        metadata: {}
+      }
+    ];
+
+    const inserted = await insertMeasurementBulletin(supabase, {
+      id: "bulletin-123",
+      companyId: "company-1",
+      engineeringProjectId: "project-123",
+      measurementWorkspaceId: "workspace-123",
+      bulletinNumber: 8,
+      periodNumber: 8,
+      issueDate: "2026-07-01",
+      reference,
+      header,
+      decimalContext,
+      lines,
+      totals,
+      validationIssues: [],
+      trace,
+      metadata: { test: true }
+    });
+
+    assertEqual(inserted.id, "bulletin-123", "id inserido incorreto");
+    assertEqual(inserted.issueDate, "2026-07-01", "issueDate inserida incorreta");
+    assertEqual(inserted.header.technicalResponsibleId, "eng-marcos", "responsavel tecnico id preservado");
+    assertEqual(inserted.header.technicalResponsibleName, "Marcos Ferreira", "responsavel tecnico nome preservado");
+    assertEqual(inserted.decimalContext.monetaryPolicy.key, "source-document-truncation-to-cents", "monetary policy key preservada");
+
+    const fetched = await getMeasurementBulletinById(supabase, { id: "bulletin-123", companyId: "company-1" });
+    assertTrue(fetched !== null, "boletim deveria existir");
+    assertEqual(fetched?.id, "bulletin-123", "id recuperado incorreto");
+    assertEqual(fetched?.issueDate, "2026-07-01", "issueDate recuperada incorreta");
+    assertEqual(fetched?.header.technicalResponsibleName, "Marcos Ferreira", "responsavel tecnico recuperado incorreto");
+    assertEqual(fetched?.status, "Draft", "status padrao deveria ser Draft");
+    assertEqual((fetched?.trace as Array<unknown>)?.length, 1, "trace recuperado incorreto");
+
+    // Teste de transição de status com atualização de trace
+    const updatedTrace = [
+      ...trace,
+      {
+        action: "bulletin_finalized",
+        actor: "eng-marcos",
+        occurredAt: "2026-07-02T10:00:00Z",
+        description: "Boletim finalizado",
+        metadata: {}
+      }
+    ];
+    await updateMeasurementBulletinStatus(supabase, {
+      id: "bulletin-123",
+      companyId: "company-1",
+      status: "Finalized",
+      finalizedAt: "2026-07-02T10:00:00Z",
+      trace: updatedTrace
+    });
+
+    const finalized = await getMeasurementBulletinById(supabase, { id: "bulletin-123", companyId: "company-1" });
+    assertEqual(finalized?.status, "Finalized", "status deveria ser Finalized");
+    assertEqual(finalized?.finalizedAt, "2026-07-02T10:00:00Z", "finalizedAt incorreto");
+    assertEqual((finalized?.trace as Array<unknown>)?.length, 2, "trace finalizado deveria ter 2 entradas");
   });
 }
 

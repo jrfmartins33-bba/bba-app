@@ -124,6 +124,17 @@ runTest("rejects missing header period id", () => {
   assertEqual(result.errors[0]?.code, "missing_header_period_id", "error code mismatch");
 });
 
+runTest("rejects missing header issue date", () => {
+  const input = createBulletinInputFixture();
+  const result = createMeasurementBulletin({
+    ...input,
+    header: { ...input.header, issueDate: "" },
+  });
+
+  assertFailure(result, "expected missing header issue date failure");
+  assertEqual(result.errors[0]?.code, "missing_header_issue_date", "error code mismatch");
+});
+
 runTest("rejects missing header technical responsible", () => {
   const input = createBulletinInputFixture();
   const result = createMeasurementBulletin({
@@ -559,6 +570,86 @@ runTest(
   },
 );
 
+runTest("preserves complete formal envelope and enables deterministic reconstruction", () => {
+  const input = createBulletinInputFixture();
+  const created = createMeasurementBulletin(input);
+  assertSuccess(created, "expected bulletin creation success");
+
+  const validated = validateMeasurementBulletin({
+    bulletin: created.bulletin,
+    actor,
+    occurredAt: "2026-07-02T10:00:00Z",
+  });
+  assertSuccess(validated, "expected validation success");
+
+  const finalized = finalizeMeasurementBulletin({
+    bulletin: validated.bulletin,
+    actor,
+    occurredAt: "2026-07-03T10:00:00Z",
+  });
+  assertSuccess(finalized, "expected finalization success");
+
+  const bulletin = finalized.bulletin;
+
+  // Snapshot representation as would be stored in the database
+  const persistedEnvelope = {
+    id: bulletin.id,
+    organizationId: bulletin.organizationId,
+    reference: JSON.parse(JSON.stringify(bulletin.reference)),
+    header: JSON.parse(JSON.stringify(bulletin.header)),
+    decimalContext: JSON.parse(JSON.stringify(bulletin.decimalContext)),
+    lines: JSON.parse(JSON.stringify(bulletin.lines)),
+    totals: JSON.parse(JSON.stringify(bulletin.totals)),
+    status: bulletin.status,
+    validationIssues: JSON.parse(JSON.stringify(bulletin.validationIssues)),
+    trace: JSON.parse(JSON.stringify(bulletin.trace)),
+    metadata: JSON.parse(JSON.stringify(bulletin.metadata)),
+  };
+
+  // Reconstructed bulletin
+  const reconstructed: MeasurementBulletin = {
+    id: persistedEnvelope.id,
+    organizationId: persistedEnvelope.organizationId,
+    reference: persistedEnvelope.reference,
+    header: persistedEnvelope.header,
+    decimalContext: persistedEnvelope.decimalContext,
+    lines: persistedEnvelope.lines,
+    totals: persistedEnvelope.totals,
+    status: persistedEnvelope.status,
+    validationIssues: persistedEnvelope.validationIssues,
+    trace: persistedEnvelope.trace,
+    metadata: persistedEnvelope.metadata,
+  };
+
+  assertEqual(reconstructed.id, bulletin.id, "reconstructed id mismatch");
+  assertEqual(reconstructed.header.contractId, contractId, "reconstructed contractId mismatch");
+  assertEqual(reconstructed.header.issueDate, "2026-07-01", "reconstructed issueDate mismatch");
+  assertEqual(
+    reconstructed.header.technicalResponsibleId,
+    "engineer-marcos",
+    "reconstructed technicalResponsibleId mismatch",
+  );
+  assertEqual(
+    reconstructed.header.technicalResponsibleName,
+    "Marcos Ferreira",
+    "reconstructed technicalResponsibleName mismatch",
+  );
+  assertEqual(
+    reconstructed.decimalContext.monetaryPolicy.key,
+    "source-round-2",
+    "reconstructed monetary policy key mismatch",
+  );
+  assertEqual(reconstructed.trace.length, 3, "reconstructed trace count mismatch");
+  assertEqual(reconstructed.trace[0]?.action, "bulletin_created", "trace 0 action mismatch");
+  assertEqual(reconstructed.trace[1]?.action, "bulletin_validated", "trace 1 action mismatch");
+  assertEqual(reconstructed.trace[2]?.action, "bulletin_finalized", "trace 2 action mismatch");
+  assertEqual(
+    reconstructed.totals.canonicalTotalValue,
+    bulletin.totals.canonicalTotalValue,
+    "reconstructed totals mismatch",
+  );
+});
+
 function createBulletinFixture(
   overrides: Partial<CreateMeasurementBulletinInput> = {},
 ): MeasurementBulletin {
@@ -593,6 +684,7 @@ function createBulletinInputFixture(
         periodNumber: 8,
         startDate: "2026-06-01",
         endDate: "2026-06-30",
+        issueDate: "2026-07-01",
         technicalResponsibleId: "engineer-marcos",
         technicalResponsibleName: "Marcos Ferreira",
         metadata: { source: "engineer-workspace" },

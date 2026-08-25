@@ -53,6 +53,7 @@ export interface MeasurementBulletinHeader {
   readonly periodNumber: number;
   readonly startDate: string;
   readonly endDate: string;
+  readonly issueDate: string;
   readonly technicalResponsibleId: string;
   readonly technicalResponsibleName: string;
   readonly metadata: MeasurementBulletinMetadata;
@@ -176,6 +177,7 @@ export type MeasurementBulletinErrorCode =
   | "missing_header_contract_id"
   | "missing_header_project_id"
   | "missing_header_period_id"
+  | "missing_header_issue_date"
   | "missing_header_technical_responsible"
   | "missing_lines"
   | "missing_line_id"

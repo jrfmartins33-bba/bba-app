@@ -940,11 +940,19 @@ export interface MeasurementBulletinRecord {
   readonly periodNumber: number;
   readonly issueDate: string;
   readonly status: MeasurementBulletinStatus;
+  readonly reference: Record<string, unknown>;
+  readonly header: Record<string, unknown>;
+  readonly decimalContext: Record<string, unknown>;
+  readonly lines: unknown;
+  readonly totals: unknown;
+  readonly validationIssues: unknown;
+  readonly trace: unknown;
+  readonly metadata: Record<string, unknown>;
   readonly finalizedAt: string | null;
 }
 
 const selectMeasurementBulletinColumns =
-  "id, company_id, engineering_project_id, measurement_workspace_id, bulletin_number, period_number, issue_date, status, finalized_at";
+  "id, company_id, engineering_project_id, measurement_workspace_id, bulletin_number, period_number, issue_date, status, reference, header, decimal_context, lines, totals, validation_issues, trace, metadata, finalized_at";
 
 const toMeasurementBulletinRecord = (data: Record<string, unknown>): MeasurementBulletinRecord => ({
   id: data.id as string,
@@ -955,13 +963,22 @@ const toMeasurementBulletinRecord = (data: Record<string, unknown>): Measurement
   periodNumber: Number(data.period_number),
   issueDate: data.issue_date as string,
   status: data.status as MeasurementBulletinStatus,
+  reference: (data.reference as Record<string, unknown>) ?? {},
+  header: (data.header as Record<string, unknown>) ?? {},
+  decimalContext: (data.decimal_context as Record<string, unknown>) ?? {},
+  lines: data.lines,
+  totals: data.totals,
+  validationIssues: data.validation_issues,
+  trace: data.trace ?? [],
+  metadata: (data.metadata as Record<string, unknown>) ?? {},
   finalizedAt: (data.finalized_at as string | null) ?? null
 });
 
 // bulletinNumber já vem decidido pelo Application Service (regra de
 // numeração, Sprint 4.0) — este repository nunca escolhe o número,
-// só grava o que recebe. lines/totals/validationIssues são gravados
-// verbatim (JSONB), mesma disciplina de insertPlanningDataset.
+// só grava o que recebe. O envelope formal completo (reference, header,
+// decimalContext, lines, totals, validationIssues, trace, metadata) é
+// gravado verbatim (JSONB) para garantir rastreabilidade determinística.
 export const insertMeasurementBulletin = async (
   supabase: SupabaseClient,
   params: {
@@ -972,9 +989,14 @@ export const insertMeasurementBulletin = async (
     bulletinNumber: number;
     periodNumber: number;
     issueDate: string;
+    reference?: unknown;
+    header?: unknown;
+    decimalContext?: unknown;
     lines: unknown;
     totals: unknown;
-    validationIssues: unknown;
+    validationIssues?: unknown;
+    trace?: unknown;
+    metadata?: unknown;
   }
 ): Promise<MeasurementBulletinRecord> => {
   const { data, error } = await supabase
@@ -987,9 +1009,14 @@ export const insertMeasurementBulletin = async (
       bulletin_number: params.bulletinNumber,
       period_number: params.periodNumber,
       issue_date: params.issueDate,
+      reference: params.reference ?? {},
+      header: params.header ?? {},
+      decimal_context: params.decimalContext ?? {},
       lines: params.lines,
       totals: params.totals,
-      validation_issues: params.validationIssues
+      validation_issues: params.validationIssues ?? [],
+      trace: params.trace ?? [],
+      metadata: params.metadata ?? {}
     })
     .select(selectMeasurementBulletinColumns)
     .single();
@@ -1024,17 +1051,31 @@ export const getMeasurementBulletinById = async (
 // (Sprint 3) recusa no banco qualquer UPDATE quando o boletim já está
 // Finalized, sem exceção. finalizedAt só é passado na transição para
 // 'Finalized' (o CHECK measurement_bulletins_finalized_at_consistent
-// exige os dois juntos ou nenhum).
+// exige os dois juntos ou nenhum). Permite evoluir validation_issues,
+// trace e metadata durante as transições de domínio.
 export const updateMeasurementBulletinStatus = async (
   supabase: SupabaseClient,
-  params: { id: string; companyId: string; status: MeasurementBulletinStatus; finalizedAt?: string }
+  params: {
+    id: string;
+    companyId: string;
+    status: MeasurementBulletinStatus;
+    validationIssues?: unknown;
+    trace?: unknown;
+    metadata?: unknown;
+    finalizedAt?: string;
+  }
 ): Promise<void> => {
+  const payload: Record<string, unknown> = {
+    status: params.status,
+    ...(params.finalizedAt ? { finalized_at: params.finalizedAt } : {}),
+    ...(params.validationIssues !== undefined ? { validation_issues: params.validationIssues } : {}),
+    ...(params.trace !== undefined ? { trace: params.trace } : {}),
+    ...(params.metadata !== undefined ? { metadata: params.metadata } : {})
+  };
+
   const { error } = await supabase
     .from("measurement_bulletins")
-    .update({
-      status: params.status,
-      ...(params.finalizedAt ? { finalized_at: params.finalizedAt } : {})
-    })
+    .update(payload)
     .eq("id", params.id)
     .eq("company_id", params.companyId);
 
