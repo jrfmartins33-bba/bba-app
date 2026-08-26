@@ -1092,3 +1092,97 @@ export const updateMeasurementBulletinStatus = async (
     throw error;
   }
 };
+
+// Leitura por workspace (não por id do boletim) -- ponto de entrada real
+// para a tela de um import específico, que só conhece o workspace
+// (via measurement_workspaces.measurement_bulletin_import_id), nunca o
+// id do boletim formal diretamente. Um workspace pode, em tese, ter
+// mais de um boletim ao longo do tempo (ex.: um Cancelled seguido de
+// um novo) -- `order by created_at desc, limit 1` devolve sempre o
+// mais recente, nunca uma leitura ambígua.
+export const getMeasurementBulletinByWorkspaceId = async (
+  supabase: SupabaseClient,
+  params: { measurementWorkspaceId: string; companyId: string }
+): Promise<MeasurementBulletinRecord | null> => {
+  const { data, error } = await supabase
+    .from("measurement_bulletins")
+    .select(selectMeasurementBulletinColumns)
+    .eq("measurement_workspace_id", params.measurementWorkspaceId)
+    .eq("company_id", params.companyId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as Record<string, unknown>[];
+  return rows.length > 0 ? toMeasurementBulletinRecord(rows[0]!) : null;
+};
+
+// ---------------------------------------------------------------
+// measurement_bulletin_line_sources
+// ---------------------------------------------------------------
+
+// Só a contagem -- a tela de status formal (Etapa 3C.2) só precisa
+// comprovar "todas as linhas têm fonte relacional", nunca exibir o
+// conteúdo de cada fonte. `head: true` evita trazer as 15 linhas
+// inteiras do banco só para contar.
+export const countMeasurementBulletinLineSources = async (
+  supabase: SupabaseClient,
+  params: { measurementBulletinId: string }
+): Promise<number> => {
+  const { count, error } = await supabase
+    .from("measurement_bulletin_line_sources")
+    .select("id", { count: "exact", head: true })
+    .eq("measurement_bulletin_id", params.measurementBulletinId);
+
+  if (error) {
+    throw error;
+  }
+
+  return count ?? 0;
+};
+
+// ---------------------------------------------------------------
+// measurement_cycles
+// ---------------------------------------------------------------
+
+export type MeasurementCycleRecordStatus = "draft" | "measured" | "bulletin_generated" | "certified" | "closed";
+
+export interface MeasurementCycleRecord {
+  readonly id: string;
+  readonly measurementWorkspaceId: string;
+  readonly measurementBulletinId: string | null;
+  readonly status: MeasurementCycleRecordStatus;
+}
+
+const selectMeasurementCycleColumns = "id, measurement_workspace_id, measurement_bulletin_id, status";
+
+const toMeasurementCycleRecord = (data: Record<string, unknown>): MeasurementCycleRecord => ({
+  id: data.id as string,
+  measurementWorkspaceId: data.measurement_workspace_id as string,
+  measurementBulletinId: (data.measurement_bulletin_id as string | null) ?? null,
+  status: data.status as MeasurementCycleRecordStatus
+});
+
+// UNIQUE(measurement_workspace_id) no banco garante no máximo um ciclo
+// por workspace -- maybeSingle() é seguro aqui, ao contrário do
+// boletim (que não tem essa mesma garantia de unicidade).
+export const getMeasurementCycleByWorkspaceId = async (
+  supabase: SupabaseClient,
+  params: { measurementWorkspaceId: string; companyId: string }
+): Promise<MeasurementCycleRecord | null> => {
+  const { data, error } = await supabase
+    .from("measurement_cycles")
+    .select(selectMeasurementCycleColumns)
+    .eq("measurement_workspace_id", params.measurementWorkspaceId)
+    .eq("company_id", params.companyId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ? toMeasurementCycleRecord(data) : null;
+};
