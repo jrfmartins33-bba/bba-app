@@ -2961,6 +2961,18 @@ button {
   margin-top: 2px;
 }
 
+/* Refinamento pós-3C.2 -- nota neutra, fora da faixa de risco
+   (measurement-decision-hero__stats): observação técnica nunca usa o
+   mesmo tom de alerta (amber) de uma divergência material real. */
+.measurement-decision-hero__technical-observations {
+  align-items: center;
+  color: var(--text-muted);
+  display: flex;
+  font-size: 12.5px;
+  gap: 6px;
+  margin: 0;
+}
+
 .measurement-decision-hero__next-step {
   align-items: flex-start;
   background: rgba(255, 255, 255, 0.04);
@@ -3350,6 +3362,15 @@ button {
   border-left-color: var(--status-amber);
 }
 
+/* Refinamento pós-3C.2 -- observação técnica não material nunca usa o
+   amarelo de alerta principal (esse tom é reservado para divergência
+   material real). Aplicado por materiality, não por severity: uma
+   ocorrência `warning` classificada como observação técnica cai aqui,
+   nunca em --warning, mesmo compartilhando o mesmo severity de origem. */
+.measurement-critical-item--technical-observation {
+  border-left-color: var(--text-muted);
+}
+
 .measurement-critical-item__trigger {
   align-items: center;
   background: transparent;
@@ -3399,6 +3420,11 @@ button {
 
 .measurement-critical-item--warning .measurement-critical-item__severity {
   color: var(--status-amber);
+}
+
+.measurement-critical-item--technical-observation .measurement-critical-item__severity {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--text-muted);
 }
 
 .measurement-critical-item__title {
@@ -3453,6 +3479,11 @@ button {
 .measurement-critical-item__block--negative {
   background: rgba(239, 68, 68, 0.06);
   border-color: rgba(239, 68, 68, 0.28);
+}
+
+.measurement-critical-item__block--neutral {
+  background: rgba(148, 163, 184, 0.05);
+  border-color: var(--app-border);
 }
 
 .measurement-critical-item__block-label {

@@ -1,9 +1,9 @@
 "use client";
 
 import { useId, useState } from "react";
-import { AlertOctagon, AlertTriangle, ChevronDown, CircleCheck, MapPin, SearchCheck, ShieldAlert } from "lucide-react";
+import { AlertOctagon, AlertTriangle, CheckCircle2, ChevronDown, CircleCheck, MapPin, SearchCheck, ShieldAlert } from "lucide-react";
 import type { DecisionBriefCriticalItem } from "@bba/bdos-core/decision-brief";
-import { translateSeverity } from "./measurement-critical-item-view-model";
+import { translateItemPresentation } from "./measurement-critical-item-view-model";
 import { MeasurementCellReference } from "./measurement-cell-reference";
 
 const SEVERITY_ICON: Record<DecisionBriefCriticalItem["severity"], typeof AlertOctagon> = {
@@ -38,13 +38,16 @@ const SEVERITY_ICON: Record<DecisionBriefCriticalItem["severity"], typeof AlertO
 export function MeasurementCriticalItem({ item, index }: { readonly item: DecisionBriefCriticalItem; readonly index: number }) {
   const [expanded, setExpanded] = useState(false);
   const contentId = useId();
-  const presentation = translateSeverity(item.severity);
-  const Icon = SEVERITY_ICON[item.severity];
+  const isTechnicalObservation = item.materiality === "technical_observation";
+  const presentation = translateItemPresentation(item);
+  const Icon = isTechnicalObservation ? CheckCircle2 : SEVERITY_ICON[item.severity];
   const hasLocation = item.evidenceReferences.length > 0;
   const hasConsequences = item.consequenceIfAddressed !== null || item.consequenceIfIgnored !== null;
 
   return (
-    <li className={`measurement-critical-item measurement-critical-item--${item.severity}`}>
+    <li
+      className={`measurement-critical-item measurement-critical-item--${isTechnicalObservation ? "technical-observation" : item.severity}`}
+    >
       <button
         aria-controls={contentId}
         aria-expanded={expanded}
@@ -88,13 +91,23 @@ export function MeasurementCriticalItem({ item, index }: { readonly item: Decisi
           {hasConsequences ? (
             <div className="measurement-critical-item__consequences">
               {item.consequenceIfIgnored !== null ? (
-                <div className="measurement-critical-item__block measurement-critical-item__block--negative">
-                  <p className="measurement-critical-item__block-label">
-                    <ShieldAlert aria-hidden="true" size={14} />
-                    Se for ignorado
-                  </p>
-                  <p className="measurement-critical-item__block-body">{item.consequenceIfIgnored}</p>
-                </div>
+                isTechnicalObservation ? (
+                  <div className="measurement-critical-item__block measurement-critical-item__block--neutral">
+                    <p className="measurement-critical-item__block-label">
+                      <CheckCircle2 aria-hidden="true" size={14} />
+                      Tratamento
+                    </p>
+                    <p className="measurement-critical-item__block-body">{item.consequenceIfIgnored}</p>
+                  </div>
+                ) : (
+                  <div className="measurement-critical-item__block measurement-critical-item__block--negative">
+                    <p className="measurement-critical-item__block-label">
+                      <ShieldAlert aria-hidden="true" size={14} />
+                      Se for ignorado
+                    </p>
+                    <p className="measurement-critical-item__block-body">{item.consequenceIfIgnored}</p>
+                  </div>
+                )
               ) : null}
               {item.consequenceIfAddressed !== null ? (
                 <div className="measurement-critical-item__block measurement-critical-item__block--positive">

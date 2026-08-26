@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, CircleCheck } from "lucide-react";
 import { Card } from "@bba/ui";
-import type { DecisionBrief } from "@bba/bdos-core/decision-brief";
+import type { DecisionBrief, DecisionBriefCriticalItem } from "@bba/bdos-core/decision-brief";
 import { MeasurementCriticalItem } from "./measurement-critical-item";
 
 export interface MeasurementCriticalItemsSectionProps {
@@ -18,29 +18,67 @@ const VISIBLE_COUNT = 4;
 
 /**
  * Epic 20 (Decision Experience), Sprint 20.1E.4 (original) + 20.1E.6
- * (padrão visual human-first, PRINCIPLE 008 -- segunda iteração) —
- * apresenta `criticalItems[]` na ordem exata entregue pelo builder.
- * Diferente de Principais Decisões/Ações Recomendadas, um array vazio
- * aqui tem significado positivo e por isso a seção nunca é omitida --
- * mostra um estado vazio explícito em vez de desaparecer.
+ * (padrão visual human-first) + refinamento pós-3C.2 (materialidade)
+ * — separa `criticalItems[]` em dois cards conforme `item.materiality`,
+ * cada um com sua própria paginação "Ver mais". Nunca reordena,
+ * funde, corta ou esconde nenhuma ocorrência -- os dois arrays juntos
+ * somam exatamente `criticalItems.length`, sempre.
  *
- * "Ver mais"/"Mostrar menos" só controla quantos itens já renderizados
- * ficam visíveis -- nunca corta, funde ou reordena `criticalItems[]`;
- * o array inteiro é sempre passado para `.map`, intacto.
+ * "O que precisa de atenção" (material) nunca é omitido -- um array
+ * vazio aqui tem significado positivo, mostra estado vazio explícito.
+ * "Observações técnicas da leitura" (technical_observation) só
+ * aparece quando existe pelo menos uma -- uma seção vazia ao lado da
+ * de atenção pareceria quebrada, não intencional (mesma regra já
+ * aplicada a Principais Decisões/Ações Recomendadas).
  */
 export function MeasurementCriticalItemsSection({ criticalItems }: MeasurementCriticalItemsSectionProps) {
+  const materialItems = criticalItems.filter((item) => item.materiality === "material");
+  const technicalObservationItems = criticalItems.filter((item) => item.materiality === "technical_observation");
+
+  return (
+    <>
+      <MeasurementCriticalItemsGroup
+        emptyMessage="Nenhum item crítico identificado."
+        items={materialItems}
+        itemNoun={{ singular: "item", plural: "itens" }}
+        title="O que precisa de atenção"
+      />
+
+      {technicalObservationItems.length > 0 ? (
+        <MeasurementCriticalItemsGroup
+          intro="Estas ocorrências foram identificadas durante a leitura da planilha, mas não alteram os valores, os itens medidos nem a rastreabilidade do boletim."
+          items={technicalObservationItems}
+          itemNoun={{ singular: "observação", plural: "observações" }}
+          title="Observações técnicas da leitura"
+        />
+      ) : null}
+    </>
+  );
+}
+
+interface MeasurementCriticalItemsGroupProps {
+  readonly title: string;
+  readonly items: ReadonlyArray<DecisionBriefCriticalItem>;
+  readonly itemNoun: { readonly singular: string; readonly plural: string };
+  readonly intro?: string;
+  readonly emptyMessage?: string;
+}
+
+function MeasurementCriticalItemsGroup({ title, items, itemNoun, intro, emptyMessage }: MeasurementCriticalItemsGroupProps) {
   const [showAll, setShowAll] = useState(false);
-  const hasItems = criticalItems.length > 0;
-  const hasMore = criticalItems.length > VISIBLE_COUNT;
-  const visibleItems = showAll ? criticalItems : criticalItems.slice(0, VISIBLE_COUNT);
-  const remainingCount = criticalItems.length - VISIBLE_COUNT;
+  const hasItems = items.length > 0;
+  const hasMore = items.length > VISIBLE_COUNT;
+  const visibleItems = showAll ? items : items.slice(0, VISIBLE_COUNT);
+  const remainingCount = items.length - VISIBLE_COUNT;
 
   return (
     <Card
-      action={hasItems ? <span className="measurement-section-count">{criticalItems.length} {criticalItems.length === 1 ? "item" : "itens"}</span> : undefined}
+      action={hasItems ? <span className="measurement-section-count">{items.length} {items.length === 1 ? itemNoun.singular : itemNoun.plural}</span> : undefined}
       className="span-12 workspace-card"
-      title="O que precisa de atenção"
+      title={title}
     >
+      {intro ? <p className="workspace-card__description">{intro}</p> : null}
+
       {hasItems ? (
         <>
           <ul className="measurement-critical-items-list">
@@ -61,12 +99,12 @@ export function MeasurementCriticalItemsSection({ criticalItems }: MeasurementCr
             </button>
           ) : null}
         </>
-      ) : (
+      ) : emptyMessage ? (
         <div className="measurement-critical-items-empty">
           <CircleCheck aria-hidden="true" size={20} />
-          <p>Nenhum item crítico identificado.</p>
+          <p>{emptyMessage}</p>
         </div>
-      )}
+      ) : null}
     </Card>
   );
 }

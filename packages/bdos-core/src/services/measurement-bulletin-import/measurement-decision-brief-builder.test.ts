@@ -144,13 +144,70 @@ runTest("reconciled produz readiness=ready", () => {
   assertTrue(brief.keyDecisions[0]!.recommended, "única keyDecision é a recomendada");
 });
 
-// 2. Análise completa com ressalvas (needs_review, só warnings).
-runTest("needs_review com só warnings produz readiness=ready_with_reservations (caso real do BM_08)", () => {
-  assertEqual(deriveReadiness(NEEDS_REVIEW_FIXTURE), "ready_with_reservations");
+// 2. Caso real do BM_08 (dois warnings, ambos observação técnica não
+// material: missing_work_package_code e orphan_legacy_column_detected,
+// totalDifference=0) -- correção pós-revisão: `analysisResult.status`
+// sozinho ("needs_review") não distingue observação técnica de
+// divergência material; a prontidão agora é recalculada a partir da
+// materialidade real de cada ocorrência.
+runTest("caso real do BM_08 (só observações técnicas, reconciliado) produz readiness=ready, nenhuma ação corretiva, texto de 'pronta para certificação'", () => {
+  assertEqual(deriveReadiness(NEEDS_REVIEW_FIXTURE), "ready", "status persistido diz needs_review, mas nenhuma das 2 ocorrências é material e a reconciliação é exata");
   const brief = buildMeasurementDecisionBrief(buildInput(NEEDS_REVIEW_FIXTURE));
-  assertEqual(brief.executiveConclusion.readiness, "ready_with_reservations");
-  assertEqual(brief.criticalItems.length, 2);
-  assertEqual(brief.keyDecisions.length, 2, "prosseguir com ressalvas + reter, como alternativas");
+  assertEqual(brief.executiveConclusion.readiness, "ready");
+  assertEqual(brief.executiveConclusion.headline, "Medição conferida, sem divergências materiais.");
+  assertTrue(brief.executiveConclusion.body.includes("reconciliados sem divergências"), "body reconhece a reconciliação limpa");
+  assertTrue(brief.executiveConclusion.body.includes("2 observações técnicas"), "body menciona a contagem real de observações técnicas");
+
+  // Não esconde nem apaga as ocorrências -- continuam em criticalItems, rastreáveis.
+  assertEqual(brief.criticalItems.length, 2, "as 2 ocorrências continuam visíveis, nunca escondidas");
+  assertTrue(brief.criticalItems.every((item) => item.materiality === "technical_observation"), "ambas classificadas como observação técnica, não material");
+  assertTrue(
+    brief.criticalItems.every((item) => item.evidenceReferences.length >= 0),
+    "evidenceReferences continua presente (rastreabilidade preservada) mesmo para observação técnica"
+  );
+
+  // Não gera ação corretiva para observação técnica já tratada.
+  assertEqual(brief.nextActions.length, 0, "observação técnica não material nunca produz ação recomendada");
+
+  // Caminho recomendado: só a alternativa positiva, sem "reter" como opção equivalente.
+  assertEqual(brief.keyDecisions.length, 1, "nenhuma alternativa de retenção quando não há divergência material");
+  assertEqual(brief.keyDecisions[0]!.label, "Prosseguir para certificação da medição");
+  assertTrue(brief.keyDecisions[0]!.recommended);
+});
+
+// Consequência de observação técnica: nunca "se for ignorado"/"ao
+// corrigir"/"a inconsistência permanecerá" -- sempre "tratado
+// automaticamente", já que não existe ação humana pendente.
+runTest("observação técnica usa linguagem de tratamento automático, nunca a moldura de ação humana pendente", () => {
+  const brief = buildMeasurementDecisionBrief(buildInput(NEEDS_REVIEW_FIXTURE));
+  brief.criticalItems.forEach((item) => {
+    assertEqual(item.consequenceIfAddressed, null, "não existe 'ao corrigir' quando não há ação a tomar");
+    assertTrue(item.consequenceIfIgnored !== null && item.consequenceIfIgnored.includes("Tratado automaticamente"), "linguagem de tratamento automático");
+    [item.consequenceIfAddressed ?? "", item.consequenceIfIgnored ?? ""].forEach((text) => {
+      assertTrue(!text.toLowerCase().includes("se for ignorado"), "nunca 'se for ignorado' para observação técnica");
+      assertTrue(!text.toLowerCase().includes("a inconsistência permanecerá"), "nunca 'a inconsistência permanecerá' para observação técnica");
+    });
+  });
+});
+
+// Divergência material (warning, não blocking) continua sendo ponto
+// de atenção real -- materialidade não é "todo warning vira
+// observação técnica", só os códigos comprovadamente inofensivos.
+runTest("warning material (ex.: missing_quantity_and_value) continua readiness=ready_with_reservations e gera ação recomendada", () => {
+  const materialWarningFixture: MeasurementAnalysisResult = {
+    ...RECONCILED_FIXTURE,
+    measurementBulletinImportId: "import-material-warning",
+    structuralIssues: [
+      { code: "missing_quantity_and_value", severity: "warning", message: "Linha sem quantidade e sem valor no período." }
+    ],
+    status: "needs_review"
+  };
+
+  assertEqual(deriveReadiness(materialWarningFixture), "ready_with_reservations");
+  const brief = buildMeasurementDecisionBrief(buildInput(materialWarningFixture));
+  assertEqual(brief.criticalItems.length, 1);
+  assertEqual(brief.criticalItems[0]!.materiality, "material");
+  assertEqual(brief.nextActions.length, 1, "warning material continua gerando ação recomendada");
 });
 
 // 3. Análise com condição bloqueante (failed + issue blocking).
@@ -208,10 +265,14 @@ runTest("criticalItems reflete severidade/mensagem reais e consequências aprova
   assertEqual(genericItem!.consequenceIfAddressed, "A análise poderá prosseguir sem esta inconsistência.", "fallback genérico para código sem consequência específica aprovada");
 });
 
-// 11. nextActions descritivas, derivadas de um problema real.
-runTest("nextActions é 1:1 com criticalItems, nunca cria id de aggregate", () => {
-  const brief = buildMeasurementDecisionBrief(buildInput(NEEDS_REVIEW_FIXTURE));
-  assertEqual(brief.nextActions.length, brief.criticalItems.length);
+// 11. nextActions descritivas, derivadas de um problema real -- 1:1
+// só com os criticalItems `material` (MULTI_COLUMN_FIXTURE: 1
+// blocking + 1 warning material, nenhuma observação técnica).
+runTest("nextActions é 1:1 com os criticalItems materiais, nunca cria id de aggregate", () => {
+  const brief = buildMeasurementDecisionBrief(buildInput(MULTI_COLUMN_FIXTURE));
+  const materialItemCount = brief.criticalItems.filter((item) => item.materiality === "material").length;
+  assertEqual(brief.nextActions.length, materialItemCount);
+  assertEqual(brief.nextActions.length, brief.criticalItems.length, "MULTI_COLUMN_FIXTURE não tem observação técnica -- os dois itens são materiais");
   brief.nextActions.forEach((action) => {
     const keys = Object.keys(action).sort();
     assertEqual(JSON.stringify(keys), JSON.stringify(["evidenceReferences", "rationale", "title"]), "nextAction só tem title/rationale/evidenceReferences -- nenhum campo de aggregate");
@@ -226,11 +287,25 @@ runTest("keyMetrics reflete valores já calculados pelo Engine, sem inventar mé
   assertEqual(officialMetric!.value, new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(1000), "mesmo formatador usado pelo builder -- evita depender do caractere de espaço exato do Intl");
 
   const failedBrief = buildMeasurementDecisionBrief(buildInput(FAILED_TECHNICAL_FIXTURE));
-  assertEqual(failedBrief.keyMetrics.length, 2, "só impedimentos/pontos de atenção -- failed não tem officialPeriodTotal/recalculatedTotal no tipo");
+  assertEqual(failedBrief.keyMetrics.length, 3, "impedimentos/divergências materiais/observações técnicas -- failed não tem officialPeriodTotal/recalculatedTotal no tipo");
   assertTrue(
-    failedBrief.keyMetrics.every((metric) => metric.label === "Impedimentos bloqueantes" || metric.label === "Pontos de atenção"),
+    failedBrief.keyMetrics.every(
+      (metric) => metric.label === "Impedimentos bloqueantes" || metric.label === "Divergências materiais" || metric.label === "Observações técnicas"
+    ),
     "nenhuma métrica financeira inventada para o ramo failed"
   );
+});
+
+// Observação técnica não material não aumenta "Divergências
+// materiais" nas keyMetrics -- só entra na contagem separada de
+// "Observações técnicas".
+runTest("keyMetrics: observação técnica não material soma em 'Observações técnicas', nunca em 'Divergências materiais'", () => {
+  const brief = buildMeasurementDecisionBrief(buildInput(NEEDS_REVIEW_FIXTURE));
+  const materialMetric = brief.keyMetrics.find((metric) => metric.label === "Divergências materiais");
+  const observationsMetric = brief.keyMetrics.find((metric) => metric.label === "Observações técnicas");
+  assertTrue(materialMetric !== undefined && observationsMetric !== undefined);
+  assertEqual(materialMetric!.value, "0", "as 2 ocorrências são observação técnica, nenhuma material");
+  assertEqual(observationsMetric!.value, "2");
 });
 
 // 13 e 14. Referências de origem, incluindo múltiplas colunas.

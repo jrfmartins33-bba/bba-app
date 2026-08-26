@@ -106,6 +106,7 @@ export function MeasurementDecisionBriefPage({ measurementBulletinImportId }: { 
               confidence={state.brief.confidence}
               criticalItems={state.brief.criticalItems}
               executiveConclusion={state.brief.executiveConclusion}
+              measurementBulletinImportId={measurementBulletinImportId}
               nextActions={state.brief.nextActions}
               situation={state.brief.situation}
             />

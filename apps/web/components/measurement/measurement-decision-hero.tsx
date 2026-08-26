@@ -1,8 +1,12 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { ArrowRight, CircleCheck, CircleHelp, CircleX, ListChecks, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Card } from "@bba/ui";
 import type { DecisionBrief, ReliabilityIndexResult } from "@bba/bdos-core/decision-brief";
 import { MeasurementConfidenceNote } from "./measurement-confidence-note";
 import { translateReadiness, type ReadinessIcon } from "./measurement-decision-hero-view-model";
+import { fetchMeasurementBulletinFormalStatus } from "./measurement-bulletin-formal-status-client";
 
 const READINESS_ICON: Record<ReadinessIcon, typeof CircleCheck> = {
   check: CircleCheck,
@@ -17,33 +21,77 @@ export interface MeasurementDecisionHeroProps {
   readonly confidence: ReliabilityIndexResult;
   readonly criticalItems: DecisionBrief["criticalItems"];
   readonly nextActions: DecisionBrief["nextActions"];
+  /**
+   * Refinamento pós-3C.2 -- exclusivo para a checagem opcional de
+   * estado formal real (ver `certificationReadyHeadline` abaixo). O
+   * Brief em si (readiness/headline/body) nunca depende disto -- este
+   * id só entra numa segunda leitura, somente-leitura, do estado já
+   * persistido do boletim formal (Etapa 3C.1C/3C.2), inteiramente
+   * separada da análise técnica.
+   */
+  readonly measurementBulletinImportId: string;
 }
+
+// Etapa 3C.2 -- só promove o headline/body de "análise limpa" para a
+// linguagem de certificação quando o estado formal REAL confirma isso
+// (boletim Finalized, ainda não certificado). O builder (puro, sem
+// I/O) nunca sabe se um boletim formal existe -- essa composição só
+// pode acontecer aqui, na fronteira que já lê os dois lados.
+const CERTIFICATION_READY_HEADLINE = "Medição conferida e pronta para certificação.";
+const CERTIFICATION_READY_BODY =
+  "Os valores e itens medidos foram reconciliados sem divergências. As observações técnicas de leitura do arquivo não têm impacto sobre o valor ou a rastreabilidade da medição.";
 
 /**
  * Epic 20 (Decision Experience), Sprint 20.1E.3 (original) + 20.1E.6
- * (padrão visual human-first, PRINCIPLE 008 -- segunda iteração, após
- * protótipo validado com a fixture real do BM_08) — elemento
- * dominante da página. Apresenta `executiveConclusion`/`situation`
- * exatamente como o Brief entrega -- nenhum headline/body é recomposto
- * aqui, só `readiness` é traduzido para o marcador de estado.
+ * (padrão visual human-first, PRINCIPLE 008) + refinamento pós-3C.2
+ * (materialidade + estado formal) — elemento dominante da página.
+ * Apresenta `executiveConclusion`/`situation` como o Brief entrega --
+ * só o par headline/body é substituído, e só quando readiness="ready"
+ * E o estado formal real (lido à parte, nunca calculado aqui) confirma
+ * Finalized/não certificado; nenhum outro caso é afetado.
  *
- * Os três números (Impedimentos bloqueantes / Pontos de atenção /
- * Ações recomendadas) usam a MESMA distinção de severidade que o
- * builder já usa para `keyMetrics` (`buildKeyMetrics`,
- * measurement-decision-brief-builder.ts): bloqueantes conta só
- * `severity === "blocking"`, pontos de atenção conta só
- * `severity === "warning"` -- nunca `criticalItems.length` bruto, que
- * confundiria as duas contagens sempre que existir pelo menos um item
- * bloqueante. "Próximo passo" usa `nextActions[0]` verbatim (primeira
- * ação real, nunca escolhida por peso/prioridade -- o contrato não
- * tem esse campo); omitido quando `nextActions` está vazio.
+ * Os dois números de risco (Impedimentos bloqueantes / Divergências
+ * materiais) usam `item.materiality`, não `severity` bruto -- um
+ * `warning` classificado como observação técnica nunca conta como
+ * divergência material (essa é exatamente a correção desta rodada).
+ * "Observações técnicas" é mostrado separadamente, fora da faixa de
+ * risco, com tratamento visual neutro -- nunca no mesmo tom de alerta.
  */
-export function MeasurementDecisionHero({ situation, executiveConclusion, confidence, criticalItems, nextActions }: MeasurementDecisionHeroProps) {
+export function MeasurementDecisionHero({
+  situation,
+  executiveConclusion,
+  confidence,
+  criticalItems,
+  nextActions,
+  measurementBulletinImportId
+}: MeasurementDecisionHeroProps) {
   const presentation = translateReadiness(executiveConclusion.readiness);
   const Icon = READINESS_ICON[presentation.icon];
   const blockingCount = criticalItems.filter((item) => item.severity === "blocking").length;
-  const attentionCount = criticalItems.filter((item) => item.severity === "warning").length;
+  const materialWarningCount = criticalItems.filter((item) => item.severity === "warning" && item.materiality === "material").length;
+  const technicalObservationCount = criticalItems.filter((item) => item.materiality === "technical_observation").length;
   const firstAction = nextActions[0] ?? null;
+
+  const [certificationReady, setCertificationReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (executiveConclusion.readiness !== "ready") {
+      setCertificationReady(false);
+      return;
+    }
+    void fetchMeasurementBulletinFormalStatus(measurementBulletinImportId).then((outcome) => {
+      if (!cancelled && outcome.kind === "ok") {
+        setCertificationReady(outcome.formalStatus.status === "Finalized" && !outcome.formalStatus.certified);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [executiveConclusion.readiness, measurementBulletinImportId]);
+
+  const headline = certificationReady ? CERTIFICATION_READY_HEADLINE : executiveConclusion.headline;
+  const body = certificationReady ? CERTIFICATION_READY_BODY : executiveConclusion.body;
 
   return (
     <Card className={`span-12 workspace-card measurement-decision-hero measurement-decision-hero--${presentation.tone}`}>
@@ -55,8 +103,8 @@ export function MeasurementDecisionHero({ situation, executiveConclusion, confid
           <span>{presentation.label}</span>
         </div>
 
-        <h2 className="measurement-decision-hero__headline">{executiveConclusion.headline}</h2>
-        <p className="measurement-decision-hero__body">{executiveConclusion.body}</p>
+        <h2 className="measurement-decision-hero__headline">{headline}</h2>
+        <p className="measurement-decision-hero__body">{body}</p>
 
         <div className="measurement-decision-hero__stats">
           <div className="measurement-decision-hero__stat measurement-decision-hero__stat--ok">
@@ -73,8 +121,8 @@ export function MeasurementDecisionHero({ situation, executiveConclusion, confid
               <TriangleAlert size={20} />
             </span>
             <span className="measurement-decision-hero__stat-body">
-              <span className="measurement-decision-hero__stat-value">{attentionCount}</span>
-              <span className="measurement-decision-hero__stat-label">Pontos de atenção</span>
+              <span className="measurement-decision-hero__stat-value">{materialWarningCount}</span>
+              <span className="measurement-decision-hero__stat-label">Divergências materiais</span>
             </span>
           </div>
           <div className="measurement-decision-hero__stat measurement-decision-hero__stat--gold">
@@ -87,6 +135,13 @@ export function MeasurementDecisionHero({ situation, executiveConclusion, confid
             </span>
           </div>
         </div>
+
+        {technicalObservationCount > 0 ? (
+          <p className="measurement-decision-hero__technical-observations">
+            <CircleCheck aria-hidden="true" size={14} />
+            {technicalObservationCount} {technicalObservationCount === 1 ? "observação técnica" : "observações técnicas"} — sem impacto no valor ou na rastreabilidade
+          </p>
+        ) : null}
 
         {firstAction !== null ? (
           <div className="measurement-decision-hero__next-step">

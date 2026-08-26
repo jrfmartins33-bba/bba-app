@@ -30,14 +30,20 @@ const VISIBLE_COUNT = 3;
  * "Ver mais"/"Mostrar menos" só controla quantas ações já renderizadas
  * ficam visíveis -- nunca funde, reordena ou corta `nextActions[]`.
  *
- * Array vazio: seção omitida, mesma decisão de
- * MeasurementKeyDecisionsSection.
+ * Array vazio: refinamento pós-3C.2 -- deixou de ser omitida (uma
+ * medição sem nenhuma ação corretiva pendente é um resultado positivo
+ * que merece confirmação explícita, não silêncio) e passou a mostrar
+ * "Nenhuma ação corretiva necessária antes da certificação."
  */
 export function MeasurementRecommendedActionsSection({ nextActions }: MeasurementRecommendedActionsSectionProps) {
   const [showAll, setShowAll] = useState(false);
 
   if (nextActions.length === 0) {
-    return null;
+    return (
+      <Card className="span-12 workspace-card" title="Ações Recomendadas">
+        <p className="workspace-card__description">Nenhuma ação corretiva necessária antes da certificação.</p>
+      </Card>
+    );
   }
 
   const hasMore = nextActions.length > VISIBLE_COUNT;

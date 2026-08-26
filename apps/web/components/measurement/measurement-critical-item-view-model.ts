@@ -25,3 +25,18 @@ const SEVERITY_PRESENTATION: Record<DecisionBriefCriticalItem["severity"], Sever
 export function translateSeverity(severity: DecisionBriefCriticalItem["severity"]): SeverityPresentation {
   return SEVERITY_PRESENTATION[severity];
 }
+
+/**
+ * Refinamento pós-3C.2 -- rótulo do badge depende de `materiality`,
+ * não só de `severity`: uma ocorrência `warning` classificada como
+ * `technical_observation` nunca mostra "Ponto de atenção" (linguagem
+ * de alerta que este refinamento existe para corrigir). `blocking`
+ * sempre é `material` (ver classifyIssueMateriality no builder), então
+ * nunca cai no ramo "Observação técnica" aqui.
+ */
+export function translateItemPresentation(item: Pick<DecisionBriefCriticalItem, "severity" | "materiality">): SeverityPresentation {
+  if (item.materiality === "technical_observation") {
+    return { label: "Observação técnica" };
+  }
+  return translateSeverity(item.severity);
+}

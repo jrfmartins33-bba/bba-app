@@ -249,9 +249,25 @@ async function main(): Promise<void> {
     assertTrue(!/Aprovad|Certificad|100% conforme|Sem riscos/i.test(CRITICAL_ITEMS_SECTION_SOURCE), "estado vazio não pode soar como aprovação formal");
   });
 
-  await runTest("Itens Críticos não ordena nem filtra o array recebido (slice de exibição é permitido, sort/filter não)", () => {
-    assertTrue(!/\.sort\(|\.reverse\(|\.filter\(/.test(CRITICAL_ITEMS_SECTION_SOURCE), "criticalItems deve ser apresentado exatamente como veio, na mesma ordem");
+  // Refinamento pós-3C.2: a seção agora usa `.filter(materiality)` para
+  // separar em dois cards (material / observação técnica) -- nunca
+  // para esconder um item (as duas listas juntas somam exatamente
+  // `criticalItems.length`, ver teste de materialidade abaixo). `.sort`/
+  // `.reverse` continuam proibidos -- nenhum reordenamento dentro de
+  // cada grupo.
+  await runTest("Itens Críticos nunca ordena o array recebido -- só separa por materiality (slice de exibição é permitido, sort/reverse não)", () => {
+    assertTrue(!/\.sort\(|\.reverse\(/.test(CRITICAL_ITEMS_SECTION_SOURCE), "criticalItems deve ser apresentado exatamente como veio dentro de cada grupo, na mesma ordem");
     assertTrue(!/\.sort\(|\.reverse\(/.test(CRITICAL_ITEM_SOURCE), "evidenceReferences não pode ser reordenado");
+  });
+
+  await runTest("Itens Críticos separa material de observação técnica sem perder nenhum item (as duas listas somam o total)", () => {
+    assertTrue(CRITICAL_ITEMS_SECTION_SOURCE.includes('item.materiality === "material"'), "grupo material filtra por materiality");
+    assertTrue(CRITICAL_ITEMS_SECTION_SOURCE.includes('item.materiality === "technical_observation"'), "grupo de observação técnica filtra por materiality");
+    assertTrue(CRITICAL_ITEMS_SECTION_SOURCE.includes("Observações técnicas da leitura"), "título do segundo grupo");
+    assertTrue(
+      CRITICAL_ITEMS_SECTION_SOURCE.includes("Estas ocorrências foram identificadas durante a leitura da planilha"),
+      "texto introdutório do grupo de observações técnicas"
+    );
   });
 
   await runTest("placeholder 'em construção' do 20.1E.1B foi removido", () => {
@@ -304,9 +320,20 @@ async function main(): Promise<void> {
     assertTrue(!/\.sort\(|\.reverse\(/.test(RECOMMENDED_ACTIONS_SOURCE), "nextActions não pode ser reordenado");
   });
 
-  await runTest("Principais Decisões e Ações Recomendadas omitem a seção quando o array está vazio", () => {
+  await runTest("Principais Decisões omite a seção quando o array está vazio", () => {
     assertTrue(/length === 0[\s\S]{0,20}return null/.test(KEY_DECISIONS_SOURCE), "keyDecisions vazio deve omitir a seção, não criar decisão genérica");
-    assertTrue(/length === 0[\s\S]{0,20}return null/.test(RECOMMENDED_ACTIONS_SOURCE), "nextActions vazio deve omitir a seção, não criar ação genérica");
+  });
+
+  // Refinamento pós-3C.2: nextActions vazio deixou de omitir a seção --
+  // "nenhuma ação corretiva necessária" é uma confirmação positiva que
+  // merece aparecer, não silêncio (mesmo raciocínio de Itens Críticos,
+  // que já tinha estado vazio explícito antes desta rodada).
+  await runTest("Ações Recomendadas mostra confirmação explícita (nunca omite a seção) quando nextActions está vazio", () => {
+    assertTrue(
+      RECOMMENDED_ACTIONS_SOURCE.includes("Nenhuma ação corretiva necessária antes da certificação."),
+      "texto de confirmação positiva quando não há ação corretiva pendente"
+    );
+    assertTrue(!/length === 0[\s\S]{0,20}return null/.test(RECOMMENDED_ACTIONS_SOURCE), "não volta a omitir a seção silenciosamente");
   });
 
   await runTest("recommended nunca vira botão de aprovação/execução/checkbox", () => {
@@ -375,10 +402,16 @@ async function main(): Promise<void> {
     assertTrue(!/recharts|chart\.js|d3-|victory-|nivo/i.test(RENDER_SOURCE), "nenhum gráfico deve ser criado a partir de dado narrativo");
   });
 
+  // Refinamento pós-3C.2: a paginação "Ver mais" foi extraída para
+  // MeasurementCriticalItemsGroup (reusada pelos dois cards, material
+  // e observação técnica) -- `items` é o parâmetro genérico do grupo,
+  // não mais `criticalItems` diretamente, mas a mesma garantia
+  // (array completo sempre disponível, slice só controla exibição)
+  // continua valendo para cada grupo.
   await runTest("'Ver mais' de Itens Críticos revela itens reais adicionais, nunca funde/trunca dado -- o array inteiro é sempre passado ao .map", () => {
     assertTrue(CRITICAL_ITEMS_SECTION_SOURCE.includes("VISIBLE_COUNT"), "deve existir um limite de exibição explícito, não implícito");
-    assertTrue(CRITICAL_ITEMS_SECTION_SOURCE.includes("showAll ? criticalItems : criticalItems.slice"), "o array completo continua disponível; slice só controla o que já está visível");
-    assertTrue(CRITICAL_ITEMS_SECTION_SOURCE.includes("criticalItems.length - VISIBLE_COUNT"), "contagem de 'ver mais' deve ser derivada do total real, nunca um número fixo");
+    assertTrue(CRITICAL_ITEMS_SECTION_SOURCE.includes("showAll ? items : items.slice"), "o array completo continua disponível; slice só controla o que já está visível");
+    assertTrue(CRITICAL_ITEMS_SECTION_SOURCE.includes("items.length - VISIBLE_COUNT"), "contagem de 'ver mais' deve ser derivada do total real, nunca um número fixo");
   });
 
   await runTest("'Ver mais' de Ações Recomendadas revela ações reais adicionais, nunca funde/trunca dado", () => {
@@ -389,6 +422,37 @@ async function main(): Promise<void> {
   await runTest("controle 'Ver mais'/'Mostrar menos' é um botão real com aria-expanded, nunca um texto de resumo estático", () => {
     assertTrue(CRITICAL_ITEMS_SECTION_SOURCE.includes("aria-expanded={showAll}") && /<button\b/.test(CRITICAL_ITEMS_SECTION_SOURCE), "Itens Críticos: controle real");
     assertTrue(RECOMMENDED_ACTIONS_SOURCE.includes("aria-expanded={showAll}") && /<button\b/.test(RECOMMENDED_ACTIONS_SOURCE), "Ações Recomendadas: controle real");
+  });
+
+  // Refinamento pós-3C.2, teste direcionado #6: um caso reconciliado
+  // sem divergência (readiness="ready" no Brief puro) só vira "pronta
+  // para certificação" quando o estado formal REAL confirma isso --
+  // nunca o builder (sem I/O) decidindo sozinho. A checagem fica
+  // inteiramente no Hero (client component), lendo o boletim formal
+  // por uma segunda chamada somente-leitura, e só troca o par
+  // headline/body -- nunca o restante do Brief.
+  await runTest("Hero só promove para 'Medição conferida e pronta para certificação' quando readiness='ready' E o boletim formal real está Finalized e não certificado", () => {
+    assertTrue(
+      HERO_SOURCE.includes('"Medição conferida e pronta para certificação."'),
+      "headline de certificação pronta deve existir literalmente no Hero"
+    );
+    assertTrue(
+      HERO_SOURCE.includes("fetchMeasurementBulletinFormalStatus"),
+      "a promoção deve depender de uma leitura real do estado formal, não de uma suposição"
+    );
+    assertTrue(
+      /executiveConclusion\.readiness\s*!==\s*["']ready["']/.test(HERO_SOURCE),
+      "a checagem do estado formal só deve rodar quando o Brief puro já diz readiness='ready'"
+    );
+    assertTrue(
+      /outcome\.formalStatus\.status\s*===\s*["']Finalized["']\s*&&\s*!outcome\.formalStatus\.certified/.test(HERO_SOURCE),
+      "só promove com boletim Finalized e ainda não certificado -- nunca por suposição de readiness isolada"
+    );
+    assertTrue(
+      /const headline = certificationReady \? CERTIFICATION_READY_HEADLINE : executiveConclusion\.headline;/.test(HERO_SOURCE) &&
+        /const body = certificationReady \? CERTIFICATION_READY_BODY : executiveConclusion\.body;/.test(HERO_SOURCE),
+      "só o par headline/body é substituído -- situation, criticalItems, nextActions continuam vindos do Brief tal como entregue"
+    );
   });
 }
 

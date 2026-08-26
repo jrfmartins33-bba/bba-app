@@ -1,7 +1,9 @@
 import {
+  DECISION_BRIEF_CRITICAL_ITEM_MATERIALITY_VALUES,
   DECISION_BRIEF_READINESS_VALUES,
   DECISION_BRIEF_SCHEMA_VERSION,
   type DecisionBrief,
+  type DecisionBriefCriticalItemMateriality,
   type DecisionBriefReadiness,
   type DecisionBriefSourceReference,
   type ReliabilityIndexResult,
@@ -58,6 +60,7 @@ function buildSampleDecisionBrief(overrides?: { readonly schemaVersion?: string;
       {
         id: "issue-1",
         severity: "warning",
+        materiality: "material",
         title: "Linha com dado parcial",
         body: "Código ou nome ausente na aba de origem.",
         consequenceIfAddressed: "Reduz risco de retrabalho na conferência.",
@@ -119,6 +122,13 @@ runTest("DECISION_BRIEF_READINESS_VALUES enumera exatamente os 4 valores aprovad
     assertTrue(DECISION_BRIEF_READINESS_VALUES.includes(value), `readiness inclui "${value}"`);
   });
   assertTrue(!DECISION_BRIEF_READINESS_VALUES.some((value) => value.includes("approve") || value.includes("approved") || value.includes("certified")), "nenhum valor carrega semântica de aprovação/certificação");
+});
+
+runTest("DECISION_BRIEF_CRITICAL_ITEM_MATERIALITY_VALUES enumera exatamente os 2 valores aprovados", () => {
+  assertEqual(DECISION_BRIEF_CRITICAL_ITEM_MATERIALITY_VALUES.length, 2, "2 valores de materiality");
+  (["material", "technical_observation"] as ReadonlyArray<DecisionBriefCriticalItemMateriality>).forEach((value) => {
+    assertTrue(DECISION_BRIEF_CRITICAL_ITEM_MATERIALITY_VALUES.includes(value), `materiality inclui "${value}"`);
+  });
 });
 
 runTest("DecisionBriefSourceReference (spreadsheet_cell) é um localizador -- sourceId + locator, coluna opcional", () => {

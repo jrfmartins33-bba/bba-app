@@ -80,6 +80,63 @@ export function buildMeasurementDecisionBrief(input: BuildMeasurementDecisionBri
 }
 
 // ---------------------------------------------------------------
+// Materialidade -- Categoria A. Separa, por código de ocorrência,
+// observações puramente técnicas de leitura do arquivo (nunca geram
+// item medido faltante, nunca alteram quantidade/preço unitário/
+// valor, nunca produzem diferença de reconciliação, nunca quebram
+// vínculo com item operacional ou rastreabilidade, nunca impedem
+// formalização/certificação) de ocorrências materiais.
+//
+// Allowlist deliberada (não denylist): um código só entra aqui depois
+// de comprovado, na leitura do parser (bulletin-import.ts), que ele é
+// estruturalmente incapaz de representar uma dessas cinco coisas --
+// qualquer código não listado (ou qualquer ocorrência `blocking`,
+// nunca incluída aqui) permanece material por padrão. Nenhuma decisão
+// de conteúdo (nome de arquivo, número de linha, projeto) participa
+// desta classificação -- só o código, sempre o mesmo para qualquer
+// arquivo que o parser processar.
+//
+// - orphan_legacy_column_detected: coluna nunca lida pela extração.
+// - missing_work_package_code / unrecognized_line (variante warning):
+//   só disparam para uma linha com código OU nome ausente -- uma linha
+//   totalmente em branco nunca gera ocorrência (filtrada antes, ver
+//   bulletin-import.ts), e uma linha com dado parcial nunca chega a
+//   virar item/linha medida (exige os dois presentes). A linha TOTAL
+//   GERAL do próprio arquivo sempre cai aqui, e é exatamente a fonte
+//   usada para a reconciliação -- não uma perda.
+// - historical_grid_not_authoritative: grade histórica é só um
+//   cruzamento informativo; a fonte oficial já prevaleceu no cálculo.
+// - ambiguous_period_label (variante warning, coluna da grade
+//   histórica não localizada): não afeta a coluna oficial, só o
+//   cruzamento histórico.
+// - period_number_conflict: nunca bloqueia por definição (remedição
+//   legítima é uma hipótese válida); é um sinal administrativo entre
+//   workspaces, não uma divergência dentro deste boletim.
+// - service_item_description_mismatch: linha é materializada
+//   normalmente (comprovado em measurement-bulletin-import-service.test.ts).
+const NON_MATERIAL_TECHNICAL_OBSERVATION_CODES: ReadonlySet<MeasurementImportIssueCode> = new Set([
+  "orphan_legacy_column_detected",
+  "missing_work_package_code",
+  "missing_service_item_code",
+  "unrecognized_line",
+  "historical_grid_not_authoritative",
+  "ambiguous_period_label",
+  "period_number_conflict",
+  "service_item_description_mismatch"
+]);
+
+function classifyIssueMateriality(issue: MeasurementImportIssue): "material" | "technical_observation" {
+  if (issue.severity === "blocking") {
+    return "material";
+  }
+  return NON_MATERIAL_TECHNICAL_OBSERVATION_CODES.has(issue.code) ? "technical_observation" : "material";
+}
+
+function isMaterialIssue(issue: MeasurementImportIssue): boolean {
+  return classifyIssueMateriality(issue) === "material";
+}
+
+// ---------------------------------------------------------------
 // Readiness -- Categoria A, 100% derivada dos caminhos reais de
 // measurement-bulletin-import-service.ts (matriz de auditoria,
 // linhas 1-4): "failed" só ocorre com structuralIssues vazio (falha
@@ -87,18 +144,30 @@ export function buildMeasurementDecisionBrief(input: BuildMeasurementDecisionBri
 // nunca as duas coisas fora desses casos, e blocking nunca coexiste
 // com "reconciled"/"needs_review" porque os gates retornam "failed"
 // antes desse branch ser alcançado.
+//
+// Correção pós-revisão: `analysisResult.status` sozinho não distingue
+// "há observações técnicas não materiais" de "há divergência
+// material" -- measurement-bulletin-import-service.ts marca
+// "needs_review" sempre que existe >=1 warning, mesmo quando nenhum
+// deles é material. A prontidão executiva agora é recalculada aqui a
+// partir das ocorrências reais (via classifyIssueMateriality) mais a
+// diferença de reconciliação já calculada (`totalDifference`) --
+// nunca reinventa a tolerância usada por measurement-bulletin-import-service.ts
+// (categoria de cálculo, fora deste builder): só promove a "ready"
+// quando a diferença é exatamente zero, o que nunca piora nenhum caso
+// que já era "ready" (esse status só existe hoje com zero warnings).
 // ---------------------------------------------------------------
 
 export function deriveReadiness(analysisResult: MeasurementAnalysisResult): DecisionBriefReadiness {
-  if (analysisResult.status === "reconciled") {
-    return "ready";
+  if (analysisResult.status === "failed") {
+    const hasBlockingIssue = analysisResult.structuralIssues.some((issue) => issue.severity === "blocking");
+    return hasBlockingIssue ? "not_ready" : "inconclusive";
   }
-  if (analysisResult.status === "needs_review") {
-    return "ready_with_reservations";
-  }
-  // status === "failed"
-  const hasBlockingIssue = analysisResult.structuralIssues.some((issue) => issue.severity === "blocking");
-  return hasBlockingIssue ? "not_ready" : "inconclusive";
+
+  const hasMaterialIssue = analysisResult.structuralIssues.some(isMaterialIssue);
+  const isFullyReconciled = analysisResult.totalDifference === 0;
+
+  return !hasMaterialIssue && isFullyReconciled ? "ready" : "ready_with_reservations";
 }
 
 // ---------------------------------------------------------------
@@ -135,19 +204,28 @@ function formatPeriod(declaredPeriod: MeasurementAnalysisResult["declaredPeriod"
 
 function buildIssuesSummarySentence(structuralIssues: ReadonlyArray<MeasurementImportIssue>): string {
   const blockingCount = structuralIssues.filter((issue) => issue.severity === "blocking").length;
-  const warningCount = structuralIssues.filter((issue) => issue.severity === "warning").length;
+  const materialWarningCount = structuralIssues.filter(
+    (issue) => issue.severity === "warning" && isMaterialIssue(issue)
+  ).length;
+  const technicalObservationCount = structuralIssues.filter(
+    (issue) => classifyIssueMateriality(issue) === "technical_observation"
+  ).length;
 
-  if (blockingCount === 0 && warningCount === 0) {
-    return "Nenhum impedimento ou ponto de atenção identificado.";
+  if (blockingCount === 0 && materialWarningCount === 0 && technicalObservationCount === 0) {
+    return "Nenhum impedimento ou divergência material identificado.";
   }
   const parts: string[] = [];
   if (blockingCount > 0) {
     parts.push(`${blockingCount} ${blockingCount === 1 ? "impedimento bloqueante" : "impedimentos bloqueantes"}`);
   }
-  if (warningCount > 0) {
-    parts.push(`${warningCount} ${warningCount === 1 ? "ponto de atenção" : "pontos de atenção"}`);
+  if (materialWarningCount > 0) {
+    parts.push(`${materialWarningCount} ${materialWarningCount === 1 ? "divergência material" : "divergências materiais"}`);
   }
-  return `Identificado(s): ${parts.join(" e ")}.`;
+  let sentence = parts.length > 0 ? `Identificado(s): ${parts.join(" e ")}.` : "Nenhum impedimento ou divergência material identificado.";
+  if (technicalObservationCount > 0) {
+    sentence += ` Foram identificadas ${technicalObservationCount} ${technicalObservationCount === 1 ? "observação técnica" : "observações técnicas"} de leitura do arquivo, sem impacto sobre o valor ou a rastreabilidade da medição.`;
+  }
+  return sentence;
 }
 
 // ---------------------------------------------------------------
@@ -161,20 +239,36 @@ function buildExecutiveConclusion(
   readiness: DecisionBriefReadiness
 ): DecisionBrief["executiveConclusion"] {
   const blockingCount = analysisResult.structuralIssues.filter((issue) => issue.severity === "blocking").length;
-  const warningCount = analysisResult.structuralIssues.filter((issue) => issue.severity === "warning").length;
+  const materialWarningCount = analysisResult.structuralIssues.filter(
+    (issue) => issue.severity === "warning" && isMaterialIssue(issue)
+  ).length;
+  const technicalObservationCount = analysisResult.structuralIssues.filter(
+    (issue) => classifyIssueMateriality(issue) === "technical_observation"
+  ).length;
 
   switch (readiness) {
-    case "ready":
+    case "ready": {
+      const observationsClause =
+        technicalObservationCount > 0
+          ? ` Foram identificadas ${technicalObservationCount} ${technicalObservationCount === 1 ? "observação técnica" : "observações técnicas"} de leitura do arquivo, sem impacto sobre o valor ou a rastreabilidade da medição.`
+          : "";
       return {
         readiness,
-        headline: "Apta para seguir no fluxo de aprovação.",
-        body: "A análise não identificou impedimentos nem pontos de atenção."
+        // Só a conclusão de análise -- nunca "pronta para certificação"
+        // aqui: este builder não sabe se um boletim formal já existe
+        // nem se já foi Finalized (Etapa 3C.1C/3C.2, pipeline
+        // inteiramente separado da análise técnica). Essa composição,
+        // quando o estado formal real permitir, é responsabilidade de
+        // quem consome o Brief (a página), nunca deste builder.
+        headline: "Medição conferida, sem divergências materiais.",
+        body: `Os valores e itens medidos foram reconciliados sem divergências.${observationsClause}`
       };
+    }
     case "ready_with_reservations":
       return {
         readiness,
         headline: "Apta para seguir, com ressalvas.",
-        body: `A análise não identificou impedimentos bloqueantes, mas há ${warningCount} ${warningCount === 1 ? "ponto de atenção" : "pontos de atenção"} a revisar antes do envio.`
+        body: `A análise não identificou impedimentos bloqueantes, mas há ${materialWarningCount} ${materialWarningCount === 1 ? "divergência material" : "divergências materiais"} a revisar antes do envio.`
       };
     case "not_ready":
       return {
@@ -200,11 +294,16 @@ function buildExecutiveConclusion(
 function buildKeyDecisions(readiness: DecisionBriefReadiness, analysisResult: MeasurementAnalysisResult): ReadonlyArray<DecisionBriefKeyDecision> {
   switch (readiness) {
     case "ready":
+      // Só a alternativa recomendada -- nenhuma segunda opção
+      // equivalente ("reter até revisão completa") quando não existe
+      // divergência material a revisar; ofertar as duas como
+      // alternativas igualmente válidas sugeriria uma incerteza que
+      // não existe neste caso.
       return [
         {
-          label: "Submeter a medição ao fluxo humano de aprovação",
+          label: "Prosseguir para certificação da medição",
           recommended: true,
-          rationale: "Nenhum impedimento ou ressalva material identificado."
+          rationale: "Os valores foram reconciliados, não há impedimentos materiais e as observações técnicas de leitura não alteram o resultado da medição."
         }
       ];
     case "ready_with_reservations":
@@ -254,10 +353,20 @@ function buildKeyDecisions(readiness: DecisionBriefReadiness, analysisResult: Me
 
 function buildCriticalItems(analysisResult: MeasurementAnalysisResult, sourceImportId: string): ReadonlyArray<DecisionBriefCriticalItem> {
   return analysisResult.structuralIssues.map((issue, index) => {
-    const consequences = ISSUE_CONSEQUENCES_BY_CODE[issue.code] ?? GENERIC_ISSUE_CONSEQUENCES;
+    const materiality = classifyIssueMateriality(issue);
+    // Observação técnica não material: nunca usa a linguagem de "se
+    // for ignorado"/"ao corrigir" (não existe ação humana necessária,
+    // então essa moldura não se aplica) nem o texto genérico de
+    // material ("a inconsistência permanecerá sem resolução" --
+    // linguagem proibida quando o BDOS já tratou automaticamente).
+    // Sempre o mesmo texto, independente do código -- o tratamento
+    // (ignorar com segurança) é idêntico para toda ocorrência nesta
+    // classificação, por definição de materiality.
+    const consequences = materiality === "technical_observation" ? TECHNICAL_OBSERVATION_CONSEQUENCES : (ISSUE_CONSEQUENCES_BY_CODE[issue.code] ?? GENERIC_ISSUE_CONSEQUENCES);
     return {
       id: `${issue.code}-${index}`,
       severity: issue.severity,
+      materiality,
       title: ISSUE_TITLE_BY_CODE[issue.code] ?? issue.code,
       body: issue.message,
       consequenceIfAddressed: consequences.ifAddressed,
@@ -309,10 +418,22 @@ const ISSUE_CONSEQUENCES_BY_CODE: Partial<Record<MeasurementImportIssueCode, Iss
   }
 };
 
-/** Categoria B -- texto neutro fornecido literalmente na revisão de arquitetura que precedeu esta implementação; nunca alega penalidade contratual, multa, fraude, glosa obrigatória ou inadimplemento sem que o Engine já tenha classificado isso. */
+/** Categoria B -- texto neutro fornecido literalmente na revisão de arquitetura que precedeu esta implementação; nunca alega penalidade contratual, multa, fraude, glosa obrigatória ou inadimplemento sem que o Engine já tenha classificado isso. Só se aplica a ocorrências `material` -- ver TECHNICAL_OBSERVATION_CONSEQUENCES para `technical_observation`. */
 const GENERIC_ISSUE_CONSEQUENCES: IssueConsequences = {
   ifAddressed: "A análise poderá prosseguir sem esta inconsistência.",
   ifIgnored: "A inconsistência permanecerá sem resolução no fluxo de revisão."
+};
+
+/**
+ * Texto único para toda ocorrência `technical_observation` -- nunca
+ * "se for ignorado"/"ao corrigir" (não existe ação humana pendente) e
+ * nunca "a inconsistência permanecerá" (o BDOS já tratou). `ifAddressed`
+ * fica null de propósito: não existe uma ação de "corrigir" para algo
+ * que já foi tratado automaticamente sem impacto.
+ */
+const TECHNICAL_OBSERVATION_CONSEQUENCES: IssueConsequences = {
+  ifAddressed: null,
+  ifIgnored: "Tratado automaticamente pelo BDOS — sem impacto no valor, na quantidade ou na rastreabilidade da medição."
 };
 
 // ---------------------------------------------------------------
@@ -327,11 +448,17 @@ const GENERIC_ISSUE_CONSEQUENCES: IssueConsequences = {
 
 function buildKeyMetrics(analysisResult: MeasurementAnalysisResult): ReadonlyArray<DecisionBriefKeyMetric> {
   const blockingCount = analysisResult.structuralIssues.filter((issue) => issue.severity === "blocking").length;
-  const warningCount = analysisResult.structuralIssues.filter((issue) => issue.severity === "warning").length;
+  const materialWarningCount = analysisResult.structuralIssues.filter(
+    (issue) => issue.severity === "warning" && isMaterialIssue(issue)
+  ).length;
+  const technicalObservationCount = analysisResult.structuralIssues.filter(
+    (issue) => classifyIssueMateriality(issue) === "technical_observation"
+  ).length;
 
   const base: DecisionBriefKeyMetric[] = [
     { label: "Impedimentos bloqueantes", value: String(blockingCount) },
-    { label: "Pontos de atenção", value: String(warningCount) }
+    { label: "Divergências materiais", value: String(materialWarningCount) },
+    { label: "Observações técnicas", value: String(technicalObservationCount) }
   ];
 
   if (analysisResult.status === "failed") {
@@ -386,12 +513,18 @@ function buildDetails(analysisResult: MeasurementAnalysisResult): DecisionBriefS
 // aggregates.
 // ---------------------------------------------------------------
 
+// Só ocorrências `material` viram ação recomendada -- uma observação
+// técnica já tratada automaticamente pelo BDOS nunca exige decisão ou
+// intervenção humana, então nunca deveria aparecer como algo "a
+// revisar".
 function buildNextActions(criticalItems: ReadonlyArray<DecisionBriefCriticalItem>): ReadonlyArray<DecisionBriefNextAction> {
-  return criticalItems.map((item) => ({
-    title: `Revisar: ${item.title.toLowerCase()}`,
-    rationale: item.body,
-    evidenceReferences: item.evidenceReferences
-  }));
+  return criticalItems
+    .filter((item) => item.materiality === "material")
+    .map((item) => ({
+      title: `Revisar: ${item.title.toLowerCase()}`,
+      rationale: item.body,
+      evidenceReferences: item.evidenceReferences
+    }));
 }
 
 // ---------------------------------------------------------------
