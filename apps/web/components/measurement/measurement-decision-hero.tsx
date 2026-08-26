@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { ArrowRight, CircleCheck, CircleHelp, CircleX, ListChecks, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Card } from "@bba/ui";
 import type { DecisionBrief, ReliabilityIndexResult } from "@bba/bdos-core/decision-brief";
 import { MeasurementConfidenceNote } from "./measurement-confidence-note";
 import { translateReadiness, type ReadinessIcon } from "./measurement-decision-hero-view-model";
-import { fetchMeasurementBulletinFormalStatus } from "./measurement-bulletin-formal-status-client";
+import { MEASUREMENT_CERTIFICATION_READY_LABEL, useMeasurementCertificationReady } from "./use-measurement-certification-ready";
 
 const READINESS_ICON: Record<ReadinessIcon, typeof CircleCheck> = {
   check: CircleCheck,
@@ -36,7 +35,9 @@ export interface MeasurementDecisionHeroProps {
 // linguagem de certificação quando o estado formal REAL confirma isso
 // (boletim Finalized, ainda não certificado). O builder (puro, sem
 // I/O) nunca sabe se um boletim formal existe -- essa composição só
-// pode acontecer aqui, na fronteira que já lê os dois lados.
+// pode acontecer aqui, na fronteira que já lê os dois lados. A
+// checagem em si vive em useMeasurementCertificationReady, compartilhado
+// com MeasurementDecisionFlowSection para que os dois nunca divirjam.
 const CERTIFICATION_READY_HEADLINE = "Medição conferida e pronta para certificação.";
 const CERTIFICATION_READY_BODY =
   "Os valores e itens medidos foram reconciliados sem divergências. As observações técnicas de leitura do arquivo não têm impacto sobre o valor ou a rastreabilidade da medição.";
@@ -72,26 +73,11 @@ export function MeasurementDecisionHero({
   const technicalObservationCount = criticalItems.filter((item) => item.materiality === "technical_observation").length;
   const firstAction = nextActions[0] ?? null;
 
-  const [certificationReady, setCertificationReady] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (executiveConclusion.readiness !== "ready") {
-      setCertificationReady(false);
-      return;
-    }
-    void fetchMeasurementBulletinFormalStatus(measurementBulletinImportId).then((outcome) => {
-      if (!cancelled && outcome.kind === "ok") {
-        setCertificationReady(outcome.formalStatus.status === "Finalized" && !outcome.formalStatus.certified);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [executiveConclusion.readiness, measurementBulletinImportId]);
+  const certificationReady = useMeasurementCertificationReady(executiveConclusion.readiness, measurementBulletinImportId);
 
   const headline = certificationReady ? CERTIFICATION_READY_HEADLINE : executiveConclusion.headline;
   const body = certificationReady ? CERTIFICATION_READY_BODY : executiveConclusion.body;
+  const markerLabel = certificationReady ? MEASUREMENT_CERTIFICATION_READY_LABEL : presentation.label;
 
   return (
     <Card className={`span-12 workspace-card measurement-decision-hero measurement-decision-hero--${presentation.tone}`}>
@@ -100,7 +86,7 @@ export function MeasurementDecisionHero({
 
         <div className="measurement-decision-hero__marker">
           <Icon aria-hidden="true" size={18} />
-          <span>{presentation.label}</span>
+          <span>{markerLabel}</span>
         </div>
 
         <h2 className="measurement-decision-hero__headline">{headline}</h2>

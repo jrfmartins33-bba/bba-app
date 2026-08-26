@@ -113,6 +113,7 @@ export function MeasurementDecisionBriefPage({ measurementBulletinImportId }: { 
             <MeasurementBulletinFormalStatusCard measurementBulletinImportId={measurementBulletinImportId} />
             <MeasurementDecisionFlowSection
               criticalItems={state.brief.criticalItems}
+              measurementBulletinImportId={measurementBulletinImportId}
               nextActions={state.brief.nextActions}
               readiness={state.brief.executiveConclusion.readiness}
             />

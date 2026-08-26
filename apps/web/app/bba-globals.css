@@ -3096,6 +3096,7 @@ button {
 
 .measurement-decision-flow__step--warn { border-color: rgba(245, 158, 11, 0.4); color: var(--status-amber); }
 .measurement-decision-flow__step--gold { border-color: var(--bba-gold-dim); color: var(--bba-gold-soft); }
+.measurement-decision-flow__step--technical { border-color: var(--app-border); color: var(--text-muted); }
 
 /* Passo final: mesmo tom do marcador do Hero (translateReadiness) --
    nunca hardcoded, porque readiness nem sempre é "caution". */

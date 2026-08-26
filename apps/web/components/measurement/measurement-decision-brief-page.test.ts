@@ -17,6 +17,7 @@ const HEADER_SOURCE = readFileSync(join(currentDir, "measurement-decision-brief-
 const SKELETON_SOURCE = readFileSync(join(currentDir, "measurement-decision-brief-skeleton.tsx"), "utf8");
 const ERROR_STATE_SOURCE = readFileSync(join(currentDir, "measurement-decision-brief-error-state.tsx"), "utf8");
 const HERO_SOURCE = readFileSync(join(currentDir, "measurement-decision-hero.tsx"), "utf8");
+const CERTIFICATION_READY_HOOK_SOURCE = readFileSync(join(currentDir, "use-measurement-certification-ready.ts"), "utf8");
 const CONFIDENCE_NOTE_SOURCE = readFileSync(join(currentDir, "measurement-confidence-note.tsx"), "utf8");
 const FLOW_SOURCE = readFileSync(join(currentDir, "measurement-decision-flow-section.tsx"), "utf8");
 const KEY_DECISIONS_SOURCE = readFileSync(join(currentDir, "measurement-key-decisions-section.tsx"), "utf8");
@@ -34,7 +35,7 @@ const ROUTE_PAGE_SOURCE = readFileSync(
   "utf8"
 );
 const GLOBALS_CSS_SOURCE = readFileSync(join(currentDir, "..", "..", "app", "bba-globals.css"), "utf8");
-const RENDER_SOURCE = `${PAGE_SOURCE}\n${HEADER_SOURCE}\n${SKELETON_SOURCE}\n${ERROR_STATE_SOURCE}\n${HERO_SOURCE}\n${CONFIDENCE_NOTE_SOURCE}\n${FLOW_SOURCE}\n${KEY_DECISIONS_SOURCE}\n${CRITICAL_ITEMS_SECTION_SOURCE}\n${CRITICAL_ITEM_SOURCE}\n${CRITICAL_ITEM_VM_SOURCE}\n${RECOMMENDED_ACTIONS_SOURCE}\n${RECOMMENDED_ACTION_SOURCE}\n${SUMMARY_SOURCE}\n${DETAILS_SOURCE}\n${CELL_REFERENCE_SOURCE}\n${EVIDENCE_VM_SOURCE}\n${ROUTE_PAGE_SOURCE}`;
+const RENDER_SOURCE = `${PAGE_SOURCE}\n${HEADER_SOURCE}\n${SKELETON_SOURCE}\n${ERROR_STATE_SOURCE}\n${HERO_SOURCE}\n${CERTIFICATION_READY_HOOK_SOURCE}\n${CONFIDENCE_NOTE_SOURCE}\n${FLOW_SOURCE}\n${KEY_DECISIONS_SOURCE}\n${CRITICAL_ITEMS_SECTION_SOURCE}\n${CRITICAL_ITEM_SOURCE}\n${CRITICAL_ITEM_VM_SOURCE}\n${RECOMMENDED_ACTIONS_SOURCE}\n${RECOMMENDED_ACTION_SOURCE}\n${SUMMARY_SOURCE}\n${DETAILS_SOURCE}\n${CELL_REFERENCE_SOURCE}\n${EVIDENCE_VM_SOURCE}\n${ROUTE_PAGE_SOURCE}`;
 
 async function main(): Promise<void> {
   await runTest("cabeçalho exibe generatedAt com o rótulo correto", () => {
@@ -310,9 +311,37 @@ async function main(): Promise<void> {
   });
 
   await runTest("Fluxo de decisão (Como chegamos aqui) usa as mesmas contagens reais do Hero e o mesmo translateReadiness, nunca uma etapa inventada", () => {
-    assertTrue(FLOW_SOURCE.includes('item.severity === "warning"') && FLOW_SOURCE.includes("nextActions.length"), "contagens devem ser as mesmas do Hero");
+    assertTrue(
+      FLOW_SOURCE.includes('item.severity === "warning" && item.materiality === "material"') && FLOW_SOURCE.includes("nextActions.length"),
+      "contagem do segundo passo deve ser materiality-aware, igual ao Hero -- nunca severity bruto"
+    );
     assertTrue(FLOW_SOURCE.includes("translateReadiness"), "passo final deve reaproveitar a mesma tradução de readiness do Hero, não uma nova");
     assertTrue(!/toda a planilha foi lida|cobertura (total|integral)/i.test(FLOW_SOURCE), "nenhuma alegação de cobertura que o contrato não garanta");
+  });
+
+  // Ajuste de coerência visual: quando não há nenhuma divergência
+  // material (só observações técnicas de leitura), o segundo passo do
+  // Fluxo deixa de dizer "pontos de atenção" e passa a dizer
+  // "observações técnicas", com tratamento visual neutro (nunca
+  // amber). Havendo qualquer divergência material real, continua
+  // "pontos de atenção" normalmente.
+  await runTest("Fluxo de decisão mostra 'observações técnicas' (não 'pontos de atenção') quando as ocorrências são só de leitura, sem divergência material", () => {
+    assertTrue(
+      FLOW_SOURCE.includes("materialWarningCount === 0 && technicalObservationCount > 0"),
+      "só troca para 'observações técnicas' quando não há nenhuma divergência material"
+    );
+    assertTrue(
+      FLOW_SOURCE.includes('"observação técnica" : "observações técnicas"'),
+      "rótulo correto no singular/plural para o novo passo"
+    );
+    assertTrue(
+      FLOW_SOURCE.includes("measurement-decision-flow__step--technical"),
+      "o passo de observações técnicas usa uma classe visual própria, nunca a mesma classe amber de 'pontos de atenção'"
+    );
+    assertTrue(
+      /\.measurement-decision-flow__step--technical\s*\{[^}]*color:\s*var\(--text-muted\)/.test(GLOBALS_CSS_SOURCE),
+      "tratamento visual neutro (cinza), nunca a cor de alerta amber"
+    );
   });
 
   await runTest("Principais Decisões e Ações Recomendadas nunca ordenam o array (preserva ordem do builder)", () => {
@@ -427,31 +456,59 @@ async function main(): Promise<void> {
   // Refinamento pós-3C.2, teste direcionado #6: um caso reconciliado
   // sem divergência (readiness="ready" no Brief puro) só vira "pronta
   // para certificação" quando o estado formal REAL confirma isso --
-  // nunca o builder (sem I/O) decidindo sozinho. A checagem fica
-  // inteiramente no Hero (client component), lendo o boletim formal
-  // por uma segunda chamada somente-leitura, e só troca o par
-  // headline/body -- nunca o restante do Brief.
-  await runTest("Hero só promove para 'Medição conferida e pronta para certificação' quando readiness='ready' E o boletim formal real está Finalized e não certificado", () => {
+  // nunca o builder (sem I/O) decidindo sozinho. A checagem em si vive
+  // em useMeasurementCertificationReady (hook compartilhado), lendo o
+  // boletim formal por uma segunda chamada somente-leitura; o Hero só
+  // troca o par headline/body -- nunca o restante do Brief.
+  await runTest("useMeasurementCertificationReady só confirma 'pronto' quando readiness='ready' E o boletim formal real está Finalized e não certificado", () => {
+    assertTrue(
+      CERTIFICATION_READY_HOOK_SOURCE.includes("fetchMeasurementBulletinFormalStatus"),
+      "a promoção deve depender de uma leitura real do estado formal, não de uma suposição"
+    );
+    assertTrue(
+      /readiness\s*!==\s*["']ready["']/.test(CERTIFICATION_READY_HOOK_SOURCE),
+      "a checagem do estado formal só deve rodar quando o Brief puro já diz readiness='ready'"
+    );
+    assertTrue(
+      /outcome\.formalStatus\.status\s*===\s*["']Finalized["']\s*&&\s*!outcome\.formalStatus\.certified/.test(CERTIFICATION_READY_HOOK_SOURCE),
+      "só promove com boletim Finalized e ainda não certificado -- nunca por suposição de readiness isolada"
+    );
+  });
+
+  await runTest("Hero usa useMeasurementCertificationReady para trocar headline/body para 'Medição conferida e pronta para certificação' -- nunca o restante do Brief", () => {
     assertTrue(
       HERO_SOURCE.includes('"Medição conferida e pronta para certificação."'),
       "headline de certificação pronta deve existir literalmente no Hero"
     );
-    assertTrue(
-      HERO_SOURCE.includes("fetchMeasurementBulletinFormalStatus"),
-      "a promoção deve depender de uma leitura real do estado formal, não de uma suposição"
-    );
-    assertTrue(
-      /executiveConclusion\.readiness\s*!==\s*["']ready["']/.test(HERO_SOURCE),
-      "a checagem do estado formal só deve rodar quando o Brief puro já diz readiness='ready'"
-    );
-    assertTrue(
-      /outcome\.formalStatus\.status\s*===\s*["']Finalized["']\s*&&\s*!outcome\.formalStatus\.certified/.test(HERO_SOURCE),
-      "só promove com boletim Finalized e ainda não certificado -- nunca por suposição de readiness isolada"
-    );
+    assertTrue(HERO_SOURCE.includes("useMeasurementCertificationReady"), "Hero deve usar o hook compartilhado, não uma implementação própria");
     assertTrue(
       /const headline = certificationReady \? CERTIFICATION_READY_HEADLINE : executiveConclusion\.headline;/.test(HERO_SOURCE) &&
         /const body = certificationReady \? CERTIFICATION_READY_BODY : executiveConclusion\.body;/.test(HERO_SOURCE),
       "só o par headline/body é substituído -- situation, criticalItems, nextActions continuam vindos do Brief tal como entregue"
+    );
+  });
+
+  // Ajuste de coerência visual: "Apta para seguir para aprovação" não
+  // pode continuar aparecendo no marcador do Hero nem no passo final
+  // do Fluxo quando o estado formal real já confirma que a medição
+  // está pronta para certificação -- os dois precisam concordar entre
+  // si, usando o mesmo hook e o mesmo rótulo.
+  await runTest("marcador do Hero e passo final do Fluxo usam o mesmo hook e o mesmo rótulo 'Pronta para certificação' -- nunca podem divergir entre si", () => {
+    assertTrue(
+      HERO_SOURCE.includes("MEASUREMENT_CERTIFICATION_READY_LABEL") && HERO_SOURCE.includes("useMeasurementCertificationReady"),
+      "marcador do Hero deve reaproveitar o rótulo e o hook compartilhados"
+    );
+    assertTrue(
+      FLOW_SOURCE.includes("MEASUREMENT_CERTIFICATION_READY_LABEL") && FLOW_SOURCE.includes("useMeasurementCertificationReady"),
+      "passo final do Fluxo deve reaproveitar o mesmo rótulo e o mesmo hook do Hero, não uma cópia"
+    );
+    assertTrue(
+      HERO_SOURCE.includes('const markerLabel = certificationReady ? MEASUREMENT_CERTIFICATION_READY_LABEL : presentation.label;'),
+      "marcador do Hero deve trocar para o rótulo de certificação, não continuar fixo em 'Apta para seguir para aprovação'"
+    );
+    assertTrue(
+      FLOW_SOURCE.includes('const finalStepLabel = certificationReady ? MEASUREMENT_CERTIFICATION_READY_LABEL : presentation.label;'),
+      "passo final do Fluxo deve trocar para o rótulo de certificação, não continuar fixo em 'Apta para seguir para aprovação'"
     );
   });
 }
