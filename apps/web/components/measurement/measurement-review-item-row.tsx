@@ -8,7 +8,8 @@ import {
   formatMeasurementEconomicInterpretation,
   formatMeasurementEconomicPercentage,
   formatMeasurementReviewQuantity,
-  PLANNING_COMPARISON_UNAVAILABLE_MESSAGE
+  PLANNING_COMPARISON_UNAVAILABLE_MESSAGE,
+  PLANNING_UNAVAILABLE_COMPACT_LABEL
 } from "./measurement-review-view-model";
 import { MeasurementCellReference } from "./measurement-cell-reference";
 
@@ -41,7 +42,9 @@ export function MeasurementReviewItemRow({ item }: MeasurementReviewItemRowProps
         <span className="measurement-review-item__quantity">{formatMeasurementReviewQuantity(item.quantityDecimal)}</span>
         <span className="measurement-review-item__unit-value">{formatFormalBulletinTotalBRL(item.unitValueDecimal)}</span>
         <span className="measurement-review-item__value">{formatFormalBulletinTotalBRL(item.valueDecimal)}</span>
-        <span className="measurement-review-item__situation">{PLANNING_COMPARISON_UNAVAILABLE_MESSAGE}</span>
+        <span className="measurement-review-item__situation" title={PLANNING_COMPARISON_UNAVAILABLE_MESSAGE}>
+          {PLANNING_UNAVAILABLE_COMPACT_LABEL}
+        </span>
         <button aria-expanded={expanded} className="measurement-review-item__analysis-toggle" onClick={() => setExpanded((current) => !current)} type="button">
           <ChevronDown aria-hidden="true" className="measurement-ver-mais__chevron" size={14} />
           Ver análise
@@ -55,19 +58,19 @@ export function MeasurementReviewItemRow({ item }: MeasurementReviewItemRowProps
               <h4>Econômico</h4>
               <dl>
                 <div>
-                  <dt>Preço unitário no Orçamento Oficial</dt>
+                  <dt>Preço no Orçamento Oficial</dt>
                   <dd>{formatFormalBulletinTotalBRL(economic.officialUnitPriceDecimal)}</dd>
                 </div>
                 <div>
-                  <dt>Preço unitário contratado (Proposta Vencedora)</dt>
+                  <dt>Preço contratado (Proposta Vencedora)</dt>
                   <dd>{formatFormalBulletinTotalBRL(economic.contractedUnitPriceDecimal)}</dd>
                 </div>
                 <div>
-                  <dt>Variação monetária</dt>
+                  <dt>Diferença por unidade</dt>
                   <dd>{formatFormalBulletinTotalBRL(economic.unitPriceDifferenceDecimal)}</dd>
                 </div>
                 <div>
-                  <dt>Variação percentual</dt>
+                  <dt>Variação %</dt>
                   <dd>{formatMeasurementEconomicPercentage(economic.unitPriceDifferencePercentage) ?? "—"}</dd>
                 </div>
               </dl>

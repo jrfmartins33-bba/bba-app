@@ -13,9 +13,10 @@ import {
 } from "@/lib/bdos/measurement-repository";
 import { createContractBaselineRepository } from "@/lib/bdos/contract-baseline-server-repository";
 import { createBudgetVersionRepository } from "@/lib/bdos/procurement-engineering-server-repository";
+import { createContractExecutionItemTraceabilityRepository } from "@/lib/bdos/contract-execution-item-link-server-repository";
 import { getMeasurementDecisionBrief, type MeasurementDecisionBriefImportReader } from "@/lib/bdos/measurement-decision-brief-service";
 import { getMeasurementBulletinReview, type MeasurementBulletinReviewReader } from "@/lib/bdos/measurement-bulletin-review-service";
-import { buildMeasurementItemEconomicComparisons, normalizeMeasurementItemCode } from "@/lib/bdos/measurement-item-economic-comparison-service";
+import { buildMeasurementItemEconomicComparisons } from "@/lib/bdos/measurement-item-economic-comparison-service";
 
 /**
  * "Revisar medição" — mesma separação route.ts/route-handler.ts das
@@ -27,6 +28,14 @@ import { buildMeasurementItemEconomicComparisons, normalizeMeasurementItemCode }
  * (Orçamento Oficial × Proposta Vencedora) via o mesmo motor já usado
  * e testado por /orcamentos (getBudgetComparisonService) -- nunca uma
  * segunda implementação de comparação.
+ *
+ * CORREÇÃO CIRÚRGICA (pós-Preview): a ligação entre item medido e
+ * item comparado agora usa PRIMARIAMENTE a identidade já persistida em
+ * contract_execution_item_links (managed_service_item_id ->
+ * proposal_budget_line_id) -- nunca mais dependendo exclusivamente do
+ * texto do código, que vive em dois espaços de código independentes
+ * (ver measurement-item-economic-comparison-service.ts para a causa
+ * raiz completa, confirmada contra o BM_08 real).
  */
 
 export interface MeasurementEconomicComparisonReader {
@@ -34,10 +43,15 @@ export interface MeasurementEconomicComparisonReader {
     measurementBulletinImportId: string;
     companyId: string | null;
   }): Promise<{ companyId: string; engineeringProjectId: string } | null>;
-  /** null quando o contrato não tem uma Proposta Vencedora rastreável (source_budget_version_id ausente). */
-  findProposalBudgetVersionId(input: { companyId: string; engineeringProjectId: string }): Promise<string | null>;
+  /** null quando o projeto não tem contrato rastreável ou o contrato não tem Proposta Vencedora rastreável (source_budget_version_id ausente). */
+  findContractBaseline(input: {
+    companyId: string;
+    engineeringProjectId: string;
+  }): Promise<{ id: string; sourceBudgetVersionId: string } | null>;
   /** null quando a comparação não está disponível (orçamento oficial não rastreável, versão não encontrada etc.) -- nunca um erro para o usuário. */
   getBudgetComparison(input: { companyId: string; proposalBudgetVersionId: string }): Promise<BudgetVersionComparison | null>;
+  /** managed_service_item_id -> proposal_budget_line_id, de contract_execution_item_links -- identidade persistida, sempre preferida ao código de texto. */
+  findExecutionItemLinks(input: { companyId: string; contractBaselineId: string }): Promise<ReadonlyMap<string, string>>;
 }
 
 export function buildMeasurementReviewDecisionBriefReader(supabase: SupabaseClient): MeasurementDecisionBriefImportReader {
@@ -55,6 +69,7 @@ export function buildMeasurementReviewDecisionBriefReader(supabase: SupabaseClie
 export function buildMeasurementEconomicComparisonReader(supabase: SupabaseClient): MeasurementEconomicComparisonReader {
   const contractBaselineRepository = createContractBaselineRepository(supabase);
   const budgetVersionRepository = createBudgetVersionRepository(supabase);
+  const executionItemLinkRepository = createContractExecutionItemTraceabilityRepository(supabase);
 
   return {
     async findWorkspaceProjectContext(query) {
@@ -65,14 +80,30 @@ export function buildMeasurementEconomicComparisonReader(supabase: SupabaseClien
       return workspace ? { companyId: workspace.companyId, engineeringProjectId: workspace.engineeringProjectId } : null;
     },
 
-    async findProposalBudgetVersionId(query) {
+    async findContractBaseline(query) {
       const baseline = await contractBaselineRepository.findContractBaselineByProject(query.companyId, query.engineeringProjectId);
-      return baseline?.sourceBudgetVersionId ?? null;
+      if (!baseline || !baseline.sourceBudgetVersionId) {
+        return null;
+      }
+      return { id: baseline.id, sourceBudgetVersionId: baseline.sourceBudgetVersionId };
     },
 
     async getBudgetComparison(query) {
       const result = await getBudgetComparisonService(query.companyId, query.proposalBudgetVersionId, budgetVersionRepository);
       return result.outcome === "compared" ? result.comparison : null;
+    },
+
+    async findExecutionItemLinks(query) {
+      const rows = await executionItemLinkRepository.listByContractBaseline(query.companyId, query.contractBaselineId);
+      const links = new Map<string, string>();
+      for (const row of rows as ReadonlyArray<Record<string, unknown>>) {
+        const managedServiceItemId = row.managed_service_item_id;
+        const proposalBudgetLineId = row.proposal_budget_line_id;
+        if (typeof managedServiceItemId === "string" && typeof proposalBudgetLineId === "string") {
+          links.set(managedServiceItemId, proposalBudgetLineId);
+        }
+      }
+      return links;
     }
   };
 }
@@ -190,17 +221,26 @@ export async function handleGetMeasurementBulletinReview(
   // sem Proposta Vencedora, sem Orçamento Oficial de origem) resulta
   // em economicSummary=null / economicComparison=null por item, nunca
   // um erro para o usuário nem uma comparação inventada.
-  const comparison = await resolveBudgetComparison(measurementBulletinImportId, auth.companyId, dependencies.economicComparisonReader);
+  const { comparison, executionItemLinks } = await resolveEconomicComparisonInputs(
+    measurementBulletinImportId,
+    auth.companyId,
+    dependencies.economicComparisonReader
+  );
   const economicResult = buildMeasurementItemEconomicComparisons(
-    reviewResult.review.items.map((item) => ({ code: item.code, quantityDecimal: item.quantityDecimal })),
-    comparison
+    reviewResult.review.items.map((item) => ({
+      id: item.id,
+      code: item.code,
+      quantityDecimal: item.quantityDecimal,
+      managedServiceItemId: item.managedServiceItemId
+    })),
+    comparison,
+    executionItemLinks
   );
 
-  const items = reviewResult.review.items.map((item) => {
-    const normalizedCode = normalizeMeasurementItemCode(item.code);
-    const economicComparison = normalizedCode !== null ? (economicResult.byItemCode.get(normalizedCode) ?? null) : null;
-    return { ...item, economicComparison };
-  });
+  const items = reviewResult.review.items.map((item) => ({
+    ...item,
+    economicComparison: economicResult.byItemId.get(item.id) ?? null
+  }));
 
   return {
     status: 200,
@@ -208,26 +248,30 @@ export async function handleGetMeasurementBulletinReview(
   };
 }
 
-async function resolveBudgetComparison(
+async function resolveEconomicComparisonInputs(
   measurementBulletinImportId: string,
   authCompanyId: string | null,
   reader: MeasurementEconomicComparisonReader
-): Promise<BudgetVersionComparison | null> {
+): Promise<{ comparison: BudgetVersionComparison | null; executionItemLinks: ReadonlyMap<string, string> }> {
+  const NONE = { comparison: null, executionItemLinks: new Map<string, string>() };
+
   const context = await reader.findWorkspaceProjectContext({ measurementBulletinImportId, companyId: authCompanyId });
   if (!context) {
-    return null;
+    return NONE;
   }
   // bba_admin sem companyId próprio: a comparação econômica é sempre de
   // UMA empresa (mesmo raciocínio já usado na prévia de certificação).
   const effectiveCompanyId = authCompanyId ?? context.companyId;
 
-  const proposalBudgetVersionId = await reader.findProposalBudgetVersionId({
-    companyId: effectiveCompanyId,
-    engineeringProjectId: context.engineeringProjectId
-  });
-  if (!proposalBudgetVersionId) {
-    return null;
+  const baseline = await reader.findContractBaseline({ companyId: effectiveCompanyId, engineeringProjectId: context.engineeringProjectId });
+  if (!baseline) {
+    return NONE;
   }
 
-  return reader.getBudgetComparison({ companyId: effectiveCompanyId, proposalBudgetVersionId });
+  const [comparison, executionItemLinks] = await Promise.all([
+    reader.getBudgetComparison({ companyId: effectiveCompanyId, proposalBudgetVersionId: baseline.sourceBudgetVersionId }),
+    reader.findExecutionItemLinks({ companyId: effectiveCompanyId, contractBaselineId: baseline.id })
+  ]);
+
+  return { comparison, executionItemLinks };
 }

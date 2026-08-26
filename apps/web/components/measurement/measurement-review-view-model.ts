@@ -27,6 +27,9 @@ export function formatMeasurementEconomicPercentage(percentageDecimal: string | 
 
 export const PLANNING_COMPARISON_UNAVAILABLE_MESSAGE = "Comparação com o planejamento ainda não disponível";
 
+/** Rótulo compacto para a coluna Situação da tabela principal -- a frase completa fica em Ver análise → Planejamento físico-financeiro. */
+export const PLANNING_UNAVAILABLE_COMPACT_LABEL = "Planejamento indisponível";
+
 /** "125.5000" -> "125,5". Remove zeros à direita supérfluos, mantém a vírgula decimal pt-BR. */
 export function formatMeasurementReviewQuantity(decimalString: string): string {
   const negative = decimalString.startsWith("-");

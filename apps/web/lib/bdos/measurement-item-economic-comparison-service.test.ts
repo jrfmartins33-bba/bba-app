@@ -1,11 +1,19 @@
 import type { BudgetComparedItem, BudgetVersionComparison } from "@bba/bdos-core/services/procurement-engineering";
-import { buildMeasurementItemEconomicComparisons } from "./measurement-item-economic-comparison-service";
+import { buildMeasurementItemEconomicComparisons, type MeasurementEconomicComparisonItemInput } from "./measurement-item-economic-comparison-service";
 
 // "Revisar medição" -- teste direcionado: variação econômica usa
 // dados reais e decimal exato; item abaixo do preço oficial aparece
 // como economia; item acima aparece como acima do orçamento; nenhum
 // desconto uniforme é aplicado; sem correspondência confiável, nenhum
 // resumo artificial é produzido.
+//
+// CORREÇÃO CIRÚRGICA: a causa raiz real (confirmada contra o BM_08),
+// managed_service_items.code ("01.02.01") e budget_lines.external_code
+// ("73847/002") são espaços de código independentes -- por isso os
+// testes abaixo cobrem explicitamente o caso que expôs o bug (item
+// cujo código nunca aparece em nenhum BudgetComparedItem, mas que tem
+// um vínculo persistido em contract_execution_item_links) e confirmam
+// que a identidade persistida é sempre preferida ao código de texto.
 
 function moneyDelta(officialCents: number | null, winnerCents: number | null) {
   if (officialCents === null || winnerCents === null) {
@@ -16,9 +24,10 @@ function moneyDelta(officialCents: number | null, winnerCents: number | null) {
   return { officialCents, winnerCents, differenceCents, percentageBasisPoints };
 }
 
-function comparedItem(overrides: Partial<BudgetComparedItem> & { proposalCode: string | null; officialCode: string | null }): BudgetComparedItem {
+function comparedItem(
+  overrides: Partial<BudgetComparedItem> & { proposalLineId: string; proposalCode: string | null; officialCode: string | null }
+): BudgetComparedItem {
   return {
-    proposalLineId: overrides.proposalCode ?? "line",
     officialLineId: "official-line",
     matchMethod: "UniqueExternalCode",
     unmatchedReason: null,
@@ -70,15 +79,74 @@ function buildComparison(items: ReadonlyArray<BudgetComparedItem>): BudgetVersio
   };
 }
 
+function measuredItem(overrides: Partial<MeasurementEconomicComparisonItemInput> & { id: string }): MeasurementEconomicComparisonItemInput {
+  return { code: "", quantityDecimal: "1", managedServiceItemId: null, ...overrides };
+}
+
+const NO_LINKS: ReadonlyMap<string, string> = new Map();
+
 async function main(): Promise<void> {
+  await runTest("BUG REAL: item medido com código hierárquico interno ('01.02.01') nunca bate com o external_code do catálogo ('73847/002') por texto -- só a identidade persistida resolve", () => {
+    const comparison = buildComparison([
+      comparedItem({ proposalLineId: "proposal-line-1", proposalCode: "73847/002", officialCode: "73847/002", unitPrice: moneyDelta(100000, 88647) })
+    ]);
+    const links = new Map([["managed-service-item-1", "proposal-line-1"]]);
+
+    const withoutLink = buildMeasurementItemEconomicComparisons(
+      [measuredItem({ id: "line-1", code: "01.02.01", managedServiceItemId: "managed-service-item-1", quantityDecimal: "1" })],
+      comparison,
+      NO_LINKS
+    );
+    assertEqual(withoutLink.byItemId.size, 0, "sem o vínculo persistido, o código de texto sozinho não deve encontrar nada (prova da causa raiz)");
+
+    const withLink = buildMeasurementItemEconomicComparisons(
+      [measuredItem({ id: "line-1", code: "01.02.01", managedServiceItemId: "managed-service-item-1", quantityDecimal: "1" })],
+      comparison,
+      links
+    );
+    const item = withLink.byItemId.get("line-1");
+    assertTrue(item !== undefined, "com o vínculo persistido (contract_execution_item_links), a correspondência deve ser encontrada mesmo com códigos textualmente distintos");
+    assertEqual(item?.officialUnitPriceDecimal, "1000.00");
+    assertEqual(item?.contractedUnitPriceDecimal, "886.47");
+  });
+
+  await runTest("identidade persistida é sempre preferida ao código de texto, mesmo quando os dois existem e apontam para itens diferentes", () => {
+    const comparison = buildComparison([
+      comparedItem({ proposalLineId: "linked-line", proposalCode: "SAME-CODE", officialCode: "SAME-CODE", unitPrice: moneyDelta(10000, 9000) }),
+      comparedItem({ proposalLineId: "other-line", proposalCode: "OTHER-CODE", officialCode: "OTHER-CODE", unitPrice: moneyDelta(50000, 50000) })
+    ]);
+    const links = new Map([["managed-service-item-1", "linked-line"]]);
+
+    const result = buildMeasurementItemEconomicComparisons(
+      [measuredItem({ id: "line-1", code: "SAME-CODE", managedServiceItemId: "managed-service-item-1" })],
+      comparison,
+      links
+    );
+
+    const item = result.byItemId.get("line-1");
+    assertEqual(item?.officialUnitPriceDecimal, "100.00", "deve usar o item ligado pela identidade (linked-line), não o item que bateria por código");
+  });
+
+  await runTest("item sem managedServiceItemId (boletim não carrega essa identidade) cai no casamento por código como reserva", () => {
+    const comparison = buildComparison([comparedItem({ proposalLineId: "line-x", proposalCode: "01.02.03", officialCode: "01.02.03", unitPrice: moneyDelta(10000, 9000) })]);
+
+    const result = buildMeasurementItemEconomicComparisons(
+      [measuredItem({ id: "line-1", code: "01.02.03", managedServiceItemId: null })],
+      comparison,
+      NO_LINKS
+    );
+
+    assertTrue(result.byItemId.get("line-1") !== undefined, "reserva por código deve funcionar quando não há identidade persistida disponível");
+  });
+
   await runTest("item com preço contratado abaixo do oficial: interpretation='economy', diferença e percentual exatos", () => {
     const comparison = buildComparison([
-      comparedItem({ proposalCode: "01.02.03", officialCode: "01.02.03", unitPrice: moneyDelta(10000, 9000) })
+      comparedItem({ proposalLineId: "p1", proposalCode: "01.02.03", officialCode: "01.02.03", unitPrice: moneyDelta(10000, 9000) })
     ]);
 
-    const result = buildMeasurementItemEconomicComparisons([{ code: "01.02.03", quantityDecimal: "10" }], comparison);
+    const result = buildMeasurementItemEconomicComparisons([measuredItem({ id: "line-1", code: "01.02.03", quantityDecimal: "10" })], comparison, NO_LINKS);
 
-    const item = result.byItemCode.get("01.02.03");
+    const item = result.byItemId.get("line-1");
     assertTrue(item !== undefined, "item deveria ter correspondência");
     assertEqual(item?.officialUnitPriceDecimal, "100.00");
     assertEqual(item?.contractedUnitPriceDecimal, "90.00");
@@ -88,38 +156,36 @@ async function main(): Promise<void> {
 
   await runTest("item com preço contratado acima do oficial: interpretation='above_official', diferença negativa", () => {
     const comparison = buildComparison([
-      comparedItem({ proposalCode: "02.01.01", officialCode: "02.01.01", unitPrice: moneyDelta(5000, 6000) })
+      comparedItem({ proposalLineId: "p2", proposalCode: "02.01.01", officialCode: "02.01.01", unitPrice: moneyDelta(5000, 6000) })
     ]);
 
-    const result = buildMeasurementItemEconomicComparisons([{ code: "02.01.01", quantityDecimal: "5" }], comparison);
+    const result = buildMeasurementItemEconomicComparisons([measuredItem({ id: "line-1", code: "02.01.01", quantityDecimal: "5" })], comparison, NO_LINKS);
 
-    const item = result.byItemCode.get("02.01.01");
+    const item = result.byItemId.get("line-1");
     assertEqual(item?.interpretation, "above_official");
     assertEqual(item?.unitPriceDifferenceDecimal, "-10.00");
   });
 
   await runTest("item com preço idêntico: interpretation='no_relevant_variation' -- nenhum limiar arbitrário, só zero exato", () => {
     const comparison = buildComparison([
-      comparedItem({ proposalCode: "03.01.01", officialCode: "03.01.01", unitPrice: moneyDelta(5000, 5000) })
+      comparedItem({ proposalLineId: "p3", proposalCode: "03.01.01", officialCode: "03.01.01", unitPrice: moneyDelta(5000, 5000) })
     ]);
 
-    const result = buildMeasurementItemEconomicComparisons([{ code: "03.01.01", quantityDecimal: "1" }], comparison);
+    const result = buildMeasurementItemEconomicComparisons([measuredItem({ id: "line-1", code: "03.01.01", quantityDecimal: "1" })], comparison, NO_LINKS);
 
-    assertEqual(result.byItemCode.get("03.01.01")?.interpretation, "no_relevant_variation");
+    assertEqual(result.byItemId.get("line-1")?.interpretation, "no_relevant_variation");
   });
 
   await runTest("resumo (economia total) usa aritmética decimal exata: quantidade × preço, soma dos itens correspondidos", () => {
     const comparison = buildComparison([
-      comparedItem({ proposalCode: "A", officialCode: "A", unitPrice: moneyDelta(10000, 9000) }),
-      comparedItem({ proposalCode: "B", officialCode: "B", unitPrice: moneyDelta(5000, 5500) })
+      comparedItem({ proposalLineId: "pA", proposalCode: "A", officialCode: "A", unitPrice: moneyDelta(10000, 9000) }),
+      comparedItem({ proposalLineId: "pB", proposalCode: "B", officialCode: "B", unitPrice: moneyDelta(5000, 5500) })
     ]);
 
     const result = buildMeasurementItemEconomicComparisons(
-      [
-        { code: "A", quantityDecimal: "10" },
-        { code: "B", quantityDecimal: "4" }
-      ],
-      comparison
+      [measuredItem({ id: "line-a", code: "A", quantityDecimal: "10" }), measuredItem({ id: "line-b", code: "B", quantityDecimal: "4" })],
+      comparison,
+      NO_LINKS
     );
 
     assertTrue(result.summary !== null);
@@ -133,24 +199,22 @@ async function main(): Promise<void> {
     assertEqual(result.summary.totalItemCount, 2);
   });
 
-  await runTest("item sem correspondência confiável (código não encontrado): nenhum item no mapa, sem resumo artificial se nenhum for encontrado", () => {
-    const comparison = buildComparison([comparedItem({ proposalCode: "X", officialCode: "X", unitPrice: moneyDelta(1000, 900) })]);
+  await runTest("item sem correspondência confiável (nem identidade nem código): nenhum item no mapa, sem resumo artificial se nenhum for encontrado", () => {
+    const comparison = buildComparison([comparedItem({ proposalLineId: "px", proposalCode: "X", officialCode: "X", unitPrice: moneyDelta(1000, 900) })]);
 
-    const result = buildMeasurementItemEconomicComparisons([{ code: "CODIGO-INEXISTENTE", quantityDecimal: "1" }], comparison);
+    const result = buildMeasurementItemEconomicComparisons([measuredItem({ id: "line-1", code: "CODIGO-INEXISTENTE" })], comparison, NO_LINKS);
 
-    assertEqual(result.byItemCode.size, 0);
+    assertEqual(result.byItemId.size, 0);
     assertEqual(result.summary, null, "sem nenhum item correspondido, o resumo deve ser null -- nunca zeros artificiais");
   });
 
   await runTest("comparação parcial: resumo reporta matchedItemCount menor que totalItemCount, nunca inventa correspondência para o item ausente", () => {
-    const comparison = buildComparison([comparedItem({ proposalCode: "A", officialCode: "A", unitPrice: moneyDelta(10000, 9000) })]);
+    const comparison = buildComparison([comparedItem({ proposalLineId: "pA", proposalCode: "A", officialCode: "A", unitPrice: moneyDelta(10000, 9000) })]);
 
     const result = buildMeasurementItemEconomicComparisons(
-      [
-        { code: "A", quantityDecimal: "1" },
-        { code: "SEM-CORRESPONDENCIA", quantityDecimal: "1" }
-      ],
-      comparison
+      [measuredItem({ id: "line-a", code: "A" }), measuredItem({ id: "line-b", code: "SEM-CORRESPONDENCIA" })],
+      comparison,
+      NO_LINKS
     );
 
     assertTrue(result.summary !== null);
@@ -159,20 +223,20 @@ async function main(): Promise<void> {
     assertEqual(result.summary.totalItemCount, 2, "Comparação econômica disponível para 1 de 2 itens");
   });
 
-  await runTest("código ambíguo (aparece em mais de um item comparado): descartado, nunca escolhido arbitrariamente", () => {
+  await runTest("código ambíguo (aparece em mais de um item comparado) sem vínculo persistido: descartado, nunca escolhido arbitrariamente", () => {
     const comparison = buildComparison([
-      comparedItem({ proposalCode: "DUP", officialCode: "DUP", proposalLineId: "line-1", unitPrice: moneyDelta(1000, 900) }),
-      comparedItem({ proposalCode: "DUP", officialCode: "DUP", proposalLineId: "line-2", unitPrice: moneyDelta(2000, 1900) })
+      comparedItem({ proposalLineId: "line-1", proposalCode: "DUP", officialCode: "DUP", unitPrice: moneyDelta(1000, 900) }),
+      comparedItem({ proposalLineId: "line-2", proposalCode: "DUP", officialCode: "DUP", unitPrice: moneyDelta(2000, 1900) })
     ]);
 
-    const result = buildMeasurementItemEconomicComparisons([{ code: "DUP", quantityDecimal: "1" }], comparison);
+    const result = buildMeasurementItemEconomicComparisons([measuredItem({ id: "line-1", code: "DUP" })], comparison, NO_LINKS);
 
-    assertEqual(result.byItemCode.size, 0, "código ambíguo nunca deve resolver para um dos dois itens ao acaso");
+    assertEqual(result.byItemId.size, 0, "código ambíguo nunca deve resolver para um dos dois itens ao acaso");
   });
 
   await runTest("comparison === null (sem contrato/versão de orçamento rastreável): nenhum item, nenhum resumo", () => {
-    const result = buildMeasurementItemEconomicComparisons([{ code: "QUALQUER", quantityDecimal: "1" }], null);
-    assertEqual(result.byItemCode.size, 0);
+    const result = buildMeasurementItemEconomicComparisons([measuredItem({ id: "line-1", code: "QUALQUER" })], null, NO_LINKS);
+    assertEqual(result.byItemId.size, 0);
     assertEqual(result.summary, null);
   });
 }

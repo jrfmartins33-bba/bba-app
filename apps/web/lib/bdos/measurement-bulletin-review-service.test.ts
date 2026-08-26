@@ -14,6 +14,7 @@ const COMPANY_ID = "company-1";
 const BULLETIN_LINES = [
   {
     id: "line-1",
+    serviceItemId: "managed-service-item-1",
     serviceItemCode: "01.02.03",
     description: "Escavação mecanizada",
     unit: "m3",
@@ -103,6 +104,7 @@ async function main(): Promise<void> {
     assertEqual(result.review.items[0]?.quantityDecimal, "120.5000");
     assertEqual(result.review.items[0]?.unitValueDecimal, "45.30");
     assertEqual(result.review.items[0]?.valueDecimal, "5458.65");
+    assertEqual(result.review.items[0]?.managedServiceItemId, "managed-service-item-1", "managedServiceItemId vem de line.serviceItemId -- identidade real, não o código de texto");
   });
 
   await runTest("total vem literalmente de totals.canonicalTotalValue -- nunca somado a partir das linhas no serviço", async () => {

@@ -26,6 +26,8 @@ export interface MeasurementBulletinReviewItem {
   readonly unitValueDecimal: string;
   readonly valueDecimal: string;
   readonly evidenceReferences: ReadonlyArray<DecisionBriefSourceReference>;
+  /** managed_service_items.id -- identidade persistida do item operacional, usada para ligar à Proposta Vencedora via contract_execution_item_links (nunca por texto/código). */
+  readonly managedServiceItemId: string | null;
 }
 
 export interface MeasurementBulletinReview {
@@ -189,7 +191,8 @@ function toReviewItem(
     quantityDecimal: typeof line.canonicalQuantity === "string" ? line.canonicalQuantity : String(line.quantity ?? "0"),
     unitValueDecimal: typeof line.canonicalUnitValue === "string" ? line.canonicalUnitValue : String(line.unitValue ?? "0"),
     valueDecimal: typeof line.canonicalTotalValue === "string" ? line.canonicalTotalValue : String(line.totalValue ?? "0"),
-    evidenceReferences: workspaceLine ? buildEvidenceReferences(workspaceLine, sourceImportId) : []
+    evidenceReferences: workspaceLine ? buildEvidenceReferences(workspaceLine, sourceImportId) : [],
+    managedServiceItemId: typeof line.serviceItemId === "string" ? line.serviceItemId : null
   };
 }
 

@@ -184,14 +184,16 @@ export function MeasurementReviewPage({ measurementBulletinImportId }: { measure
           >
             <ul className="measurement-review-items-list">
               <li className="measurement-review-item measurement-review-item--head" aria-hidden="true">
-                <span className="measurement-review-item__code">Código</span>
-                <span className="measurement-review-item__description">Serviço</span>
-                <span className="measurement-review-item__unit">Unidade</span>
-                <span className="measurement-review-item__quantity">Quantidade medida</span>
-                <span className="measurement-review-item__unit-value">Preço unitário contratado</span>
-                <span className="measurement-review-item__value">Valor medido</span>
-                <span className="measurement-review-item__situation">Situação</span>
-                <span className="measurement-review-item__analysis-toggle" />
+                <div className="measurement-review-item__row">
+                  <span className="measurement-review-item__code">Código</span>
+                  <span className="measurement-review-item__description">Serviço</span>
+                  <span className="measurement-review-item__unit">Unidade</span>
+                  <span className="measurement-review-item__quantity">Quantidade medida</span>
+                  <span className="measurement-review-item__unit-value">Preço unitário contratado</span>
+                  <span className="measurement-review-item__value">Valor medido</span>
+                  <span className="measurement-review-item__situation">Situação</span>
+                  <span className="measurement-review-item__analysis-toggle" />
+                </div>
               </li>
               {state.review.items.map((item) => (
                 <MeasurementReviewItemRow item={item} key={item.id} />

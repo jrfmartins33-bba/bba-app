@@ -99,6 +99,17 @@ async function main(): Promise<void> {
     assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("item.evidenceReferences"), "origem vem das referências reais do item, nunca inventada");
   });
 
+  // Correção cirúrgica: cabeçalho da tabela usava os <span> soltos
+  // direto no <li>, sem o <div class="measurement-review-item__row">
+  // que a grade CSS aplica -- por isso os títulos apareciam
+  // concatenados, sem grade nem alinhamento com as colunas de dado.
+  await runTest("cabeçalho da tabela usa o mesmo wrapper de grade (.measurement-review-item__row) das linhas de dado -- nunca <span> soltos sem grade", () => {
+    const headerRowMatch = /measurement-review-item--head[^]*?<\/li>/.exec(REVIEW_PAGE_SOURCE);
+    assertTrue(headerRowMatch !== null, "deve existir o <li> de cabeçalho");
+    const headerMarkup = headerRowMatch?.[0] ?? "";
+    assertTrue(headerMarkup.includes('className="measurement-review-item__row"'), "cabeçalho deve usar o mesmo wrapper de grade que as linhas de dado, não spans soltos");
+  });
+
   // Item 1: VALOR virou VALOR MEDIDO; PREÇO UNITÁRIO virou PREÇO
   // UNITÁRIO CONTRATADO -- distinção inequívoca entre as duas colunas.
   await runTest("cabeçalho da tabela usa 'Valor medido' e 'Preço unitário contratado' -- nunca 'Valor'/'Preço unitário' isolados", () => {
@@ -114,8 +125,8 @@ async function main(): Promise<void> {
   await runTest("bloco Econômico distingue preço do Orçamento Oficial e preço contratado (Proposta Vencedora) -- nunca o mesmo campo para os dois", () => {
     assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("economic.officialUnitPriceDecimal"));
     assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("economic.contractedUnitPriceDecimal"));
-    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Preço unitário no Orçamento Oficial"));
-    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Preço unitário contratado (Proposta Vencedora)"));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Preço no Orçamento Oficial"));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Preço contratado (Proposta Vencedora)"));
     assertTrue(
       REVIEW_ITEM_ROW_SOURCE.indexOf("economic.officialUnitPriceDecimal") !== REVIEW_ITEM_ROW_SOURCE.indexOf("economic.contractedUnitPriceDecimal"),
       "os dois preços devem vir de campos distintos, nunca o mesmo valor duplicado"
@@ -163,10 +174,22 @@ async function main(): Promise<void> {
     assertTrue(!invented.test(REVIEW_ITEM_ROW_SOURCE), "linha do item não deve inventar nenhum estado de cronograma");
   });
 
-  await runTest("coluna Situação e o bloco 'Planejamento físico-financeiro' sempre mostram a mensagem exata de indisponibilidade -- nunca um status calculado sem fonte", () => {
-    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("PLANNING_COMPARISON_UNAVAILABLE_MESSAGE"), "linha do item deve usar a mensagem compartilhada, não um texto solto");
+  await runTest("bloco 'Planejamento físico-financeiro' (Ver análise) e o resumo executivo sempre mostram a mensagem completa de indisponibilidade -- nunca um status calculado sem fonte", () => {
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("PLANNING_COMPARISON_UNAVAILABLE_MESSAGE"), "bloco Planejamento (Ver análise) deve usar a mensagem compartilhada, não um texto solto");
     assertTrue(REVIEW_PAGE_SOURCE.includes("PLANNING_COMPARISON_UNAVAILABLE_MESSAGE"), "resumo executivo também deve usar a mesma mensagem compartilhada");
     assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Comparação com o planejamento ainda não disponível"'), "a mensagem exata deve existir literalmente, uma única fonte");
+  });
+
+  // Item 3 da correção cirúrgica: a tabela principal não repete a
+  // frase longa em cada linha -- usa um badge compacto; a explicação
+  // completa fica só em Ver análise e no title= do badge.
+  await runTest("coluna Situação da tabela usa o rótulo compacto 'Planejamento indisponível' -- nunca a frase longa repetida em cada linha", () => {
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("PLANNING_UNAVAILABLE_COMPACT_LABEL"), "linha do item deve usar o rótulo compacto compartilhado");
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Planejamento indisponível"'), "o rótulo compacto deve existir literalmente, uma única fonte");
+    assertTrue(
+      /<span className="measurement-review-item__situation" title=\{PLANNING_COMPARISON_UNAVAILABLE_MESSAGE\}>\s*\{PLANNING_UNAVAILABLE_COMPACT_LABEL\}/.test(REVIEW_ITEM_ROW_SOURCE),
+      "a frase longa deve estar disponível como title= (acessível sob demanda), nunca como texto visível repetido"
+    );
   });
 
   await runTest("evidenceReferences do item é validado estruturalmente no client fetch (sourceType/locator), nunca aceito sem checagem", () => {
@@ -185,6 +208,31 @@ async function main(): Promise<void> {
   await runTest("resumo de observações técnicas usa contagem, não a lista de itens críticos materiais, para o texto de destaque", () => {
     assertTrue(REVIEW_PAGE_SOURCE.includes("state.review.technicalObservationCount"), "resumo deve usar a contagem real de observações técnicas");
     assertTrue(/sem impacto no valor ou na\s+rastreabilidade/.test(REVIEW_PAGE_SOURCE), "texto de destaque deve afirmar ausência de impacto no valor/rastreabilidade");
+  });
+
+  // Correção cirúrgica: a comparação econômica usa PRIMARIAMENTE a
+  // identidade persistida (contract_execution_item_links), nunca
+  // exclusivamente o código de texto -- causa raiz real, confirmada
+  // contra o BM_08 (managed_service_items.code é um espaço de código
+  // diferente de budget_lines.external_code).
+  await runTest("route-handler resolve a comparação econômica via contract_execution_item_links (managed_service_item_id -> proposal_budget_line_id) -- identidade persistida, não texto", () => {
+    assertTrue(REVIEW_ROUTE_HANDLER_SOURCE.includes("createContractExecutionItemTraceabilityRepository"), "deve reaproveitar o repositório já existente de vínculos, não inventar uma segunda leitura");
+    assertTrue(REVIEW_ROUTE_HANDLER_SOURCE.includes("findExecutionItemLinks"));
+    assertTrue(REVIEW_ROUTE_HANDLER_SOURCE.includes("listByContractBaseline"), "deve reaproveitar a função de leitura já existente, não uma nova query");
+    assertTrue(REVIEW_ROUTE_HANDLER_SOURCE.includes("managed_service_item_id") && REVIEW_ROUTE_HANDLER_SOURCE.includes("proposal_budget_line_id"));
+  });
+
+  await runTest("junção item medido -> item comparado prefere a identidade persistida (managedServiceItemId) e só cai para código quando não há vínculo", () => {
+    assertTrue(ECONOMIC_COMPARISON_SERVICE_SOURCE.includes("executionItemLinks.get(item.managedServiceItemId)"), "deve consultar o vínculo persistido primeiro");
+    assertTrue(
+      ECONOMIC_COMPARISON_SERVICE_SOURCE.includes("Reserva: só quando o item não tem vínculo persistido"),
+      "o casamento por código deve ser explicitamente uma reserva, não o caminho principal"
+    );
+    assertTrue(!/from ["'](fuse\.js|leven|string-similarity|fastest-levenshtein)["']/i.test(ECONOMIC_COMPARISON_SERVICE_SOURCE), "nenhuma biblioteca de fuzzy matching importada");
+  });
+
+  await runTest("route-handler repassa managedServiceItemId (identidade real do item, vinda do boletim) ao serviço econômico -- nunca omitido", () => {
+    assertTrue(REVIEW_ROUTE_HANDLER_SOURCE.includes("item.managedServiceItemId"), "route-handler deve repassar a identidade real do item ao serviço econômico");
   });
 
   // 6. Certificação abre confirmação, não executa imediatamente.
