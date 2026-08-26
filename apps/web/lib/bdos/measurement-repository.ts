@@ -1186,6 +1186,36 @@ export const getMeasurementBulletinByWorkspaceId = async (
 // measurement_bulletin_line_sources
 // ---------------------------------------------------------------
 
+export interface MeasurementBulletinLineSourceRecord {
+  readonly bulletinLineId: string;
+  readonly measurementWorkspaceLineId: string;
+}
+
+// Leitura com detalhe (ao contrário de countMeasurementBulletinLineSources,
+// que só conta) -- a tela "Revisar medição" precisa saber, por linha
+// do boletim formal, qual measurement_workspace_line a originou, para
+// então reaproveitar sourceSheetName/sourceRowNumber/sourcePhysicalColumn/
+// sourceFinancialColumn já persistidos nessa linha de workspace (nunca
+// duplicados aqui).
+export const listMeasurementBulletinLineSources = async (
+  supabase: SupabaseClient,
+  params: { measurementBulletinId: string }
+): Promise<ReadonlyArray<MeasurementBulletinLineSourceRecord>> => {
+  const { data, error } = await supabase
+    .from("measurement_bulletin_line_sources")
+    .select("bulletin_line_id, measurement_workspace_line_id")
+    .eq("measurement_bulletin_id", params.measurementBulletinId);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((row) => ({
+    bulletinLineId: row.bulletin_line_id as string,
+    measurementWorkspaceLineId: row.measurement_workspace_line_id as string
+  }));
+};
+
 // Só a contagem -- a tela de status formal (Etapa 3C.2) só precisa
 // comprovar "todas as linhas têm fonte relacional", nunca exibir o
 // conteúdo de cada fonte. `head: true` evita trazer as 15 linhas
@@ -1250,4 +1280,64 @@ export const getMeasurementCycleByWorkspaceId = async (
   }
 
   return data ? toMeasurementCycleRecord(data) : null;
+};
+
+// Prévia de certificação (Revisar medição): "acumulado certificado
+// antes desta medição" é a soma dos totais dos DEMAIS boletins do
+// mesmo contract_baseline cujo ciclo já chegou a certified/closed --
+// nunca uma nova view/migration (as views measurement_certified_item_*
+// já existem mas são por item, não por boletim; este é o número por
+// boletim/contrato que a tela pede). Dois SELECTs simples, sem RPC:
+// primeiro os boletins já certificados do contrato, depois seus totais.
+export interface CertifiedMeasurementBulletinTotal {
+  readonly measurementBulletinId: string;
+  readonly totalValueDecimal: string;
+}
+
+const CERTIFIED_OR_CLOSED_CYCLE_STATUSES = ["certified", "closed"];
+
+export const listCertifiedMeasurementBulletinTotalsForContractBaseline = async (
+  supabase: SupabaseClient,
+  params: { contractBaselineId: string; companyId: string; excludingMeasurementBulletinId: string }
+): Promise<ReadonlyArray<CertifiedMeasurementBulletinTotal>> => {
+  const { data: cycles, error: cyclesError } = await supabase
+    .from("measurement_cycles")
+    .select("measurement_bulletin_id")
+    .eq("contract_baseline_id", params.contractBaselineId)
+    .eq("company_id", params.companyId)
+    .in("status", CERTIFIED_OR_CLOSED_CYCLE_STATUSES)
+    .not("measurement_bulletin_id", "is", null);
+
+  if (cyclesError) {
+    throw cyclesError;
+  }
+
+  const bulletinIds = Array.from(
+    new Set(
+      (cycles ?? [])
+        .map((row) => row.measurement_bulletin_id as string | null)
+        .filter((id): id is string => id !== null && id !== params.excludingMeasurementBulletinId)
+    )
+  );
+
+  if (bulletinIds.length === 0) {
+    return [];
+  }
+
+  const { data: bulletins, error: bulletinsError } = await supabase
+    .from("measurement_bulletins")
+    .select("id, totals")
+    .in("id", bulletinIds);
+
+  if (bulletinsError) {
+    throw bulletinsError;
+  }
+
+  return (bulletins ?? []).map((row) => {
+    const totals = (row.totals as Record<string, unknown> | null) ?? {};
+    return {
+      measurementBulletinId: row.id as string,
+      totalValueDecimal: typeof totals.canonicalTotalValue === "string" ? totals.canonicalTotalValue : "0"
+    };
+  });
 };

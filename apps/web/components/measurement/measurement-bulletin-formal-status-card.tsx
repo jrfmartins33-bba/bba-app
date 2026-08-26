@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, FileCheck2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, CheckCircle2, FileCheck2 } from "lucide-react";
 import { Card, StatusBadge } from "@bba/ui";
 import { useBbaStore } from "@bba/lib";
 import { fetchMeasurementBulletinFormalStatus } from "./measurement-bulletin-formal-status-client";
@@ -18,10 +19,15 @@ import {
  * Etapa 3C.2 (BM_08) — card somente-leitura do estado formal já
  * persistido do boletim (Etapa 3C.1C/3C.2: reference/header completos,
  * 15 linhas formais, 15 fontes relacionais, ciclo bulletin_generated).
- * Nunca oferece ação de certificação nesta rodada -- é puramente
- * informativo. A maioria dos boletins ainda não passou pela Etapa
- * 3C.2 (`not_formalized`), então o estado normal deste componente é
- * não renderizar nada -- nunca um erro, nunca um placeholder vazio.
+ * A maioria dos boletins ainda não passou pela Etapa 3C.2
+ * (`not_formalized`), então o estado normal deste componente é não
+ * renderizar nada -- nunca um erro, nunca um placeholder vazio.
+ *
+ * Ajuste "Revisar medição" (fluxo Relatório Executivo → Revisar
+ * medição → Ver itens medidos → Certificar/Recusar): a única ação
+ * oferecida aqui é navegar para a tela dedicada de revisão -- a
+ * certificação em si nunca acontece neste card nem no Relatório
+ * Executivo, só na tela .../revisar.
  */
 
 type FormalStatusCardState =
@@ -126,6 +132,11 @@ export function MeasurementBulletinFormalStatusCard({ measurementBulletinImportI
           </dd>
         </div>
       </dl>
+
+      <Link className="measurement-formal-status-card__review-action" href={`/medicoes/${measurementBulletinImportId}/revisar`}>
+        Revisar medição
+        <ArrowRight aria-hidden="true" size={16} />
+      </Link>
     </Card>
   );
 }
