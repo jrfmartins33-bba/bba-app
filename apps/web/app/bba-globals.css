@@ -3565,7 +3565,7 @@ button {
   align-items: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: 84px 1fr 76px 96px 112px 130px 108px;
+  grid-template-columns: 84px 1fr 64px 96px 130px 130px 168px 124px;
   min-height: 40px;
   padding: 6px 0;
 }
@@ -3613,7 +3613,17 @@ button {
   text-align: right;
 }
 
-.measurement-review-item__origin-toggle {
+/* Situação: sempre a mensagem neutra de planejamento indisponível
+   nesta rodada (ver PLANNING_COMPARISON_UNAVAILABLE_MESSAGE) -- nunca
+   Em execução/Concluído/Ainda não iniciado sem fonte físico-financeira
+   determinística. */
+.measurement-review-item__situation {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.measurement-review-item__analysis-toggle {
   align-items: center;
   background: transparent;
   border: 1px solid var(--app-border);
@@ -3629,18 +3639,80 @@ button {
   padding: 4px 8px;
 }
 
-.measurement-review-item__origin-toggle--unavailable {
-  border-color: transparent;
-  color: var(--text-muted);
-  cursor: default;
-}
-
-.measurement-review-item__origin-toggle[aria-expanded="true"] .measurement-ver-mais__chevron {
+.measurement-review-item__analysis-toggle[aria-expanded="true"] .measurement-ver-mais__chevron {
   transform: rotate(180deg);
 }
 
-.measurement-review-item__origin {
-  padding: 6px 0 10px;
+.measurement-review-item__analysis {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  padding: 10px 0 14px;
+}
+
+.measurement-review-item__analysis-block {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.measurement-review-item__analysis-block h4 {
+  color: var(--text-secondary-strong);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.measurement-review-item__analysis-block dl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.measurement-review-item__analysis-block dt {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.measurement-review-item__analysis-block dd {
+  color: var(--text-primary);
+  font-size: 13.5px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.measurement-review-item__analysis-block--muted p {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  margin: 0;
+}
+
+.measurement-review-item__economic-interpretation {
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  margin: 10px 0 0;
+  padding: 6px 10px;
+  text-align: center;
+}
+
+.measurement-review-item__economic-interpretation--economy {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--status-green);
+}
+
+.measurement-review-item__economic-interpretation--above_official {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--status-red);
+}
+
+.measurement-review-item__economic-interpretation--no_relevant_variation {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
 }
 
 .measurement-review-total {
@@ -3662,6 +3734,18 @@ button {
   color: var(--bba-gold-soft);
   font-size: 22px;
   font-variant-numeric: tabular-nums;
+}
+
+.measurement-review-header__economic-coverage {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.measurement-review-header__planning-note {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin: 12px 0 0;
 }
 
 .measurement-review-observations .measurement-ver-mais {

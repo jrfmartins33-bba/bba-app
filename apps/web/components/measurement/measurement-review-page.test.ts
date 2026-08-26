@@ -15,6 +15,11 @@ const REVIEW_CLIENT_SOURCE = readFileSync(join(currentDir, "measurement-review-c
 const CERTIFICATION_DIALOG_SOURCE = readFileSync(join(currentDir, "measurement-certification-confirm-dialog.tsx"), "utf8");
 const CERTIFICATION_PREVIEW_CLIENT_SOURCE = readFileSync(join(currentDir, "measurement-certification-preview-client.ts"), "utf8");
 const REFUSAL_DIALOG_SOURCE = readFileSync(join(currentDir, "measurement-refusal-dialog.tsx"), "utf8");
+const REVIEW_VIEW_MODEL_SOURCE = readFileSync(join(currentDir, "measurement-review-view-model.ts"), "utf8");
+const ECONOMIC_COMPARISON_SERVICE_SOURCE = readFileSync(
+  join(currentDir, "..", "..", "lib", "bdos", "measurement-item-economic-comparison-service.ts"),
+  "utf8"
+);
 const ROUTE_PAGE_SOURCE = readFileSync(
   join(currentDir, "..", "..", "app", "(dashboard)", "medicoes", "[measurementBulletinImportId]", "revisar", "page.tsx"),
   "utf8"
@@ -83,12 +88,85 @@ async function main(): Promise<void> {
     assertTrue(!/Number\(/.test(REVIEW_PAGE_SOURCE), "nenhuma conversão para float na página");
   });
 
-  // 4. Origem de cada item pode ser consultada.
-  await runTest("'Ver origem' existe por item e reaproveita MeasurementCellReference (mesmo componente do Relatório Executivo)", () => {
-    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Ver origem"));
+  // 4. Origem de cada item pode ser consultada -- evolução econômica
+  // dobrou a origem dentro de "Ver análise" (seção Rastreabilidade),
+  // conforme a própria especificação autoriza.
+  await runTest("'Ver análise' existe por item e sua seção Rastreabilidade reaproveita MeasurementCellReference (mesmo componente do Relatório Executivo)", () => {
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Ver análise"));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Rastreabilidade"));
     assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("MeasurementCellReference"));
     assertTrue(REVIEW_ITEM_ROW_SOURCE.includes('variant="full"'));
     assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("item.evidenceReferences"), "origem vem das referências reais do item, nunca inventada");
+  });
+
+  // Item 1: VALOR virou VALOR MEDIDO; PREÇO UNITÁRIO virou PREÇO
+  // UNITÁRIO CONTRATADO -- distinção inequívoca entre as duas colunas.
+  await runTest("cabeçalho da tabela usa 'Valor medido' e 'Preço unitário contratado' -- nunca 'Valor'/'Preço unitário' isolados", () => {
+    assertTrue(REVIEW_PAGE_SOURCE.includes("Valor medido"), "coluna de valor deve dizer explicitamente 'Valor medido'");
+    assertTrue(REVIEW_PAGE_SOURCE.includes("Preço unitário contratado"), "coluna de preço deve dizer explicitamente 'Preço unitário contratado'");
+    assertTrue(!/>Valor<\/span>/.test(REVIEW_PAGE_SOURCE), "cabeçalho não deve mais dizer só 'Valor'");
+    assertTrue(!/>Preço unitário<\/span>/.test(REVIEW_PAGE_SOURCE), "cabeçalho não deve mais dizer só 'Preço unitário' sem qualificar");
+  });
+
+  // Itens 2/3: referência econômica (Orçamento Oficial × Proposta
+  // Vencedora) -- as duas referências nunca são confundidas, e a
+  // variação é sempre a diferença real já calculada pelo servidor.
+  await runTest("bloco Econômico distingue preço do Orçamento Oficial e preço contratado (Proposta Vencedora) -- nunca o mesmo campo para os dois", () => {
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("economic.officialUnitPriceDecimal"));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("economic.contractedUnitPriceDecimal"));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Preço unitário no Orçamento Oficial"));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Preço unitário contratado (Proposta Vencedora)"));
+    assertTrue(
+      REVIEW_ITEM_ROW_SOURCE.indexOf("economic.officialUnitPriceDecimal") !== REVIEW_ITEM_ROW_SOURCE.indexOf("economic.contractedUnitPriceDecimal"),
+      "os dois preços devem vir de campos distintos, nunca o mesmo valor duplicado"
+    );
+  });
+
+  await runTest("a diferença monetária/percentual exibida vem pronta do servidor (economic.*Decimal) -- a UI nunca subtrai ou divide dinheiro", () => {
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("economic.unitPriceDifferenceDecimal"));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("economic.unitPriceDifferencePercentage"));
+    assertTrue(!/economic\.\w+Decimal\s*[-/*]/.test(REVIEW_ITEM_ROW_SOURCE), "nenhuma operação aritmética aplicada a um campo econômico no componente");
+  });
+
+  // Item 3: item abaixo do preço oficial = economia; item acima =
+  // acima do orçamento; nunca "ganho"/"perda" genéricos.
+  await runTest("interpretação econômica usa 'Economia frente ao orçamento oficial' / 'Acima do orçamento oficial' / 'Sem variação relevante' -- nunca 'ganho'/'perda'", () => {
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes("Economia frente ao orçamento oficial"));
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes("Acima do orçamento oficial"));
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes("Sem variação relevante"));
+    assertTrue(!/\bganho\b|\bperda\b/i.test(REVIEW_VIEW_MODEL_SOURCE), "vocabulário genérico proibido pela especificação");
+    assertTrue(!/\bganho\b|\bperda\b/i.test(REVIEW_ITEM_ROW_SOURCE), "vocabulário genérico proibido também na linha do item");
+  });
+
+  await runTest("interpretação econômica ('economy'/'above_official'/'no_relevant_variation') é determinística a partir do sinal real da diferença -- não há limiar percentual hardcoded", () => {
+    assertTrue(ECONOMIC_COMPARISON_SERVICE_SOURCE.includes('differenceCents === 0 ? "no_relevant_variation"'));
+    assertTrue(ECONOMIC_COMPARISON_SERVICE_SOURCE.includes('differenceCents > 0 ? "economy" : "above_official"'));
+    assertTrue(!/0\.0[1-9]|[1-9]\d*\s*%/.test(ECONOMIC_COMPARISON_SERVICE_SOURCE), "nenhum percentual/limiar numérico hardcoded para decidir a interpretação");
+  });
+
+  // Item 12: nenhum cálculo financeiro decisório no frontend.
+  await runTest("nenhum cálculo financeiro decisório no frontend -- nenhuma multiplicação/divisão de dinheiro nos componentes React de Revisar medição", () => {
+    assertTrue(!/\*\s*item\.|item\.\w+Decimal\s*\*/.test(REVIEW_PAGE_SOURCE), "página nunca multiplica quantidade por preço");
+    assertTrue(!/\*\s*item\.|item\.\w+Decimal\s*\*/.test(REVIEW_ITEM_ROW_SOURCE), "linha do item nunca multiplica quantidade por preço");
+    assertTrue(!/Number\(/.test(REVIEW_ITEM_ROW_SOURCE), "nenhuma conversão para float na linha do item");
+  });
+
+  // Itens 6/7/8: nenhum status físico-financeiro é inventado; a coluna
+  // Situação e o bloco Planejamento sempre mostram a mensagem neutra
+  // de indisponibilidade nesta rodada -- nenhuma fonte determinística
+  // suficiente foi encontrada para calcular Em execução/Concluído/
+  // Ainda não iniciado/Adiantado/No ritmo previsto/Abaixo do
+  // previsto/Em atraso.
+  await runTest("nenhum status físico-financeiro é inventado -- 'Em execução'/'Concluído'/'Adiantado'/'No ritmo previsto'/'Abaixo do previsto'/'Em atraso' não aparecem em nenhum arquivo desta tela", () => {
+    const invented = /Em execução|Concluído|Ainda não iniciado|Adiantado|No ritmo previsto|Abaixo do previsto|Em atraso|Work in Progress|\bWIP\b/;
+    assertTrue(!invented.test(REVIEW_PAGE_SOURCE), "página não deve inventar nenhum estado de cronograma");
+    assertTrue(!invented.test(REVIEW_ITEM_ROW_SOURCE), "linha do item não deve inventar nenhum estado de cronograma");
+  });
+
+  await runTest("coluna Situação e o bloco 'Planejamento físico-financeiro' sempre mostram a mensagem exata de indisponibilidade -- nunca um status calculado sem fonte", () => {
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("PLANNING_COMPARISON_UNAVAILABLE_MESSAGE"), "linha do item deve usar a mensagem compartilhada, não um texto solto");
+    assertTrue(REVIEW_PAGE_SOURCE.includes("PLANNING_COMPARISON_UNAVAILABLE_MESSAGE"), "resumo executivo também deve usar a mesma mensagem compartilhada");
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Comparação com o planejamento ainda não disponível"'), "a mensagem exata deve existir literalmente, uma única fonte");
   });
 
   await runTest("evidenceReferences do item é validado estruturalmente no client fetch (sourceType/locator), nunca aceito sem checagem", () => {

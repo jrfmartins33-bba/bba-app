@@ -1,19 +1,41 @@
 import type { DecisionBriefCriticalItem, DecisionBriefSourceReference } from "@bba/bdos-core/decision-brief";
-import type { MeasurementBulletinReview, MeasurementBulletinReviewStatus } from "@/lib/bdos/measurement-bulletin-review-service";
+import type { MeasurementBulletinReview, MeasurementBulletinReviewItem, MeasurementBulletinReviewStatus } from "@/lib/bdos/measurement-bulletin-review-service";
+import type {
+  MeasurementEconomicComparisonSummary,
+  MeasurementItemEconomicComparison,
+  MeasurementItemEconomicInterpretation
+} from "@/lib/bdos/measurement-item-economic-comparison-service";
 
 /**
  * "Revisar medição" — orquestra `GET /api/measurement/imports/[id]/review`.
  * Mesmo padrão de measurement-bulletin-formal-status-client.ts:
  * `fetchImpl` injetável, validação estrutural mínima (aceita ou
  * rejeita, nunca normaliza).
+ *
+ * Evolução econômica: a rota devolve cada item com `economicComparison`
+ * (null quando não há correspondência confiável com o Orçamento Oficial/
+ * Proposta Vencedora) e um `economicSummary` de topo (null quando
+ * nenhum item teve correspondência) -- estende, sem alterar,
+ * `MeasurementBulletinReview`/`MeasurementBulletinReviewItem`.
  */
 
+export interface MeasurementReviewItemWithEconomics extends MeasurementBulletinReviewItem {
+  readonly economicComparison: MeasurementItemEconomicComparison | null;
+}
+
+export interface MeasurementBulletinReviewWithEconomics extends Omit<MeasurementBulletinReview, "items"> {
+  readonly items: ReadonlyArray<MeasurementReviewItemWithEconomics>;
+  readonly economicSummary: MeasurementEconomicComparisonSummary | null;
+}
+
 export type MeasurementReviewFetchOutcome =
-  | { readonly kind: "ok"; readonly review: MeasurementBulletinReview }
+  | { readonly kind: "ok"; readonly review: MeasurementBulletinReviewWithEconomics }
   | { readonly kind: "unauthenticated" }
   | { readonly kind: "not_found" }
   | { readonly kind: "not_formalized" }
   | { readonly kind: "technical_error" };
+
+const ECONOMIC_INTERPRETATION_VALUES: ReadonlyArray<MeasurementItemEconomicInterpretation> = ["economy", "above_official", "no_relevant_variation"];
 
 const BULLETIN_STATUS_VALUES: ReadonlyArray<MeasurementBulletinReviewStatus> = ["Draft", "Validated", "Finalized", "Cancelled"];
 
@@ -48,7 +70,31 @@ function extractValidSourceReference(value: unknown): DecisionBriefSourceReferen
   return candidate as unknown as DecisionBriefSourceReference;
 }
 
-export function extractValidMeasurementReview(payload: unknown): MeasurementBulletinReview | null {
+function extractValidItemEconomicComparison(value: unknown): MeasurementItemEconomicComparison | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== "object") return undefined;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.officialUnitPriceDecimal !== "string") return undefined;
+  if (typeof candidate.contractedUnitPriceDecimal !== "string") return undefined;
+  if (typeof candidate.unitPriceDifferenceDecimal !== "string") return undefined;
+  if (candidate.unitPriceDifferencePercentage !== null && typeof candidate.unitPriceDifferencePercentage !== "string") return undefined;
+  if (!ECONOMIC_INTERPRETATION_VALUES.includes(candidate.interpretation as MeasurementItemEconomicInterpretation)) return undefined;
+  return candidate as unknown as MeasurementItemEconomicComparison;
+}
+
+function extractValidEconomicSummary(value: unknown): MeasurementEconomicComparisonSummary | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== "object") return undefined;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.matchedItemCount !== "number") return undefined;
+  if (typeof candidate.totalItemCount !== "number") return undefined;
+  if (typeof candidate.measuredValueAtOfficialPricesDecimal !== "string") return undefined;
+  if (typeof candidate.measuredValueAtContractedPricesDecimal !== "string") return undefined;
+  if (typeof candidate.economyDecimal !== "string") return undefined;
+  return candidate as unknown as MeasurementEconomicComparisonSummary;
+}
+
+export function extractValidMeasurementReview(payload: unknown): MeasurementBulletinReviewWithEconomics | null {
   if (typeof payload !== "object" || payload === null) return null;
 
   const data = (payload as { data?: unknown }).data;
@@ -87,9 +133,12 @@ export function extractValidMeasurementReview(payload: unknown): MeasurementBull
     for (const reference of item.evidenceReferences) {
       if (extractValidSourceReference(reference) === null) return null;
     }
+    if (extractValidItemEconomicComparison(item.economicComparison) === undefined) return null;
   }
 
-  return data as MeasurementBulletinReview;
+  if (extractValidEconomicSummary(candidate.economicSummary) === undefined) return null;
+
+  return data as MeasurementBulletinReviewWithEconomics;
 }
 
 export async function fetchMeasurementBulletinReview(

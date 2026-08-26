@@ -16,6 +16,7 @@ import {
   formatFormalBulletinStatusLabel,
   formatFormalBulletinTotalBRL
 } from "./measurement-bulletin-formal-status-view-model";
+import { PLANNING_COMPARISON_UNAVAILABLE_MESSAGE } from "./measurement-review-view-model";
 
 type PageState =
   | { readonly status: "loading" }
@@ -138,6 +139,18 @@ export function MeasurementReviewPage({ measurementBulletinImportId }: { measure
                 <dt>Observações técnicas</dt>
                 <dd>{state.review.technicalObservationCount}</dd>
               </div>
+              {state.review.economicSummary ? (
+                <div className="workspace-fact">
+                  <dt>Economia frente ao Orçamento Oficial</dt>
+                  <dd>
+                    {formatFormalBulletinTotalBRL(state.review.economicSummary.economyDecimal)}
+                    <span className="measurement-review-header__economic-coverage">
+                      {" "}
+                      · comparação disponível para {state.review.economicSummary.matchedItemCount} de {state.review.economicSummary.totalItemCount} itens
+                    </span>
+                  </dd>
+                </div>
+              ) : null}
               {state.review.technicalResponsibleName ? (
                 <div className="workspace-fact">
                   <dt>Responsável técnico</dt>
@@ -161,6 +174,7 @@ export function MeasurementReviewPage({ measurementBulletinImportId }: { measure
                 </dd>
               </div>
             </dl>
+            <p className="measurement-review-header__planning-note">{PLANNING_COMPARISON_UNAVAILABLE_MESSAGE}.</p>
           </Card>
 
           <Card
@@ -173,10 +187,11 @@ export function MeasurementReviewPage({ measurementBulletinImportId }: { measure
                 <span className="measurement-review-item__code">Código</span>
                 <span className="measurement-review-item__description">Serviço</span>
                 <span className="measurement-review-item__unit">Unidade</span>
-                <span className="measurement-review-item__quantity">Quantidade</span>
-                <span className="measurement-review-item__unit-value">Preço unitário</span>
-                <span className="measurement-review-item__value">Valor</span>
-                <span className="measurement-review-item__origin-toggle" />
+                <span className="measurement-review-item__quantity">Quantidade medida</span>
+                <span className="measurement-review-item__unit-value">Preço unitário contratado</span>
+                <span className="measurement-review-item__value">Valor medido</span>
+                <span className="measurement-review-item__situation">Situação</span>
+                <span className="measurement-review-item__analysis-toggle" />
               </li>
               {state.review.items.map((item) => (
                 <MeasurementReviewItemRow item={item} key={item.id} />

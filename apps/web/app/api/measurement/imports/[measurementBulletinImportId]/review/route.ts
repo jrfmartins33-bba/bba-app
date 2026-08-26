@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseRouteHandlerClient, requireAuthenticatedActor } from "@/lib/supabase/server";
 import {
   buildMeasurementBulletinReviewReader,
+  buildMeasurementEconomicComparisonReader,
   buildMeasurementReviewDecisionBriefReader,
   handleGetMeasurementBulletinReview
 } from "./measurement-bulletin-review-route-handler";
@@ -23,7 +24,8 @@ export async function GET(_request: Request, context: { params: { measurementBul
       { auth, measurementBulletinImportId: context.params.measurementBulletinImportId, generatedAt: new Date().toISOString() },
       {
         decisionBriefReader: buildMeasurementReviewDecisionBriefReader(supabase),
-        reviewReader: buildMeasurementBulletinReviewReader(supabase)
+        reviewReader: buildMeasurementBulletinReviewReader(supabase),
+        economicComparisonReader: buildMeasurementEconomicComparisonReader(supabase)
       }
     );
 
