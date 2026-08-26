@@ -47,6 +47,18 @@ export type AuthenticatedCompany = {
 // `getUser()`, nunca `getSession()`: revalida o JWT contra o Auth
 // server a cada chamada — a sessão vem de um cookie que o cliente não
 // controla, então não pode ser confiada sem essa revalidação.
+//
+// bba_admin sem company_id (caso real: admin@bbabrazil.com.br) NÃO é
+// "não autenticado" -- é um admin da plataforma, sem empresa cliente
+// vinculada por natureza (mesmo estado que packages/lib/src/store.ts
+// já trata do lado do cliente: buildAdminWorkspace usa
+// `profile.company_id ?? profile.id` como o workspace do próprio
+// admin). Sem esse mesmo fallback aqui, qualquer rota que dependa
+// desta função rejeita todo admin sem empresa com 401, derrubando a
+// sessão real -- bug observado no clique em "Medições" pelo Admin.
+// Continua exigindo `getUser()` válido; nunca relaxa a autenticação
+// em si, só resolve o escopo de empresa do mesmo jeito que o cliente
+// já resolve.
 export const requireAuthenticatedCompany = async (
   supabase: SupabaseClient
 ): Promise<AuthenticatedCompany | null> => {
@@ -61,15 +73,21 @@ export const requireAuthenticatedCompany = async (
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("company_id")
+    .select("company_id, role")
     .eq("id", user.id)
     .single();
 
-  if (profileError || !profile?.company_id) {
+  if (profileError || !profile) {
     return null;
   }
 
-  return { userId: user.id, companyId: profile.company_id as string };
+  const companyId = (profile.company_id as string | null) ?? (profile.role === "bba_admin" ? user.id : null);
+
+  if (!companyId) {
+    return null;
+  }
+
+  return { userId: user.id, companyId };
 };
 
 export type AuthenticatedAdmin = {
