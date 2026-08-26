@@ -18,15 +18,27 @@ const ENGINEERING_PROJECT_ID = "project-1";
 
 interface FakeReader extends MeasurementImportsListReader {
   readonly calls: Array<{ companyId: string }>;
+  readonly listAllCalls: number;
 }
 
-function createFakeReader(itemsByCompany: Record<string, ReadonlyArray<MeasurementImportListItem>>): FakeReader {
+function createFakeReader(
+  itemsByCompany: Record<string, ReadonlyArray<MeasurementImportListItem>>,
+  allItems: ReadonlyArray<MeasurementImportListItem> = []
+): FakeReader {
   const calls: Array<{ companyId: string }> = [];
+  let listAllCalls = 0;
   return {
     calls,
+    get listAllCalls() {
+      return listAllCalls;
+    },
     async listByCompany(input) {
       calls.push(input);
       return itemsByCompany[input.companyId] ?? [];
+    },
+    async listAll() {
+      listAllCalls += 1;
+      return allItems;
     }
   };
 }
@@ -52,7 +64,10 @@ async function main(): Promise<void> {
     };
     const reader = createFakeReader({ [COMPANY_ID]: [item] });
 
-    const outcome = await handleListMeasurementImports({ auth: { companyId: COMPANY_ID, userId: "user-1" } }, { importsListReader: reader });
+    const outcome = await handleListMeasurementImports(
+      { auth: { companyId: COMPANY_ID, userId: "user-1", isAdmin: false } },
+      { importsListReader: reader }
+    );
 
     assertEqual(outcome.status, 200);
     assertEqual(JSON.stringify(outcome.body), JSON.stringify({ imports: [item] }));
@@ -62,10 +77,36 @@ async function main(): Promise<void> {
 
   await runTest("200 com lista vazia quando a company não tem importações -- nunca 404", async () => {
     const reader = createFakeReader({});
-    const outcome = await handleListMeasurementImports({ auth: { companyId: COMPANY_ID, userId: "user-1" } }, { importsListReader: reader });
+    const outcome = await handleListMeasurementImports(
+      { auth: { companyId: COMPANY_ID, userId: "user-1", isAdmin: false } },
+      { importsListReader: reader }
+    );
 
     assertEqual(outcome.status, 200);
     assertEqual(JSON.stringify(outcome.body), JSON.stringify({ imports: [] }));
+  });
+
+  await runTest("auth.isAdmin=true chama reader.listAll() -- cross-tenant, nunca listByCompany", async () => {
+    const crossTenantItem: MeasurementImportListItem = {
+      measurementBulletinImportId: "import-any-company",
+      humanLabel: "BM_08.xlsx",
+      status: "completed",
+      createdAt: "2026-07-10T10:00:00.000Z",
+      updatedAt: "2026-07-10T10:05:00.000Z",
+      analysisAvailable: true,
+      companyName: "Hidromec Serviços e Locações Ltda"
+    };
+    const reader = createFakeReader({}, [crossTenantItem]);
+
+    const outcome = await handleListMeasurementImports(
+      { auth: { companyId: null, userId: "admin-1", isAdmin: true } },
+      { importsListReader: reader }
+    );
+
+    assertEqual(outcome.status, 200);
+    assertEqual(JSON.stringify(outcome.body), JSON.stringify({ imports: [crossTenantItem] }));
+    assertEqual(reader.calls.length, 0, "listByCompany nunca é chamado para admin");
+    assertEqual(reader.listAllCalls, 1);
   });
 
   // Composição real do reader contra o repository do Epic 19.

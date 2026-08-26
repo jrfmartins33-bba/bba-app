@@ -18,16 +18,16 @@ const OTHER_COMPANY_ID = "company-2";
 
 interface SeedRecord {
   readonly measurementBulletinImportId: string;
-  readonly companyId: string;
+  readonly companyId: string | null;
   readonly record: MeasurementDecisionBriefImportRecord;
 }
 
 interface FakeImportReader extends MeasurementDecisionBriefImportReader {
-  readonly calls: Array<{ measurementBulletinImportId: string; companyId: string }>;
+  readonly calls: Array<{ measurementBulletinImportId: string; companyId: string | null }>;
 }
 
 function createFakeImportReader(seed: ReadonlyArray<SeedRecord>): FakeImportReader {
-  const calls: Array<{ measurementBulletinImportId: string; companyId: string }> = [];
+  const calls: Array<{ measurementBulletinImportId: string; companyId: string | null }> = [];
   return {
     calls,
     async findById(query) {
@@ -98,6 +98,21 @@ async function main(): Promise<void> {
     assertEqual(result.decisionBrief.metadata.generatedAt, "2026-07-13T12:00:00.000Z", "generatedAt preservado exatamente como injetado");
     assertEqual(result.decisionBrief.executiveConclusion.readiness, "ready_with_reservations", "readiness do builder, não recalculada aqui");
     assertEqual(result.decisionBrief.confidence.status, "unavailable", "confidence do builder, não recalculada aqui");
+  });
+
+  // companyId null (bba_admin, cross-tenant) -- passa verbatim ao
+  // reader, nunca substituído por um valor sintético; a autorização
+  // cross-tenant é responsabilidade da RLS/reader, não deste serviço.
+  await runTest("companyId null (admin) é repassado ao reader verbatim, e o Brief é encontrado normalmente", async () => {
+    const reader = createFakeImportReader([{ measurementBulletinImportId: "import-1", companyId: null, record: { analysisResult: NEEDS_REVIEW_ANALYSIS } }]);
+
+    const result = await getMeasurementDecisionBrief(
+      { measurementBulletinImportId: "import-1", companyId: null, generatedAt: "2026-07-13T12:00:00.000Z" },
+      deps(reader)
+    );
+
+    assertTrue(result.success, "deveria ter sucesso mesmo com companyId null");
+    assertEqual(JSON.stringify(reader.calls[0]), JSON.stringify({ measurementBulletinImportId: "import-1", companyId: null }), "reader recebe companyId null verbatim, nunca substituído");
   });
 
   // 5. import_not_found quando o reader devolve null.

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseRouteHandlerClient, requireAuthenticatedCompany } from "@/lib/supabase/server";
+import { getSupabaseRouteHandlerClient, requireAuthenticatedActor } from "@/lib/supabase/server";
 import { buildMeasurementImportsListReader, handleListMeasurementImports } from "./measurement-imports-list-route-handler";
 
 /**
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<NextResponse> {
   const supabase = getSupabaseRouteHandlerClient();
-  const auth = await requireAuthenticatedCompany(supabase);
+  const auth = await requireAuthenticatedActor(supabase);
 
   try {
     const outcome = await handleListMeasurementImports({ auth }, { importsListReader: buildMeasurementImportsListReader(supabase) });

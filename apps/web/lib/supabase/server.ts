@@ -90,6 +90,57 @@ export const requireAuthenticatedCompany = async (
   return { userId: user.id, companyId };
 };
 
+export type AuthenticatedActor = {
+  userId: string;
+  /** null exclusivamente quando isAdmin -- nunca para um cliente comum (ver requireAuthenticatedCompany). */
+  companyId: string | null;
+  isAdmin: boolean;
+};
+
+// Igual a requireAuthenticatedCompany (mesmo getUser(), mesma
+// revalidação), mas devolve o papel real em vez de forçar um único
+// companyId -- para rotas que precisam diferenciar "cliente, restrito
+// à própria empresa" de "admin BBA, autorizado a ver qualquer
+// empresa" (a mesma distinção que a RLS já faz nas tabelas de
+// Medições via `company_id = get_my_company_id() OR is_bba_admin()`,
+// supabase/migrations/202506280001_bba_app_core_schema.sql em diante).
+// Quando isAdmin, companyId vem null de propósito: cabe ao chamador
+// decidir se lista todas as empresas ou filtra por uma específica --
+// nunca inventa um companyId sintético aqui (diferente de
+// requireAuthenticatedCompany, que precisa de um companyId não-nulo
+// para não quebrar as dezenas de rotas company-scoped existentes).
+export const requireAuthenticatedActor = async (
+  supabase: SupabaseClient
+): Promise<AuthenticatedActor | null> => {
+  const {
+    data: { user },
+    error: userError
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return null;
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+
+  if (profileError || !profile) {
+    return null;
+  }
+
+  const isAdmin = profile.role === "bba_admin";
+  const companyId = (profile.company_id as string | null) ?? null;
+
+  if (!isAdmin && !companyId) {
+    return null;
+  }
+
+  return { userId: user.id, companyId, isAdmin };
+};
+
 export type AuthenticatedAdmin = {
   userId: string;
 };

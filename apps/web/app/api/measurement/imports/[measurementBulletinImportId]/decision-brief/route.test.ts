@@ -53,16 +53,16 @@ const NEEDS_REVIEW_ANALYSIS: MeasurementAnalysisResult = {
 
 interface SeedRecord {
   readonly measurementBulletinImportId: string;
-  readonly companyId: string;
+  readonly companyId: string | null;
   readonly analysisResult: unknown;
 }
 
 interface FakeReader extends MeasurementDecisionBriefImportReader {
-  readonly calls: Array<{ measurementBulletinImportId: string; companyId: string }>;
+  readonly calls: Array<{ measurementBulletinImportId: string; companyId: string | null }>;
 }
 
 function createFakeReader(seed: ReadonlyArray<SeedRecord>): FakeReader {
-  const calls: Array<{ measurementBulletinImportId: string; companyId: string }> = [];
+  const calls: Array<{ measurementBulletinImportId: string; companyId: string | null }> = [];
   return {
     calls,
     async findById(query) {
@@ -82,7 +82,7 @@ async function main(): Promise<void> {
     const reader = createFakeReader([{ measurementBulletinImportId: "import-1", companyId: COMPANY_ID, analysisResult: NEEDS_REVIEW_ANALYSIS }]);
 
     const outcome = await handleGetMeasurementDecisionBrief(
-      { auth: { companyId: COMPANY_ID, userId: "user-1" }, measurementBulletinImportId: "import-1", generatedAt: "2026-07-13T12:00:00.000Z" },
+      { auth: { companyId: COMPANY_ID, userId: "user-1", isAdmin: false }, measurementBulletinImportId: "import-1", generatedAt: "2026-07-13T12:00:00.000Z" },
       { importReader: reader }
     );
 
@@ -96,6 +96,21 @@ async function main(): Promise<void> {
 
     assertEqual(reader.calls.length, 1, "reader chamado uma única vez");
     assertEqual(JSON.stringify(reader.calls[0]), JSON.stringify({ measurementBulletinImportId: "import-1", companyId: COMPANY_ID }), "reader recebe os IDs corretos");
+  });
+
+  // Admin (companyId null): 200 mesmo sem empresa própria -- a busca
+  // cross-tenant é responsabilidade do reader (RLS), auth.isAdmin só
+  // decide que companyId null é válido aqui, nunca inventa um valor.
+  await runTest("200 com o Brief quando auth.isAdmin=true e companyId é null -- reader recebe null verbatim", async () => {
+    const reader = createFakeReader([{ measurementBulletinImportId: "import-1", companyId: null, analysisResult: NEEDS_REVIEW_ANALYSIS }]);
+
+    const outcome = await handleGetMeasurementDecisionBrief(
+      { auth: { companyId: null, userId: "admin-1", isAdmin: true }, measurementBulletinImportId: "import-1", generatedAt: "2026-07-13T12:00:00.000Z" },
+      { importReader: reader }
+    );
+
+    assertEqual(outcome.status, 200);
+    assertEqual(JSON.stringify(reader.calls[0]), JSON.stringify({ measurementBulletinImportId: "import-1", companyId: null }), "reader recebe companyId null verbatim para admin");
   });
 
   // 4. Usuário não autenticado.
@@ -112,7 +127,7 @@ async function main(): Promise<void> {
   await runTest("400 quando measurementBulletinImportId está ausente", async () => {
     const reader = createFakeReader([]);
     const outcome = await handleGetMeasurementDecisionBrief(
-      { auth: { companyId: COMPANY_ID, userId: "user-1" }, measurementBulletinImportId: undefined, generatedAt: "2026-07-13T12:00:00.000Z" },
+      { auth: { companyId: COMPANY_ID, userId: "user-1", isAdmin: false }, measurementBulletinImportId: undefined, generatedAt: "2026-07-13T12:00:00.000Z" },
       { importReader: reader }
     );
 
@@ -125,7 +140,7 @@ async function main(): Promise<void> {
   await runTest("404 quando a importação não existe", async () => {
     const reader = createFakeReader([]);
     const outcome = await handleGetMeasurementDecisionBrief(
-      { auth: { companyId: COMPANY_ID, userId: "user-1" }, measurementBulletinImportId: "id-inexistente", generatedAt: "2026-07-13T12:00:00.000Z" },
+      { auth: { companyId: COMPANY_ID, userId: "user-1", isAdmin: false }, measurementBulletinImportId: "id-inexistente", generatedAt: "2026-07-13T12:00:00.000Z" },
       { importReader: reader }
     );
 
@@ -137,7 +152,7 @@ async function main(): Promise<void> {
   await runTest("404 quando a importação pertence a outra company -- mesmo status/erro de inexistente", async () => {
     const reader = createFakeReader([{ measurementBulletinImportId: "import-1", companyId: OTHER_COMPANY_ID, analysisResult: NEEDS_REVIEW_ANALYSIS }]);
     const outcome = await handleGetMeasurementDecisionBrief(
-      { auth: { companyId: COMPANY_ID, userId: "user-1" }, measurementBulletinImportId: "import-1", generatedAt: "2026-07-13T12:00:00.000Z" },
+      { auth: { companyId: COMPANY_ID, userId: "user-1", isAdmin: false }, measurementBulletinImportId: "import-1", generatedAt: "2026-07-13T12:00:00.000Z" },
       { importReader: reader }
     );
 
@@ -149,7 +164,7 @@ async function main(): Promise<void> {
   await runTest("409 quando a importação existe mas ainda não tem analysis_result", async () => {
     const reader = createFakeReader([{ measurementBulletinImportId: "import-1", companyId: COMPANY_ID, analysisResult: null }]);
     const outcome = await handleGetMeasurementDecisionBrief(
-      { auth: { companyId: COMPANY_ID, userId: "user-1" }, measurementBulletinImportId: "import-1", generatedAt: "2026-07-13T12:00:00.000Z" },
+      { auth: { companyId: COMPANY_ID, userId: "user-1", isAdmin: false }, measurementBulletinImportId: "import-1", generatedAt: "2026-07-13T12:00:00.000Z" },
       { importReader: reader }
     );
 
@@ -165,7 +180,7 @@ async function main(): Promise<void> {
   await runTest("nenhum campo do corpo da resposta carrega id de Decision/Recommendation/ActionPlan/Action/ExecutionWorkflow/ExecutionTask", async () => {
     const reader = createFakeReader([{ measurementBulletinImportId: "import-1", companyId: COMPANY_ID, analysisResult: NEEDS_REVIEW_ANALYSIS }]);
     const outcome = await handleGetMeasurementDecisionBrief(
-      { auth: { companyId: COMPANY_ID, userId: "user-1" }, measurementBulletinImportId: "import-1", generatedAt: "2026-07-13T12:00:00.000Z" },
+      { auth: { companyId: COMPANY_ID, userId: "user-1", isAdmin: false }, measurementBulletinImportId: "import-1", generatedAt: "2026-07-13T12:00:00.000Z" },
       { importReader: reader }
     );
 

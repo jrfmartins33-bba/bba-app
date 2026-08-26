@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AuthenticatedCompany } from "@/lib/supabase/server";
+import type { AuthenticatedActor } from "@/lib/supabase/server";
 import {
   countMeasurementBulletinLineSources,
   getMeasurementBulletinByWorkspaceId,
@@ -23,7 +23,7 @@ export function buildMeasurementBulletinFormalStatusReader(supabase: SupabaseCli
     async findWorkspaceByImportId(query) {
       const workspace = await getMeasurementWorkspaceByImportId(supabase, {
         measurementBulletinImportId: query.measurementBulletinImportId,
-        companyId: query.companyId
+        companyId: query.companyId ?? undefined
       });
       return workspace ? { id: workspace.id } : null;
     },
@@ -31,7 +31,7 @@ export function buildMeasurementBulletinFormalStatusReader(supabase: SupabaseCli
     async findBulletinByWorkspaceId(query) {
       const bulletin = await getMeasurementBulletinByWorkspaceId(supabase, {
         measurementWorkspaceId: query.measurementWorkspaceId,
-        companyId: query.companyId
+        companyId: query.companyId ?? undefined
       });
       if (!bulletin) {
         return null;
@@ -53,7 +53,7 @@ export function buildMeasurementBulletinFormalStatusReader(supabase: SupabaseCli
     async findCycleByWorkspaceId(query) {
       const cycle = await getMeasurementCycleByWorkspaceId(supabase, {
         measurementWorkspaceId: query.measurementWorkspaceId,
-        companyId: query.companyId
+        companyId: query.companyId ?? undefined
       });
       return cycle ? { status: cycle.status } : null;
     }
@@ -61,7 +61,7 @@ export function buildMeasurementBulletinFormalStatusReader(supabase: SupabaseCli
 }
 
 export interface HandleGetMeasurementBulletinFormalStatusInput {
-  readonly auth: AuthenticatedCompany | null;
+  readonly auth: AuthenticatedActor | null;
   readonly measurementBulletinImportId: string | undefined;
 }
 

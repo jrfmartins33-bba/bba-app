@@ -90,16 +90,21 @@ const toMeasurementBulletinImportRecord = (data: Record<string, unknown>): Measu
   analysisResult: data.analysis_result ?? null
 });
 
+// `companyId` opcional -- omitido só quando o chamador já confirmou
+// (requireAuthenticatedActor) que o ator é bba_admin, autorizado pela
+// RLS a ler qualquer empresa (`company_id = get_my_company_id() OR
+// is_bba_admin()`). Continua sendo o filtro obrigatório para todo
+// cliente comum -- este parâmetro nunca é opcional nas chamadas
+// company-scoped já existentes.
 export const getMeasurementBulletinImportById = async (
   supabase: SupabaseClient,
-  params: { id: string; companyId: string }
+  params: { id: string; companyId?: string }
 ): Promise<MeasurementBulletinImportRecord | null> => {
-  const { data, error } = await supabase
-    .from("measurement_bulletin_imports")
-    .select(selectMeasurementBulletinImportColumns)
-    .eq("id", params.id)
-    .eq("company_id", params.companyId)
-    .maybeSingle();
+  let query = supabase.from("measurement_bulletin_imports").select(selectMeasurementBulletinImportColumns).eq("id", params.id);
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+  const { data, error } = await query.maybeSingle();
 
   if (error) {
     throw error;
@@ -189,6 +194,58 @@ export const listMeasurementBulletinImportsByCompany = async (
   const idsWithAnalysis = new Set((rowsWithAnalysis ?? []).map((row: Record<string, unknown>) => row.id as string));
 
   return (data ?? []).map((row) => toMeasurementBulletinImportSummary(row as Record<string, unknown>, idsWithAnalysis.has((row as Record<string, unknown>).id as string)));
+};
+
+export interface MeasurementBulletinImportSummaryWithCompany extends MeasurementBulletinImportSummary {
+  readonly companyId: string;
+  /** `companies.name` -- null só se a empresa referenciada foi removida (nunca acontece hoje, DELETE bloqueado em toda a cadeia). */
+  readonly companyName: string | null;
+}
+
+const selectMeasurementBulletinImportSummaryWithCompanyColumns =
+  "id, file_name, status, uploaded_at, updated_at, company_id, companies(name)";
+
+// Cross-tenant -- exclusivo para bba_admin (RLS já autoriza via
+// is_bba_admin() nas policies de measurement_bulletin_imports;
+// requireAuthenticatedActor, na fronteira da rota, é quem garante que
+// só um admin real chega até aqui). Nunca aceita companyId: listar
+// "todas as empresas para um cliente comum" não é um caso de uso,
+// seria uma forma de bypass -- a distinção entre esta função e
+// listMeasurementBulletinImportsByCompany é a própria fronteira de
+// autorização, não um parâmetro opcional.
+export const listAllMeasurementBulletinImportsForAdmin = async (
+  supabase: SupabaseClient
+): Promise<ReadonlyArray<MeasurementBulletinImportSummaryWithCompany>> => {
+  const { data, error } = await supabase
+    .from("measurement_bulletin_imports")
+    .select(selectMeasurementBulletinImportSummaryWithCompanyColumns)
+    .order("uploaded_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const { data: rowsWithAnalysis, error: analysisError } = await supabase
+    .from("measurement_bulletin_imports")
+    .select("id")
+    .not("analysis_result", "is", null);
+
+  if (analysisError) {
+    throw analysisError;
+  }
+
+  const idsWithAnalysis = new Set((rowsWithAnalysis ?? []).map((row: Record<string, unknown>) => row.id as string));
+
+  return (data ?? []).map((row) => {
+    const typedRow = row as Record<string, unknown>;
+    const company = typedRow.companies as { name: string | null } | { name: string | null }[] | null;
+    const companyName = Array.isArray(company) ? (company[0]?.name ?? null) : (company?.name ?? null);
+    return {
+      ...toMeasurementBulletinImportSummary(typedRow, idsWithAnalysis.has(typedRow.id as string)),
+      companyId: typedRow.company_id as string,
+      companyName
+    };
+  });
 };
 
 export const updateMeasurementBulletinImportStatus = async (
@@ -645,16 +702,19 @@ export const listMeasurementWorkspacesByProjectAndPeriod = async (
 // vinculado a um import, se existir. O que fazer com o resultado
 // (already_completed / resumed / workspace_closed / ...) é decisão do
 // Application Service, nunca desta função.
+// `companyId` opcional -- mesma disciplina de getMeasurementBulletinImportById.
 export const getMeasurementWorkspaceByImportId = async (
   supabase: SupabaseClient,
-  params: { measurementBulletinImportId: string; companyId: string }
+  params: { measurementBulletinImportId: string; companyId?: string }
 ): Promise<MeasurementWorkspaceRecord | null> => {
-  const { data, error } = await supabase
+  let query = supabase
     .from("measurement_workspaces")
     .select(selectMeasurementWorkspaceColumns)
-    .eq("measurement_bulletin_import_id", params.measurementBulletinImportId)
-    .eq("company_id", params.companyId)
-    .maybeSingle();
+    .eq("measurement_bulletin_import_id", params.measurementBulletinImportId);
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+  const { data, error } = await query.maybeSingle();
 
   if (error) {
     throw error;
@@ -1100,17 +1160,19 @@ export const updateMeasurementBulletinStatus = async (
 // mais de um boletim ao longo do tempo (ex.: um Cancelled seguido de
 // um novo) -- `order by created_at desc, limit 1` devolve sempre o
 // mais recente, nunca uma leitura ambígua.
+// `companyId` opcional -- mesma disciplina de getMeasurementBulletinImportById.
 export const getMeasurementBulletinByWorkspaceId = async (
   supabase: SupabaseClient,
-  params: { measurementWorkspaceId: string; companyId: string }
+  params: { measurementWorkspaceId: string; companyId?: string }
 ): Promise<MeasurementBulletinRecord | null> => {
-  const { data, error } = await supabase
+  let query = supabase
     .from("measurement_bulletins")
     .select(selectMeasurementBulletinColumns)
-    .eq("measurement_workspace_id", params.measurementWorkspaceId)
-    .eq("company_id", params.companyId)
-    .order("created_at", { ascending: false })
-    .limit(1);
+    .eq("measurement_workspace_id", params.measurementWorkspaceId);
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(1);
 
   if (error) {
     throw error;
@@ -1169,16 +1231,19 @@ const toMeasurementCycleRecord = (data: Record<string, unknown>): MeasurementCyc
 // UNIQUE(measurement_workspace_id) no banco garante no máximo um ciclo
 // por workspace -- maybeSingle() é seguro aqui, ao contrário do
 // boletim (que não tem essa mesma garantia de unicidade).
+// `companyId` opcional -- mesma disciplina de getMeasurementBulletinImportById.
 export const getMeasurementCycleByWorkspaceId = async (
   supabase: SupabaseClient,
-  params: { measurementWorkspaceId: string; companyId: string }
+  params: { measurementWorkspaceId: string; companyId?: string }
 ): Promise<MeasurementCycleRecord | null> => {
-  const { data, error } = await supabase
+  let query = supabase
     .from("measurement_cycles")
     .select(selectMeasurementCycleColumns)
-    .eq("measurement_workspace_id", params.measurementWorkspaceId)
-    .eq("company_id", params.companyId)
-    .maybeSingle();
+    .eq("measurement_workspace_id", params.measurementWorkspaceId);
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+  const { data, error } = await query.maybeSingle();
 
   if (error) {
     throw error;

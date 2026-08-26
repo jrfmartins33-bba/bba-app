@@ -113,6 +113,12 @@ export function MeasurementImportsPage() {
         return (
           <Card className="workspace-card measurement-imports-item" key={item.measurementBulletinImportId} title={label}>
             <dl className="workspace-fact-list">
+              {item.companyName ? (
+                <div className="workspace-fact">
+                  <dt>Empresa</dt>
+                  <dd>{item.companyName}</dd>
+                </div>
+              ) : null}
               <div className="workspace-fact">
                 <dt>Status</dt>
                 <dd>

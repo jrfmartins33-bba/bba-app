@@ -46,21 +46,22 @@ export interface MeasurementBulletinFormalStatusCycleRecord {
 }
 
 export interface MeasurementBulletinFormalStatusReader {
+  /** companyId null exclusivamente para bba_admin -- ver AuthenticatedActor em lib/supabase/server.ts. */
   findWorkspaceByImportId(input: {
     measurementBulletinImportId: string;
-    companyId: string;
+    companyId: string | null;
   }): Promise<MeasurementBulletinFormalStatusWorkspaceRecord | null>;
 
   findBulletinByWorkspaceId(input: {
     measurementWorkspaceId: string;
-    companyId: string;
+    companyId: string | null;
   }): Promise<MeasurementBulletinFormalStatusBulletinRecord | null>;
 
   countLineSources(input: { measurementBulletinId: string }): Promise<number>;
 
   findCycleByWorkspaceId(input: {
     measurementWorkspaceId: string;
-    companyId: string;
+    companyId: string | null;
   }): Promise<MeasurementBulletinFormalStatusCycleRecord | null>;
 }
 
@@ -73,7 +74,7 @@ export type GetMeasurementBulletinFormalStatusResult =
 const CERTIFIED_CYCLE_STATUSES = new Set(["certified", "closed"]);
 
 export async function getMeasurementBulletinFormalStatus(
-  input: { readonly measurementBulletinImportId: string; readonly companyId: string },
+  input: { readonly measurementBulletinImportId: string; readonly companyId: string | null },
   dependencies: { readonly reader: MeasurementBulletinFormalStatusReader }
 ): Promise<GetMeasurementBulletinFormalStatusResult> {
   const workspace = await dependencies.reader.findWorkspaceByImportId({

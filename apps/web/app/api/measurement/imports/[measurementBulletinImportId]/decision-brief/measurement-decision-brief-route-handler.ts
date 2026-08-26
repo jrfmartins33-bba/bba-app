@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AuthenticatedCompany } from "@/lib/supabase/server";
+import type { AuthenticatedActor } from "@/lib/supabase/server";
 import { getMeasurementBulletinImportById } from "@/lib/bdos/measurement-repository";
 import { getMeasurementDecisionBrief, type MeasurementDecisionBriefImportReader } from "@/lib/bdos/measurement-decision-brief-service";
 
@@ -25,7 +25,7 @@ import { getMeasurementDecisionBrief, type MeasurementDecisionBriefImportReader 
 export function buildMeasurementDecisionBriefImportReader(supabase: SupabaseClient): MeasurementDecisionBriefImportReader {
   return {
     async findById(query) {
-      const record = await getMeasurementBulletinImportById(supabase, { id: query.measurementBulletinImportId, companyId: query.companyId });
+      const record = await getMeasurementBulletinImportById(supabase, { id: query.measurementBulletinImportId, companyId: query.companyId ?? undefined });
       if (!record) {
         return null;
       }
@@ -35,7 +35,7 @@ export function buildMeasurementDecisionBriefImportReader(supabase: SupabaseClie
 }
 
 export interface HandleGetMeasurementDecisionBriefInput {
-  readonly auth: AuthenticatedCompany | null;
+  readonly auth: AuthenticatedActor | null;
   readonly measurementBulletinImportId: string | undefined;
   readonly generatedAt: string;
 }
