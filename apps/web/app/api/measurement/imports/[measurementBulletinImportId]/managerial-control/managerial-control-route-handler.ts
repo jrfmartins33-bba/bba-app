@@ -203,6 +203,8 @@ export async function handleGetManagerialControl(
     return { status: 400, body: { error: "missing_measurement_bulletin_import_id" } };
   }
 
+  // Descoberta inicial: sujeita ao RLS -- `auth.companyId` é null para
+  // bba_admin (cross-tenant SELECT liberado no RLS).
   const context = await dependencies.reader.findWorkspaceContext({
     measurementBulletinImportId: input.measurementBulletinImportId,
     companyId: input.auth.companyId
@@ -211,9 +213,18 @@ export async function handleGetManagerialControl(
     return { status: 404, body: { error: "workspace_not_found" } };
   }
 
+  // Depois que o workspace foi localizado e autorizado pelo RLS, as
+  // leituras relacionadas do Controle Gerencial usam a EMPRESA REAL DA
+  // OBRA (`context.companyId`), nunca `auth.companyId` -- que, sendo
+  // null para admin, faria a Base Contratual autoritativa
+  // (contract_baselines, escopada por company_id) cair para o fallback
+  // da soma canônica. Isso NÃO amplia autorização: a autenticação e a
+  // descoberta continuam iguais; só o escopo econômico passa a ser o do
+  // workspace já autorizado. Mesmo padrão de resolveEconomicComparisonInputs
+  // na tela Revisar medição.
   const viewInput = await dependencies.reader.loadManagerialControlInput({
     workspaceId: context.workspaceId,
-    companyId: input.auth.companyId,
+    companyId: context.companyId,
     engineeringProjectId: context.engineeringProjectId
   });
 
