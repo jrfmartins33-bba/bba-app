@@ -12,13 +12,19 @@ export interface MeasurementContractDiscountCardProps {
 }
 
 /**
- * Correção semântica pós-Preview (itens 3/4/5): substitui o antigo
- * card de rótulo incorreto por este -- o conceito é DESÁGIO/REDUÇÃO NA
- * CONTRATAÇÃO (quanto o valor desta medição seria maior se
- * precificado pelo Orçamento Oficial), nunca um resultado de execução
- * da contratada. O total (`contractDiscountImpactDecimal`) já vem
- * pronto do servidor, soma dos impactos canônicos por linha -- este
- * componente nunca soma nem subtrai nada.
+ * Correção semântica pós-Preview (itens 3/4/5, e ajuste visual
+ * seguinte): o conceito é DESÁGIO/REDUÇÃO NA CONTRATAÇÃO (quanto o
+ * valor desta medição seria maior se precificado pelo Orçamento
+ * Oficial), nunca um resultado de execução da contratada. O total
+ * (`contractDiscountImpactDecimal`) já vem pronto do servidor, soma
+ * dos impactos canônicos por linha -- este componente nunca soma nem
+ * subtrai nada.
+ *
+ * Regra de cores econômicas: esta comparação (Orçamento Oficial ×
+ * Proposta Vencedora) é sempre informação documental, nunca ganho ou
+ * perda comprovados -- por isso o card inteiro é neutro (sem verde,
+ * sem vermelho); verde/vermelho ficam reservados para quando o BDOS
+ * apurar resultado real de execução (ver "Resultado da execução").
  *
  * "Ver composição" mostra os itens que compõem o total, na ordem que
  * o servidor já decidiu (maior contribuição primeiro) -- nunca
@@ -29,7 +35,9 @@ export function MeasurementContractDiscountCard({ summary }: MeasurementContract
   const topContributor = summary.composition[0] ?? null;
 
   return (
-    <Card className="span-12 workspace-card measurement-contract-discount-card" title="Impacto do deságio contratual nesta medição">
+    <Card className="span-12 workspace-card measurement-contract-discount-card" title="Redução da proposta frente ao orçamento oficial">
+      <p className="measurement-contract-discount-card__subtitle">Impacto nas quantidades medidas neste período</p>
+
       <div className="measurement-contract-discount-card__headline">
         <strong>{formatFormalBulletinTotalBRL(summary.contractDiscountImpactDecimal)}</strong>
         <span className="measurement-review-header__economic-coverage">
@@ -71,8 +79,8 @@ export function MeasurementContractDiscountCard({ summary }: MeasurementContract
             <span>Quantidade medida</span>
             <span>Preço oficial</span>
             <span>Preço contratado</span>
-            <span>Redução refletida</span>
-            <span>Participação</span>
+            <span>Impacto do deságio</span>
+            <span>Participação no impacto total</span>
           </li>
           {summary.composition.map((entry) => (
             <li className="measurement-contract-discount-composition__row" key={entry.itemId}>

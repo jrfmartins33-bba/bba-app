@@ -3758,21 +3758,21 @@ button {
   text-align: center;
 }
 
-/* contract_discount: preço contratado abaixo do oficial (deságio na
-   contratação) -- nunca chamado de economia/ganho/margem. */
-.measurement-review-item__economic-interpretation--contract_discount {
-  background: rgba(34, 197, 94, 0.1);
-  color: var(--status-green);
-}
-
-.measurement-review-item__economic-interpretation--contract_premium {
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--status-red);
-}
-
+/* Regra de cores econômicas (ajuste cirúrgico): verde é reservado
+   para ganho econômico real e comprovado da execução (resultado
+   positivo/margem realizada positiva/economia frente ao custo real)
+   -- que o BDOS ainda não apura por item (ver "Resultado da
+   execução"). Vermelho é reservado para perda econômica real
+   comprovada. A comparação Orçamento Oficial × Proposta Vencedora
+   nunca é nem uma coisa nem outra -- é só informação documental
+   (deságio/redução na contratação), sempre neutra, independente do
+   sentido da variação (contract_discount/contract_premium/
+   no_variation usam exatamente o mesmo tratamento visual). */
+.measurement-review-item__economic-interpretation--contract_discount,
+.measurement-review-item__economic-interpretation--contract_premium,
 .measurement-review-item__economic-interpretation--no_variation {
   background: rgba(255, 255, 255, 0.04);
-  color: var(--text-muted);
+  color: var(--text-secondary-strong);
 }
 
 .measurement-review-total {
@@ -3812,6 +3812,12 @@ button {
    pós-Preview: nunca "economia"/"ganho". Reaproveita o mesmo
    vocabulário visual do resto da tela (gold para o valor em destaque,
    texto neutro para o contexto). */
+.measurement-contract-discount-card__subtitle {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin: -6px 0 12px;
+}
+
 .measurement-contract-discount-card__headline {
   align-items: baseline;
   display: flex;

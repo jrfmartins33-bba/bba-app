@@ -17,6 +17,7 @@ const CERTIFICATION_PREVIEW_CLIENT_SOURCE = readFileSync(join(currentDir, "measu
 const REFUSAL_DIALOG_SOURCE = readFileSync(join(currentDir, "measurement-refusal-dialog.tsx"), "utf8");
 const REVIEW_VIEW_MODEL_SOURCE = readFileSync(join(currentDir, "measurement-review-view-model.ts"), "utf8");
 const CONTRACT_DISCOUNT_CARD_SOURCE = readFileSync(join(currentDir, "measurement-contract-discount-card.tsx"), "utf8");
+const GLOBALS_CSS_SOURCE = readFileSync(join(currentDir, "..", "..", "app", "bba-globals.css"), "utf8");
 const ECONOMIC_COMPARISON_SERVICE_SOURCE = readFileSync(
   join(currentDir, "..", "..", "lib", "bdos", "measurement-item-economic-comparison-service.ts"),
   "utf8"
@@ -272,13 +273,43 @@ async function main(): Promise<void> {
     assertTrue(REVIEW_PAGE_SOURCE.includes("state.review.economicSummary ? <MeasurementContractDiscountCard"), "card só aparece quando há comparação econômica disponível");
   });
 
-  await runTest("card agregado usa o título 'Impacto do deságio contratual nesta medição' -- nunca 'Economia frente ao orçamento oficial' como título/rótulo positivo", () => {
-    assertTrue(CONTRACT_DISCOUNT_CARD_SOURCE.includes('title="Impacto do deságio contratual nesta medição"'));
-    assertTrue(!/Economia frente ao [Oo]rçamento [Oo]ficial/.test(CONTRACT_DISCOUNT_CARD_SOURCE), "rótulo antigo não deve mais aparecer, nem como título nem como texto");
+  // Ajuste cirúrgico (semântica visual): título/subtítulo do card
+  // agregado revisados novamente -- "Redução da proposta frente ao
+  // orçamento oficial" / "Impacto nas quantidades medidas neste
+  // período". Nunca "Impacto do deságio contratual" (título anterior)
+  // nem "Economia frente ao orçamento oficial" (título original).
+  await runTest("card agregado usa o título 'Redução da proposta frente ao orçamento oficial' e o subtítulo 'Impacto nas quantidades medidas neste período'", () => {
+    assertTrue(CONTRACT_DISCOUNT_CARD_SOURCE.includes('title="Redução da proposta frente ao orçamento oficial"'));
+    assertTrue(CONTRACT_DISCOUNT_CARD_SOURCE.includes("Impacto nas quantidades medidas neste período"));
+    assertTrue(!/Economia frente ao [Oo]rçamento [Oo]ficial/.test(CONTRACT_DISCOUNT_CARD_SOURCE), "rótulo original não deve mais aparecer, nem como título nem como texto");
+    assertTrue(!CONTRACT_DISCOUNT_CARD_SOURCE.includes('title="Impacto do deságio contratual nesta medição"'), "título anterior (rodada passada) também não deve mais aparecer como title=");
     // A explicação pode (e deve) citar esses termos só para negá-los
     // explicitamente ("não representa economia...") -- nunca como um
     // rótulo/título positivo.
     assertTrue(/não representa economia operacional/i.test(CONTRACT_DISCOUNT_CARD_SOURCE), "a explicação deve negar explicitamente a leitura de economia operacional, per a especificação");
+  });
+
+  // Item 1 do ajuste cirúrgico: regra de cores econômicas -- verde só
+  // para ganho real e comprovado da execução (que o BDOS não apura
+  // hoje); vermelho só para perda real comprovada; a comparação
+  // Oficial×Proposta é sempre neutra, documental, independente do
+  // sinal da variação.
+  await runTest("deságio (contract_discount/contract_premium/no_variation) nunca usa verde/vermelho -- os três estados usam exatamente o mesmo tratamento visual neutro", () => {
+    assertTrue(
+      /economic-interpretation--contract_discount,\s*\.measurement-review-item__economic-interpretation--contract_premium,\s*\.measurement-review-item__economic-interpretation--no_variation\s*\{/.test(
+        GLOBALS_CSS_SOURCE
+      ),
+      "os três estados devem compartilhar exatamente a mesma regra CSS -- nenhum tratamento diferenciado por sinal"
+    );
+    const colorBlockMatch = /economic-interpretation--contract_discount[^]*?\n\}/.exec(GLOBALS_CSS_SOURCE);
+    assertTrue(colorBlockMatch !== null);
+    const block = colorBlockMatch?.[0] ?? "";
+    assertTrue(!/--status-green|--status-red|rgba\(34, 197, 94|rgba\(239, 68, 68/.test(block), "nenhuma cor de sucesso/alerta aplicada à comparação documental Oficial×Proposta");
+  });
+
+  await runTest("'X% abaixo/acima do orçamento oficial' permanece com o mesmo texto, só o tratamento visual mudou para neutro", () => {
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes("abaixo do orçamento oficial"), "texto do deságio deve continuar existindo, só sem destaque verde");
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes("acima do orçamento oficial"));
   });
 
   await runTest("card agregado mostra contractDiscountImpactDecimal (já pronto do servidor) -- nunca soma/subtrai valores no componente", () => {
@@ -312,6 +343,15 @@ async function main(): Promise<void> {
       assertTrue(CONTRACT_DISCOUNT_CARD_SOURCE.includes(field), `composição deve exibir ${field}`);
     }
     assertTrue(!/composition\s*(\]?)\s*\.sort\(/.test(CONTRACT_DISCOUNT_CARD_SOURCE), "o card nunca reordena a composição -- a ordem já vem decidida pelo servidor");
+  });
+
+  // Item 4 do ajuste cirúrgico: linguagem da composição revisada --
+  // "Impacto do deságio" / "Participação no impacto total", nunca
+  // "economia"/"ganho"/"margem"/"lucro" como descrição da comparação.
+  await runTest("cabeçalho da tabela de composição usa 'Impacto do deságio' e 'Participação no impacto total' -- vocabulário do ajuste cirúrgico", () => {
+    assertTrue(CONTRACT_DISCOUNT_CARD_SOURCE.includes("<span>Impacto do deságio</span>"));
+    assertTrue(CONTRACT_DISCOUNT_CARD_SOURCE.includes("<span>Participação no impacto total</span>"));
+    assertTrue(!/\beconomia\b|\bganho\b|\bmargem\b|\blucro\b/i.test(CONTRACT_DISCOUNT_CARD_SOURCE) || /não representa economia operacional/i.test(CONTRACT_DISCOUNT_CARD_SOURCE), "termos proibidos só podem aparecer dentro da negação explícita já validada acima");
   });
 
   await runTest("route-handler ordena a composição por maior contribuição (compareMoneyDecimalsDescending) -- decisão do servidor, nunca da UI", () => {
