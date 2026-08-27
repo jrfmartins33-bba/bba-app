@@ -17,6 +17,12 @@ import { createContractExecutionItemTraceabilityRepository } from "@/lib/bdos/co
 import { getMeasurementDecisionBrief, type MeasurementDecisionBriefImportReader } from "@/lib/bdos/measurement-decision-brief-service";
 import { getMeasurementBulletinReview, type MeasurementBulletinReviewReader } from "@/lib/bdos/measurement-bulletin-review-service";
 import { buildMeasurementItemEconomicComparisons, compareMoneyDecimalsDescending } from "@/lib/bdos/measurement-item-economic-comparison-service";
+import {
+  buildMeasurementPhysicalFinancialAnalysis,
+  selectConsolidatedPhysicalFinancialDataset,
+  type MeasurementPhysicalFinancialAnalysis
+} from "@/lib/bdos/measurement-physical-financial-analysis-service";
+import { listPlanningDatasetsByType } from "@/lib/bdos/repository";
 
 /**
  * "Revisar medição" — mesma separação route.ts/route-handler.ts das
@@ -108,6 +114,39 @@ export function buildMeasurementEconomicComparisonReader(supabase: SupabaseClien
   };
 }
 
+export interface MeasurementPhysicalFinancialReader {
+  findWorkspaceProjectContext(input: {
+    measurementBulletinImportId: string;
+    companyId: string | null;
+  }): Promise<{ companyId: string; engineeringProjectId: string } | null>;
+  /** Todas as linhas `fisico-financeiro` da Camada 2 para o projeto, mais recente primeiro. Nunca escreve. */
+  listPhysicalFinancialDatasets(input: {
+    companyId: string | null;
+    engineeringProjectId: string;
+  }): Promise<ReadonlyArray<{ id: string; createdAt: string; fileName: string | null; dataset: unknown }>>;
+}
+
+export function buildMeasurementPhysicalFinancialReader(supabase: SupabaseClient): MeasurementPhysicalFinancialReader {
+  return {
+    async findWorkspaceProjectContext(query) {
+      const workspace = await getMeasurementWorkspaceByImportId(supabase, {
+        measurementBulletinImportId: query.measurementBulletinImportId,
+        companyId: query.companyId ?? undefined
+      });
+      return workspace ? { companyId: workspace.companyId, engineeringProjectId: workspace.engineeringProjectId } : null;
+    },
+
+    async listPhysicalFinancialDatasets(query) {
+      const rows = await listPlanningDatasetsByType(supabase, {
+        companyId: query.companyId,
+        engineeringProjectId: query.engineeringProjectId,
+        detectedType: "fisico-financeiro"
+      });
+      return rows.map((row) => ({ id: row.id, createdAt: row.createdAt, fileName: row.fileName, dataset: row.dataset }));
+    }
+  };
+}
+
 export function buildMeasurementBulletinReviewReader(supabase: SupabaseClient): MeasurementBulletinReviewReader {
   return {
     async findWorkspaceByImportId(query) {
@@ -171,6 +210,21 @@ export interface HandleGetMeasurementBulletinReviewDependencies {
   readonly decisionBriefReader: MeasurementDecisionBriefImportReader;
   readonly reviewReader: MeasurementBulletinReviewReader;
   readonly economicComparisonReader: MeasurementEconomicComparisonReader;
+  readonly physicalFinancialReader: MeasurementPhysicalFinancialReader;
+}
+
+/** Projeção serializável da análise físico-financeira (sem o Map de correlação, que vira campo por item). */
+export interface MeasurementReviewPhysicalFinancialPayload {
+  readonly obraAvailable: boolean;
+  readonly obraUnavailableReason: string | null;
+  readonly groupsAvailable: boolean;
+  readonly groupsUnavailableReason: string | null;
+  readonly sourceFileName: string | null;
+  readonly sourceSheetName: string | null;
+  readonly period: MeasurementPhysicalFinancialAnalysis["period"];
+  readonly obra: MeasurementPhysicalFinancialAnalysis["obra"];
+  readonly groups: MeasurementPhysicalFinancialAnalysis["groups"];
+  readonly adjustments: MeasurementPhysicalFinancialAnalysis["adjustments"];
 }
 
 export interface HandleGetMeasurementBulletinReviewOutcome {
@@ -237,10 +291,29 @@ export async function handleGetMeasurementBulletinReview(
     executionItemLinks
   );
 
-  const items = reviewResult.review.items.map((item) => ({
-    ...item,
-    economicComparison: economicResult.byItemId.get(item.id) ?? null
-  }));
+  // Análise físico-financeira (Cronograma DNOCS: Obra + Grupo) --
+  // também melhor-esforço: sem cronograma consolidado, período ausente
+  // na planilha ou importações divergentes resultam em "indisponível"
+  // com motivo, nunca em erro nem em número inventado. O realizado aqui
+  // é o declarado na Curva S importada, não o acumulado de medições do
+  // BDOS (essa reconciliação é uma camada gerencial própria).
+  const physicalFinancial = await resolvePhysicalFinancialAnalysis(
+    measurementBulletinImportId,
+    auth.companyId,
+    { startDate: reviewResult.review.periodStartDate, endDate: reviewResult.review.periodEndDate },
+    reviewResult.review.items.map((item) => item.code),
+    dependencies.physicalFinancialReader
+  );
+  const groupByCode = new Map(physicalFinancial.groups.map((group) => [group.groupCode, group]));
+
+  const items = reviewResult.review.items.map((item) => {
+    const groupCode = physicalFinancial.itemGroupByCode.get(item.code) ?? null;
+    return {
+      ...item,
+      economicComparison: economicResult.byItemId.get(item.id) ?? null,
+      physicalFinancialGroup: groupCode ? groupByCode.get(groupCode) ?? null : null
+    };
+  });
 
   // "Ver composição" (item 5) -- os itens que realmente têm
   // correspondência, com o que a UI precisa para explicar de onde vem
@@ -264,10 +337,70 @@ export async function handleGetMeasurementBulletinReview(
 
   const economicSummary = economicResult.summary ? { ...economicResult.summary, composition } : null;
 
+  const physicalFinancialPayload: MeasurementReviewPhysicalFinancialPayload = {
+    obraAvailable: physicalFinancial.obraAvailable,
+    obraUnavailableReason: physicalFinancial.obraUnavailableReason,
+    groupsAvailable: physicalFinancial.groupsAvailable,
+    groupsUnavailableReason: physicalFinancial.groupsUnavailableReason,
+    sourceFileName: physicalFinancial.sourceFileName,
+    sourceSheetName: physicalFinancial.sourceSheetName,
+    period: physicalFinancial.period,
+    obra: physicalFinancial.obra,
+    groups: physicalFinancial.groups,
+    adjustments: physicalFinancial.adjustments
+  };
+
   return {
     status: 200,
-    body: { data: { ...reviewResult.review, items, economicSummary } }
+    body: { data: { ...reviewResult.review, items, economicSummary, physicalFinancial: physicalFinancialPayload } }
   };
+}
+
+async function resolvePhysicalFinancialAnalysis(
+  measurementBulletinImportId: string,
+  authCompanyId: string | null,
+  measurementPeriod: { startDate: string; endDate: string },
+  measuredItemCodes: ReadonlyArray<string>,
+  reader: MeasurementPhysicalFinancialReader
+): Promise<MeasurementPhysicalFinancialAnalysis> {
+  const unavailable = (): MeasurementPhysicalFinancialAnalysis =>
+    buildMeasurementPhysicalFinancialAnalysis({
+      planningDataset: null,
+      datasetId: null,
+      sourceFileName: null,
+      measurementPeriod,
+      measuredItemCodes
+    });
+
+  const context = await reader.findWorkspaceProjectContext({ measurementBulletinImportId, companyId: authCompanyId });
+  if (!context) {
+    return unavailable();
+  }
+
+  const rows = await reader.listPhysicalFinancialDatasets({
+    companyId: authCompanyId,
+    engineeringProjectId: context.engineeringProjectId
+  });
+
+  const selection = selectConsolidatedPhysicalFinancialDataset(
+    rows.map((row) => ({ id: row.id, createdAt: row.createdAt, fileName: row.fileName, dataset: row.dataset }))
+  );
+
+  if (selection.outcome === "divergent") {
+    return { ...unavailable(), obraUnavailableReason: selection.reason, groupsUnavailableReason: selection.reason };
+  }
+
+  if (selection.outcome === "none") {
+    return unavailable();
+  }
+
+  return buildMeasurementPhysicalFinancialAnalysis({
+    planningDataset: selection.selected.dataset,
+    datasetId: selection.selected.id,
+    sourceFileName: selection.selected.fileName,
+    measurementPeriod,
+    measuredItemCodes
+  });
 }
 
 async function resolveEconomicComparisonInputs(

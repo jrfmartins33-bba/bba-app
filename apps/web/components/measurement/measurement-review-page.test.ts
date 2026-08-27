@@ -17,6 +17,11 @@ const CERTIFICATION_PREVIEW_CLIENT_SOURCE = readFileSync(join(currentDir, "measu
 const REFUSAL_DIALOG_SOURCE = readFileSync(join(currentDir, "measurement-refusal-dialog.tsx"), "utf8");
 const REVIEW_VIEW_MODEL_SOURCE = readFileSync(join(currentDir, "measurement-review-view-model.ts"), "utf8");
 const CONTRACT_DISCOUNT_CARD_SOURCE = readFileSync(join(currentDir, "measurement-contract-discount-card.tsx"), "utf8");
+const OBRA_CARD_SOURCE = readFileSync(join(currentDir, "measurement-physical-financial-obra-card.tsx"), "utf8");
+const PHYSICAL_FINANCIAL_SERVICE_SOURCE = readFileSync(
+  join(currentDir, "..", "..", "lib", "bdos", "measurement-physical-financial-analysis-service.ts"),
+  "utf8"
+);
 const GLOBALS_CSS_SOURCE = readFileSync(join(currentDir, "..", "..", "app", "bba-globals.css"), "utf8");
 const ECONOMIC_COMPARISON_SERVICE_SOURCE = readFileSync(
   join(currentDir, "..", "..", "lib", "bdos", "measurement-item-economic-comparison-service.ts"),
@@ -191,34 +196,107 @@ async function main(): Promise<void> {
     assertTrue(!/Number\(/.test(REVIEW_ITEM_ROW_SOURCE), "nenhuma conversão para float na linha do item");
   });
 
-  // Itens 6/7/8: nenhum status físico-financeiro é inventado; a coluna
-  // Situação e o bloco Planejamento sempre mostram a mensagem neutra
-  // de indisponibilidade nesta rodada -- nenhuma fonte determinística
-  // suficiente foi encontrada para calcular Em execução/Concluído/
-  // Ainda não iniciado/Adiantado/No ritmo previsto/Abaixo do
-  // previsto/Em atraso.
-  await runTest("nenhum status físico-financeiro é inventado -- 'Em execução'/'Concluído'/'Adiantado'/'No ritmo previsto'/'Abaixo do previsto'/'Em atraso' não aparecem em nenhum arquivo desta tela", () => {
-    const invented = /Em execução|Concluído|Ainda não iniciado|Adiantado|No ritmo previsto|Abaixo do previsto|Em atraso|Work in Progress|\bWIP\b/;
-    assertTrue(!invented.test(REVIEW_PAGE_SOURCE), "página não deve inventar nenhum estado de cronograma");
-    assertTrue(!invented.test(REVIEW_ITEM_ROW_SOURCE), "linha do item não deve inventar nenhum estado de cronograma");
+  // Itens 6/7/8 (rodada físico-financeiro por grupo): a situação
+  // AGORA é derivada do Cronograma Físico-Financeiro DNOCS já
+  // persistido -- Obra (série agregada) e Grupo (séries mensais). O
+  // vocabulário é FIXO: "Acima do previsto" / "No previsto" / "Abaixo
+  // do previsto". "Atraso"/"atrasado" continua PROIBIDO (a fonte não
+  // caracteriza atraso temporal), e nenhum estado inventado
+  // (Em execução/Concluído/Adiantado/No ritmo previsto/WIP) aparece.
+  await runTest("vocabulário da situação físico-financeira é fixo (Acima/No/Abaixo do previsto) e nunca usa 'atraso'/'atrasado' nem estados inventados", () => {
+    const forbidden = /Em execução|Concluíd[ao]|Ainda não iniciad[ao]|Adiantad[ao]|No ritmo previsto|\bEm atraso\b|atrasad[ao]|Work in Progress|\bWIP\b/i;
+    for (const [label, source] of [
+      ["página", REVIEW_PAGE_SOURCE],
+      ["linha do item", REVIEW_ITEM_ROW_SOURCE],
+      ["card da obra", OBRA_CARD_SOURCE],
+      ["view-model", REVIEW_VIEW_MODEL_SOURCE],
+      ["serviço físico-financeiro", PHYSICAL_FINANCIAL_SERVICE_SOURCE]
+    ] as const) {
+      assertTrue(!forbidden.test(source), `${label} não deve usar 'atraso' nem inventar estado de cronograma`);
+    }
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Acima do previsto"'), "vocabulário fixo declarado no view-model");
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"No previsto"'), "vocabulário fixo declarado no view-model");
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Abaixo do previsto"'), "vocabulário fixo declarado no view-model");
   });
 
-  await runTest("bloco 'Planejamento físico-financeiro' (Ver análise) e o resumo executivo sempre mostram a mensagem completa de indisponibilidade -- nunca um status calculado sem fonte", () => {
-    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("PLANNING_COMPARISON_UNAVAILABLE_MESSAGE"), "bloco Planejamento (Ver análise) deve usar a mensagem compartilhada, não um texto solto");
-    assertTrue(REVIEW_PAGE_SOURCE.includes("PLANNING_COMPARISON_UNAVAILABLE_MESSAGE"), "resumo executivo também deve usar a mesma mensagem compartilhada");
-    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Comparação com o planejamento ainda não disponível"'), "a mensagem exata deve existir literalmente, uma única fonte");
-  });
-
-  // Item 3 da correção cirúrgica: a tabela principal não repete a
-  // frase longa em cada linha -- usa um badge compacto; a explicação
-  // completa fica só em Ver análise e no title= do badge.
-  await runTest("coluna Situação da tabela usa o rótulo compacto 'Planejamento indisponível' -- nunca a frase longa repetida em cada linha", () => {
-    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("PLANNING_UNAVAILABLE_COMPACT_LABEL"), "linha do item deve usar o rótulo compacto compartilhado");
-    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Planejamento indisponível"'), "o rótulo compacto deve existir literalmente, uma única fonte");
+  await runTest("bloco 'Planejamento físico-financeiro' (Ver análise) mostra a SITUAÇÃO DO GRUPO com a ressalva de que não é status do item, e degrada para motivo textual quando não há grupo/cronograma", () => {
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("item.physicalFinancialGroup"), "bloco usa o grupo correlacionado vindo do servidor");
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("<dt>Situação do grupo</dt>"), "o rótulo é explicitamente 'Situação do grupo'");
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("GROUP_SITUATION_ITEM_NOTE"), "a ressalva fixa deve acompanhar o bloco por item");
     assertTrue(
-      /<span className="measurement-review-item__situation" title=\{PLANNING_COMPARISON_UNAVAILABLE_MESSAGE\}>\s*\{PLANNING_UNAVAILABLE_COMPACT_LABEL\}/.test(REVIEW_ITEM_ROW_SOURCE),
-      "a frase longa deve estar disponível como title= (acessível sob demanda), nunca como texto visível repetido"
+      REVIEW_VIEW_MODEL_SOURCE.includes("não ao item individual"),
+      "a ressalva deve dizer literalmente que a situação é do grupo, não do item individual"
     );
+    assertTrue(
+      REVIEW_ITEM_ROW_SOURCE.includes("PLANNING_COMPARISON_UNAVAILABLE_MESSAGE") || REVIEW_ITEM_ROW_SOURCE.includes("groupsUnavailableReason"),
+      "sem grupo/cronograma, o bloco cai para um motivo textual, nunca para um status inventado"
+    );
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Comparação com o planejamento ainda não disponível"'), "a mensagem de fallback exata continua existindo, uma única fonte");
+  });
+
+  await runTest("resumo executivo do topo usa o card dedicado da obra (MeasurementPhysicalFinancialObraCard), alimentado por state.review.physicalFinancial", () => {
+    assertTrue(REVIEW_PAGE_SOURCE.includes("MeasurementPhysicalFinancialObraCard"), "topo da tela renderiza o card dedicado da situação da obra");
+    assertTrue(REVIEW_PAGE_SOURCE.includes("physicalFinancial={state.review.physicalFinancial}"), "card é alimentado pelo payload do servidor, nunca por cálculo do cliente");
+    assertTrue(OBRA_CARD_SOURCE.includes("Situação físico-financeira da obra"), "título humano, responde em segundos");
+    assertTrue(!/Number\(/.test(OBRA_CARD_SOURCE), "card da obra nunca converte para float");
+    assertTrue(!/\.\w+Decimal\s*[-+*/]\s*\w/.test(OBRA_CARD_SOURCE), "card da obra nunca faz aritmética sobre campos decimais");
+  });
+
+  // Tabela principal: quando há grupo correlacionado, a coluna
+  // Situação passa a mostrar um badge compacto do GRUPO
+  // ("Grupo abaixo do previsto"); sem correlação, mantém "Planejamento
+  // indisponível". A frase longa continua só em title=.
+  await runTest("coluna Situação da tabela mostra badge compacto do grupo quando correlacionado, e 'Planejamento indisponível' caso contrário", () => {
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("formatGroupSituationBadge"), "badge compacto do grupo vem do view-model");
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes("`Grupo ${"), "o badge é 'Grupo <situação>' -- item 9 da especificação");
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("PLANNING_UNAVAILABLE_COMPACT_LABEL"), "sem grupo, mantém o rótulo compacto compartilhado");
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Planejamento indisponível"'), "o rótulo compacto continua existindo, uma única fonte");
+    assertTrue(
+      /title=\{PLANNING_COMPARISON_UNAVAILABLE_MESSAGE\}>\s*\{PLANNING_UNAVAILABLE_COMPACT_LABEL\}/.test(REVIEW_ITEM_ROW_SOURCE),
+      "a frase longa continua acessível como title= no caso sem correlação"
+    );
+  });
+
+  // Item 9 da especificação: cores respeitam a semântica -- verde só
+  // para "acima do previsto" (inequivocamente favorável), amber para
+  // "abaixo", neutro para "no previsto". Nada de vermelho nesta versão.
+  await runTest("tom visual da situação: acima -> positivo, no previsto -> neutro, abaixo -> atenção (amber) -- nunca vermelho", () => {
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('if (situation === "above_planned") return "positive";'));
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('if (situation === "on_planned") return "neutral";'));
+    assertTrue(/return "caution";/.test(REVIEW_VIEW_MODEL_SOURCE), "abaixo do previsto -> atenção (amber)");
+    const situationCssStart = GLOBALS_CSS_SOURCE.indexOf("Situação físico-financeira da obra (Cronograma DNOCS)");
+    assertTrue(situationCssStart >= 0, "bloco CSS da situação físico-financeira deve existir");
+    const situationCssEnd = GLOBALS_CSS_SOURCE.indexOf("groups__situation--neutral", situationCssStart);
+    const situationCss = GLOBALS_CSS_SOURCE.slice(situationCssStart, GLOBALS_CSS_SOURCE.indexOf("}", situationCssEnd) + 1);
+    assertTrue(!/--status-red|rgba\(239, 68, 68/.test(situationCss), "nenhum vermelho aplicado à situação físico-financeira");
+    assertTrue(/--status-green|--status-amber/.test(situationCss), "usa apenas verde/amber, per a regra de três cores de status");
+  });
+
+  // Item 4/16: correlação item -> grupo é determinística por prefixo,
+  // sem fuzzy, e os ajustes (ARREDONDAMENTO / MANUTENÇÃO DO DESCONTO)
+  // nunca viram grupos.
+  await runTest("correlação item -> grupo é determinística por prefixo de código no serviço -- sem fuzzy, sem casar por descrição", () => {
+    assertTrue(PHYSICAL_FINANCIAL_SERVICE_SOURCE.includes("resolveGroupCode"), "existe uma função explícita de resolução por código");
+    assertTrue(/\/\^\\d\+\\\.0\$\//.test(PHYSICAL_FINANCIAL_SERVICE_SOURCE), "grupo é reconhecido pelo padrão de código N.0");
+    assertTrue(!/from ["'](fuse\.js|leven|string-similarity|fastest-levenshtein)["']/i.test(PHYSICAL_FINANCIAL_SERVICE_SOURCE), "nenhuma biblioteca de fuzzy matching");
+    assertTrue(PHYSICAL_FINANCIAL_SERVICE_SOURCE.includes("adjustments"), "linhas de ajuste ficam listadas à parte, nunca como grupo");
+  });
+
+  // Item 2/15: toda moeda canonicalizada em centavos; nada de float
+  // como fonte de decisão; o cálculo vive no Application Service, não
+  // no componente.
+  await runTest("análise físico-financeira usa aritmética decimal canônica (measurement-certification) e nunca float como fonte de decisão", () => {
+    assertTrue(PHYSICAL_FINANCIAL_SERVICE_SOURCE.includes('from "@bba/bdos-core/domain/measurement-certification"'), "reaproveita a camada decimal canônica já existente");
+    assertTrue(PHYSICAL_FINANCIAL_SERVICE_SOURCE.includes("canonicalizeMeasurementDecimal"));
+    assertTrue(PHYSICAL_FINANCIAL_SERVICE_SOURCE.includes("addMeasurementDecimals"));
+    assertTrue(!/parseFloat\(|Number\.parseFloat\(/.test(PHYSICAL_FINANCIAL_SERVICE_SOURCE), "nenhum parseFloat -- float nunca é fonte de decisão monetária");
+  });
+
+  await runTest("route-handler compõe a análise físico-financeira no servidor e nunca escreve -- só lê planning_datasets", () => {
+    assertTrue(REVIEW_ROUTE_HANDLER_SOURCE.includes("buildMeasurementPhysicalFinancialAnalysis"), "a análise é montada no servidor");
+    assertTrue(REVIEW_ROUTE_HANDLER_SOURCE.includes("selectConsolidatedPhysicalFinancialDataset"), "a seleção entre importações concorrentes é determinística");
+    assertTrue(REVIEW_ROUTE_HANDLER_SOURCE.includes("listPlanningDatasetsByType"), "leitura da Camada 2 por tipo, somente leitura");
+    assertTrue(!/\.insert\(|\.update\(|\.upsert\(|\.delete\(/.test(REVIEW_ROUTE_HANDLER_SOURCE), "o route-handler de revisão nunca escreve");
   });
 
   await runTest("evidenceReferences do item é validado estruturalmente no client fetch (sourceType/locator), nunca aceito sem checagem", () => {

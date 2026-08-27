@@ -17,7 +17,7 @@ import {
   formatFormalBulletinStatusLabel,
   formatFormalBulletinTotalBRL
 } from "./measurement-bulletin-formal-status-view-model";
-import { PLANNING_COMPARISON_UNAVAILABLE_MESSAGE } from "./measurement-review-view-model";
+import { MeasurementPhysicalFinancialObraCard } from "./measurement-physical-financial-obra-card";
 
 type PageState =
   | { readonly status: "loading" }
@@ -163,8 +163,9 @@ export function MeasurementReviewPage({ measurementBulletinImportId }: { measure
                 </dd>
               </div>
             </dl>
-            <p className="measurement-review-header__planning-note">{PLANNING_COMPARISON_UNAVAILABLE_MESSAGE}.</p>
           </Card>
+
+          <MeasurementPhysicalFinancialObraCard physicalFinancial={state.review.physicalFinancial} />
 
           {state.review.economicSummary ? <MeasurementContractDiscountCard summary={state.review.economicSummary} /> : null}
 
@@ -187,7 +188,12 @@ export function MeasurementReviewPage({ measurementBulletinImportId }: { measure
                 </div>
               </li>
               {state.review.items.map((item) => (
-                <MeasurementReviewItemRow item={item} key={item.id} />
+                <MeasurementReviewItemRow
+                  groupsAvailable={state.review.physicalFinancial.groupsAvailable}
+                  groupsUnavailableReason={state.review.physicalFinancial.groupsUnavailableReason}
+                  item={item}
+                  key={item.id}
+                />
               ))}
             </ul>
 

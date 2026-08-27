@@ -3,6 +3,7 @@ import { getSupabaseRouteHandlerClient, requireAuthenticatedActor } from "@/lib/
 import {
   buildMeasurementBulletinReviewReader,
   buildMeasurementEconomicComparisonReader,
+  buildMeasurementPhysicalFinancialReader,
   buildMeasurementReviewDecisionBriefReader,
   handleGetMeasurementBulletinReview
 } from "./measurement-bulletin-review-route-handler";
@@ -25,7 +26,8 @@ export async function GET(_request: Request, context: { params: { measurementBul
       {
         decisionBriefReader: buildMeasurementReviewDecisionBriefReader(supabase),
         reviewReader: buildMeasurementBulletinReviewReader(supabase),
-        economicComparisonReader: buildMeasurementEconomicComparisonReader(supabase)
+        economicComparisonReader: buildMeasurementEconomicComparisonReader(supabase),
+        physicalFinancialReader: buildMeasurementPhysicalFinancialReader(supabase)
       }
     );
 

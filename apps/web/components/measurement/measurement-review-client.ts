@@ -19,8 +19,56 @@ import type {
  * `MeasurementBulletinReview`/`MeasurementBulletinReviewItem`.
  */
 
+export type PhysicalFinancialSituation = "above_planned" | "on_planned" | "below_planned";
+
+export interface MeasurementReviewPhysicalFinancialObra {
+  readonly periodLabel: string;
+  readonly periodDate: string;
+  readonly plannedAccumulatedValueDecimal: string;
+  readonly actualAccumulatedValueDecimal: string;
+  readonly deviationValueDecimal: string;
+  readonly plannedAccumulatedPercent: string | null;
+  readonly actualAccumulatedPercent: string | null;
+  readonly deviationPercentPoints: string | null;
+  readonly situation: PhysicalFinancialSituation;
+}
+
+export interface MeasurementReviewPhysicalFinancialGroup {
+  readonly groupCode: string;
+  readonly groupName: string;
+  readonly plannedPeriodValueDecimal: string;
+  readonly plannedAccumulatedValueDecimal: string;
+  readonly actualPeriodValueDecimal: string;
+  readonly actualAccumulatedValueDecimal: string;
+  readonly plannedAccumulatedPercent: string | null;
+  readonly actualAccumulatedPercent: string | null;
+  readonly deviationValueDecimal: string;
+  readonly deviationPercentPoints: string | null;
+  readonly situation: PhysicalFinancialSituation;
+}
+
+export interface MeasurementReviewPhysicalFinancialAdjustment {
+  readonly code: string;
+  readonly name: string;
+}
+
+export interface MeasurementReviewPhysicalFinancial {
+  readonly obraAvailable: boolean;
+  readonly obraUnavailableReason: string | null;
+  readonly groupsAvailable: boolean;
+  readonly groupsUnavailableReason: string | null;
+  readonly sourceFileName: string | null;
+  readonly sourceSheetName: string | null;
+  readonly period: { readonly label: string; readonly date: string } | null;
+  readonly obra: MeasurementReviewPhysicalFinancialObra | null;
+  readonly groups: ReadonlyArray<MeasurementReviewPhysicalFinancialGroup>;
+  readonly adjustments: ReadonlyArray<MeasurementReviewPhysicalFinancialAdjustment>;
+}
+
 export interface MeasurementReviewItemWithEconomics extends MeasurementBulletinReviewItem {
   readonly economicComparison: MeasurementItemEconomicComparison | null;
+  /** Situação do GRUPO do cronograma físico-financeiro a que este item pertence -- nunca um status individual do item. null quando não há grupo correlacionado ou o cronograma não está disponível. */
+  readonly physicalFinancialGroup: MeasurementReviewPhysicalFinancialGroup | null;
 }
 
 /** "Ver composição" (correção semântica pós-Preview, item 5) -- um item que contribui para o impacto agregado do deságio, ordenado pelo servidor por maior contribuição. */
@@ -42,6 +90,7 @@ export interface MeasurementEconomicSummaryWithComposition extends MeasurementEc
 export interface MeasurementBulletinReviewWithEconomics extends Omit<MeasurementBulletinReview, "items"> {
   readonly items: ReadonlyArray<MeasurementReviewItemWithEconomics>;
   readonly economicSummary: MeasurementEconomicSummaryWithComposition | null;
+  readonly physicalFinancial: MeasurementReviewPhysicalFinancial;
 }
 
 export type MeasurementReviewFetchOutcome =
@@ -130,6 +179,73 @@ function extractValidEconomicSummary(value: unknown): MeasurementEconomicSummary
   return candidate as unknown as MeasurementEconomicSummaryWithComposition;
 }
 
+const PHYSICAL_FINANCIAL_SITUATION_VALUES: ReadonlyArray<PhysicalFinancialSituation> = ["above_planned", "on_planned", "below_planned"];
+
+function isNullableString(value: unknown): boolean {
+  return value === null || typeof value === "string";
+}
+
+function extractValidPhysicalFinancialGroup(value: unknown): MeasurementReviewPhysicalFinancialGroup | null {
+  if (typeof value !== "object" || value === null) return null;
+  const c = value as Record<string, unknown>;
+  if (typeof c.groupCode !== "string") return null;
+  if (typeof c.groupName !== "string") return null;
+  if (typeof c.plannedPeriodValueDecimal !== "string") return null;
+  if (typeof c.plannedAccumulatedValueDecimal !== "string") return null;
+  if (typeof c.actualPeriodValueDecimal !== "string") return null;
+  if (typeof c.actualAccumulatedValueDecimal !== "string") return null;
+  if (!isNullableString(c.plannedAccumulatedPercent)) return null;
+  if (!isNullableString(c.actualAccumulatedPercent)) return null;
+  if (typeof c.deviationValueDecimal !== "string") return null;
+  if (!isNullableString(c.deviationPercentPoints)) return null;
+  if (!PHYSICAL_FINANCIAL_SITUATION_VALUES.includes(c.situation as PhysicalFinancialSituation)) return null;
+  return c as unknown as MeasurementReviewPhysicalFinancialGroup;
+}
+
+function extractValidPhysicalFinancialObra(value: unknown): MeasurementReviewPhysicalFinancialObra | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== "object") return undefined;
+  const c = value as Record<string, unknown>;
+  if (typeof c.periodLabel !== "string") return undefined;
+  if (typeof c.periodDate !== "string") return undefined;
+  if (typeof c.plannedAccumulatedValueDecimal !== "string") return undefined;
+  if (typeof c.actualAccumulatedValueDecimal !== "string") return undefined;
+  if (typeof c.deviationValueDecimal !== "string") return undefined;
+  if (!isNullableString(c.plannedAccumulatedPercent)) return undefined;
+  if (!isNullableString(c.actualAccumulatedPercent)) return undefined;
+  if (!isNullableString(c.deviationPercentPoints)) return undefined;
+  if (!PHYSICAL_FINANCIAL_SITUATION_VALUES.includes(c.situation as PhysicalFinancialSituation)) return undefined;
+  return c as unknown as MeasurementReviewPhysicalFinancialObra;
+}
+
+function extractValidPhysicalFinancial(value: unknown): MeasurementReviewPhysicalFinancial | null {
+  if (typeof value !== "object" || value === null) return null;
+  const c = value as Record<string, unknown>;
+  if (typeof c.obraAvailable !== "boolean") return null;
+  if (typeof c.groupsAvailable !== "boolean") return null;
+  if (!isNullableString(c.obraUnavailableReason)) return null;
+  if (!isNullableString(c.groupsUnavailableReason)) return null;
+  if (!isNullableString(c.sourceFileName)) return null;
+  if (!isNullableString(c.sourceSheetName)) return null;
+  if (c.period !== null) {
+    if (typeof c.period !== "object" || c.period === null) return null;
+    const period = c.period as Record<string, unknown>;
+    if (typeof period.label !== "string" || typeof period.date !== "string") return null;
+  }
+  if (extractValidPhysicalFinancialObra(c.obra) === undefined) return null;
+  if (!Array.isArray(c.groups)) return null;
+  for (const group of c.groups) {
+    if (extractValidPhysicalFinancialGroup(group) === null) return null;
+  }
+  if (!Array.isArray(c.adjustments)) return null;
+  for (const adjustment of c.adjustments) {
+    if (typeof adjustment !== "object" || adjustment === null) return null;
+    const row = adjustment as Record<string, unknown>;
+    if (typeof row.code !== "string" || typeof row.name !== "string") return null;
+  }
+  return c as unknown as MeasurementReviewPhysicalFinancial;
+}
+
 export function extractValidMeasurementReview(payload: unknown): MeasurementBulletinReviewWithEconomics | null {
   if (typeof payload !== "object" || payload === null) return null;
 
@@ -170,9 +286,11 @@ export function extractValidMeasurementReview(payload: unknown): MeasurementBull
       if (extractValidSourceReference(reference) === null) return null;
     }
     if (extractValidItemEconomicComparison(item.economicComparison) === undefined) return null;
+    if (item.physicalFinancialGroup !== null && extractValidPhysicalFinancialGroup(item.physicalFinancialGroup) === null) return null;
   }
 
   if (extractValidEconomicSummary(candidate.economicSummary) === undefined) return null;
+  if (extractValidPhysicalFinancial(candidate.physicalFinancial) === null) return null;
 
   return data as MeasurementBulletinReviewWithEconomics;
 }

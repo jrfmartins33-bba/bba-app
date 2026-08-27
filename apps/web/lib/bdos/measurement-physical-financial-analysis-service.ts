@@ -44,7 +44,7 @@ const PERCENT_POINT_POLICY = {
   quantizationMode: MeasurementDecimalQuantizationMode.RoundHalfAwayFromZero
 };
 
-/** realizado > planejado → acima; iguais → no previsto; realizado < planejado → abaixo. Nunca "em atraso" — a fonte não caracteriza atraso temporal. */
+/** realizado > planejado → acima; iguais → no previsto; realizado < planejado → abaixo. Vocabulário deliberadamente sem conotação temporal: a fonte não traz datas/durações por grupo. */
 export type PhysicalFinancialSituation = "above_planned" | "on_planned" | "below_planned";
 
 export interface PhysicalFinancialObraReading {
@@ -108,6 +108,110 @@ export interface MeasurementPhysicalFinancialAnalysisInput {
 }
 
 const GROUP_CODE_PATTERN = /^\d+\.0$/;
+
+// -------------------------------------------------------------------
+// Seleção determinística entre importações concorrentes do mesmo
+// cronograma físico-financeiro (item 1 da especificação).
+// -------------------------------------------------------------------
+
+export interface PhysicalFinancialDatasetCandidateInput {
+  readonly id: string;
+  readonly createdAt: string;
+  readonly fileName: string | null;
+  /** `planning_datasets.dataset` verbatim (JSONB). Forma não validada. */
+  readonly dataset: unknown;
+}
+
+export interface SelectedPhysicalFinancialDataset {
+  readonly id: string;
+  readonly createdAt: string;
+  readonly fileName: string | null;
+  readonly dataset: PlanningDataset;
+}
+
+export type PhysicalFinancialDatasetSelection =
+  | { readonly outcome: "selected"; readonly selected: SelectedPhysicalFinancialDataset; readonly candidateCount: number }
+  | { readonly outcome: "none" }
+  | { readonly outcome: "divergent"; readonly reason: string };
+
+/**
+ * Regra: entre todas as linhas `fisico-financeiro` do projeto, usa a
+ * MAIS RECENTE por `created_at` quando todas são semanticamente
+ * equivalentes (mesma impressão digital estrutural). Se duas divergem
+ * MATERIALMENTE, não escolhe nenhuma — devolve `divergent` com motivo,
+ * para a UI reportar em vez de adivinhar.
+ */
+export function selectConsolidatedPhysicalFinancialDataset(
+  candidates: ReadonlyArray<PhysicalFinancialDatasetCandidateInput>
+): PhysicalFinancialDatasetSelection {
+  const parsed = candidates
+    .map((candidate) => ({ candidate, dataset: asPlanningDatasetOrNull(candidate.dataset) }))
+    .filter((entry): entry is { candidate: PhysicalFinancialDatasetCandidateInput; dataset: PlanningDataset } => entry.dataset !== null)
+    .filter((entry) => entry.dataset.detectedType === "fisico-financeiro");
+
+  if (parsed.length === 0) {
+    return { outcome: "none" };
+  }
+
+  const fingerprints = new Set(parsed.map((entry) => physicalFinancialFingerprint(entry.dataset)));
+  if (fingerprints.size > 1) {
+    return {
+      outcome: "divergent",
+      reason:
+        "Há mais de um cronograma físico-financeiro importado com diferenças materiais entre si. Consolide a fonte antes de comparar a medição ao planejamento."
+    };
+  }
+
+  const mostRecent = [...parsed].sort((a, b) => compareIsoDesc(a.candidate.createdAt, b.candidate.createdAt))[0];
+  return {
+    outcome: "selected",
+    candidateCount: parsed.length,
+    selected: {
+      id: mostRecent.candidate.id,
+      createdAt: mostRecent.candidate.createdAt,
+      fileName: mostRecent.candidate.fileName,
+      dataset: mostRecent.dataset
+    }
+  };
+}
+
+/** Impressão digital estrutural: quantidade de atividades + soma canônica de planejado/realizado + a série agregada por ponto datado. Dois datasets com a mesma impressão são tratados como equivalentes. */
+function physicalFinancialFingerprint(dataset: PlanningDataset): string {
+  const activityPart = dataset.activities
+    .map((activity) => `${activity.code}|${canonicalOrNull(activity.plannedValue) ?? "-"}|${canonicalOrNull(activity.actualValue) ?? "-"}`)
+    .sort()
+    .join(";");
+
+  const aggregate = dataset.periodSeries.find((series) => series.activityId === null);
+  const aggregatePart = aggregate
+    ? aggregate.points
+        .filter((point) => point.date !== null)
+        .map(
+          (point) =>
+            `${point.date}|${canonicalOrNull(point.plannedValue) ?? "-"}|${canonicalOrNull(point.actualValue) ?? "-"}`
+        )
+        .join(";")
+    : "";
+
+  return `${dataset.activities.length}#${activityPart}#${aggregatePart}`;
+}
+
+function compareIsoDesc(a: string, b: string): number {
+  return a < b ? 1 : a > b ? -1 : 0;
+}
+
+/** Guarda estrutural mínima: aceita ou rejeita a forma de `PlanningDataset`, nunca normaliza. */
+export function asPlanningDatasetOrNull(value: unknown): PlanningDataset | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.detectedType !== "string") return null;
+  if (!Array.isArray(candidate.activities)) return null;
+  if (!Array.isArray(candidate.periodSeries)) return null;
+  if (typeof candidate.origin !== "object" || candidate.origin === null) return null;
+  return value as PlanningDataset;
+}
 
 const EMPTY_ANALYSIS = (
   overrides: Partial<MeasurementPhysicalFinancialAnalysis>

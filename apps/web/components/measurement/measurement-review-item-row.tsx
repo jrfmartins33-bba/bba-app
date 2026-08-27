@@ -5,9 +5,15 @@ import { ChevronDown } from "lucide-react";
 import type { MeasurementReviewItemWithEconomics } from "./measurement-review-client";
 import { formatFormalBulletinTotalBRL } from "./measurement-bulletin-formal-status-view-model";
 import {
+  formatDeviationBRL,
+  formatGroupSituationBadge,
   formatMeasurementEconomicInterpretationSentence,
   formatMeasurementEconomicPercentage,
   formatMeasurementReviewQuantity,
+  formatPercentPoints,
+  formatPhysicalFinancialSituation,
+  physicalFinancialSituationTone,
+  GROUP_SITUATION_ITEM_NOTE,
   PLANNING_COMPARISON_UNAVAILABLE_MESSAGE,
   PLANNING_UNAVAILABLE_COMPACT_LABEL
 } from "./measurement-review-view-model";
@@ -15,6 +21,9 @@ import { MeasurementCellReference } from "./measurement-cell-reference";
 
 export interface MeasurementReviewItemRowProps {
   readonly item: MeasurementReviewItemWithEconomics;
+  /** Contexto do topo da tela -- para distinguir "sem grupo correspondente" de "cronograma indisponível". */
+  readonly groupsAvailable: boolean;
+  readonly groupsUnavailableReason: string | null;
 }
 
 /**
@@ -28,10 +37,11 @@ export interface MeasurementReviewItemRowProps {
  * "Rastreabilidade" dentro da mesma expansão, por sugestão explícita
  * da especificação de evolução econômica.
  */
-export function MeasurementReviewItemRow({ item }: MeasurementReviewItemRowProps) {
+export function MeasurementReviewItemRow({ item, groupsAvailable, groupsUnavailableReason }: MeasurementReviewItemRowProps) {
   const [expanded, setExpanded] = useState(false);
   const hasOrigin = item.evidenceReferences.length > 0;
   const economic = item.economicComparison;
+  const group = item.physicalFinancialGroup;
 
   return (
     <li className="measurement-review-item">
@@ -42,9 +52,18 @@ export function MeasurementReviewItemRow({ item }: MeasurementReviewItemRowProps
         <span className="measurement-review-item__quantity">{formatMeasurementReviewQuantity(item.quantityDecimal)}</span>
         <span className="measurement-review-item__unit-value">{formatFormalBulletinTotalBRL(item.unitValueDecimal)}</span>
         <span className="measurement-review-item__value">{formatFormalBulletinTotalBRL(item.valueDecimal)}</span>
-        <span className="measurement-review-item__situation" title={PLANNING_COMPARISON_UNAVAILABLE_MESSAGE}>
-          {PLANNING_UNAVAILABLE_COMPACT_LABEL}
-        </span>
+        {group ? (
+          <span
+            className={`measurement-review-item__situation measurement-review-item__situation--${physicalFinancialSituationTone(group.situation)}`}
+            title={`${GROUP_SITUATION_ITEM_NOTE} (${group.groupCode} — ${group.groupName})`}
+          >
+            {formatGroupSituationBadge(group.situation)}
+          </span>
+        ) : (
+          <span className="measurement-review-item__situation" title={PLANNING_COMPARISON_UNAVAILABLE_MESSAGE}>
+            {PLANNING_UNAVAILABLE_COMPACT_LABEL}
+          </span>
+        )}
         <button aria-expanded={expanded} className="measurement-review-item__analysis-toggle" onClick={() => setExpanded((current) => !current)} type="button">
           <ChevronDown aria-hidden="true" className="measurement-ver-mais__chevron" size={14} />
           Ver análise
@@ -111,10 +130,57 @@ export function MeasurementReviewItemRow({ item }: MeasurementReviewItemRowProps
             </dl>
           </section>
 
-          <section className="measurement-review-item__analysis-block measurement-review-item__analysis-block--muted">
-            <h4>Planejamento físico-financeiro</h4>
-            <p>{PLANNING_COMPARISON_UNAVAILABLE_MESSAGE}</p>
-          </section>
+          {group ? (
+            <section className="measurement-review-item__analysis-block">
+              <h4>Planejamento físico-financeiro</h4>
+              <p className="measurement-review-item__group-heading">
+                Grupo <strong>{group.groupCode} — {group.groupName}</strong>
+              </p>
+              <dl>
+                <div>
+                  <dt>Planejado acumulado</dt>
+                  <dd>
+                    {formatFormalBulletinTotalBRL(group.plannedAccumulatedValueDecimal)}
+                    {group.plannedAccumulatedPercent ? ` · ${formatPercentPoints(group.plannedAccumulatedPercent)}` : ""}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Realizado acumulado</dt>
+                  <dd>
+                    {formatFormalBulletinTotalBRL(group.actualAccumulatedValueDecimal)}
+                    {group.actualAccumulatedPercent ? ` · ${formatPercentPoints(group.actualAccumulatedPercent)}` : ""}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Desvio</dt>
+                  <dd>
+                    {formatDeviationBRL(group.deviationValueDecimal)}
+                    {group.deviationPercentPoints ? ` · ${formatPercentPoints(group.deviationPercentPoints, { asPoints: true })}` : ""}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Situação do grupo</dt>
+                  <dd>
+                    <span
+                      className={`measurement-review-item__group-situation measurement-review-item__group-situation--${physicalFinancialSituationTone(group.situation)}`}
+                    >
+                      {formatPhysicalFinancialSituation(group.situation)}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+              <p className="measurement-review-item__analysis-block-note">{GROUP_SITUATION_ITEM_NOTE}</p>
+            </section>
+          ) : (
+            <section className="measurement-review-item__analysis-block measurement-review-item__analysis-block--muted">
+              <h4>Planejamento físico-financeiro</h4>
+              <p>
+                {groupsAvailable
+                  ? "Este item não tem grupo correspondente no cronograma físico-financeiro."
+                  : groupsUnavailableReason ?? PLANNING_COMPARISON_UNAVAILABLE_MESSAGE}
+              </p>
+            </section>
+          )}
 
           {hasOrigin ? (
             <section className="measurement-review-item__analysis-block">
