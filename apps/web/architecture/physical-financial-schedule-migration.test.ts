@@ -42,8 +42,29 @@ runTest("dinheiro e percentual são NUMERIC exato -- nunca tipo de ponto flutuan
   assertTrue(!/(DOUBLE PRECISION|FLOAT4|FLOAT8)/i.test(SQL), "nenhum tipo de ponto flutuante no schema");
 });
 
-runTest("uma linha por (dataset, escopo, grupo, período) -- sem duplicar", () => {
-  assertTrue(/UNIQUE \(planning_dataset_id, scope, group_code, period_index\)/.test(SQL), "chave única do grão");
+runTest("idempotência: DOIS índices únicos PARCIAIS, um por escopo -- nunca um UNIQUE de tabela que dependa de group_code para 'obra'", () => {
+  // Obra: sem group_code na chave (NULL nunca protege num UNIQUE
+  // convencional) -> chave é só (planning_dataset_id, period_index).
+  assertTrue(
+    /CREATE UNIQUE INDEX[^;]*?physical_financial_schedule_periods_obra_uniq[\s\S]*?\(planning_dataset_id, period_index\)[\s\S]*?WHERE scope = 'obra'/.test(SQL),
+    "índice único parcial de obra em (planning_dataset_id, period_index) WHERE scope='obra'"
+  );
+  // Grupo: group_code faz parte da chave -> grupos diferentes no mesmo
+  // período NÃO colidem; mesmo grupo/período colide.
+  assertTrue(
+    /CREATE UNIQUE INDEX[^;]*?physical_financial_schedule_periods_group_uniq[\s\S]*?\(planning_dataset_id, group_code, period_index\)[\s\S]*?WHERE scope = 'group'/.test(SQL),
+    "índice único parcial de grupo em (planning_dataset_id, group_code, period_index) WHERE scope='group'"
+  );
+  // O UNIQUE de tabela antigo (que não protegia 'obra' por causa do NULL) sumiu.
+  assertTrue(
+    !/UNIQUE \(planning_dataset_id, scope, group_code, period_index\)/.test(SQL),
+    "o UNIQUE de tabela que não protege NULL foi removido"
+  );
+  // O índice de obra não referencia group_code em lugar nenhum.
+  const obraIdx = /physical_financial_schedule_periods_obra_uniq[\s\S]*?;/.exec(SQL)?.[0] ?? "";
+  assertTrue(obraIdx.length > 0 && !/group_code/.test(obraIdx), "índice de obra não depende de group_code");
+  // O comentário explica o porquê (NULL não colide com NULL).
+  assertTrue(/NULL nunca colide[\s\S]{0,12}com NULL/i.test(SQL), "o comentário registra a razão do índice parcial");
 });
 
 runTest("cascateia a partir de planning_datasets (Camada 2) e engineering_projects", () => {

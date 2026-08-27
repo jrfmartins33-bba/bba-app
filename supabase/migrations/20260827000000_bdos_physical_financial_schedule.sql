@@ -61,9 +61,22 @@ CREATE TABLE IF NOT EXISTS public.physical_financial_schedule_periods (
     (planned_accumulated_percent IS NULL OR planned_accumulated_percent BETWEEN -1000 AND 1000)
     AND
     (actual_accumulated_percent IS NULL OR actual_accumulated_percent BETWEEN -1000 AND 1000)
-  ),
-  UNIQUE (planning_dataset_id, scope, group_code, period_index)
+  )
 );
+
+-- Unicidade do grão -- DOIS índices únicos PARCIAIS, nunca um UNIQUE de
+-- tabela sobre (…, scope, group_code, …): no PostgreSQL NULL nunca colide
+-- com NULL num índice único convencional, então scope='obra' (onde
+-- group_code IS NULL) ficaria sem proteção e admitiria linhas
+-- duplicadas do mesmo dataset/período. Cada índice cobre exatamente um
+-- escopo, sem depender de group_code para desempatar 'obra'.
+CREATE UNIQUE INDEX IF NOT EXISTS physical_financial_schedule_periods_obra_uniq
+  ON public.physical_financial_schedule_periods (planning_dataset_id, period_index)
+  WHERE scope = 'obra';
+
+CREATE UNIQUE INDEX IF NOT EXISTS physical_financial_schedule_periods_group_uniq
+  ON public.physical_financial_schedule_periods (planning_dataset_id, group_code, period_index)
+  WHERE scope = 'group';
 
 CREATE INDEX IF NOT EXISTS physical_financial_schedule_periods_project_idx
   ON public.physical_financial_schedule_periods (engineering_project_id, scope);

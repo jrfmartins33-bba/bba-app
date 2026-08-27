@@ -116,6 +116,8 @@ const GROUP_CODE_PATTERN = /^\d+\.0$/;
 
 export interface PhysicalFinancialDatasetCandidateInput {
   readonly id: string;
+  /** `planning_datasets.dataset_schema_version` -- a maior versão disponível vence. */
+  readonly schemaVersion: number;
   readonly createdAt: string;
   readonly fileName: string | null;
   /** `planning_datasets.dataset` verbatim (JSONB). Forma não validada. */
@@ -124,6 +126,7 @@ export interface PhysicalFinancialDatasetCandidateInput {
 
 export interface SelectedPhysicalFinancialDataset {
   readonly id: string;
+  readonly schemaVersion: number;
   readonly createdAt: string;
   readonly fileName: string | null;
   readonly dataset: PlanningDataset;
@@ -135,11 +138,21 @@ export type PhysicalFinancialDatasetSelection =
   | { readonly outcome: "divergent"; readonly reason: string };
 
 /**
- * Regra: entre todas as linhas `fisico-financeiro` do projeto, usa a
- * MAIS RECENTE por `created_at` quando todas são semanticamente
- * equivalentes (mesma impressão digital estrutural). Se duas divergem
- * MATERIALMENTE, não escolhe nenhuma — devolve `divergent` com motivo,
- * para a UI reportar em vez de adivinhar.
+ * Regra de seleção (ordem estrita):
+ *   1. Só linhas `fisico-financeiro`.
+ *   2. A MAIOR `schemaVersion` disponível vence -- versões anteriores
+ *      (ex.: v1 sem série por grupo) são descartadas por completo, nunca
+ *      entram na comparação nem no resultado.
+ *   3. Dentro da versão vencedora, agrupa por LINHAGEM (arquivo-fonte,
+ *      `origin.fileName`). Vence a linhagem com o `created_at` mais
+ *      recente -- linhagens diferentes são documentos diferentes, não
+ *      "divergência".
+ *   4. Dentro dessa versão + linhagem: se houver mais de um candidato e
+ *      as impressões digitais ESTRUTURAIS divergirem, não escolhe nada
+ *      -- devolve `divergent`. Caso contrário, usa o mais recente.
+ *
+ * A impressão digital ignora `origin.importedAt`, então dois imports do
+ * mesmo arquivo em horários diferentes NÃO contam como divergência.
  */
 export function selectConsolidatedPhysicalFinancialDataset(
   candidates: ReadonlyArray<PhysicalFinancialDatasetCandidateInput>
@@ -153,26 +166,47 @@ export function selectConsolidatedPhysicalFinancialDataset(
     return { outcome: "none" };
   }
 
-  const fingerprints = new Set(parsed.map((entry) => physicalFinancialFingerprint(entry.dataset)));
+  const maxVersion = Math.max(...parsed.map((entry) => entry.candidate.schemaVersion));
+  const winningVersion = parsed.filter((entry) => entry.candidate.schemaVersion === maxVersion);
+
+  const lineageKey = (dataset: PlanningDataset): string => (dataset.origin.fileName ?? "").trim().toLowerCase();
+  const lineages = new Map<string, typeof winningVersion>();
+  for (const entry of winningVersion) {
+    const key = lineageKey(entry.dataset);
+    const bucket = lineages.get(key) ?? [];
+    bucket.push(entry);
+    lineages.set(key, bucket);
+  }
+
+  const winningLineage = [...lineages.values()].sort(
+    (a, b) => compareIsoDesc(mostRecentCreatedAt(a), mostRecentCreatedAt(b))
+  )[0];
+
+  const fingerprints = new Set(winningLineage.map((entry) => physicalFinancialFingerprint(entry.dataset)));
   if (fingerprints.size > 1) {
     return {
       outcome: "divergent",
       reason:
-        "Há mais de um cronograma físico-financeiro importado com diferenças materiais entre si. Consolide a fonte antes de comparar a medição ao planejamento."
+        "Há mais de um cronograma físico-financeiro consolidado (mesma versão e mesmo arquivo-fonte) com diferenças materiais entre si. Consolide a fonte antes de comparar a medição ao planejamento."
     };
   }
 
-  const mostRecent = [...parsed].sort((a, b) => compareIsoDesc(a.candidate.createdAt, b.candidate.createdAt))[0];
+  const mostRecent = [...winningLineage].sort((a, b) => compareIsoDesc(a.candidate.createdAt, b.candidate.createdAt))[0];
   return {
     outcome: "selected",
-    candidateCount: parsed.length,
+    candidateCount: winningLineage.length,
     selected: {
       id: mostRecent.candidate.id,
+      schemaVersion: mostRecent.candidate.schemaVersion,
       createdAt: mostRecent.candidate.createdAt,
       fileName: mostRecent.candidate.fileName,
       dataset: mostRecent.dataset
     }
   };
+}
+
+function mostRecentCreatedAt(entries: ReadonlyArray<{ readonly candidate: PhysicalFinancialDatasetCandidateInput }>): string {
+  return [...entries].map((entry) => entry.candidate.createdAt).sort(compareIsoDesc)[0] ?? "";
 }
 
 /** Impressão digital estrutural: quantidade de atividades + soma canônica de planejado/realizado + a série agregada por ponto datado. Dois datasets com a mesma impressão são tratados como equivalentes. */

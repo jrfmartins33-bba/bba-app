@@ -123,7 +123,7 @@ export interface MeasurementPhysicalFinancialReader {
   listPhysicalFinancialDatasets(input: {
     companyId: string | null;
     engineeringProjectId: string;
-  }): Promise<ReadonlyArray<{ id: string; createdAt: string; fileName: string | null; dataset: unknown }>>;
+  }): Promise<ReadonlyArray<{ id: string; schemaVersion: number; createdAt: string; fileName: string | null; dataset: unknown }>>;
 }
 
 export function buildMeasurementPhysicalFinancialReader(supabase: SupabaseClient): MeasurementPhysicalFinancialReader {
@@ -142,7 +142,13 @@ export function buildMeasurementPhysicalFinancialReader(supabase: SupabaseClient
         engineeringProjectId: query.engineeringProjectId,
         detectedType: "fisico-financeiro"
       });
-      return rows.map((row) => ({ id: row.id, createdAt: row.createdAt, fileName: row.fileName, dataset: row.dataset }));
+      return rows.map((row) => ({
+        id: row.id,
+        schemaVersion: row.datasetSchemaVersion,
+        createdAt: row.createdAt,
+        fileName: row.fileName,
+        dataset: row.dataset
+      }));
     }
   };
 }
@@ -383,7 +389,13 @@ async function resolvePhysicalFinancialAnalysis(
   });
 
   const selection = selectConsolidatedPhysicalFinancialDataset(
-    rows.map((row) => ({ id: row.id, createdAt: row.createdAt, fileName: row.fileName, dataset: row.dataset }))
+    rows.map((row) => ({
+      id: row.id,
+      schemaVersion: row.schemaVersion,
+      createdAt: row.createdAt,
+      fileName: row.fileName,
+      dataset: row.dataset
+    }))
   );
 
   if (selection.outcome === "divergent") {

@@ -181,7 +181,7 @@ function extractPeriodMatrix(sheet: ExcelSheetDto, detection: SheetDetectionResu
   const codeColumn = firstColumnOfKind(detection.columns, "code");
   const nameColumn = firstColumnOfKind(detection.columns, "name");
   const controlColumn = firstColumnOfKind(detection.columns, "control");
-  const periodColumns = detection.periodColumns;
+  const periodColumns = canonicalPeriodPrefix(detection.periodColumns);
 
   const warnings: PlanningImportWarning[] = [
     { code: "missing_dependencies", message: "Dependências não identificadas no Excel de origem." },
@@ -295,6 +295,36 @@ function extractPeriodMatrix(sheet: ExcelSheetDto, detection: SheetDetectionResu
   }
 
   return { activities, periodSeries, warnings };
+}
+
+/**
+ * Períodos canônicos do cronograma: o maior PREFIXO de colunas de
+ * período cuja data resolvida é não-nula E estritamente crescente.
+ * Colunas de "mês" sem data, ou com data cronologicamente incoerente
+ * (ex.: 2025-08-01 depois de 2026-07-01), são resíduo de template da
+ * planilha e não entram no Planning Dataset — nem no payload, nem em
+ * nenhum read model a jusante. Sem nenhuma data em nenhuma coluna,
+ * não há como distinguir canônico de resíduo: mantém tudo (verbatim),
+ * comportamento anterior.
+ */
+function canonicalPeriodPrefix(columns: ReadonlyArray<DetectedPeriodColumn>): DetectedPeriodColumn[] {
+  if (!columns.some((column) => column.date !== null)) {
+    return [...columns];
+  }
+
+  const kept: DetectedPeriodColumn[] = [];
+  let previousDate: string | null = null;
+  for (const column of columns) {
+    if (column.date === null) {
+      break;
+    }
+    if (previousDate !== null && !(column.date > previousDate)) {
+      break;
+    }
+    previousDate = column.date;
+    kept.push(column);
+  }
+  return kept;
 }
 
 interface PeriodAccumulator {
