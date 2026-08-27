@@ -52,14 +52,14 @@ function extractValidView(payload: unknown): ManagerialControlView | null {
 
   const s = c.summary as Record<string, unknown> | undefined;
   if (!s || typeof s.totalItems !== "number") return null;
-  for (const key of [
-    "contractedValueTotalDecimal",
-    "bdosRegisteredValueTotalDecimal",
-    "contractBalanceTotalDecimal"
-  ]) {
+  for (const key of ["itemsCanonicalSumDecimal", "bdosRegisteredValueTotalDecimal", "contractBalanceTotalDecimal"]) {
     if (!isString(s[key])) return null;
   }
+  for (const key of ["contractOfficialValueDecimal", "itemsTechnicalTotalDecimal", "contractRoundingAdjustmentDecimal"]) {
+    if (s[key] !== null && !isString(s[key])) return null;
+  }
   if (typeof s.certificationRegistered !== "boolean") return null;
+  if (typeof s.currentBulletinCertified !== "boolean") return null;
   if (typeof s.documentaryHistoryImported !== "boolean") return null;
 
   const a = c.analyses as Record<string, unknown> | undefined;

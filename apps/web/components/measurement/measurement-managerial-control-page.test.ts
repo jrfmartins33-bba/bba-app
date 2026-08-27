@@ -55,10 +55,23 @@ ok("distingue documental × certificado — 'certificado = 0' não é 'sem execu
   assertTrue(SERVICE.includes("obraReference"), "posição real da obra (Curva S) exposta à parte para contraste");
 });
 
-ok("ajuste/reconciliação contratual à parte — nunca rateado nos itens", () => {
-  assertTrue(SERVICE.includes("contractAdjustmentDecimal"), "campo de ajuste no resumo");
-  assertTrue(!/\/\s*items\.length|rate|distribu/i.test(SERVICE) || SERVICE.includes("NUNCA rateado"), "sem distribuição do ajuste");
-  assertTrue(PAGE.includes("Ajuste / reconciliação contratual"), "exibido separadamente");
+ok("reconciliação contratual AUTORITATIVA da Base Contratual — nunca 'soma de itens arredondados − oficial'", () => {
+  const HANDLER = read("../../app/api/measurement/imports/[measurementBulletinImportId]/managerial-control/managerial-control-route-handler.ts");
+  assertTrue(HANDLER.includes("findContractBaselineByProject"), "usa a Base Contratual existente, não uma segunda fonte");
+  assertTrue(HANDLER.includes("derivedItemsTotalDecimal") && HANDLER.includes("contractualRoundingAdjustmentDecimal"), "soma técnica + ajuste vêm da Base Contratual");
+  assertTrue(SERVICE.includes("itemsTechnicalTotalDecimal") && SERVICE.includes("contractRoundingAdjustmentDecimal"), "campos autoritativos no resumo");
+  assertTrue(!SERVICE.includes("contractAdjustmentDecimal"), "o antigo campo derivado (soma canônica − oficial) foi removido");
+  assertTrue(/soma t[ée]cnica dos itens/i.test(PAGE) && /ajuste contratual de arredondamento/i.test(PAGE) && /valor oficial do contrato/i.test(PAGE), "a reconciliação é exibida com os três termos");
+  assertTrue(/nunca é rateado pelos itens/i.test(PAGE), "diz explicitamente que o ajuste não é rateado");
+});
+
+ok("§1 — sem dupla contagem: BM atual só entra no acumulado enquanto o ciclo não está certificado", () => {
+  const HANDLER = read("../../app/api/measurement/imports/[measurementBulletinImportId]/managerial-control/managerial-control-route-handler.ts");
+  assertTrue(HANDLER.includes("getMeasurementCycleByWorkspaceId"), "resolve o estado do CICLO do próprio workspace, não 'existe alguma certificação'");
+  assertTrue(HANDLER.includes("currentBulletinCertified"), "flag propagada ao serviço");
+  assertTrue(SERVICE.includes("currentBulletinCertified"), "serviço consome a flag");
+  assertTrue(/Evita DUPLA CONTAGEM|dupla contagem/i.test(SERVICE), "o serviço documenta a regra");
+  assertTrue(/valor do período continua vis|neste per[íi]odo/i.test(PAGE) || ITEM_ROW.includes("Sem medição neste período"), "o valor do período segue visível à parte");
 });
 
 ok("cores §25 — sem verde para quantidades; azul/neutro/amber", () => {

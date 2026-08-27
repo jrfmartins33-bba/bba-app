@@ -115,15 +115,22 @@ export interface ManagerialControlSummary {
   readonly itemsAboveContractQuantity: number;
   readonly itemsInsufficientBasis: number;
 
-  readonly contractedValueTotalDecimal: string;
+  /** Valor OFICIAL do contrato -- da Base Contratual da Obra (`contract_baselines.contracted_value_cents`), autoritativo. É a referência principal. */
   readonly contractOfficialValueDecimal: string | null;
-  /** soma dos itens − valor de contrato oficial. Exibido à parte, NUNCA rateado. */
-  readonly contractAdjustmentDecimal: string | null;
+  /** Soma técnica derivada dos itens -- da Base Contratual (`derived_items_total_decimal`), alta precisão, autoritativa. NÃO é somatório canônico a centavos. */
+  readonly itemsTechnicalTotalDecimal: string | null;
+  /** Ajuste contratual de arredondamento -- da Base Contratual (`contractual_rounding_adjustment_decimal`), autoritativo. soma técnica + ajuste = valor oficial. NUNCA rateado nos itens. */
+  readonly contractRoundingAdjustmentDecimal: string | null;
+  /** Soma dos valores contratuais por item (autoritativo por item), canonicalizada a centavos -- só informativo; pode diferir do oficial por arredondamento por linha. */
+  readonly itemsCanonicalSumDecimal: string;
 
   readonly bdosRegisteredValueTotalDecimal: string;
+  /** valor oficial do contrato − posição registrada. Parte do OFICIAL, não da soma dos itens. */
   readonly contractBalanceTotalDecimal: string;
-  /** valor registrado no BDOS ÷ valor contratual × 100 -- SOMENTE o que o BDOS registrou (BM atual + certificado). NÃO é o % financeiro acumulado da obra. */
+  /** valor registrado ÷ valor OFICIAL do contrato × 100 -- SOMENTE o que o BDOS registrou (BM atual não certificado + acumulado certificado). NÃO é o % financeiro acumulado da obra. */
   readonly bdosRegisteredFinancialPercent: string | null;
+  /** true quando o boletim/ciclo atual JÁ está certificado -- então o BM atual não é somado de novo ao acumulado. */
+  readonly currentBulletinCertified: boolean;
 
   /** Referência do cronograma físico-financeiro consolidado (Curva S) -- posição REAL da obra, para contraste com o registrado no BDOS. null quando não há físico-financeiro. */
   readonly obraReference: {
@@ -209,14 +216,26 @@ export interface ManagerialControlBulletinInput {
   readonly lines: ReadonlyArray<ManagerialControlBulletinLineInput>;
 }
 
+/** Reconciliação contratual AUTORITATIVA, direto da Base Contratual da Obra. Nunca derivada por soma de itens arredondados. */
+export interface ManagerialControlContractReconciliation {
+  /** `contract_baselines.contracted_value_cents` -> decimal. Valor OFICIAL do contrato. */
+  readonly officialContractValueDecimal: string;
+  /** `contract_baselines.derived_items_total_decimal`. Soma técnica dos itens, alta precisão. */
+  readonly itemsTechnicalTotalDecimal: string;
+  /** `contract_baselines.contractual_rounding_adjustment_decimal`. soma técnica + ajuste = valor oficial. */
+  readonly roundingAdjustmentDecimal: string;
+}
+
 export interface BuildManagerialControlViewInput {
   readonly contractItems: ReadonlyArray<ManagerialControlContractItemInput>;
   readonly certifiedBalances: ReadonlyArray<ManagerialControlCertifiedBalanceInput>;
   readonly currentBulletin: ManagerialControlBulletinInput | null;
   readonly physicalFinancial: MeasurementPhysicalFinancialAnalysis | null;
   readonly certificationRegistered: boolean;
-  /** valor de contrato oficial (Curva S) -- para o ajuste/reconciliação. null quando não há físico-financeiro consolidado. */
-  readonly contractOfficialValueDecimal: string | null;
+  /** true quando o boletim/ciclo do BM atual já chegou a certified/closed -- então o BM atual NÃO é somado de novo ao acumulado certificado. */
+  readonly currentBulletinCertified: boolean;
+  /** Reconciliação contratual autoritativa. null quando o projeto não tem Base Contratual rastreável -- aí o consolidado cai para a soma dos itens (best effort, com nota). */
+  readonly contractReconciliation: ManagerialControlContractReconciliation | null;
 }
 
 const TOP_N = 5;
@@ -242,7 +261,16 @@ export function buildManagerialControlView(input: BuildManagerialControlViewInpu
   const groupByCode = new Map((input.physicalFinancial?.groups ?? []).map((g) => [g.groupCode, g]));
 
   const items = input.contractItems
-    .map((item) => buildItem(item, balanceByItemId.get(item.id) ?? null, bulletinLineByItemId.get(item.id) ?? null, groupByCode, input.currentBulletin))
+    .map((item) =>
+      buildItem(
+        item,
+        balanceByItemId.get(item.id) ?? null,
+        bulletinLineByItemId.get(item.id) ?? null,
+        groupByCode,
+        input.currentBulletin,
+        input.currentBulletinCertified
+      )
+    )
     .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
 
   const summary = buildSummary(items, input);
@@ -256,7 +284,8 @@ function buildItem(
   balance: ManagerialControlCertifiedBalanceInput | null,
   bulletinLine: ManagerialControlBulletinLineInput | null,
   groupByCode: ReadonlyMap<string, MeasurementPhysicalFinancialAnalysis["groups"][number]>,
-  currentBulletin: ManagerialControlBulletinInput | null
+  currentBulletin: ManagerialControlBulletinInput | null,
+  currentBulletinCertified: boolean
 ): ManagerialControlItem {
   const contractQuantityDecimal = canonQty(item.contractQuantityDecimal);
   const unitPriceDecimal = canonMoney(item.unitPriceDecimal);
@@ -273,8 +302,18 @@ function buildItem(
   const certifiedAccumulatedQuantityDecimal = canonQty(balance?.certifiedAccumulatedQuantityDecimal ?? "0");
   const certifiedAccumulatedValueDecimal = canonMoney(balance?.certifiedAccumulatedValueDecimal ?? "0");
 
-  const bdosRegisteredQuantityDecimal = addMeasurementDecimals([certifiedAccumulatedQuantityDecimal, periodQuantityDecimal ?? "0"], QUANTITY_SCALE);
-  const bdosRegisteredValueDecimal = addMeasurementDecimals([certifiedAccumulatedValueDecimal, periodValueDecimal ?? "0"], MONEY_SCALE);
+  // Evita DUPLA CONTAGEM: quando o BM atual JÁ está certificado, o
+  // acumulado certificado (measurement_certified_item_balances) já o
+  // inclui -- somar o período de novo contaria duas vezes. Quando NÃO
+  // está certificado, o acumulado certificado é a posição ANTERIOR e o
+  // BM atual entra por cima. O valor "neste período" continua visível
+  // à parte nos dois casos, mas nunca entra duas vezes no acumulado.
+  const bdosRegisteredQuantityDecimal = currentBulletinCertified
+    ? certifiedAccumulatedQuantityDecimal
+    : addMeasurementDecimals([certifiedAccumulatedQuantityDecimal, periodQuantityDecimal ?? "0"], QUANTITY_SCALE);
+  const bdosRegisteredValueDecimal = currentBulletinCertified
+    ? certifiedAccumulatedValueDecimal
+    : addMeasurementDecimals([certifiedAccumulatedValueDecimal, periodValueDecimal ?? "0"], MONEY_SCALE);
 
   const quantityBalanceDecimal = subtractMeasurementDecimals(contractQuantityDecimal, bdosRegisteredQuantityDecimal, QUANTITY_SCALE);
   const financialBalanceDecimal = subtractMeasurementDecimals(contractedValueDecimal, bdosRegisteredValueDecimal, MONEY_SCALE);
@@ -359,17 +398,25 @@ function buildItem(
 }
 
 function buildSummary(items: ReadonlyArray<ManagerialControlItem>, input: BuildManagerialControlViewInput): ManagerialControlSummary {
-  const contractedValueTotalDecimal = addMeasurementDecimals(items.map((i) => i.contractedValueDecimal), MONEY_SCALE);
+  const itemsCanonicalSumDecimal = addMeasurementDecimals(items.map((i) => i.contractedValueDecimal), MONEY_SCALE);
   const bdosRegisteredValueTotalDecimal = addMeasurementDecimals(items.map((i) => i.bdosRegisteredValueDecimal), MONEY_SCALE);
-  const contractBalanceTotalDecimal = subtractMeasurementDecimals(contractedValueTotalDecimal, bdosRegisteredValueTotalDecimal, MONEY_SCALE);
 
-  const contractOfficialValueDecimal = input.contractOfficialValueDecimal != null ? canonMoney(input.contractOfficialValueDecimal) : null;
-  const contractAdjustmentDecimal =
-    contractOfficialValueDecimal != null ? subtractMeasurementDecimals(contractedValueTotalDecimal, contractOfficialValueDecimal, MONEY_SCALE) : null;
+  // Reconciliação contratual AUTORITATIVA, direto da Base Contratual --
+  // nunca "soma de itens arredondados − oficial" (isso injeta deriva de
+  // arredondamento por linha, o R$ 0,51 espúrio da versão anterior).
+  const rec = input.contractReconciliation;
+  const contractOfficialValueDecimal = rec ? canonMoney(rec.officialContractValueDecimal) : null;
+  const itemsTechnicalTotalDecimal = rec ? rec.itemsTechnicalTotalDecimal : null;
+  const contractRoundingAdjustmentDecimal = rec ? rec.roundingAdjustmentDecimal : null;
 
-  const bdosRegisteredFinancialPercent = isZero(contractedValueTotalDecimal, MONEY_SCALE)
+  // Saldo e % consolidados PARTEM DO VALOR OFICIAL, não da soma dos
+  // itens. Sem Base Contratual rastreável, cai para a soma dos itens
+  // (best effort).
+  const consolidatedReferenceDecimal = contractOfficialValueDecimal ?? itemsCanonicalSumDecimal;
+  const contractBalanceTotalDecimal = subtractMeasurementDecimals(consolidatedReferenceDecimal, bdosRegisteredValueTotalDecimal, MONEY_SCALE);
+  const bdosRegisteredFinancialPercent = isZero(consolidatedReferenceDecimal, MONEY_SCALE)
     ? null
-    : ratioPercent(bdosRegisteredValueTotalDecimal, contractedValueTotalDecimal);
+    : ratioPercent(bdosRegisteredValueTotalDecimal, consolidatedReferenceDecimal);
 
   const obra = input.physicalFinancial?.obra ?? null;
   const obraReference = obra
@@ -392,12 +439,14 @@ function buildSummary(items: ReadonlyArray<ManagerialControlItem>, input: BuildM
     itemsContractQuantityReached: items.filter((i) => i.status === "contract_quantity_reached").length,
     itemsAboveContractQuantity: items.filter((i) => i.status === "above_contract_quantity").length,
     itemsInsufficientBasis: items.filter((i) => i.status === "insufficient_basis").length,
-    contractedValueTotalDecimal,
     contractOfficialValueDecimal,
-    contractAdjustmentDecimal,
+    itemsTechnicalTotalDecimal,
+    contractRoundingAdjustmentDecimal,
+    itemsCanonicalSumDecimal,
     bdosRegisteredValueTotalDecimal,
     contractBalanceTotalDecimal,
     bdosRegisteredFinancialPercent,
+    currentBulletinCertified: input.currentBulletinCertified,
     obraReference,
     documentaryHistoryImported: false,
     certificationRegistered: input.certificationRegistered,
@@ -501,12 +550,14 @@ function emptySummary(input: BuildManagerialControlViewInput): ManagerialControl
     itemsContractQuantityReached: 0,
     itemsAboveContractQuantity: 0,
     itemsInsufficientBasis: 0,
-    contractedValueTotalDecimal: "0.00",
-    contractOfficialValueDecimal: input.contractOfficialValueDecimal,
-    contractAdjustmentDecimal: null,
+    contractOfficialValueDecimal: input.contractReconciliation ? canonMoney(input.contractReconciliation.officialContractValueDecimal) : null,
+    itemsTechnicalTotalDecimal: input.contractReconciliation?.itemsTechnicalTotalDecimal ?? null,
+    contractRoundingAdjustmentDecimal: input.contractReconciliation?.roundingAdjustmentDecimal ?? null,
+    itemsCanonicalSumDecimal: "0.00",
     bdosRegisteredValueTotalDecimal: "0.00",
     contractBalanceTotalDecimal: "0.00",
     bdosRegisteredFinancialPercent: null,
+    currentBulletinCertified: input.currentBulletinCertified,
     obraReference: null,
     documentaryHistoryImported: false,
     certificationRegistered: input.certificationRegistered,

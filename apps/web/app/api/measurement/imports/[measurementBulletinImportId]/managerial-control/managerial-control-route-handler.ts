@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AuthenticatedActor } from "@/lib/supabase/server";
 import {
   getMeasurementBulletinByWorkspaceId,
+  getMeasurementCycleByWorkspaceId,
   getMeasurementWorkspaceByImportId,
   listCertifiedItemBalances,
   listManagedServiceItems,
@@ -9,6 +10,7 @@ import {
   projectHasAnyCertification
 } from "@/lib/bdos/measurement-repository";
 import { listPlanningDatasetsByType } from "@/lib/bdos/repository";
+import { createContractBaselineRepository } from "@/lib/bdos/contract-baseline-server-repository";
 import {
   buildMeasurementPhysicalFinancialAnalysis,
   selectConsolidatedPhysicalFinancialDataset
@@ -53,7 +55,7 @@ export function buildManagerialControlReader(supabase: SupabaseClient): Manageri
     },
 
     async loadManagerialControlInput(query) {
-      const [contractItems, balances, bulletin, hasCertification, datasetRows, workspaceLines] = await Promise.all([
+      const [contractItems, balances, bulletin, hasCertification, datasetRows, workspaceLines, cycle, contractBaseline] = await Promise.all([
         listManagedServiceItems(supabase, { engineeringProjectId: query.engineeringProjectId, companyId: query.companyId }),
         listCertifiedItemBalances(supabase, { engineeringProjectId: query.engineeringProjectId, companyId: query.companyId }),
         getMeasurementBulletinByWorkspaceId(supabase, { measurementWorkspaceId: query.workspaceId, companyId: query.companyId ?? undefined }),
@@ -63,8 +65,27 @@ export function buildManagerialControlReader(supabase: SupabaseClient): Manageri
           engineeringProjectId: query.engineeringProjectId,
           detectedType: "fisico-financeiro"
         }),
-        listMeasurementWorkspaceLines(supabase, { measurementWorkspaceId: query.workspaceId })
+        listMeasurementWorkspaceLines(supabase, { measurementWorkspaceId: query.workspaceId }),
+        getMeasurementCycleByWorkspaceId(supabase, { measurementWorkspaceId: query.workspaceId, companyId: query.companyId ?? undefined }),
+        query.companyId
+          ? createContractBaselineRepository(supabase).findContractBaselineByProject(query.companyId, query.engineeringProjectId)
+          : Promise.resolve(null)
       ]);
+
+      // Dupla contagem: o BM atual só entra no acumulado enquanto o
+      // ciclo NÃO chegou a certified/closed. Estado do ciclo do próprio
+      // workspace -- infraestrutura existente, sem segunda fonte.
+      const currentBulletinCertified = cycle !== null && ["certified", "closed"].includes(cycle.status);
+
+      // Reconciliação contratual AUTORITATIVA -- direto da Base
+      // Contratual da Obra, nunca por soma de itens arredondados.
+      const contractReconciliation = contractBaseline
+        ? {
+            officialContractValueDecimal: centsToDecimal(contractBaseline.contractedValueCents),
+            itemsTechnicalTotalDecimal: contractBaseline.derivedItemsTotalDecimal,
+            roundingAdjustmentDecimal: contractBaseline.contractualRoundingAdjustmentDecimal
+          }
+        : null;
 
       const sourceByItemId = new Map(
         workspaceLines.map((line) => [
@@ -146,11 +167,19 @@ export function buildManagerialControlReader(supabase: SupabaseClient): Manageri
             }
           : null,
         certificationRegistered: hasCertification,
+        currentBulletinCertified,
         physicalFinancial,
-        contractOfficialValueDecimal: selectedDataset?.financial?.contractValue != null ? String(selectedDataset.financial.contractValue) : null
+        contractReconciliation
       };
     }
   };
+}
+
+/** cents (bigint/number) -> decimal string "7611851.65". Nunca via Number()/float. */
+function centsToDecimal(cents: number): string {
+  const negative = cents < 0;
+  const digits = String(Math.trunc(Math.abs(cents))).padStart(3, "0");
+  return `${negative ? "-" : ""}${digits.slice(0, -2)}.${digits.slice(-2)}`;
 }
 
 export interface HandleGetManagerialControlInput {

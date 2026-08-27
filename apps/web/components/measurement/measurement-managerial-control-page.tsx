@@ -123,19 +123,25 @@ function LoadedView({
           <div className="workspace-fact"><dt>Qtd. contratada atingida</dt><dd>{s.itemsContractQuantityReached}</dd></div>
           <div className="workspace-fact"><dt>Acima da qtd. contratada</dt><dd>{s.itemsAboveContractQuantity}</dd></div>
           <div className="workspace-fact"><dt>Base insuficiente</dt><dd>{s.itemsInsufficientBasis}</dd></div>
-          <div className="workspace-fact"><dt>Valor contratual (soma dos itens)</dt><dd>{formatManagerialBRL(s.contractedValueTotalDecimal)}</dd></div>
-          {s.contractOfficialValueDecimal ? (
-            <div className="workspace-fact">
-              <dt>Ajuste / reconciliação contratual</dt>
-              <dd>{formatManagerialBRL(s.contractAdjustmentDecimal ?? "0.00")}</dd>
-            </div>
-          ) : null}
           <div className="workspace-fact">
-            <dt>Registrado no sistema (BM {s.currentBulletinNumber ?? "atual"})</dt>
+            <dt>Valor do contrato</dt>
+            <dd>{s.contractOfficialValueDecimal ? formatManagerialBRL(s.contractOfficialValueDecimal) : formatManagerialBRL(s.itemsCanonicalSumDecimal)}</dd>
+          </div>
+          <div className="workspace-fact">
+            <dt>Registrado (BM {s.currentBulletinNumber ?? "atual"}{s.currentBulletinCertified ? ", certificado" : ""})</dt>
             <dd>{formatManagerialBRL(s.bdosRegisteredValueTotalDecimal)}{s.bdosRegisteredFinancialPercent ? ` · ${formatManagerialPercent(s.bdosRegisteredFinancialPercent)}` : ""}</dd>
           </div>
-          <div className="workspace-fact"><dt>Saldo contratual (vs. registrado)</dt><dd>{formatManagerialBRL(s.contractBalanceTotalDecimal)}</dd></div>
+          <div className="workspace-fact"><dt>Saldo consolidado (contrato − registrado)</dt><dd>{formatManagerialBRL(s.contractBalanceTotalDecimal)}</dd></div>
         </dl>
+
+        {s.contractOfficialValueDecimal && s.itemsTechnicalTotalDecimal && s.contractRoundingAdjustmentDecimal ? (
+          <p className="managerial-control-summary__recon">
+            Reconciliação contratual (Base Contratual da Obra): soma técnica dos itens{" "}
+            {formatManagerialBRL(s.itemsTechnicalTotalDecimal)} + ajuste contratual de arredondamento{" "}
+            {formatManagerialBRL(s.contractRoundingAdjustmentDecimal)} = valor oficial do contrato{" "}
+            {formatManagerialBRL(s.contractOfficialValueDecimal)}. O ajuste nunca é rateado pelos itens.
+          </p>
+        ) : null}
 
         <div className="managerial-control-summary__truth-note">
           <p>
@@ -150,6 +156,11 @@ function LoadedView({
               &ldquo;nenhuma execução realizada&rdquo;.
             </p>
           )}
+          <p>
+            {s.currentBulletinCertified
+              ? `O BM ${s.currentBulletinNumber ?? "atual"} já está certificado — a posição registrada é o acumulado certificado, sem somar o BM de novo (o valor do período continua visível à parte).`
+              : `O BM ${s.currentBulletinNumber ?? "atual"} ainda não está certificado — a posição registrada é o acumulado certificado anterior + o BM atual, sem dupla contagem.`}
+          </p>
           {s.obraReference ? (
             <p className="managerial-control-summary__obra-ref">
               Posição físico-financeira da obra (Curva S, grupo a grupo): realizado acumulado{" "}
