@@ -5,7 +5,7 @@ import { ChevronDown } from "lucide-react";
 import type { MeasurementReviewItemWithEconomics } from "./measurement-review-client";
 import { formatFormalBulletinTotalBRL } from "./measurement-bulletin-formal-status-view-model";
 import {
-  formatMeasurementEconomicInterpretation,
+  formatMeasurementEconomicInterpretationSentence,
   formatMeasurementEconomicPercentage,
   formatMeasurementReviewQuantity,
   PLANNING_COMPARISON_UNAVAILABLE_MESSAGE,
@@ -56,27 +56,39 @@ export function MeasurementReviewItemRow({ item }: MeasurementReviewItemRowProps
           {economic ? (
             <section className="measurement-review-item__analysis-block">
               <h4>Econômico</h4>
-              <dl>
-                <div>
-                  <dt>Preço no Orçamento Oficial</dt>
-                  <dd>{formatFormalBulletinTotalBRL(economic.officialUnitPriceDecimal)}</dd>
-                </div>
-                <div>
-                  <dt>Preço contratado (Proposta Vencedora)</dt>
-                  <dd>{formatFormalBulletinTotalBRL(economic.contractedUnitPriceDecimal)}</dd>
-                </div>
-                <div>
-                  <dt>Diferença por unidade</dt>
-                  <dd>{formatFormalBulletinTotalBRL(economic.unitPriceDifferenceDecimal)}</dd>
-                </div>
-                <div>
-                  <dt>Variação %</dt>
-                  <dd>{formatMeasurementEconomicPercentage(economic.unitPriceDifferencePercentage) ?? "—"}</dd>
-                </div>
-              </dl>
-              <p className={`measurement-review-item__economic-interpretation measurement-review-item__economic-interpretation--${economic.interpretation}`}>
-                {formatMeasurementEconomicInterpretation(economic.interpretation)}
-              </p>
+
+              <div className="measurement-review-item__economic-subblock">
+                <h5>Contratação</h5>
+                <dl>
+                  <div>
+                    <dt>Orçamento Oficial</dt>
+                    <dd>{formatFormalBulletinTotalBRL(economic.officialUnitPriceDecimal)}</dd>
+                  </div>
+                  <div>
+                    <dt>Proposta Vencedora</dt>
+                    <dd>{formatFormalBulletinTotalBRL(economic.contractedUnitPriceDecimal)}</dd>
+                  </div>
+                  <div>
+                    <dt>Redução unitária na contratação</dt>
+                    <dd>{formatFormalBulletinTotalBRL(economic.unitPriceDifferenceDecimal)}</dd>
+                  </div>
+                  <div>
+                    <dt>Deságio</dt>
+                    <dd>{formatMeasurementEconomicPercentage(economic.unitPriceDifferencePercentage) ?? "—"}</dd>
+                  </div>
+                </dl>
+                <p
+                  className={`measurement-review-item__economic-interpretation measurement-review-item__economic-interpretation--${economic.interpretation}`}
+                >
+                  {formatMeasurementEconomicInterpretationSentence(economic.interpretation, economic.unitPriceDifferencePercentage)}
+                </p>
+              </div>
+
+              <div className="measurement-review-item__economic-subblock measurement-review-item__economic-subblock--muted">
+                <h5>Resultado da execução</h5>
+                <p>Resultado econômico da execução ainda não disponível.</p>
+                <p className="measurement-review-item__analysis-block-note">A apuração de ganho ou perda depende da integração dos custos reais da execução.</p>
+              </div>
             </section>
           ) : (
             <section className="measurement-review-item__analysis-block measurement-review-item__analysis-block--muted">

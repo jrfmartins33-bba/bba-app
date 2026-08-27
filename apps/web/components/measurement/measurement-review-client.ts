@@ -23,9 +23,25 @@ export interface MeasurementReviewItemWithEconomics extends MeasurementBulletinR
   readonly economicComparison: MeasurementItemEconomicComparison | null;
 }
 
+/** "Ver composição" (correção semântica pós-Preview, item 5) -- um item que contribui para o impacto agregado do deságio, ordenado pelo servidor por maior contribuição. */
+export interface MeasurementEconomicCompositionEntry {
+  readonly itemId: string;
+  readonly code: string;
+  readonly description: string;
+  readonly quantityDecimal: string;
+  readonly officialUnitPriceDecimal: string;
+  readonly contractedUnitPriceDecimal: string;
+  readonly lineImpactDecimal: string;
+  readonly participationPercentage: string | null;
+}
+
+export interface MeasurementEconomicSummaryWithComposition extends MeasurementEconomicComparisonSummary {
+  readonly composition: ReadonlyArray<MeasurementEconomicCompositionEntry>;
+}
+
 export interface MeasurementBulletinReviewWithEconomics extends Omit<MeasurementBulletinReview, "items"> {
   readonly items: ReadonlyArray<MeasurementReviewItemWithEconomics>;
-  readonly economicSummary: MeasurementEconomicComparisonSummary | null;
+  readonly economicSummary: MeasurementEconomicSummaryWithComposition | null;
 }
 
 export type MeasurementReviewFetchOutcome =
@@ -35,7 +51,7 @@ export type MeasurementReviewFetchOutcome =
   | { readonly kind: "not_formalized" }
   | { readonly kind: "technical_error" };
 
-const ECONOMIC_INTERPRETATION_VALUES: ReadonlyArray<MeasurementItemEconomicInterpretation> = ["economy", "above_official", "no_relevant_variation"];
+const ECONOMIC_INTERPRETATION_VALUES: ReadonlyArray<MeasurementItemEconomicInterpretation> = ["contract_discount", "contract_premium", "no_variation"];
 
 const BULLETIN_STATUS_VALUES: ReadonlyArray<MeasurementBulletinReviewStatus> = ["Draft", "Validated", "Finalized", "Cancelled"];
 
@@ -79,10 +95,26 @@ function extractValidItemEconomicComparison(value: unknown): MeasurementItemEcon
   if (typeof candidate.unitPriceDifferenceDecimal !== "string") return undefined;
   if (candidate.unitPriceDifferencePercentage !== null && typeof candidate.unitPriceDifferencePercentage !== "string") return undefined;
   if (!ECONOMIC_INTERPRETATION_VALUES.includes(candidate.interpretation as MeasurementItemEconomicInterpretation)) return undefined;
+  if (typeof candidate.lineImpactDecimal !== "string") return undefined;
+  if (candidate.participationPercentage !== null && typeof candidate.participationPercentage !== "string") return undefined;
   return candidate as unknown as MeasurementItemEconomicComparison;
 }
 
-function extractValidEconomicSummary(value: unknown): MeasurementEconomicComparisonSummary | null | undefined {
+function extractValidCompositionEntry(value: unknown): MeasurementEconomicCompositionEntry | null {
+  if (typeof value !== "object" || value === null) return null;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.itemId !== "string") return null;
+  if (typeof candidate.code !== "string") return null;
+  if (typeof candidate.description !== "string") return null;
+  if (typeof candidate.quantityDecimal !== "string") return null;
+  if (typeof candidate.officialUnitPriceDecimal !== "string") return null;
+  if (typeof candidate.contractedUnitPriceDecimal !== "string") return null;
+  if (typeof candidate.lineImpactDecimal !== "string") return null;
+  if (candidate.participationPercentage !== null && typeof candidate.participationPercentage !== "string") return null;
+  return candidate as unknown as MeasurementEconomicCompositionEntry;
+}
+
+function extractValidEconomicSummary(value: unknown): MeasurementEconomicSummaryWithComposition | null | undefined {
   if (value === null) return null;
   if (typeof value !== "object") return undefined;
   const candidate = value as Record<string, unknown>;
@@ -90,8 +122,12 @@ function extractValidEconomicSummary(value: unknown): MeasurementEconomicCompari
   if (typeof candidate.totalItemCount !== "number") return undefined;
   if (typeof candidate.measuredValueAtOfficialPricesDecimal !== "string") return undefined;
   if (typeof candidate.measuredValueAtContractedPricesDecimal !== "string") return undefined;
-  if (typeof candidate.economyDecimal !== "string") return undefined;
-  return candidate as unknown as MeasurementEconomicComparisonSummary;
+  if (typeof candidate.contractDiscountImpactDecimal !== "string") return undefined;
+  if (!Array.isArray(candidate.composition)) return undefined;
+  for (const entry of candidate.composition) {
+    if (extractValidCompositionEntry(entry) === null) return undefined;
+  }
+  return candidate as unknown as MeasurementEconomicSummaryWithComposition;
 }
 
 export function extractValidMeasurementReview(payload: unknown): MeasurementBulletinReviewWithEconomics | null {

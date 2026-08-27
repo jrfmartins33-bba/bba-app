@@ -16,7 +16,7 @@ import { createBudgetVersionRepository } from "@/lib/bdos/procurement-engineerin
 import { createContractExecutionItemTraceabilityRepository } from "@/lib/bdos/contract-execution-item-link-server-repository";
 import { getMeasurementDecisionBrief, type MeasurementDecisionBriefImportReader } from "@/lib/bdos/measurement-decision-brief-service";
 import { getMeasurementBulletinReview, type MeasurementBulletinReviewReader } from "@/lib/bdos/measurement-bulletin-review-service";
-import { buildMeasurementItemEconomicComparisons } from "@/lib/bdos/measurement-item-economic-comparison-service";
+import { buildMeasurementItemEconomicComparisons, compareMoneyDecimalsDescending } from "@/lib/bdos/measurement-item-economic-comparison-service";
 
 /**
  * "Revisar medição" — mesma separação route.ts/route-handler.ts das
@@ -242,9 +242,31 @@ export async function handleGetMeasurementBulletinReview(
     economicComparison: economicResult.byItemId.get(item.id) ?? null
   }));
 
+  // "Ver composição" (item 5) -- os itens que realmente têm
+  // correspondência, com o que a UI precisa para explicar de onde vem
+  // o impacto agregado (código/descrição/quantidade já vêm do
+  // boletim; o resto vem do próprio economicComparison, nunca
+  // recalculado aqui). Ordenado pela maior contribuição -- decisão do
+  // servidor, a UI nunca reordena.
+  const composition = items
+    .filter((item): item is typeof item & { economicComparison: NonNullable<(typeof item)["economicComparison"]> } => item.economicComparison !== null)
+    .map((item) => ({
+      itemId: item.id,
+      code: item.code,
+      description: item.description,
+      quantityDecimal: item.quantityDecimal,
+      officialUnitPriceDecimal: item.economicComparison.officialUnitPriceDecimal,
+      contractedUnitPriceDecimal: item.economicComparison.contractedUnitPriceDecimal,
+      lineImpactDecimal: item.economicComparison.lineImpactDecimal,
+      participationPercentage: item.economicComparison.participationPercentage
+    }))
+    .sort((a, b) => compareMoneyDecimalsDescending(a.lineImpactDecimal, b.lineImpactDecimal));
+
+  const economicSummary = economicResult.summary ? { ...economicResult.summary, composition } : null;
+
   return {
     status: 200,
-    body: { data: { ...reviewResult.review, items, economicSummary: economicResult.summary } }
+    body: { data: { ...reviewResult.review, items, economicSummary } }
   };
 }
 

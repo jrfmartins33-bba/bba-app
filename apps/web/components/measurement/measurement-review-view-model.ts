@@ -6,17 +6,32 @@ import type { MeasurementItemEconomicInterpretation } from "@/lib/bdos/measureme
  * quantidade/valor decimal por `Number()` (perderia precisão).
  */
 
-// Vocabulário aprovado (item 3 da especificação de evolução econômica)
-// -- nunca rótulos genéricos de resultado, sempre nomeando a
-// referência (orçamento oficial) explicitamente.
-const ECONOMIC_INTERPRETATION_LABELS: Record<MeasurementItemEconomicInterpretation, string> = {
-  economy: "Economia frente ao orçamento oficial",
-  above_official: "Acima do orçamento oficial",
-  no_relevant_variation: "Sem variação relevante"
-};
+/**
+ * Correção semântica pós-Preview: Orçamento Oficial × Proposta
+ * Vencedora é DESÁGIO/REDUÇÃO NA CONTRATAÇÃO -- nunca um rótulo de
+ * resultado de execução (esse conceito só fará sentido comparando a
+ * Proposta Vencedora contra o custo real de execução, que o BDOS
+ * ainda não integra por item/período -- ver "Resultado da execução"
+ * em measurement-review-item-row.tsx). A sentença nomeia sempre a
+ * referência (orçamento oficial) explicitamente, com o percentual
+ * real embutido -- nunca um rótulo genérico solto.
+ */
+export function formatMeasurementEconomicInterpretationSentence(
+  interpretation: MeasurementItemEconomicInterpretation,
+  percentageDecimal: string | null
+): string {
+  if (interpretation === "no_variation") {
+    return "Preço contratado sem variação frente ao orçamento oficial.";
+  }
+  const magnitude = formatMeasurementEconomicPercentage(absolutePercentage(percentageDecimal)) ?? "—";
+  return interpretation === "contract_discount"
+    ? `Preço contratado ${magnitude} abaixo do orçamento oficial.`
+    : `Preço contratado ${magnitude} acima do orçamento oficial.`;
+}
 
-export function formatMeasurementEconomicInterpretation(interpretation: MeasurementItemEconomicInterpretation): string {
-  return ECONOMIC_INTERPRETATION_LABELS[interpretation];
+function absolutePercentage(percentageDecimal: string | null): string | null {
+  if (percentageDecimal === null) return null;
+  return percentageDecimal.startsWith("-") ? percentageDecimal.slice(1) : percentageDecimal;
 }
 
 /** "-1234" (percentual em texto, já formatado como "-12.34" pelo serviço) -> "-12,34%". Nunca refaz a matemática, só troca ponto por vírgula. */

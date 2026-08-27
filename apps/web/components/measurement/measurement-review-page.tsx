@@ -7,6 +7,7 @@ import { Card, StatusBadge } from "@bba/ui";
 import { useBbaStore } from "@bba/lib";
 import { fetchMeasurementBulletinReview, type MeasurementReviewFetchOutcome } from "./measurement-review-client";
 import { MeasurementReviewItemRow } from "./measurement-review-item-row";
+import { MeasurementContractDiscountCard } from "./measurement-contract-discount-card";
 import { MeasurementCriticalItem } from "./measurement-critical-item";
 import { MeasurementCertificationConfirmDialog } from "./measurement-certification-confirm-dialog";
 import { MeasurementRefusalDialog } from "./measurement-refusal-dialog";
@@ -139,18 +140,6 @@ export function MeasurementReviewPage({ measurementBulletinImportId }: { measure
                 <dt>Observações técnicas</dt>
                 <dd>{state.review.technicalObservationCount}</dd>
               </div>
-              {state.review.economicSummary ? (
-                <div className="workspace-fact">
-                  <dt>Economia frente ao Orçamento Oficial</dt>
-                  <dd>
-                    {formatFormalBulletinTotalBRL(state.review.economicSummary.economyDecimal)}
-                    <span className="measurement-review-header__economic-coverage">
-                      {" "}
-                      · comparação disponível para {state.review.economicSummary.matchedItemCount} de {state.review.economicSummary.totalItemCount} itens
-                    </span>
-                  </dd>
-                </div>
-              ) : null}
               {state.review.technicalResponsibleName ? (
                 <div className="workspace-fact">
                   <dt>Responsável técnico</dt>
@@ -176,6 +165,8 @@ export function MeasurementReviewPage({ measurementBulletinImportId }: { measure
             </dl>
             <p className="measurement-review-header__planning-note">{PLANNING_COMPARISON_UNAVAILABLE_MESSAGE}.</p>
           </Card>
+
+          {state.review.economicSummary ? <MeasurementContractDiscountCard summary={state.review.economicSummary} /> : null}
 
           <Card
             action={<span className="measurement-section-count">{state.review.items.length} {state.review.items.length === 1 ? "item" : "itens"}</span>}

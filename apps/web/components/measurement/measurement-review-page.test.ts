@@ -16,6 +16,7 @@ const CERTIFICATION_DIALOG_SOURCE = readFileSync(join(currentDir, "measurement-c
 const CERTIFICATION_PREVIEW_CLIENT_SOURCE = readFileSync(join(currentDir, "measurement-certification-preview-client.ts"), "utf8");
 const REFUSAL_DIALOG_SOURCE = readFileSync(join(currentDir, "measurement-refusal-dialog.tsx"), "utf8");
 const REVIEW_VIEW_MODEL_SOURCE = readFileSync(join(currentDir, "measurement-review-view-model.ts"), "utf8");
+const CONTRACT_DISCOUNT_CARD_SOURCE = readFileSync(join(currentDir, "measurement-contract-discount-card.tsx"), "utf8");
 const ECONOMIC_COMPARISON_SERVICE_SOURCE = readFileSync(
   join(currentDir, "..", "..", "lib", "bdos", "measurement-item-economic-comparison-service.ts"),
   "utf8"
@@ -119,18 +120,27 @@ async function main(): Promise<void> {
     assertTrue(!/>Preço unitário<\/span>/.test(REVIEW_PAGE_SOURCE), "cabeçalho não deve mais dizer só 'Preço unitário' sem qualificar");
   });
 
-  // Itens 2/3: referência econômica (Orçamento Oficial × Proposta
-  // Vencedora) -- as duas referências nunca são confundidas, e a
-  // variação é sempre a diferença real já calculada pelo servidor.
-  await runTest("bloco Econômico distingue preço do Orçamento Oficial e preço contratado (Proposta Vencedora) -- nunca o mesmo campo para os dois", () => {
+  // Itens 2/3 (evolução) + correção semântica: referência econômica
+  // (Orçamento Oficial × Proposta Vencedora) -- as duas referências
+  // nunca são confundidas, e a variação é sempre a diferença real já
+  // calculada pelo servidor.
+  await runTest("bloco Contratação distingue Orçamento Oficial e Proposta Vencedora -- nunca o mesmo campo para os dois", () => {
     assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("economic.officialUnitPriceDecimal"));
     assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("economic.contractedUnitPriceDecimal"));
-    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Preço no Orçamento Oficial"));
-    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Preço contratado (Proposta Vencedora)"));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("<dt>Orçamento Oficial</dt>"));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("<dt>Proposta Vencedora</dt>"));
     assertTrue(
       REVIEW_ITEM_ROW_SOURCE.indexOf("economic.officialUnitPriceDecimal") !== REVIEW_ITEM_ROW_SOURCE.indexOf("economic.contractedUnitPriceDecimal"),
       "os dois preços devem vir de campos distintos, nunca o mesmo valor duplicado"
     );
+  });
+
+  // Item 2 da correção cirúrgica: rótulos passaram para
+  // deságio/redução contratual -- nunca "diferença"/"variação"
+  // genéricos sem nomear o conceito.
+  await runTest("bloco Contratação usa os rótulos 'Redução unitária na contratação' e 'Deságio' -- correção do item 2", () => {
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("<dt>Redução unitária na contratação</dt>"));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("<dt>Deságio</dt>"));
   });
 
   await runTest("a diferença monetária/percentual exibida vem pronta do servidor (economic.*Decimal) -- a UI nunca subtrai ou divide dinheiro", () => {
@@ -139,20 +149,38 @@ async function main(): Promise<void> {
     assertTrue(!/economic\.\w+Decimal\s*[-/*]/.test(REVIEW_ITEM_ROW_SOURCE), "nenhuma operação aritmética aplicada a um campo econômico no componente");
   });
 
-  // Item 3: item abaixo do preço oficial = economia; item acima =
-  // acima do orçamento; nunca "ganho"/"perda" genéricos.
-  await runTest("interpretação econômica usa 'Economia frente ao orçamento oficial' / 'Acima do orçamento oficial' / 'Sem variação relevante' -- nunca 'ganho'/'perda'", () => {
-    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes("Economia frente ao orçamento oficial"));
-    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes("Acima do orçamento oficial"));
-    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes("Sem variação relevante"));
-    assertTrue(!/\bganho\b|\bperda\b/i.test(REVIEW_VIEW_MODEL_SOURCE), "vocabulário genérico proibido pela especificação");
-    assertTrue(!/\bganho\b|\bperda\b/i.test(REVIEW_ITEM_ROW_SOURCE), "vocabulário genérico proibido também na linha do item");
+  // Item 1 da correção cirúrgica: Orçamento Oficial × Proposta
+  // Vencedora é DESÁGIO/REDUÇÃO NA CONTRATAÇÃO -- nunca
+  // economia/ganho/margem/lucro (esses termos só cabem em "Resultado
+  // da execução", contra custo real -- ver teste específico abaixo).
+  await runTest("interpretação da comparação Oficial×Proposta usa 'X% abaixo/acima do orçamento oficial' / 'sem variação' -- nunca economia/ganho/margem/lucro", () => {
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes("abaixo do orçamento oficial"));
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes("acima do orçamento oficial"));
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes("Preço contratado sem variação frente ao orçamento oficial."));
+    assertTrue(
+      !/\beconomia\b|\bganho\b|\bmargem\b|\blucro\b/i.test(REVIEW_VIEW_MODEL_SOURCE),
+      "vocabulário proibido pela especificação para a comparação Oficial×Proposta"
+    );
   });
 
-  await runTest("interpretação econômica ('economy'/'above_official'/'no_relevant_variation') é determinística a partir do sinal real da diferença -- não há limiar percentual hardcoded", () => {
-    assertTrue(ECONOMIC_COMPARISON_SERVICE_SOURCE.includes('differenceCents === 0 ? "no_relevant_variation"'));
-    assertTrue(ECONOMIC_COMPARISON_SERVICE_SOURCE.includes('differenceCents > 0 ? "economy" : "above_official"'));
+  await runTest("interpretação econômica ('contract_discount'/'contract_premium'/'no_variation') é determinística a partir do sinal real da diferença -- não há limiar percentual hardcoded, e o tipo não usa mais 'economy'/'above_official'", () => {
+    assertTrue(ECONOMIC_COMPARISON_SERVICE_SOURCE.includes('differenceCents === 0 ? "no_variation"'));
+    assertTrue(ECONOMIC_COMPARISON_SERVICE_SOURCE.includes('differenceCents > 0 ? "contract_discount" : "contract_premium"'));
+    assertTrue(!/["']economy["']|["']above_official["']|["']no_relevant_variation["']/.test(ECONOMIC_COMPARISON_SERVICE_SOURCE), "o tipo antigo (economy/above_official) não deve mais existir no código");
     assertTrue(!/0\.0[1-9]|[1-9]\d*\s*%/.test(ECONOMIC_COMPARISON_SERVICE_SOURCE), "nenhum percentual/limiar numérico hardcoded para decidir a interpretação");
+  });
+
+  // Item 6 da correção cirúrgica: "Contratação" × "Resultado da
+  // execução" nunca se misturam visualmente, e o valor medido nunca é
+  // tratado como custo real (que o BDOS não integra hoje).
+  await runTest("'Resultado da execução' é um subbloco visualmente separado de 'Contratação', mostra a mensagem de indisponibilidade e nunca usa item.valueDecimal como custo", () => {
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("<h5>Contratação</h5>"));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("<h5>Resultado da execução</h5>"));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Resultado econômico da execução ainda não disponível."));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("A apuração de ganho ou perda depende da integração dos custos reais da execução."));
+    const executionBlockMatch = /Resultado da execução<\/h5>[^]*?<\/div>/.exec(REVIEW_ITEM_ROW_SOURCE);
+    assertTrue(executionBlockMatch !== null, "deve existir o bloco de Resultado da execução");
+    assertTrue(!(executionBlockMatch?.[0] ?? "").includes("item.valueDecimal"), "valor medido nunca deve ser usado como custo real dentro do bloco de resultado da execução");
   });
 
   // Item 12: nenhum cálculo financeiro decisório no frontend.
@@ -233,6 +261,67 @@ async function main(): Promise<void> {
 
   await runTest("route-handler repassa managedServiceItemId (identidade real do item, vinda do boletim) ao serviço econômico -- nunca omitido", () => {
     assertTrue(REVIEW_ROUTE_HANDLER_SOURCE.includes("item.managedServiceItemId"), "route-handler deve repassar a identidade real do item ao serviço econômico");
+  });
+
+  // Item 3 da correção cirúrgica: o antigo rótulo "Economia frente ao
+  // Orçamento Oficial" saiu do cabeçalho -- o conceito agora vive só
+  // no card dedicado (MeasurementContractDiscountCard).
+  await runTest("cabeçalho da tela não mostra mais 'Economia frente ao Orçamento Oficial' -- o card dedicado assume o conceito corrigido", () => {
+    assertTrue(!REVIEW_PAGE_SOURCE.includes("Economia frente ao Orçamento Oficial"), "rótulo antigo removido do cabeçalho");
+    assertTrue(REVIEW_PAGE_SOURCE.includes("MeasurementContractDiscountCard"), "página deve renderizar o card dedicado quando economicSummary existir");
+    assertTrue(REVIEW_PAGE_SOURCE.includes("state.review.economicSummary ? <MeasurementContractDiscountCard"), "card só aparece quando há comparação econômica disponível");
+  });
+
+  await runTest("card agregado usa o título 'Impacto do deságio contratual nesta medição' -- nunca 'Economia frente ao orçamento oficial' como título/rótulo positivo", () => {
+    assertTrue(CONTRACT_DISCOUNT_CARD_SOURCE.includes('title="Impacto do deságio contratual nesta medição"'));
+    assertTrue(!/Economia frente ao [Oo]rçamento [Oo]ficial/.test(CONTRACT_DISCOUNT_CARD_SOURCE), "rótulo antigo não deve mais aparecer, nem como título nem como texto");
+    // A explicação pode (e deve) citar esses termos só para negá-los
+    // explicitamente ("não representa economia...") -- nunca como um
+    // rótulo/título positivo.
+    assertTrue(/não representa economia operacional/i.test(CONTRACT_DISCOUNT_CARD_SOURCE), "a explicação deve negar explicitamente a leitura de economia operacional, per a especificação");
+  });
+
+  await runTest("card agregado mostra contractDiscountImpactDecimal (já pronto do servidor) -- nunca soma/subtrai valores no componente", () => {
+    assertTrue(CONTRACT_DISCOUNT_CARD_SOURCE.includes("summary.contractDiscountImpactDecimal"));
+    assertTrue(!/summary\.\w+Decimal\s*[-+*/]/.test(CONTRACT_DISCOUNT_CARD_SOURCE), "nenhuma aritmética sobre campos do resumo no componente");
+  });
+
+  // Item 4 da correção cirúrgica: total agregado usa a mesma
+  // aritmética decimal exata das linhas (soma dos impactos canônicos
+  // por linha), nunca a diferença entre dois totais arredondados
+  // separadamente -- ver teste numérico da divergência de centavos no
+  // arquivo de teste do serviço.
+  await runTest("card agregado (contractDiscountImpactDecimal) usa a mesma política monetária das linhas -- soma de lineImpactDecimal, nunca diferença de dois totais", () => {
+    assertTrue(
+      ECONOMIC_COMPARISON_SERVICE_SOURCE.includes("addMeasurementDecimals(") &&
+        ECONOMIC_COMPARISON_SERVICE_SOURCE.includes("rawMatches.map((match) => match.lineImpactDecimal)"),
+      "contractDiscountImpactDecimal deve ser a soma dos lineImpactDecimal já calculados por linha"
+    );
+    assertTrue(
+      ECONOMIC_COMPARISON_SERVICE_SOURCE.includes("policy: MONEY_POLICY") && (ECONOMIC_COMPARISON_SERVICE_SOURCE.match(/MONEY_POLICY/g) ?? []).length >= 2,
+      "a mesma política monetária (MONEY_POLICY) deve ser reaproveitada em mais de um cálculo -- linha e agregado nunca usam políticas diferentes"
+    );
+  });
+
+  // Item 5 da correção cirúrgica: "Ver composição", itens ordenados
+  // por contribuição, principal item identificado deterministicamente.
+  await runTest("'Ver composição' existe, mostra código/serviço/quantidade/preço oficial/preço contratado/redução/participação, e nunca reordena no cliente", () => {
+    assertTrue(CONTRACT_DISCOUNT_CARD_SOURCE.includes("Ver composição"));
+    assertTrue(CONTRACT_DISCOUNT_CARD_SOURCE.includes("summary.composition.map"));
+    for (const field of ["entry.code", "entry.description", "entry.quantityDecimal", "entry.officialUnitPriceDecimal", "entry.contractedUnitPriceDecimal", "entry.lineImpactDecimal", "entry.participationPercentage"]) {
+      assertTrue(CONTRACT_DISCOUNT_CARD_SOURCE.includes(field), `composição deve exibir ${field}`);
+    }
+    assertTrue(!/composition\s*(\]?)\s*\.sort\(/.test(CONTRACT_DISCOUNT_CARD_SOURCE), "o card nunca reordena a composição -- a ordem já vem decidida pelo servidor");
+  });
+
+  await runTest("route-handler ordena a composição por maior contribuição (compareMoneyDecimalsDescending) -- decisão do servidor, nunca da UI", () => {
+    assertTrue(REVIEW_ROUTE_HANDLER_SOURCE.includes("compareMoneyDecimalsDescending"));
+    assertTrue(REVIEW_ROUTE_HANDLER_SOURCE.includes(".sort((a, b) => compareMoneyDecimalsDescending(a.lineImpactDecimal, b.lineImpactDecimal))"));
+  });
+
+  await runTest("principal item é identificado deterministicamente (composition[0], já ordenado pelo servidor) -- nunca uma escolha arbitrária no cliente", () => {
+    assertTrue(CONTRACT_DISCOUNT_CARD_SOURCE.includes("summary.composition[0]"));
+    assertTrue(CONTRACT_DISCOUNT_CARD_SOURCE.includes("topContributor.participationPercentage"));
   });
 
   // 6. Certificação abre confirmação, não executa imediatamente.
