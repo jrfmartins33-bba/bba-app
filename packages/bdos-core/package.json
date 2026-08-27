@@ -20,6 +20,7 @@
     "./domain/contract-baseline": "./src/domain/contract-baseline/index.ts",
     "./domain/contract-execution-item-link": "./src/domain/contract-execution-item-link/index.ts",
     "./domain/measurement-certification": "./src/domain/measurement-certification/index.ts",
+    "./domain/schedule-management": "./src/domain/schedule-management/index.ts",
     "./services/contract-execution-item-traceability": "./src/services/contract-execution-item-traceability/index.ts",
     "./advisor/claude-narrator": "./src/advisor/claude-narrator.ts",
     "./advisor/advisor-context.types": "./src/advisor/advisor-context.types.ts",

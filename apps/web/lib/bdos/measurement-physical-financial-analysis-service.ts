@@ -1,0 +1,360 @@
+/**
+ * "Revisar medição" — análise FÍSICO-FINANCEIRA determinística sobre o
+ * Cronograma Físico-Financeiro oficial (DNOCS) já persistido como
+ * Planning Dataset. Função pura, sem I/O: recebe o `PlanningDataset`
+ * (JSON verbatim da Camada 2) + o período da medição + os códigos dos
+ * itens medidos, e projeta:
+ *
+ *   - a situação físico-financeira da OBRA no período (da série
+ *     agregada da Curva S — pontos ACUMULADOS, verbatim da planilha);
+ *   - a situação de cada GRUPO do cronograma (1.0 … 11.0) no período
+ *     (das séries mensais por grupo — schema v2 do Planning Dataset —,
+ *     com o acumulado derivado por SOMA DECIMAL EXATA, nunca float);
+ *   - a correlação determinística item → grupo por prefixo hierárquico
+ *     de código (`01.xx.xx` → `1.0`), sem fuzzy, sem casar por texto.
+ *
+ * NUNCA infere planejado acumulado de grupo a partir do BAC, do
+ * percentual físico final, nem de qualquer aproximação — só soma as
+ * células mensais PREVISTO realmente existentes. Fonte insuficiente
+ * (dataset v1 sem série por grupo, período ausente na planilha, tipo
+ * de dataset errado) degrada para "indisponível" com motivo explícito,
+ * nunca para um número inventado.
+ *
+ * Realizado aqui = o declarado na Curva S importada (fonte documental
+ * daquele arquivo). NÃO é o acumulado de medições/certificações do
+ * BDOS — essa reconciliação é uma camada gerencial própria, item a
+ * item, alimentada pelo histórico de medições, e não se mistura com o
+ * cronograma oficial Obra + Grupo.
+ */
+
+import type { PlanningDataset } from "@bba/bdos-core/domain/schedule-management";
+import {
+  addMeasurementDecimals,
+  calculateMeasurementLineValue,
+  canonicalizeMeasurementDecimal,
+  subtractMeasurementDecimals,
+  MeasurementDecimalQuantizationMode
+} from "@bba/bdos-core/domain/measurement-certification";
+
+const MONEY_SCALE = 2;
+const PERCENT_POINT_SCALE = 2;
+const PERCENT_POINT_POLICY = {
+  key: "PP",
+  scale: PERCENT_POINT_SCALE,
+  quantizationMode: MeasurementDecimalQuantizationMode.RoundHalfAwayFromZero
+};
+
+/** realizado > planejado → acima; iguais → no previsto; realizado < planejado → abaixo. Nunca "em atraso" — a fonte não caracteriza atraso temporal. */
+export type PhysicalFinancialSituation = "above_planned" | "on_planned" | "below_planned";
+
+export interface PhysicalFinancialObraReading {
+  readonly periodLabel: string;
+  readonly periodDate: string;
+  readonly plannedAccumulatedValueDecimal: string;
+  readonly actualAccumulatedValueDecimal: string;
+  /** realizado − planejado (negativo = abaixo do previsto). */
+  readonly deviationValueDecimal: string;
+  readonly plannedAccumulatedPercent: string | null;
+  readonly actualAccumulatedPercent: string | null;
+  /** realizado% − planejado%, em pontos percentuais (negativo = abaixo). */
+  readonly deviationPercentPoints: string | null;
+  readonly situation: PhysicalFinancialSituation;
+}
+
+export interface PhysicalFinancialGroupReading {
+  readonly groupCode: string;
+  readonly groupName: string;
+  readonly plannedPeriodValueDecimal: string;
+  readonly plannedAccumulatedValueDecimal: string;
+  readonly actualPeriodValueDecimal: string;
+  readonly actualAccumulatedValueDecimal: string;
+  readonly plannedAccumulatedPercent: string | null;
+  readonly actualAccumulatedPercent: string | null;
+  readonly deviationValueDecimal: string;
+  readonly deviationPercentPoints: string | null;
+  readonly situation: PhysicalFinancialSituation;
+}
+
+/** Linhas não operacionais do cronograma (ajustes financeiros/documentais). Nunca são grupos físicos, nunca recebem itens de execução. */
+export interface PhysicalFinancialAdjustmentRow {
+  readonly code: string;
+  readonly name: string;
+}
+
+export interface MeasurementPhysicalFinancialAnalysis {
+  readonly obraAvailable: boolean;
+  readonly obraUnavailableReason: string | null;
+  readonly groupsAvailable: boolean;
+  readonly groupsUnavailableReason: string | null;
+  readonly sourceFileName: string | null;
+  readonly sourceSheetName: string | null;
+  readonly datasetId: string | null;
+  readonly period: { readonly label: string; readonly date: string } | null;
+  readonly obra: PhysicalFinancialObraReading | null;
+  readonly groups: ReadonlyArray<PhysicalFinancialGroupReading>;
+  readonly adjustments: ReadonlyArray<PhysicalFinancialAdjustmentRow>;
+  /** código do item medido (execução) → código do grupo do cronograma ("1.0"). Só entra quem resolve para um grupo REAL existente. */
+  readonly itemGroupByCode: ReadonlyMap<string, string>;
+}
+
+export interface MeasurementPhysicalFinancialAnalysisInput {
+  /** `dataset` (JSONB verbatim) da linha escolhida de `planning_datasets`. null quando o projeto não tem físico-financeiro consolidado. */
+  readonly planningDataset: PlanningDataset | null;
+  readonly datasetId: string | null;
+  readonly sourceFileName: string | null;
+  /** Período da medição — usado só para localizar o mês correspondente na planilha (casamento por ano-mês da data de fim). */
+  readonly measurementPeriod: { readonly startDate: string; readonly endDate: string };
+  readonly measuredItemCodes: ReadonlyArray<string>;
+}
+
+const GROUP_CODE_PATTERN = /^\d+\.0$/;
+
+const EMPTY_ANALYSIS = (
+  overrides: Partial<MeasurementPhysicalFinancialAnalysis>
+): MeasurementPhysicalFinancialAnalysis => ({
+  obraAvailable: false,
+  obraUnavailableReason: null,
+  groupsAvailable: false,
+  groupsUnavailableReason: null,
+  sourceFileName: null,
+  sourceSheetName: null,
+  datasetId: null,
+  period: null,
+  obra: null,
+  groups: [],
+  adjustments: [],
+  itemGroupByCode: new Map(),
+  ...overrides
+});
+
+export function buildMeasurementPhysicalFinancialAnalysis(
+  input: MeasurementPhysicalFinancialAnalysisInput
+): MeasurementPhysicalFinancialAnalysis {
+  const dataset = input.planningDataset;
+
+  if (!dataset || dataset.detectedType !== "fisico-financeiro") {
+    return EMPTY_ANALYSIS({
+      obraUnavailableReason: "Ainda não há um cronograma físico-financeiro consolidado importado para esta obra.",
+      groupsUnavailableReason: "Ainda não há um cronograma físico-financeiro consolidado importado para esta obra.",
+      datasetId: input.datasetId,
+      sourceFileName: input.sourceFileName
+    });
+  }
+
+  const sourceSheetName = dataset.origin.sheetName;
+  const aggregateSeries = dataset.periodSeries.find((series) => series.activityId === null) ?? null;
+  const targetYearMonth = toYearMonth(input.measurementPeriod.endDate) ?? toYearMonth(input.measurementPeriod.startDate);
+
+  const targetIndex =
+    aggregateSeries && targetYearMonth !== null
+      ? aggregateSeries.points.findIndex((point) => point.date !== null && toYearMonth(point.date) === targetYearMonth)
+      : -1;
+
+  if (!aggregateSeries || targetIndex < 0) {
+    return EMPTY_ANALYSIS({
+      obraUnavailableReason: "O período desta medição não foi localizado no cronograma físico-financeiro consolidado.",
+      groupsUnavailableReason: "O período desta medição não foi localizado no cronograma físico-financeiro consolidado.",
+      datasetId: input.datasetId,
+      sourceFileName: input.sourceFileName,
+      sourceSheetName
+    });
+  }
+
+  const targetPoint = aggregateSeries.points[targetIndex];
+  const period = { label: targetPoint.period, date: targetPoint.date as string };
+
+  const obra = buildObraReading(targetPoint);
+
+  // --- Grupos (schema v2: uma série mensal por atividade de grupo) ---
+  const activityById = new Map(dataset.activities.map((activity) => [activity.id, activity]));
+  const groupSeries = dataset.periodSeries.filter((series) => series.activityId !== null);
+
+  const groups: PhysicalFinancialGroupReading[] = [];
+  for (const series of groupSeries) {
+    const activity = series.activityId ? activityById.get(series.activityId) : undefined;
+    if (!activity || !GROUP_CODE_PATTERN.test(activity.code)) {
+      continue;
+    }
+    if (series.points.length <= targetIndex) {
+      continue;
+    }
+    groups.push(buildGroupReading(activity.code, activity.name, series.points.slice(0, targetIndex + 1)));
+  }
+  groups.sort((a, b) => groupSortKey(a.groupCode) - groupSortKey(b.groupCode));
+
+  const adjustments: PhysicalFinancialAdjustmentRow[] = dataset.activities
+    .filter((activity) => !GROUP_CODE_PATTERN.test(activity.code))
+    .map((activity) => ({ code: activity.code, name: activity.name }));
+
+  const groupsAvailable = groups.length > 0;
+  const groupsUnavailableReason = groupsAvailable
+    ? null
+    : "O cronograma físico-financeiro consolidado ainda não traz o detalhamento mensal por grupo.";
+
+  const knownGroupCodes = new Set(groups.map((group) => group.groupCode));
+  const itemGroupByCode = new Map<string, string>();
+  for (const rawCode of input.measuredItemCodes) {
+    const groupCode = resolveGroupCode(rawCode);
+    if (groupCode !== null && knownGroupCodes.has(groupCode)) {
+      itemGroupByCode.set(rawCode, groupCode);
+    }
+  }
+
+  return {
+    obraAvailable: true,
+    obraUnavailableReason: null,
+    groupsAvailable,
+    groupsUnavailableReason,
+    sourceFileName: input.sourceFileName ?? dataset.origin.fileName,
+    sourceSheetName,
+    datasetId: input.datasetId,
+    period,
+    obra,
+    groups,
+    adjustments,
+    itemGroupByCode
+  };
+}
+
+/** Série agregada: os pontos JÁ são acumulados (linhas "...ACUMULADO..." da planilha). */
+function buildObraReading(point: PlanningDataset["periodSeries"][number]["points"][number]): PhysicalFinancialObraReading {
+  const plannedValue = canonicalOrNull(point.plannedValue);
+  const actualValue = canonicalOrNull(point.actualValue);
+  const plannedPct = fractionToPercentPoints(point.plannedPercent);
+  const actualPct = fractionToPercentPoints(point.actualPercent);
+
+  const plannedAccumulatedValueDecimal = plannedValue ?? "0.00";
+  const actualAccumulatedValueDecimal = actualValue ?? "0.00";
+  const deviationValueDecimal = subtractMeasurementDecimals(actualAccumulatedValueDecimal, plannedAccumulatedValueDecimal, MONEY_SCALE);
+  const deviationPercentPoints =
+    plannedPct !== null && actualPct !== null ? subtractMeasurementDecimals(actualPct, plannedPct, PERCENT_POINT_SCALE) : null;
+
+  return {
+    periodLabel: point.period,
+    periodDate: point.date as string,
+    plannedAccumulatedValueDecimal,
+    actualAccumulatedValueDecimal,
+    deviationValueDecimal,
+    plannedAccumulatedPercent: plannedPct,
+    actualAccumulatedPercent: actualPct,
+    deviationPercentPoints,
+    situation: classifySituation(deviationPercentPoints, deviationValueDecimal)
+  };
+}
+
+/** Série por grupo: pontos MENSAIS. O acumulado é a soma decimal exata de `points[0..alvo]`. */
+function buildGroupReading(
+  groupCode: string,
+  groupName: string,
+  pointsUpToTarget: ReadonlyArray<PlanningDataset["periodSeries"][number]["points"][number]>
+): PhysicalFinancialGroupReading {
+  const last = pointsUpToTarget[pointsUpToTarget.length - 1];
+
+  const plannedPeriodValueDecimal = canonicalOrNull(last?.plannedValue ?? null) ?? "0.00";
+  const actualPeriodValueDecimal = canonicalOrNull(last?.actualValue ?? null) ?? "0.00";
+
+  const plannedAccumulatedValueDecimal = sumValues(pointsUpToTarget.map((point) => point.plannedValue));
+  const actualAccumulatedValueDecimal = sumValues(pointsUpToTarget.map((point) => point.actualValue));
+
+  const plannedAccumulatedPercent = sumFractionsToPercentPoints(pointsUpToTarget.map((point) => point.plannedPercent));
+  const actualAccumulatedPercent = sumFractionsToPercentPoints(pointsUpToTarget.map((point) => point.actualPercent));
+
+  const deviationValueDecimal = subtractMeasurementDecimals(actualAccumulatedValueDecimal, plannedAccumulatedValueDecimal, MONEY_SCALE);
+  const deviationPercentPoints =
+    plannedAccumulatedPercent !== null && actualAccumulatedPercent !== null
+      ? subtractMeasurementDecimals(actualAccumulatedPercent, plannedAccumulatedPercent, PERCENT_POINT_SCALE)
+      : null;
+
+  return {
+    groupCode,
+    groupName,
+    plannedPeriodValueDecimal,
+    plannedAccumulatedValueDecimal,
+    actualPeriodValueDecimal,
+    actualAccumulatedValueDecimal,
+    plannedAccumulatedPercent,
+    actualAccumulatedPercent,
+    deviationValueDecimal,
+    deviationPercentPoints,
+    situation: classifySituation(deviationPercentPoints, deviationValueDecimal)
+  };
+}
+
+/**
+ * Regra explícita e determinística (item 7 da especificação). Sem LLM,
+ * sem limiar de tolerância inventado: qualquer desvio diferente de zero
+ * já classifica. Prioriza os pontos percentuais (metodologia do próprio
+ * documento de origem); cai para o valor quando não há percentual.
+ */
+function classifySituation(deviationPercentPoints: string | null, deviationValueDecimal: string): PhysicalFinancialSituation {
+  const primary = deviationPercentPoints ?? deviationValueDecimal;
+  if (isCanonicalZero(primary)) {
+    return "on_planned";
+  }
+  return primary.startsWith("-") ? "below_planned" : "above_planned";
+}
+
+function isCanonicalZero(decimal: string): boolean {
+  return /^-?0(\.0+)?$/.test(decimal);
+}
+
+function canonicalOrNull(value: number | null): string | null {
+  if (value === null || !Number.isFinite(value)) {
+    return null;
+  }
+  return canonicalizeMeasurementDecimal(value, MONEY_SCALE, MeasurementDecimalQuantizationMode.RoundHalfAwayFromZero);
+}
+
+/**
+ * Acumulado monetário de um grupo: soma decimal das parcelas mensais em
+ * alta precisão e canonicaliza a centavos UMA única vez no fim — o
+ * acumulado é a grandeza de interesse e deve ficar fiel à planilha
+ * (arredondar mês a mês introduziria deriva de centavos frente ao total
+ * do grupo). Nunca usa float como fonte de decisão: `addMeasurementDecimals`
+ * já opera sobre a representação decimal exata de cada parcela.
+ */
+function sumValues(values: ReadonlyArray<number | null>): string {
+  const present = values.filter((value): value is number => value !== null && Number.isFinite(value));
+  if (present.length === 0) {
+    return "0.00";
+  }
+  return canonicalizeMeasurementDecimal(addMeasurementDecimals(present, 6), MONEY_SCALE, MeasurementDecimalQuantizationMode.RoundHalfAwayFromZero);
+}
+
+/** Fração (0–1) → pontos percentuais "94.14". null quando não há valor. */
+function fractionToPercentPoints(fraction: number | null): string | null {
+  if (fraction === null || !Number.isFinite(fraction)) {
+    return null;
+  }
+  return calculateMeasurementLineValue({ quantity: fraction, unitValue: "100", policy: PERCENT_POINT_POLICY });
+}
+
+/** Soma de frações mensais (0–1) → pontos percentuais acumulados "94.14". null quando nenhuma parcela existe. */
+function sumFractionsToPercentPoints(fractions: ReadonlyArray<number | null>): string | null {
+  const present = fractions.filter((value): value is number => value !== null && Number.isFinite(value));
+  if (present.length === 0) {
+    return null;
+  }
+  const summedFraction = addMeasurementDecimals(present, 12);
+  return calculateMeasurementLineValue({ quantity: summedFraction, unitValue: "100", policy: PERCENT_POINT_POLICY });
+}
+
+/** "01.05.03" / "1-5-3" / "11.02" → "1.0" / "1.0" / "11.0". null quando o primeiro segmento não é inteiro positivo. Determinístico, sem fuzzy. */
+function resolveGroupCode(itemCode: string): string | null {
+  const firstSegment = itemCode.trim().split(/[.\-\/\s]/)[0];
+  if (!/^\d+$/.test(firstSegment)) {
+    return null;
+  }
+  const groupNumber = Number.parseInt(firstSegment, 10);
+  return groupNumber > 0 ? `${groupNumber}.0` : null;
+}
+
+function groupSortKey(groupCode: string): number {
+  return Number.parseInt(groupCode.split(".")[0] ?? "0", 10);
+}
+
+/** "2026-06-01T..." / "2026-06-30" → "2026-06". null quando não parseável. */
+function toYearMonth(isoDate: string): string | null {
+  const match = /^(\d{4})-(\d{2})/.exec(isoDate.trim());
+  return match ? `${match[1]}-${match[2]}` : null;
+}

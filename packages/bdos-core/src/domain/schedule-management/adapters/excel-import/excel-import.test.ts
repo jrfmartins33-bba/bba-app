@@ -61,6 +61,42 @@ runTest("imports a período-matrix (físico-financeiro) sheet without dates or d
   );
 });
 
+runTest("período-matrix emits one verbatim MONTHLY series per group (Cronograma Físico-Financeiro por Grupo)", () => {
+  const bytes = buildXlsxFixture([
+    {
+      name: "CRONOGRAMA FÍSICO-FINANCEIRO",
+      rows: [
+        ["", "ITEM", "DESCRIÇÃO", "", "", "VALOR TOTAL (R$)", "CONTROLE"],
+        ["", "", "", "", "", "", "", "mês 1", "mês 2", "mês 3"],
+        ["", "1.0", "Terraplenagem", "", "", 100000, "PREVISTO", 0.5, 0.5, null],
+        ["", "", "", "", "", "", "", 50000, 50000, null],
+        ["", "", "", "", "", "", "REALIZADO", 0.4, 0.1, null],
+        ["", "", "", "", "", "", "", 40000, 10000, null],
+        ["", "2.0", "Concreto", "", "", 60000, "PREVISTO", null, 0.5, 0.5],
+        ["", "", "", "", "", "", "", null, 30000, 30000],
+        ["", "", "", "", "", "", "REALIZADO", null, 0.5, null],
+        ["", "", "", "", "", "", "", null, 30000, null],
+      ],
+    },
+  ]);
+
+  const result = importPlanningExcel({ bytes, fileName: "fisico-financeiro.xlsx", importedAt: "2026-07-06T00:00:00.000Z" });
+
+  const groupSeries = result.dataset.periodSeries.filter((series) => series.activityId !== null);
+  assertEqual(groupSeries.length, 2, "expected one monthly series per group");
+
+  const first = result.dataset.periodSeries.find((series) => series.activityId === result.dataset.activities[0]?.id);
+  assertEqual(first !== undefined, true, "expected a series keyed by the first activity's id");
+  assertEqual(first?.points[0]?.plannedValue, 50000, "series point holds the MONTHLY planned value verbatim, not accumulated");
+  assertEqual(first?.points[1]?.plannedValue, 50000, "second month planned value stays monthly (not 100000 accumulated)");
+  assertEqual(first?.points[0]?.actualPercent, 0.4, "series point holds the raw REALIZADO % cell");
+  assertEqual(first?.points[1]?.actualValue, 10000, "series point holds the MONTHLY actual value verbatim");
+
+  const second = result.dataset.periodSeries.find((series) => series.activityId === result.dataset.activities[1]?.id);
+  assertEqual(second?.points[0]?.plannedValue ?? null, null, "an empty leading month stays null — never coerced to 0");
+  assertEqual(second?.points[2]?.plannedValue, 30000, "third month planned value verbatim");
+});
+
 runTest("never invents a predecessor when the sheet has no predecessors column", () => {
   const bytes = buildXlsxFixture([
     {

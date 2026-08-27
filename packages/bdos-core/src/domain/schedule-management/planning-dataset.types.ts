@@ -16,8 +16,14 @@ export type PlanningSourceType = "ms-project-xml" | "excel";
  * Incrementar sempre que esta interface mudar de verdade, nunca como
  * semver automático — é o que permite saber quais linhas antigas
  * precisam de migração/reinterpretação quando o formato evoluir.
+ *
+ * v2 (Cronograma Físico-Financeiro por Grupo): `periodSeries` passa a
+ * conter também UMA série mensal por grupo do físico-financeiro
+ * (`activityId` != null), com os valores "no período" verbatim das
+ * células PREVISTO/REALIZADO. Linhas v1 não têm essas séries — o read
+ * model degrada para "indisponível" em vez de inventar.
  */
-export const PLANNING_DATASET_SCHEMA_VERSION = 1;
+export const PLANNING_DATASET_SCHEMA_VERSION = 2;
 
 export type PlanningDetectedType = "cronograma" | "curva-s" | "fisico-financeiro" | "mixed" | "unknown";
 
@@ -66,6 +72,13 @@ export interface PlanningPeriodPoint {
   readonly period: string;
   /** Data resolvida, quando a planilha traz uma linha de referência de datas por período. */
   readonly date: string | null;
+  /**
+   * Numa série por grupo (`activityId` != null): valor NO PERÍODO
+   * (mensal), verbatim da célula. Na série agregada (`activityId` ===
+   * null): valor ACUMULADO do projeto, como está nas linhas
+   * "...ACUMULADO..." da planilha. Nunca misture os dois — ver
+   * `PlanningPeriodSeries`.
+   */
   readonly plannedPercent: number | null;
   readonly plannedValue: number | null;
   readonly actualPercent: number | null;
@@ -73,7 +86,12 @@ export interface PlanningPeriodPoint {
 }
 
 export interface PlanningPeriodSeries {
-  /** `null` = série agregada do projeto inteiro (a Curva S consolidada). */
+  /**
+   * `null` = série agregada do projeto inteiro (a Curva S consolidada,
+   * cujos pontos são ACUMULADOS). Não-`null` = `PlanningActivityRecord.id`
+   * do grupo do Cronograma Físico-Financeiro, cujos pontos são valores
+   * MENSAIS (no período) — o acumulado se obtém somando a jusante.
+   */
   readonly activityId: string | null;
   readonly label: string;
   readonly points: ReadonlyArray<PlanningPeriodPoint>;
