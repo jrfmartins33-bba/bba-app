@@ -44,8 +44,14 @@ const PERCENT_POINT_POLICY = {
   quantizationMode: MeasurementDecimalQuantizationMode.RoundHalfAwayFromZero
 };
 
-/** realizado > planejado → acima; iguais → no previsto; realizado < planejado → abaixo. Vocabulário deliberadamente sem conotação temporal: a fonte não traz datas/durações por grupo. */
-export type PhysicalFinancialSituation = "above_planned" | "on_planned" | "below_planned";
+/**
+ * realizado > planejado → acima; iguais → no previsto; realizado <
+ * planejado → abaixo; planejado e realizado ambos zerados até o corte →
+ * "sem programação até o período" (nada estava previsto ainda, então
+ * "no previsto" induziria leitura errada). Vocabulário deliberadamente
+ * sem conotação temporal: a fonte não traz datas/durações por grupo.
+ */
+export type PhysicalFinancialSituation = "above_planned" | "on_planned" | "below_planned" | "not_scheduled";
 
 export interface PhysicalFinancialObraReading {
   readonly periodLabel: string;
@@ -72,6 +78,8 @@ export interface PhysicalFinancialGroupReading {
   readonly actualAccumulatedPercent: string | null;
   readonly deviationValueDecimal: string;
   readonly deviationPercentPoints: string | null;
+  /** |desvio do grupo| ÷ |desvio líquido da obra|, em % -- null quando o desvio líquido da obra é zero. */
+  readonly sharePercent: string | null;
   readonly situation: PhysicalFinancialSituation;
 }
 
@@ -79,6 +87,45 @@ export interface PhysicalFinancialGroupReading {
 export interface PhysicalFinancialAdjustmentRow {
   readonly code: string;
   readonly name: string;
+}
+
+/**
+ * Leitura gerencial derivada DETERMINISTICAMENTE dos grupos já
+ * calculados -- só rankeia e soma o que já existe; nunca reclassifica,
+ * nunca imputa causa ou responsabilidade operacional -- a fonte
+ * comprova o DESVIO físico-financeiro, não a causalidade.
+ */
+export interface PhysicalFinancialGroupImpact {
+  readonly groupCode: string;
+  readonly groupName: string;
+  readonly plannedAccumulatedValueDecimal: string;
+  readonly actualAccumulatedValueDecimal: string;
+  readonly deviationValueDecimal: string;
+  readonly deviationPercentPoints: string | null;
+  /** |desvio do grupo| ÷ |desvio líquido da obra|, em % -- null quando o desvio líquido é zero. */
+  readonly sharePercent: string | null;
+}
+
+export interface PhysicalFinancialManagementSummary {
+  readonly headline: {
+    readonly direction: "below" | "above" | "on";
+    /** |desvio da obra| em decimal canônico -- a magnitude a exibir. */
+    readonly magnitudeValueDecimal: string;
+    readonly plannedPercent: string | null;
+    readonly actualPercent: string | null;
+    readonly deviationPercentPoints: string | null;
+  };
+  /** Grupo com o maior desvio financeiro NEGATIVO absoluto acumulado. null quando nenhum grupo está abaixo do previsto. */
+  readonly principalNegativeImpact: PhysicalFinancialGroupImpact | null;
+  /** Concentração do desvio nos maiores grupos negativos (até 3). null quando nenhum grupo está abaixo do previsto. */
+  readonly concentration: {
+    readonly groups: ReadonlyArray<{ readonly groupCode: string; readonly groupName: string; readonly deviationValueDecimal: string }>;
+    readonly combinedAbsDeviationDecimal: string;
+    readonly obraNetAbsDeviationDecimal: string;
+    readonly sharePercent: string | null;
+  } | null;
+  /** Maior desvio financeiro POSITIVO absoluto acumulado (execução acima do previsto -- nunca "ganho"/"economia"). null quando nenhum grupo está acima do previsto. */
+  readonly positiveCounterpoint: PhysicalFinancialGroupImpact | null;
 }
 
 export interface MeasurementPhysicalFinancialAnalysis {
@@ -93,6 +140,8 @@ export interface MeasurementPhysicalFinancialAnalysis {
   readonly obra: PhysicalFinancialObraReading | null;
   readonly groups: ReadonlyArray<PhysicalFinancialGroupReading>;
   readonly adjustments: ReadonlyArray<PhysicalFinancialAdjustmentRow>;
+  /** Leitura gerencial (headline, principal impacto, concentração, contraponto positivo). null quando não há obra/grupos. */
+  readonly management: PhysicalFinancialManagementSummary | null;
   /** código do item medido (execução) → código do grupo do cronograma ("1.0"). Só entra quem resolve para um grupo REAL existente. */
   readonly itemGroupByCode: ReadonlyMap<string, string>;
 }
@@ -261,6 +310,7 @@ const EMPTY_ANALYSIS = (
   obra: null,
   groups: [],
   adjustments: [],
+  management: null,
   itemGroupByCode: new Map(),
   ...overrides
 });
@@ -316,7 +366,7 @@ export function buildMeasurementPhysicalFinancialAnalysis(
     if (series.points.length <= targetIndex) {
       continue;
     }
-    groups.push(buildGroupReading(activity.code, activity.name, series.points.slice(0, targetIndex + 1)));
+    groups.push(buildGroupReading(activity.code, activity.name, series.points.slice(0, targetIndex + 1), obra));
   }
   groups.sort((a, b) => groupSortKey(a.groupCode) - groupSortKey(b.groupCode));
 
@@ -350,6 +400,7 @@ export function buildMeasurementPhysicalFinancialAnalysis(
     obra,
     groups,
     adjustments,
+    management: buildManagementSummary(obra, groups),
     itemGroupByCode
   };
 }
@@ -384,7 +435,8 @@ function buildObraReading(point: PlanningDataset["periodSeries"][number]["points
 function buildGroupReading(
   groupCode: string,
   groupName: string,
-  pointsUpToTarget: ReadonlyArray<PlanningDataset["periodSeries"][number]["points"][number]>
+  pointsUpToTarget: ReadonlyArray<PlanningDataset["periodSeries"][number]["points"][number]>,
+  obra: PhysicalFinancialObraReading
 ): PhysicalFinancialGroupReading {
   const last = pointsUpToTarget[pointsUpToTarget.length - 1];
 
@@ -403,6 +455,12 @@ function buildGroupReading(
       ? subtractMeasurementDecimals(actualAccumulatedPercent, plannedAccumulatedPercent, PERCENT_POINT_SCALE)
       : null;
 
+  // Nada previsto E nada realizado até o corte -> "sem programação até o
+  // período". Classificar como "no previsto" (desvio zero) induziria
+  // leitura errada: não havia execução programada. Regra genérica e
+  // determinística sobre os valores acumulados resultantes.
+  const nothingScheduled = isCanonicalZero(plannedAccumulatedValueDecimal) && isCanonicalZero(actualAccumulatedValueDecimal);
+
   return {
     groupCode,
     groupName,
@@ -414,8 +472,105 @@ function buildGroupReading(
     actualAccumulatedPercent,
     deviationValueDecimal,
     deviationPercentPoints,
-    situation: classifySituation(deviationPercentPoints, deviationValueDecimal)
+    sharePercent: sharePercent(deviationValueDecimal, obra.deviationValueDecimal),
+    situation: nothingScheduled ? "not_scheduled" : classifySituation(deviationPercentPoints, deviationValueDecimal)
   };
+}
+
+// -------------------------------------------------------------------
+// Leitura gerencial derivada (headline, principal impacto,
+// concentração, contraponto positivo) -- só rankeia e soma grupos já
+// calculados. Nunca reclassifica, nunca infere causa operacional.
+// -------------------------------------------------------------------
+
+function buildManagementSummary(
+  obra: PhysicalFinancialObraReading | null,
+  groups: ReadonlyArray<PhysicalFinancialGroupReading>
+): PhysicalFinancialManagementSummary | null {
+  if (obra === null || groups.length === 0) {
+    return null;
+  }
+
+  const obraDeviationCents = decimalToCents(obra.deviationValueDecimal);
+  const direction: "below" | "above" | "on" = obraDeviationCents < 0n ? "below" : obraDeviationCents > 0n ? "above" : "on";
+  const obraNetAbsDeviationDecimal = absDecimal(obra.deviationValueDecimal);
+
+  const toImpact = (group: PhysicalFinancialGroupReading): PhysicalFinancialGroupImpact => ({
+    groupCode: group.groupCode,
+    groupName: group.groupName,
+    plannedAccumulatedValueDecimal: group.plannedAccumulatedValueDecimal,
+    actualAccumulatedValueDecimal: group.actualAccumulatedValueDecimal,
+    deviationValueDecimal: group.deviationValueDecimal,
+    deviationPercentPoints: group.deviationPercentPoints,
+    sharePercent: group.sharePercent
+  });
+
+  const negative = groups
+    .filter((group) => decimalToCents(group.deviationValueDecimal) < 0n)
+    .sort((a, b) => Number(decimalToCents(a.deviationValueDecimal) - decimalToCents(b.deviationValueDecimal))); // mais negativo primeiro
+
+  const positive = groups
+    .filter((group) => decimalToCents(group.deviationValueDecimal) > 0n)
+    .sort((a, b) => Number(decimalToCents(b.deviationValueDecimal) - decimalToCents(a.deviationValueDecimal))); // maior positivo primeiro
+
+  const principalNegativeImpact = negative.length > 0 ? toImpact(negative[0]) : null;
+
+  let concentration: PhysicalFinancialManagementSummary["concentration"] = null;
+  if (negative.length > 0) {
+    const top = negative.slice(0, 3);
+    const combinedAbsDeviationDecimal = addMeasurementDecimals(
+      top.map((group) => absDecimal(group.deviationValueDecimal)),
+      MONEY_SCALE
+    );
+    concentration = {
+      groups: top.map((group) => ({ groupCode: group.groupCode, groupName: group.groupName, deviationValueDecimal: group.deviationValueDecimal })),
+      combinedAbsDeviationDecimal,
+      obraNetAbsDeviationDecimal,
+      sharePercent: sharePercent(combinedAbsDeviationDecimal, obra.deviationValueDecimal)
+    };
+  }
+
+  return {
+    headline: {
+      direction,
+      magnitudeValueDecimal: obraNetAbsDeviationDecimal,
+      plannedPercent: obra.plannedAccumulatedPercent,
+      actualPercent: obra.actualAccumulatedPercent,
+      deviationPercentPoints: obra.deviationPercentPoints
+    },
+    principalNegativeImpact,
+    concentration,
+    positiveCounterpoint: positive.length > 0 ? toImpact(positive[0]) : null
+  };
+}
+
+/** |numerador| ÷ |denominador| em %, duas casas -- bigint sobre centavos, sem float. null quando o denominador é zero. */
+function sharePercent(numeratorDecimal: string, denominatorDecimal: string): string | null {
+  const denom = absBigInt(decimalToCents(denominatorDecimal));
+  if (denom === 0n) {
+    return null;
+  }
+  const numer = absBigInt(decimalToCents(numeratorDecimal));
+  const basisPoints = (numer * 10_000n + denom / 2n) / denom; // half-up
+  const whole = basisPoints / 100n;
+  const frac = (basisPoints % 100n).toString().padStart(2, "0");
+  return `${whole.toString()}.${frac}`;
+}
+
+function decimalToCents(decimal: string): bigint {
+  const negative = decimal.startsWith("-");
+  const unsigned = negative ? decimal.slice(1) : decimal;
+  const [integerPart, fractionalPart = ""] = unsigned.split(".");
+  const cents = BigInt(integerPart || "0") * 100n + BigInt((fractionalPart + "00").slice(0, 2) || "0");
+  return negative ? -cents : cents;
+}
+
+function absDecimal(decimal: string): string {
+  return decimal.startsWith("-") ? decimal.slice(1) : decimal;
+}
+
+function absBigInt(value: bigint): bigint {
+  return value < 0n ? -value : value;
 }
 
 /**

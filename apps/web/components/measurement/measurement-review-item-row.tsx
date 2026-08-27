@@ -29,16 +29,14 @@ export interface MeasurementReviewItemRowProps {
 /**
  * "Revisar medição" — uma linha do item medido, human-first (item 3
  * da especificação original: "evitar aparência de ERP"). A tabela
- * principal permanece escaneável (Código/Serviço/Unidade/Quantidade
- * medida/Preço unitário contratado/Valor medido/Situação); toda
- * análise adicional (econômico, medição, planejamento,
- * rastreabilidade) fica atrás de um único "Ver análise" -- a origem
- * documental (antes uma ação própria) foi incorporada como a seção
- * "Rastreabilidade" dentro da mesma expansão, por sugestão explícita
- * da especificação de evolução econômica.
+ * principal permanece escaneável; "Ver análise" abre TRÊS blocos —
+ * Econômico, Medição, Planejamento físico-financeiro do grupo — e a
+ * fonte documental fica discreta no rodapé da expansão ("Ver fonte
+ * documental"), não mais como um card grande de "Rastreabilidade".
  */
 export function MeasurementReviewItemRow({ item, groupsAvailable, groupsUnavailableReason }: MeasurementReviewItemRowProps) {
   const [expanded, setExpanded] = useState(false);
+  const [sourceExpanded, setSourceExpanded] = useState(false);
   const hasOrigin = item.evidenceReferences.length > 0;
   const economic = item.economicComparison;
   const group = item.physicalFinancialGroup;
@@ -183,10 +181,22 @@ export function MeasurementReviewItemRow({ item, groupsAvailable, groupsUnavaila
           )}
 
           {hasOrigin ? (
-            <section className="measurement-review-item__analysis-block">
-              <h4>Rastreabilidade</h4>
-              <MeasurementCellReference evidenceReferences={item.evidenceReferences} variant="full" />
-            </section>
+            <div className="measurement-review-item__source-footer">
+              <button
+                aria-expanded={sourceExpanded}
+                className="measurement-review-item__source-toggle"
+                onClick={() => setSourceExpanded((current) => !current)}
+                type="button"
+              >
+                <ChevronDown aria-hidden="true" className="measurement-ver-mais__chevron" size={12} />
+                {sourceExpanded ? "Ocultar fonte documental" : "Ver fonte documental"}
+              </button>
+              {sourceExpanded ? (
+                <div className="measurement-review-item__source-detail">
+                  <MeasurementCellReference evidenceReferences={item.evidenceReferences} variant="full" />
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </div>
       ) : null}

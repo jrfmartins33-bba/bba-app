@@ -1,5 +1,5 @@
 import type { MeasurementItemEconomicInterpretation } from "@/lib/bdos/measurement-item-economic-comparison-service";
-import type { PhysicalFinancialSituation } from "./measurement-review-client";
+import type { MeasurementReviewPhysicalFinancialManagement, PhysicalFinancialSituation } from "./measurement-review-client";
 
 /**
  * "Revisar medição" — formatação puramente textual, mesma disciplina
@@ -53,29 +53,125 @@ export const GROUP_SITUATION_ITEM_NOTE =
 const PHYSICAL_FINANCIAL_SITUATION_LABEL: Record<PhysicalFinancialSituation, string> = {
   above_planned: "Acima do previsto",
   on_planned: "No previsto",
-  below_planned: "Abaixo do previsto"
+  below_planned: "Abaixo do previsto",
+  not_scheduled: "Sem programação até o período"
 };
 
-/** "Acima do previsto" / "No previsto" / "Abaixo do previsto". Vocabulário fixo, sem conotação temporal -- a fonte não traz datas/durações por grupo. */
+const PHYSICAL_FINANCIAL_SITUATION_BADGE: Record<PhysicalFinancialSituation, string> = {
+  above_planned: "Grupo acima do previsto",
+  on_planned: "Grupo no previsto",
+  below_planned: "Grupo abaixo do previsto",
+  not_scheduled: "Grupo sem programação"
+};
+
+/** "Acima do previsto" / "No previsto" / "Abaixo do previsto" / "Sem programação até o período". Vocabulário fixo, sem conotação temporal -- a fonte não traz datas/durações por grupo. */
 export function formatPhysicalFinancialSituation(situation: PhysicalFinancialSituation): string {
   return PHYSICAL_FINANCIAL_SITUATION_LABEL[situation];
 }
 
 /** Badge compacto para a coluna Situação da tabela principal quando há grupo correlacionado. */
 export function formatGroupSituationBadge(situation: PhysicalFinancialSituation): string {
-  return `Grupo ${PHYSICAL_FINANCIAL_SITUATION_LABEL[situation].toLowerCase()}`;
+  return PHYSICAL_FINANCIAL_SITUATION_BADGE[situation];
 }
 
 /**
- * Tom visual da situação (item 9): acima → positivo, por ser
- * inequivocamente favorável executar além do previsto; no previsto →
- * neutro; abaixo → atenção (amber). Evita vermelho nesta primeira
- * versão.
+ * Tom visual da situação (item 8): abaixo → atenção (amber); no previsto
+ * e sem programação → neutro; acima → azul/informativo, NUNCA verde --
+ * verde fica reservado a resultado econômico real e comprovado, e
+ * execução acima do cronograma não é isso. Vermelho fora.
  */
-export function physicalFinancialSituationTone(situation: PhysicalFinancialSituation): "positive" | "neutral" | "caution" {
-  if (situation === "above_planned") return "positive";
-  if (situation === "on_planned") return "neutral";
-  return "caution";
+export function physicalFinancialSituationTone(situation: PhysicalFinancialSituation): "info" | "neutral" | "caution" {
+  if (situation === "above_planned") return "info";
+  if (situation === "below_planned") return "caution";
+  return "neutral";
+}
+
+/** "2393467.02" -> "R$ 2,39 milhões" (>= 1 milhão) / "R$ 2.393.467,02" (abaixo). Puro string, determinístico -- nunca `Number()`. */
+export function formatFriendlyBRL(decimal: string): string {
+  const negative = decimal.startsWith("-");
+  const [integerPart] = (negative ? decimal.slice(1) : decimal).split(".");
+  if (integerPart.length >= 7) {
+    const millions = integerPart.slice(0, integerPart.length - 6);
+    const fraction = integerPart.slice(integerPart.length - 6, integerPart.length - 4).padEnd(2, "0");
+    const groupedMillions = millions.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return `${negative ? "−" : ""}R$ ${groupedMillions},${fraction} milhões`;
+  }
+  return `${negative ? "−" : ""}${formatDeviationBRLUnsigned(decimal)}`;
+}
+
+function formatDeviationBRLUnsigned(decimal: string): string {
+  const unsigned = decimal.startsWith("-") ? decimal.slice(1) : decimal;
+  const [integerPart, fractionalPart = "00"] = unsigned.split(".");
+  const groupedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `R$ ${groupedInteger},${fractionalPart.padEnd(2, "0").slice(0, 2)}`;
+}
+
+const HEADLINE_DIRECTION_PHRASE: Record<MeasurementReviewPhysicalFinancialManagement["headline"]["direction"], string> = {
+  below: "abaixo do previsto",
+  above: "acima do previsto",
+  on: "sem desvio frente ao previsto"
+};
+
+/**
+ * Leitura executiva do físico-financeiro da obra. Descreve DESVIO
+ * físico-financeiro, nunca causa/responsabilidade operacional -- a fonte
+ * comprova o desvio, não a causalidade.
+ */
+export function formatManagementHeadline(management: MeasurementReviewPhysicalFinancialManagement): string {
+  const { direction, magnitudeValueDecimal } = management.headline;
+  if (direction === "on") {
+    return "Execução físico-financeira sem desvio frente ao previsto no acumulado do período.";
+  }
+  return `${formatFriendlyBRL(magnitudeValueDecimal)} ${HEADLINE_DIRECTION_PHRASE[direction]} no período acumulado.`;
+}
+
+/** "Planejado: 94,14% · Realizado: 62,70% · Desvio: −31,44 p.p." — só quando os percentuais existem. */
+export function formatManagementHeadlineMetrics(management: MeasurementReviewPhysicalFinancialManagement): string | null {
+  const { plannedPercent, actualPercent, deviationPercentPoints } = management.headline;
+  const parts: string[] = [];
+  if (plannedPercent !== null) parts.push(`Planejado: ${formatPercentPoints(plannedPercent)}`);
+  if (actualPercent !== null) parts.push(`Realizado: ${formatPercentPoints(actualPercent)}`);
+  if (deviationPercentPoints !== null) parts.push(`Desvio: ${formatPercentPoints(deviationPercentPoints, { asPoints: true })}`);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** "4.0" -> "4"; "11.0" -> "11". Rótulo curto do grupo para frases gerenciais. */
+export function shortGroupLabel(groupCode: string): string {
+  return groupCode.replace(/\.0$/, "");
+}
+
+/** ["4.0","1.0","2.0"] -> "4, 1 e 2"; ["4.0","1.0"] -> "4 e 1"; ["4.0"] -> "4". */
+function joinGroupLabels(groupCodes: ReadonlyArray<string>): string {
+  const labels = groupCodes.map(shortGroupLabel);
+  if (labels.length <= 1) return labels[0] ?? "";
+  return `${labels.slice(0, -1).join(", ")} e ${labels[labels.length - 1]}`;
+}
+
+/**
+ * "Os grupos 4, 1 e 2 equivalem a aproximadamente 88,2% do desvio
+ * financeiro líquido atual da obra." Adapta naturalmente para 1 ou 2
+ * grupos. null quando não há concentração calculável.
+ */
+export function formatManagementConcentration(management: MeasurementReviewPhysicalFinancialManagement): string | null {
+  const concentration = management.concentration;
+  if (concentration === null || concentration.groups.length === 0 || concentration.sharePercent === null) {
+    return null;
+  }
+  const codes = concentration.groups.map((group) => group.groupCode);
+  const share = formatPercentApprox(concentration.sharePercent);
+  if (codes.length === 1) {
+    return `O grupo ${joinGroupLabels(codes)} equivale a aproximadamente ${share} do desvio financeiro líquido atual da obra.`;
+  }
+  return `Os grupos ${joinGroupLabels(codes)} equivalem a aproximadamente ${share} do desvio financeiro líquido atual da obra.`;
+}
+
+/** "88.19" -> "88,2%". Uma casa, para leitura aproximada. */
+function formatPercentApprox(decimal: string): string {
+  const [intPart, fracPart = "0"] = decimal.split(".");
+  const rounded = Math.round(Number.parseInt(fracPart.padEnd(2, "0").slice(0, 2), 10) / 10);
+  const tenths = rounded === 10 ? "0" : String(rounded);
+  const carry = rounded === 10 ? 1 : 0;
+  return `${Number.parseInt(intPart, 10) + carry},${tenths}%`;
 }
 
 /** "94.14" -> "94,14%". "-31.44" -> "−31,44 p.p." quando `asPoints`. null passa direto. */

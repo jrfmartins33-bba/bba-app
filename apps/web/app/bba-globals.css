@@ -3809,11 +3809,11 @@ button {
 }
 
 /* -------- Situação físico-financeira da obra (Cronograma DNOCS) --------
-   Human-first: responde em segundos se a obra está acima/dentro/abaixo
-   do previsto. Vocabulário fixo (nunca "em atraso"). Verde só para
-   "acima do previsto" (inequivocamente favorável ter execução
-   adiantada); amber para "abaixo"; neutro para "no previsto" -- sem
-   vermelho nesta primeira versão. */
+   Card de DECISÃO: responde em segundos "qual é a situação da obra e
+   onde está concentrado o desvio?". Regra de cores: abaixo do previsto
+   → amber; acima do previsto → azul/informativo (NUNCA verde -- verde é
+   ganho econômico real e comprovado, execução acima do cronograma não
+   é ganho); no previsto / sem programação → neutro; vermelho fora. */
 .measurement-physical-financial-obra__period {
   color: var(--text-muted);
   font-size: 12px;
@@ -3821,7 +3821,108 @@ button {
 }
 
 .measurement-physical-financial-obra__facts {
+  margin: 12px 0 0;
+}
+
+.measurement-physical-financial-obra__headline {
+  border-left: 3px solid var(--app-border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.measurement-physical-financial-obra__headline strong {
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.measurement-physical-financial-obra__headline-metrics {
+  color: var(--text-secondary-strong);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.measurement-physical-financial-obra__headline--caution {
+  background: var(--status-amber-bg);
+  border-left-color: var(--status-amber);
+}
+
+.measurement-physical-financial-obra__headline--info {
+  background: var(--status-blue-bg);
+  border-left-color: var(--status-blue);
+}
+
+.measurement-physical-financial-obra__headline--neutral {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.measurement-physical-financial-obra__impact {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  margin-top: 12px;
+  padding: 12px 14px;
+}
+
+.measurement-physical-financial-obra__impact h4 {
+  color: var(--text-secondary-strong);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.measurement-physical-financial-obra__impact-group {
+  color: var(--text-primary);
+  font-size: 12.5px;
+  margin: 0 0 8px;
+}
+
+.measurement-physical-financial-obra__impact dl {
+  display: grid;
+  gap: 6px 18px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   margin: 0;
+}
+
+.measurement-physical-financial-obra__impact dt {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.measurement-physical-financial-obra__impact dd {
+  color: var(--text-primary);
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+
+.measurement-physical-financial-obra__concentration {
+  color: var(--text-secondary-strong);
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 12px 0 0;
+}
+
+.measurement-physical-financial-obra__counterpoint {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+  margin: 10px 0 0;
+}
+
+.measurement-physical-financial-obra__counterpoint-tag {
+  background: var(--status-blue-bg);
+  border-radius: 999px;
+  color: var(--status-blue);
+  font-weight: 700;
+  margin-right: 6px;
+  padding: 2px 8px;
 }
 
 .measurement-physical-financial-obra__source,
@@ -3843,11 +3944,11 @@ button {
   white-space: nowrap;
 }
 
-.measurement-physical-financial-obra__situation--positive,
-.measurement-review-item__group-situation--positive,
-.measurement-review-item__situation--positive {
-  background: var(--status-green-bg);
-  color: var(--status-green);
+.measurement-physical-financial-obra__situation--info,
+.measurement-review-item__group-situation--info,
+.measurement-review-item__situation--info {
+  background: var(--status-blue-bg);
+  color: var(--status-blue);
 }
 
 .measurement-physical-financial-obra__situation--caution,
@@ -3866,7 +3967,7 @@ button {
 
 /* Badge da coluna Situação da tabela quando há grupo correlacionado --
    herda o pill base, só troca a cor conforme o tom. */
-.measurement-review-item__situation--positive,
+.measurement-review-item__situation--info,
 .measurement-review-item__situation--caution,
 .measurement-review-item__situation--neutral {
   border-color: transparent;
@@ -3892,7 +3993,8 @@ button {
   align-items: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(120px, 1fr)) minmax(120px, 1fr);
+  grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(120px, 1fr)) minmax(90px, 0.7fr) minmax(120px, 1fr);
+  min-width: 820px;
   padding: 6px 0;
 }
 
@@ -3921,9 +4023,9 @@ button {
   white-space: nowrap;
 }
 
-.measurement-physical-financial-groups__situation--positive {
-  background: var(--status-green-bg);
-  color: var(--status-green);
+.measurement-physical-financial-groups__situation--info {
+  background: var(--status-blue-bg);
+  color: var(--status-blue);
 }
 
 .measurement-physical-financial-groups__situation--caution {
@@ -3934,6 +4036,34 @@ button {
 .measurement-physical-financial-groups__situation--neutral {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-secondary-strong);
+}
+
+/* Fonte documental do item -- ação discreta no rodapé da expansão, não
+   mais um card grande de "Rastreabilidade". Ocupa a largura toda da
+   grade de blocos. */
+.measurement-review-item__source-footer {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+}
+
+.measurement-review-item__source-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 11.5px;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.measurement-review-item__source-toggle[aria-expanded="true"] .measurement-ver-mais__chevron {
+  transform: rotate(180deg);
+}
+
+.measurement-review-item__source-detail {
+  margin-top: 6px;
 }
 
 /* "Impacto do deságio contratual nesta medição" -- correção semântica

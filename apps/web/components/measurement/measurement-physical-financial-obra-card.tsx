@@ -3,10 +3,16 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Card } from "@bba/ui";
-import type { MeasurementReviewPhysicalFinancial } from "./measurement-review-client";
+import type {
+  MeasurementReviewPhysicalFinancial,
+  MeasurementReviewPhysicalFinancialGroupImpact
+} from "./measurement-review-client";
 import { formatFormalBulletinPeriodLabel, formatFormalBulletinTotalBRL } from "./measurement-bulletin-formal-status-view-model";
 import {
   formatDeviationBRL,
+  formatManagementConcentration,
+  formatManagementHeadline,
+  formatManagementHeadlineMetrics,
   formatPercentPoints,
   formatPhysicalFinancialSituation,
   physicalFinancialSituationTone
@@ -17,29 +23,46 @@ export interface MeasurementPhysicalFinancialObraCardProps {
 }
 
 /**
- * Topo da tela "Revisar medição" — responde em segundos: a obra está
- * acima, dentro ou abaixo do previsto? Tudo já vem decidido do
- * servidor (situação determinística, valores canônicos em centavos);
- * este componente nunca soma, subtrai ou reclassifica nada.
+ * Card de DECISÃO no topo da tela "Revisar medição": responde em
+ * segundos "qual é a situação da obra e onde está concentrado o
+ * desvio?". A leitura gerancial (headline, principal impacto,
+ * concentração, contraponto positivo) vem TODA decidida do servidor
+ * (`physicalFinancial.management`) -- este componente nunca soma,
+ * subtrai, divide ou reclassifica nada, e nunca fala em causa/
+ * responsabilidade: a fonte comprova desvio físico-financeiro, não
+ * causalidade operacional.
  *
- * O realizado exibido é o DECLARADO na Curva S importada — fonte
- * documental daquele arquivo, não o acumulado de medições do BDOS.
- * Fonte insuficiente cai para o motivo textual, nunca para um número
- * inventado.
+ * Cores: abaixo do previsto → amber; acima do previsto → azul/
+ * informativo (nunca verde -- verde é ganho econômico real); no
+ * previsto / sem programação → neutro.
  */
 export function MeasurementPhysicalFinancialObraCard({ physicalFinancial }: MeasurementPhysicalFinancialObraCardProps) {
   const [groupsExpanded, setGroupsExpanded] = useState(false);
-  const { obra, obraAvailable } = physicalFinancial;
+  const { obra, obraAvailable, management } = physicalFinancial;
 
   const periodLabel = physicalFinancial.period
     ? formatFormalBulletinPeriodLabel(physicalFinancial.period.date) ?? physicalFinancial.period.label
     : null;
+
+  const headlineMetrics = management ? formatManagementHeadlineMetrics(management) : null;
+  const concentrationText = management ? formatManagementConcentration(management) : null;
 
   return (
     <Card className="span-12 workspace-card measurement-physical-financial-obra" title="Situação físico-financeira da obra">
       {obraAvailable && obra ? (
         <>
           {periodLabel ? <p className="measurement-physical-financial-obra__period">Período: {periodLabel}</p> : null}
+
+          {management ? (
+            <div
+              className={`measurement-physical-financial-obra__headline measurement-physical-financial-obra__headline--${
+                management.headline.direction === "above" ? "info" : management.headline.direction === "below" ? "caution" : "neutral"
+              }`}
+            >
+              <strong>{formatManagementHeadline(management)}</strong>
+              {headlineMetrics ? <span className="measurement-physical-financial-obra__headline-metrics">{headlineMetrics}</span> : null}
+            </div>
+          ) : null}
 
           <dl className="workspace-fact-list measurement-physical-financial-obra__facts">
             <div className="workspace-fact">
@@ -78,6 +101,24 @@ export function MeasurementPhysicalFinancialObraCard({ physicalFinancial }: Meas
             </div>
           </dl>
 
+          {management?.principalNegativeImpact ? (
+            <GroupImpactBlock heading="Principal impacto no desvio" impact={management.principalNegativeImpact} />
+          ) : null}
+
+          {concentrationText ? <p className="measurement-physical-financial-obra__concentration">{concentrationText}</p> : null}
+
+          {management?.positiveCounterpoint ? (
+            <p className="measurement-physical-financial-obra__counterpoint">
+              <span className="measurement-physical-financial-obra__counterpoint-tag">Acima do previsto</span>
+              Grupo {management.positiveCounterpoint.groupCode} — {management.positiveCounterpoint.groupName}:{" "}
+              {formatDeviationBRL(management.positiveCounterpoint.deviationValueDecimal)}
+              {management.positiveCounterpoint.deviationPercentPoints
+                ? ` · ${formatPercentPoints(management.positiveCounterpoint.deviationPercentPoints, { asPoints: true })}`
+                : ""}
+              . Execução físico-financeira acima do previsto — não representa ganho, economia ou margem.
+            </p>
+          ) : null}
+
           {physicalFinancial.sourceFileName ? (
             <p className="measurement-physical-financial-obra__source">
               Fonte: {physicalFinancial.sourceFileName}
@@ -107,6 +148,7 @@ export function MeasurementPhysicalFinancialObraCard({ physicalFinancial }: Meas
                     <span>Planejado acumulado</span>
                     <span>Realizado acumulado</span>
                     <span>Desvio</span>
+                    <span>Participação no desvio</span>
                     <span>Situação</span>
                   </li>
                   {physicalFinancial.groups.map((group) => (
@@ -125,6 +167,11 @@ export function MeasurementPhysicalFinancialObraCard({ physicalFinancial }: Meas
                       <span>
                         {formatDeviationBRL(group.deviationValueDecimal)}
                         {group.deviationPercentPoints ? ` · ${formatPercentPoints(group.deviationPercentPoints, { asPoints: true })}` : ""}
+                      </span>
+                      <span>
+                        {group.situation === "below_planned" && group.sharePercent
+                          ? formatPercentPoints(group.sharePercent) ?? "—"
+                          : "—"}
                       </span>
                       <span
                         className={`measurement-physical-financial-groups__situation measurement-physical-financial-groups__situation--${physicalFinancialSituationTone(
@@ -155,5 +202,37 @@ export function MeasurementPhysicalFinancialObraCard({ physicalFinancial }: Meas
         </p>
       )}
     </Card>
+  );
+}
+
+function GroupImpactBlock({ heading, impact }: { readonly heading: string; readonly impact: MeasurementReviewPhysicalFinancialGroupImpact }) {
+  return (
+    <section className="measurement-physical-financial-obra__impact">
+      <h4>{heading}</h4>
+      <p className="measurement-physical-financial-obra__impact-group">
+        Grupo <strong>{impact.groupCode} — {impact.groupName}</strong>
+      </p>
+      <dl>
+        <div>
+          <dt>Planejado acumulado</dt>
+          <dd>{formatFormalBulletinTotalBRL(impact.plannedAccumulatedValueDecimal)}</dd>
+        </div>
+        <div>
+          <dt>Realizado acumulado</dt>
+          <dd>{formatFormalBulletinTotalBRL(impact.actualAccumulatedValueDecimal)}</dd>
+        </div>
+        <div>
+          <dt>Desvio</dt>
+          <dd>
+            {formatDeviationBRL(impact.deviationValueDecimal)}
+            {impact.deviationPercentPoints ? ` · ${formatPercentPoints(impact.deviationPercentPoints, { asPoints: true })}` : ""}
+          </dd>
+        </div>
+        <div>
+          <dt>Participação no desvio da obra</dt>
+          <dd>{impact.sharePercent ? formatPercentPoints(impact.sharePercent) : "—"}</dd>
+        </div>
+      </dl>
+    </section>
   );
 }

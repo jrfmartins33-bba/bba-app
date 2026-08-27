@@ -19,7 +19,7 @@ import type {
  * `MeasurementBulletinReview`/`MeasurementBulletinReviewItem`.
  */
 
-export type PhysicalFinancialSituation = "above_planned" | "on_planned" | "below_planned";
+export type PhysicalFinancialSituation = "above_planned" | "on_planned" | "below_planned" | "not_scheduled";
 
 export interface MeasurementReviewPhysicalFinancialObra {
   readonly periodLabel: string;
@@ -44,12 +44,41 @@ export interface MeasurementReviewPhysicalFinancialGroup {
   readonly actualAccumulatedPercent: string | null;
   readonly deviationValueDecimal: string;
   readonly deviationPercentPoints: string | null;
+  readonly sharePercent: string | null;
   readonly situation: PhysicalFinancialSituation;
 }
 
 export interface MeasurementReviewPhysicalFinancialAdjustment {
   readonly code: string;
   readonly name: string;
+}
+
+export interface MeasurementReviewPhysicalFinancialGroupImpact {
+  readonly groupCode: string;
+  readonly groupName: string;
+  readonly plannedAccumulatedValueDecimal: string;
+  readonly actualAccumulatedValueDecimal: string;
+  readonly deviationValueDecimal: string;
+  readonly deviationPercentPoints: string | null;
+  readonly sharePercent: string | null;
+}
+
+export interface MeasurementReviewPhysicalFinancialManagement {
+  readonly headline: {
+    readonly direction: "below" | "above" | "on";
+    readonly magnitudeValueDecimal: string;
+    readonly plannedPercent: string | null;
+    readonly actualPercent: string | null;
+    readonly deviationPercentPoints: string | null;
+  };
+  readonly principalNegativeImpact: MeasurementReviewPhysicalFinancialGroupImpact | null;
+  readonly concentration: {
+    readonly groups: ReadonlyArray<{ readonly groupCode: string; readonly groupName: string; readonly deviationValueDecimal: string }>;
+    readonly combinedAbsDeviationDecimal: string;
+    readonly obraNetAbsDeviationDecimal: string;
+    readonly sharePercent: string | null;
+  } | null;
+  readonly positiveCounterpoint: MeasurementReviewPhysicalFinancialGroupImpact | null;
 }
 
 export interface MeasurementReviewPhysicalFinancial {
@@ -63,6 +92,7 @@ export interface MeasurementReviewPhysicalFinancial {
   readonly obra: MeasurementReviewPhysicalFinancialObra | null;
   readonly groups: ReadonlyArray<MeasurementReviewPhysicalFinancialGroup>;
   readonly adjustments: ReadonlyArray<MeasurementReviewPhysicalFinancialAdjustment>;
+  readonly management: MeasurementReviewPhysicalFinancialManagement | null;
 }
 
 export interface MeasurementReviewItemWithEconomics extends MeasurementBulletinReviewItem {
@@ -179,7 +209,12 @@ function extractValidEconomicSummary(value: unknown): MeasurementEconomicSummary
   return candidate as unknown as MeasurementEconomicSummaryWithComposition;
 }
 
-const PHYSICAL_FINANCIAL_SITUATION_VALUES: ReadonlyArray<PhysicalFinancialSituation> = ["above_planned", "on_planned", "below_planned"];
+const PHYSICAL_FINANCIAL_SITUATION_VALUES: ReadonlyArray<PhysicalFinancialSituation> = [
+  "above_planned",
+  "on_planned",
+  "below_planned",
+  "not_scheduled"
+];
 
 function isNullableString(value: unknown): boolean {
   return value === null || typeof value === "string";
@@ -198,6 +233,7 @@ function extractValidPhysicalFinancialGroup(value: unknown): MeasurementReviewPh
   if (!isNullableString(c.actualAccumulatedPercent)) return null;
   if (typeof c.deviationValueDecimal !== "string") return null;
   if (!isNullableString(c.deviationPercentPoints)) return null;
+  if (!isNullableString(c.sharePercent)) return null;
   if (!PHYSICAL_FINANCIAL_SITUATION_VALUES.includes(c.situation as PhysicalFinancialSituation)) return null;
   return c as unknown as MeasurementReviewPhysicalFinancialGroup;
 }
@@ -243,7 +279,43 @@ function extractValidPhysicalFinancial(value: unknown): MeasurementReviewPhysica
     const row = adjustment as Record<string, unknown>;
     if (typeof row.code !== "string" || typeof row.name !== "string") return null;
   }
+  if (c.management !== null && extractValidPhysicalFinancialManagement(c.management) === null) return null;
   return c as unknown as MeasurementReviewPhysicalFinancial;
+}
+
+function extractValidGroupImpact(value: unknown): MeasurementReviewPhysicalFinancialGroupImpact | null {
+  if (typeof value !== "object" || value === null) return null;
+  const c = value as Record<string, unknown>;
+  if (typeof c.groupCode !== "string" || typeof c.groupName !== "string") return null;
+  if (typeof c.plannedAccumulatedValueDecimal !== "string") return null;
+  if (typeof c.actualAccumulatedValueDecimal !== "string") return null;
+  if (typeof c.deviationValueDecimal !== "string") return null;
+  if (!isNullableString(c.deviationPercentPoints)) return null;
+  if (!isNullableString(c.sharePercent)) return null;
+  return c as unknown as MeasurementReviewPhysicalFinancialGroupImpact;
+}
+
+function extractValidPhysicalFinancialManagement(value: unknown): MeasurementReviewPhysicalFinancialManagement | null {
+  if (typeof value !== "object" || value === null) return null;
+  const c = value as Record<string, unknown>;
+  const h = c.headline as Record<string, unknown> | undefined;
+  if (!h || (h.direction !== "below" && h.direction !== "above" && h.direction !== "on")) return null;
+  if (typeof h.magnitudeValueDecimal !== "string") return null;
+  if (!isNullableString(h.plannedPercent) || !isNullableString(h.actualPercent) || !isNullableString(h.deviationPercentPoints)) return null;
+  if (c.principalNegativeImpact !== null && extractValidGroupImpact(c.principalNegativeImpact) === null) return null;
+  if (c.positiveCounterpoint !== null && extractValidGroupImpact(c.positiveCounterpoint) === null) return null;
+  if (c.concentration !== null) {
+    const con = c.concentration as Record<string, unknown>;
+    if (!Array.isArray(con.groups)) return null;
+    for (const g of con.groups) {
+      if (typeof g !== "object" || g === null) return null;
+      const gr = g as Record<string, unknown>;
+      if (typeof gr.groupCode !== "string" || typeof gr.groupName !== "string" || typeof gr.deviationValueDecimal !== "string") return null;
+    }
+    if (typeof con.combinedAbsDeviationDecimal !== "string" || typeof con.obraNetAbsDeviationDecimal !== "string") return null;
+    if (!isNullableString(con.sharePercent)) return null;
+  }
+  return c as unknown as MeasurementReviewPhysicalFinancialManagement;
 }
 
 export function extractValidMeasurementReview(payload: unknown): MeasurementBulletinReviewWithEconomics | null {

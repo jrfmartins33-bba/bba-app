@@ -231,6 +231,7 @@ export interface MeasurementReviewPhysicalFinancialPayload {
   readonly obra: MeasurementPhysicalFinancialAnalysis["obra"];
   readonly groups: MeasurementPhysicalFinancialAnalysis["groups"];
   readonly adjustments: MeasurementPhysicalFinancialAnalysis["adjustments"];
+  readonly management: MeasurementPhysicalFinancialAnalysis["management"];
 }
 
 export interface HandleGetMeasurementBulletinReviewOutcome {
@@ -353,7 +354,8 @@ export async function handleGetMeasurementBulletinReview(
     period: physicalFinancial.period,
     obra: physicalFinancial.obra,
     groups: physicalFinancial.groups,
-    adjustments: physicalFinancial.adjustments
+    adjustments: physicalFinancial.adjustments,
+    management: physicalFinancial.management
   };
 
   return {

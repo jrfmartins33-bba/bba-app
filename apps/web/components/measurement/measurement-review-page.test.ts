@@ -95,15 +95,24 @@ async function main(): Promise<void> {
     assertTrue(!/Number\(/.test(REVIEW_PAGE_SOURCE), "nenhuma conversão para float na página");
   });
 
-  // 4. Origem de cada item pode ser consultada -- evolução econômica
-  // dobrou a origem dentro de "Ver análise" (seção Rastreabilidade),
-  // conforme a própria especificação autoriza.
-  await runTest("'Ver análise' existe por item e sua seção Rastreabilidade reaproveita MeasurementCellReference (mesmo componente do Relatório Executivo)", () => {
+  // 4. Origem de cada item continua acessível -- agora como AÇÃO DISCRETA
+  // no rodapé da expansão ("Ver fonte documental"), não mais como um
+  // card grande de "Rastreabilidade" (item 10 da especificação de UX).
+  await runTest("'Ver análise' existe; a fonte documental virou ação discreta no rodapé (nunca mais um card 'Rastreabilidade'), reaproveitando MeasurementCellReference", () => {
     assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Ver análise"));
-    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Rastreabilidade"));
-    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("MeasurementCellReference"));
-    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes('variant="full"'));
+    assertTrue(!/<h4>Rastreabilidade<\/h4>/.test(REVIEW_ITEM_ROW_SOURCE), "Rastreabilidade deixou de ser um card com <h4> próprio");
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("Ver fonte documental"), "ação discreta para revelar a fonte");
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("measurement-review-item__source-footer"), "a fonte fica no rodapé da expansão");
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("MeasurementCellReference"), "mesma infraestrutura de origem, sem criar nova");
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes('variant="full"'), "ao expandir mostra boletim/aba/linha/colunas");
     assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("item.evidenceReferences"), "origem vem das referências reais do item, nunca inventada");
+  });
+
+  await runTest("'Ver análise' tem exatamente três blocos: Econômico, Medição, Planejamento físico-financeiro", () => {
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("<h4>Econômico</h4>"));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("<h4>Medição</h4>"));
+    assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("<h4>Planejamento físico-financeiro</h4>"));
+    assertTrue(!/<h4>Rastreabilidade<\/h4>/.test(REVIEW_ITEM_ROW_SOURCE), "Rastreabilidade não é mais um quarto bloco");
   });
 
   // Correção cirúrgica: cabeçalho da tabela usava os <span> soltos
@@ -203,7 +212,7 @@ async function main(): Promise<void> {
   // do previsto". "Atraso"/"atrasado" continua PROIBIDO (a fonte não
   // caracteriza atraso temporal), e nenhum estado inventado
   // (Em execução/Concluído/Adiantado/No ritmo previsto/WIP) aparece.
-  await runTest("vocabulário da situação físico-financeira é fixo (Acima/No/Abaixo do previsto) e nunca usa 'atraso'/'atrasado' nem estados inventados", () => {
+  await runTest("vocabulário da situação físico-financeira é fixo (Acima/No/Abaixo do previsto + Sem programação até o período) e nunca usa 'atraso'/'atrasado' nem estados inventados", () => {
     const forbidden = /Em execução|Concluíd[ao]|Ainda não iniciad[ao]|Adiantad[ao]|No ritmo previsto|\bEm atraso\b|atrasad[ao]|Work in Progress|\bWIP\b/i;
     for (const [label, source] of [
       ["página", REVIEW_PAGE_SOURCE],
@@ -217,6 +226,55 @@ async function main(): Promise<void> {
     assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Acima do previsto"'), "vocabulário fixo declarado no view-model");
     assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"No previsto"'), "vocabulário fixo declarado no view-model");
     assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Abaixo do previsto"'), "vocabulário fixo declarado no view-model");
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Sem programação até o período"'), "0 planejado + 0 realizado -> 'Sem programação até o período'");
+  });
+
+  // Item 1 da especificação de UX: narrativa contratação -> desempenho
+  // da obra -> grupos -> itens -> decisão. O card "Redução da proposta
+  // frente ao orçamento oficial" vem ANTES do físico-financeiro.
+  await runTest("ordem das seções: 'Redução da proposta frente ao orçamento oficial' renderiza ANTES de 'Situação físico-financeira da obra'", () => {
+    const discountAt = REVIEW_PAGE_SOURCE.indexOf("MeasurementContractDiscountCard summary");
+    const obraCardAt = REVIEW_PAGE_SOURCE.indexOf("MeasurementPhysicalFinancialObraCard physicalFinancial");
+    assertTrue(discountAt >= 0 && obraCardAt >= 0, "ambos os cards devem existir na página");
+    assertTrue(discountAt < obraCardAt, "o card econômico vem antes do card físico-financeiro");
+  });
+
+  // Itens 2-5: o card físico-financeiro virou card de DECISÃO -- leitura
+  // gerencial DINÂMICA (headline, principal impacto, concentração,
+  // contraponto positivo), tudo derivado no servidor.
+  await runTest("card físico-financeiro traz leitura gerencial dinâmica: headline + principal impacto + concentração + contraponto positivo, sempre vindos do servidor", () => {
+    assertTrue(PHYSICAL_FINANCIAL_SERVICE_SOURCE.includes("buildManagementSummary"), "a leitura gerencial é montada no serviço, não na UI");
+    assertTrue(PHYSICAL_FINANCIAL_SERVICE_SOURCE.includes("principalNegativeImpact"), "identifica o maior desvio negativo");
+    assertTrue(PHYSICAL_FINANCIAL_SERVICE_SOURCE.includes("concentration"), "top 3 negativos + participação combinada");
+    assertTrue(PHYSICAL_FINANCIAL_SERVICE_SOURCE.includes("positiveCounterpoint"), "maior desvio positivo");
+    assertTrue(PHYSICAL_FINANCIAL_SERVICE_SOURCE.includes(".slice(0, 3)"), "concentração é o top 3, calculado, nunca fixo");
+    assertTrue(OBRA_CARD_SOURCE.includes("management.principalNegativeImpact") || OBRA_CARD_SOURCE.includes("management?.principalNegativeImpact"), "o card lê o principal impacto do payload");
+    assertTrue(OBRA_CARD_SOURCE.includes("formatManagementConcentration"), "a frase de concentração vem do view-model");
+    assertTrue(OBRA_CARD_SOURCE.includes("Principal impacto no desvio"), "rótulo do bloco de principal impacto");
+    assertTrue(!/Number\(/.test(OBRA_CARD_SOURCE), "card da obra nunca converte para float");
+    assertTrue(!/\.\w+Decimal\s*[-+*/]\s*\w/.test(OBRA_CARD_SOURCE), "card da obra nunca faz aritmética sobre campos decimais");
+  });
+
+  // Item 3: a headline descreve DESVIO, nunca causa/responsabilidade.
+  await runTest("nenhum texto trata o desvio como 'causa do atraso' / 'responsável pelo atraso' / 'problema causado por'", () => {
+    const causal = /causa do atraso|respons[áa]vel pelo atraso|problema causado por/i;
+    for (const [label, source] of [
+      ["card da obra", OBRA_CARD_SOURCE],
+      ["view-model", REVIEW_VIEW_MODEL_SOURCE],
+      ["serviço físico-financeiro", PHYSICAL_FINANCIAL_SERVICE_SOURCE],
+      ["página", REVIEW_PAGE_SOURCE]
+    ] as const) {
+      assertTrue(!causal.test(source), `${label} descreve desvio, nunca causalidade operacional`);
+    }
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes("formatManagementHeadline"), "headline executiva existe");
+    assertTrue(/abaixo do previsto|acima do previsto/.test(REVIEW_VIEW_MODEL_SOURCE), "headline fala em desvio frente ao previsto");
+  });
+
+  // Item 6: contraponto positivo -- execução acima do previsto NÃO é
+  // ganho/economia/lucro/margem; o texto nega isso explicitamente.
+  await runTest("contraponto positivo: 'Acima do previsto' + maior desvio positivo, negando explicitamente linguagem econômica", () => {
+    assertTrue(OBRA_CARD_SOURCE.includes("positiveCounterpoint"), "o card mostra o maior desvio positivo quando existe");
+    assertTrue(/não representa ganho, economia ou margem/i.test(OBRA_CARD_SOURCE), "nega explicitamente ganho/economia/margem");
   });
 
   await runTest("bloco 'Planejamento físico-financeiro' (Ver análise) mostra a SITUAÇÃO DO GRUPO com a ressalva de que não é status do item, e degrada para motivo textual quando não há grupo/cronograma", () => {
@@ -234,12 +292,10 @@ async function main(): Promise<void> {
     assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Comparação com o planejamento ainda não disponível"'), "a mensagem de fallback exata continua existindo, uma única fonte");
   });
 
-  await runTest("resumo executivo do topo usa o card dedicado da obra (MeasurementPhysicalFinancialObraCard), alimentado por state.review.physicalFinancial", () => {
+  await runTest("topo da tela usa o card dedicado da obra (MeasurementPhysicalFinancialObraCard), alimentado por state.review.physicalFinancial", () => {
     assertTrue(REVIEW_PAGE_SOURCE.includes("MeasurementPhysicalFinancialObraCard"), "topo da tela renderiza o card dedicado da situação da obra");
     assertTrue(REVIEW_PAGE_SOURCE.includes("physicalFinancial={state.review.physicalFinancial}"), "card é alimentado pelo payload do servidor, nunca por cálculo do cliente");
     assertTrue(OBRA_CARD_SOURCE.includes("Situação físico-financeira da obra"), "título humano, responde em segundos");
-    assertTrue(!/Number\(/.test(OBRA_CARD_SOURCE), "card da obra nunca converte para float");
-    assertTrue(!/\.\w+Decimal\s*[-+*/]\s*\w/.test(OBRA_CARD_SOURCE), "card da obra nunca faz aritmética sobre campos decimais");
   });
 
   // Tabela principal: quando há grupo correlacionado, a coluna
@@ -248,7 +304,8 @@ async function main(): Promise<void> {
   // indisponível". A frase longa continua só em title=.
   await runTest("coluna Situação da tabela mostra badge compacto do grupo quando correlacionado, e 'Planejamento indisponível' caso contrário", () => {
     assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("formatGroupSituationBadge"), "badge compacto do grupo vem do view-model");
-    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes("`Grupo ${"), "o badge é 'Grupo <situação>' -- item 9 da especificação");
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Grupo abaixo do previsto"'), "o badge é 'Grupo <situação>' -- item 9");
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Grupo sem programação"'), "badge compacto também cobre 'sem programação'");
     assertTrue(REVIEW_ITEM_ROW_SOURCE.includes("PLANNING_UNAVAILABLE_COMPACT_LABEL"), "sem grupo, mantém o rótulo compacto compartilhado");
     assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('"Planejamento indisponível"'), "o rótulo compacto continua existindo, uma única fonte");
     assertTrue(
@@ -257,19 +314,23 @@ async function main(): Promise<void> {
     );
   });
 
-  // Item 9 da especificação: cores respeitam a semântica -- verde só
-  // para "acima do previsto" (inequivocamente favorável), amber para
-  // "abaixo", neutro para "no previsto". Nada de vermelho nesta versão.
-  await runTest("tom visual da situação: acima -> positivo, no previsto -> neutro, abaixo -> atenção (amber) -- nunca vermelho", () => {
-    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('if (situation === "above_planned") return "positive";'));
-    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('if (situation === "on_planned") return "neutral";'));
-    assertTrue(/return "caution";/.test(REVIEW_VIEW_MODEL_SOURCE), "abaixo do previsto -> atenção (amber)");
+  // Item 8 da especificação de UX: abaixo do previsto → amber; acima do
+  // previsto → azul/informativo, NUNCA verde (verde = ganho econômico
+  // real e comprovado); no previsto / sem programação → neutro; vermelho
+  // fora.
+  await runTest("tom visual da situação: abaixo -> atenção (amber); acima -> azul/informativo (NUNCA verde); no previsto / sem programação -> neutro; sem vermelho", () => {
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('if (situation === "above_planned") return "info";'), "acima do previsto -> info (azul), nunca 'positive'/verde");
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('if (situation === "below_planned") return "caution";'), "abaixo do previsto -> atenção (amber)");
+    assertTrue(REVIEW_VIEW_MODEL_SOURCE.includes('return "neutral";'), "no previsto / sem programação -> neutro");
+    assertTrue(!/return "positive"/.test(REVIEW_VIEW_MODEL_SOURCE), "'positive' (verde) não é mais usado no físico-financeiro");
+
     const situationCssStart = GLOBALS_CSS_SOURCE.indexOf("Situação físico-financeira da obra (Cronograma DNOCS)");
     assertTrue(situationCssStart >= 0, "bloco CSS da situação físico-financeira deve existir");
-    const situationCssEnd = GLOBALS_CSS_SOURCE.indexOf("groups__situation--neutral", situationCssStart);
-    const situationCss = GLOBALS_CSS_SOURCE.slice(situationCssStart, GLOBALS_CSS_SOURCE.indexOf("}", situationCssEnd) + 1);
+    const situationCssEnd = GLOBALS_CSS_SOURCE.indexOf("measurement-review-item__source-detail", situationCssStart);
+    const situationCss = GLOBALS_CSS_SOURCE.slice(situationCssStart, situationCssEnd >= 0 ? situationCssEnd : situationCssStart + 6000);
     assertTrue(!/--status-red|rgba\(239, 68, 68/.test(situationCss), "nenhum vermelho aplicado à situação físico-financeira");
-    assertTrue(/--status-green|--status-amber/.test(situationCss), "usa apenas verde/amber, per a regra de três cores de status");
+    assertTrue(!/--status-green|rgba\(34, 197, 94/.test(situationCss), "nenhum VERDE aplicado à situação físico-financeira (item 8)");
+    assertTrue(/--status-blue|--status-amber/.test(situationCss), "usa azul (acima) e amber (abaixo)");
   });
 
   // Item 4/16: correlação item -> grupo é determinística por prefixo,

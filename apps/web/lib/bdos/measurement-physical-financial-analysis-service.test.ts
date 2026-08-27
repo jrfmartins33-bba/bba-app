@@ -169,6 +169,50 @@ runTest("períodos canônicos: o parser apara os meses 10–14 (sem data / data 
   assertEqual(readModelRows, 108, "obra 9 + 11 grupos x 9 = 108 linhas do read model");
 });
 
+runTest("leitura gerencial: headline, principal impacto, concentração e contraponto positivo são derivados DINAMICAMENTE dos grupos reais", () => {
+  const m = analyze().management;
+  assertTrue(m !== null, "management deve existir quando há obra + grupos");
+
+  // Headline -- desvio, nunca causa/responsabilidade.
+  assertEqual(m?.headline.direction, "below", "realizado < planejado");
+  assertEqual(m?.headline.magnitudeValueDecimal, "2393467.02", "magnitude = |desvio da obra|");
+  assertEqual(m?.headline.plannedPercent, "94.14", "planejado %");
+  assertEqual(m?.headline.actualPercent, "62.70", "realizado %");
+  assertEqual(m?.headline.deviationPercentPoints, "-31.44", "desvio p.p.");
+
+  // Principal impacto = grupo com o maior desvio NEGATIVO absoluto.
+  assertEqual(m?.principalNegativeImpact?.groupCode, "4.0", "grupo 4.0 é o principal impacto");
+  assertEqual(m?.principalNegativeImpact?.groupName, "RECUPERAÇÃO DO EQUIPAMENTO HIDROMECÂNICO", "nome real");
+  assertEqual(m?.principalNegativeImpact?.deviationValueDecimal, "-1139742.97", "desvio do grupo 4");
+  assertEqual(m?.principalNegativeImpact?.sharePercent, "47.62", "≈ 47,6% do desvio líquido da obra");
+
+  // Concentração = top 3 negativos, dinâmico.
+  assertEqual(m?.concentration?.groups.map((g) => g.groupCode).join(","), "4.0,1.0,2.0", "top 3 por desvio negativo");
+  assertEqual(m?.concentration?.combinedAbsDeviationDecimal, "2110835.45", "soma |desvio| dos 3");
+  assertEqual(m?.concentration?.obraNetAbsDeviationDecimal, "2393467.02", "|desvio líquido da obra|");
+  assertEqual(m?.concentration?.sharePercent, "88.19", "≈ 88,2%");
+
+  // Contraponto positivo = maior desvio POSITIVO (execução acima do previsto).
+  assertEqual(m?.positiveCounterpoint?.groupCode, "11.0", "grupo 11.0 acima do previsto");
+  assertEqual(m?.positiveCounterpoint?.deviationValueDecimal, "33965.86", "≈ +R$ 33.965,86");
+});
+
+runTest("grupo com planejado = 0 e realizado = 0 até o corte -> situação 'not_scheduled', nunca 'no previsto'", () => {
+  const g10 = analyze().groups.find((g) => g.groupCode === "10.0");
+  assertTrue(g10 !== undefined, "grupo 10.0 existe");
+  assertEqual(g10?.plannedAccumulatedValueDecimal, "0.00", "nada planejado até mês 8");
+  assertEqual(g10?.actualAccumulatedValueDecimal, "0.00", "nada realizado até mês 8");
+  assertEqual(g10?.situation, "not_scheduled", "sem programação até o período -- nunca on_planned");
+});
+
+runTest("todo grupo carrega participação no desvio da obra (|desvio grupo| / |desvio líquido obra|)", () => {
+  const groups = analyze().groups;
+  const g4 = groups.find((g) => g.groupCode === "4.0");
+  assertEqual(g4?.sharePercent, "47.62", "participação do grupo 4");
+  const g10 = groups.find((g) => g.groupCode === "10.0");
+  assertEqual(g10?.sharePercent, "0.00", "grupo sem desvio -> 0.00");
+});
+
 runTest("junho/2026 permanece exato após o corte de períodos (mês 8 está dentro do intervalo canônico)", () => {
   const a = analyze();
   assertEqual(a.obra?.plannedAccumulatedValueDecimal, "7166007.71", "obra planejado acumulado");

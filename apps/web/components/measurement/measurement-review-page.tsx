@@ -165,9 +165,13 @@ export function MeasurementReviewPage({ measurementBulletinImportId }: { measure
             </dl>
           </Card>
 
-          <MeasurementPhysicalFinancialObraCard physicalFinancial={state.review.physicalFinancial} />
-
+          {/* Narrativa: contratação -> desempenho da obra -> grupos que
+              explicam o desvio -> itens medidos -> decisão. "Redução da
+              proposta frente ao orçamento oficial" vem ANTES do
+              físico-financeiro. */}
           {state.review.economicSummary ? <MeasurementContractDiscountCard summary={state.review.economicSummary} /> : null}
+
+          <MeasurementPhysicalFinancialObraCard physicalFinancial={state.review.physicalFinancial} />
 
           <Card
             action={<span className="measurement-section-count">{state.review.items.length} {state.review.items.length === 1 ? "item" : "itens"}</span>}
