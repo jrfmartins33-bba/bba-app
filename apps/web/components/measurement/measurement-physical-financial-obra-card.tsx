@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { Card } from "@bba/ui";
 import type {
@@ -20,6 +21,8 @@ import {
 
 export interface MeasurementPhysicalFinancialObraCardProps {
   readonly physicalFinancial: MeasurementReviewPhysicalFinancial;
+  /** rota do Controle Gerencial da Execução -- habilita "Ver itens do grupo" por linha da tabela. */
+  readonly managerialControlHref?: string;
 }
 
 /**
@@ -36,7 +39,7 @@ export interface MeasurementPhysicalFinancialObraCardProps {
  * informativo (nunca verde -- verde é ganho econômico real); no
  * previsto / sem programação → neutro.
  */
-export function MeasurementPhysicalFinancialObraCard({ physicalFinancial }: MeasurementPhysicalFinancialObraCardProps) {
+export function MeasurementPhysicalFinancialObraCard({ physicalFinancial, managerialControlHref }: MeasurementPhysicalFinancialObraCardProps) {
   const [groupsExpanded, setGroupsExpanded] = useState(false);
   const { obra, obraAvailable, management } = physicalFinancial;
 
@@ -179,6 +182,14 @@ export function MeasurementPhysicalFinancialObraCard({ physicalFinancial }: Meas
                         )}`}
                       >
                         {formatPhysicalFinancialSituation(group.situation)}
+                        {managerialControlHref ? (
+                          <Link
+                            className="measurement-physical-financial-groups__items-link"
+                            href={`${managerialControlHref}?grupo=${encodeURIComponent(group.groupCode)}`}
+                          >
+                            Ver itens do grupo
+                          </Link>
+                        ) : null}
                       </span>
                     </li>
                   ))}

@@ -1341,3 +1341,120 @@ export const listCertifiedMeasurementBulletinTotalsForContractBaseline = async (
     };
   });
 };
+
+// ---------------------------------------------------------------
+// Controle Gerencial da Execução (item a item) -- leituras
+// somente-leitura da Base Contratual da Obra e da posição
+// certificada por item. Nenhuma escrita.
+// ---------------------------------------------------------------
+
+export interface ManagedServiceItemContractRecord {
+  readonly id: string;
+  readonly code: string;
+  readonly description: string;
+  readonly unit: string | null;
+  readonly contractQuantityDecimal: string;
+  readonly unitPriceDecimal: string;
+  readonly measurementType: string;
+}
+
+export const listManagedServiceItems = async (
+  supabase: SupabaseClient,
+  params: { engineeringProjectId: string; companyId: string | null }
+): Promise<ReadonlyArray<ManagedServiceItemContractRecord>> => {
+  let query = supabase
+    .from("managed_service_items")
+    .select("id, code, description, unit, contract_quantity, unit_price, measurement_type")
+    .eq("engineering_project_id", params.engineeringProjectId);
+
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((row) => {
+    const record = row as Record<string, unknown>;
+    return {
+      id: record.id as string,
+      code: typeof record.code === "string" ? record.code : "",
+      description: typeof record.description === "string" ? record.description : "",
+      unit: (record.unit as string | null) ?? null,
+      contractQuantityDecimal: record.contract_quantity === null ? "0" : String(record.contract_quantity),
+      unitPriceDecimal: record.unit_price === null ? "0" : String(record.unit_price),
+      measurementType: typeof record.measurement_type === "string" ? record.measurement_type : "quantity"
+    };
+  });
+};
+
+export interface CertifiedItemBalanceRecord {
+  readonly managedServiceItemId: string;
+  readonly contractQuantityDecimal: string;
+  readonly unitPriceDecimal: string;
+  /** total contratual do item, autoritativo quando presente. */
+  readonly contractedValueDecimal: string | null;
+  readonly certifiedAccumulatedQuantityDecimal: string;
+  readonly certifiedAccumulatedValueDecimal: string;
+  readonly quantityBalanceDecimal: string | null;
+  readonly financialBalanceDecimal: string | null;
+}
+
+export const listCertifiedItemBalances = async (
+  supabase: SupabaseClient,
+  params: { engineeringProjectId: string; companyId: string | null }
+): Promise<ReadonlyArray<CertifiedItemBalanceRecord>> => {
+  let query = supabase
+    .from("measurement_certified_item_balances")
+    .select(
+      "managed_service_item_id, contract_quantity, unit_price, contracted_value, certified_accumulated_quantity, quantity_balance, certified_accumulated_value, financial_balance"
+    )
+    .eq("engineering_project_id", params.engineeringProjectId);
+
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((row) => {
+    const record = row as Record<string, unknown>;
+    return {
+      managedServiceItemId: record.managed_service_item_id as string,
+      contractQuantityDecimal: record.contract_quantity === null ? "0" : String(record.contract_quantity),
+      unitPriceDecimal: record.unit_price === null ? "0" : String(record.unit_price),
+      contractedValueDecimal: record.contracted_value === null || record.contracted_value === undefined ? null : String(record.contracted_value),
+      certifiedAccumulatedQuantityDecimal: record.certified_accumulated_quantity === null ? "0" : String(record.certified_accumulated_quantity),
+      certifiedAccumulatedValueDecimal: record.certified_accumulated_value === null ? "0" : String(record.certified_accumulated_value),
+      quantityBalanceDecimal: record.quantity_balance === null || record.quantity_balance === undefined ? null : String(record.quantity_balance),
+      financialBalanceDecimal: record.financial_balance === null || record.financial_balance === undefined ? null : String(record.financial_balance)
+    };
+  });
+};
+
+/** Existe alguma certificação (cycle certificado/fechado) para o projeto? Usado para não interpretar "certificado = 0" como "sem execução". */
+export const projectHasAnyCertification = async (
+  supabase: SupabaseClient,
+  params: { engineeringProjectId: string; companyId: string | null }
+): Promise<boolean> => {
+  let query = supabase
+    .from("measurement_cycles")
+    .select("id", { count: "exact", head: true })
+    .eq("engineering_project_id", params.engineeringProjectId)
+    .in("status", CERTIFIED_OR_CLOSED_CYCLE_STATUSES);
+
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+
+  const { count, error } = await query;
+  if (error) {
+    throw error;
+  }
+  return (count ?? 0) > 0;
+};

@@ -233,8 +233,8 @@ async function main(): Promise<void> {
   // da obra -> grupos -> itens -> decisão. O card "Redução da proposta
   // frente ao orçamento oficial" vem ANTES do físico-financeiro.
   await runTest("ordem das seções: 'Redução da proposta frente ao orçamento oficial' renderiza ANTES de 'Situação físico-financeira da obra'", () => {
-    const discountAt = REVIEW_PAGE_SOURCE.indexOf("MeasurementContractDiscountCard summary");
-    const obraCardAt = REVIEW_PAGE_SOURCE.indexOf("MeasurementPhysicalFinancialObraCard physicalFinancial");
+    const discountAt = REVIEW_PAGE_SOURCE.indexOf("<MeasurementContractDiscountCard ");
+    const obraCardAt = REVIEW_PAGE_SOURCE.indexOf("<MeasurementPhysicalFinancialObraCard");
     assertTrue(discountAt >= 0 && obraCardAt >= 0, "ambos os cards devem existir na página");
     assertTrue(discountAt < obraCardAt, "o card econômico vem antes do card físico-financeiro");
   });

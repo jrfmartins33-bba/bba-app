@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ClipboardCheck, FileCheck2 } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, FileCheck2, ListChecks } from "lucide-react";
 import { Card, StatusBadge } from "@bba/ui";
 import { useBbaStore } from "@bba/lib";
 import { fetchMeasurementBulletinReview, type MeasurementReviewFetchOutcome } from "./measurement-review-client";
@@ -163,6 +164,10 @@ export function MeasurementReviewPage({ measurementBulletinImportId }: { measure
                 </dd>
               </div>
             </dl>
+            <Link className="measurement-review-header__managerial-link" href={`/medicoes/${measurementBulletinImportId}/controle-gerencial`}>
+              <ListChecks aria-hidden="true" size={14} />
+              Ver controle gerencial por item
+            </Link>
           </Card>
 
           {/* Narrativa: contratação -> desempenho da obra -> grupos que
@@ -171,7 +176,10 @@ export function MeasurementReviewPage({ measurementBulletinImportId }: { measure
               físico-financeiro. */}
           {state.review.economicSummary ? <MeasurementContractDiscountCard summary={state.review.economicSummary} /> : null}
 
-          <MeasurementPhysicalFinancialObraCard physicalFinancial={state.review.physicalFinancial} />
+          <MeasurementPhysicalFinancialObraCard
+            managerialControlHref={`/medicoes/${measurementBulletinImportId}/controle-gerencial`}
+            physicalFinancial={state.review.physicalFinancial}
+          />
 
           <Card
             action={<span className="measurement-section-count">{state.review.items.length} {state.review.items.length === 1 ? "item" : "itens"}</span>}

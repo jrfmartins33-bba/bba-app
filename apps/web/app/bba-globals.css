@@ -5099,3 +5099,351 @@ button {
 #comparacao {
   scroll-margin-top: 24px;
 }
+
+/* ==================================================================
+   Controle Gerencial da Execução (item a item)
+   Camada A: contrato + BM do período + posição certificada + grupo.
+   Sem verde para quantidades (verde = ganho econômico real). Tabela é
+   ferramenta de exploração, não a única interface.
+   ================================================================== */
+.measurement-review-header__managerial-link {
+  align-items: center;
+  color: var(--bba-gold-soft);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.measurement-physical-financial-groups__items-link {
+  color: var(--bba-gold-soft);
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.managerial-control-summary__subtitle {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin: -6px 0 12px;
+}
+
+.managerial-control-summary__facts {
+  margin: 0 0 12px;
+}
+
+.managerial-control-summary__truth-note {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.managerial-control-summary__truth-note p {
+  color: var(--text-secondary-strong);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0 0 8px;
+}
+
+.managerial-control-summary__truth-note p:last-child {
+  margin-bottom: 0;
+}
+
+.managerial-control-summary__obra-ref,
+.managerial-control-summary__recon {
+  color: var(--text-muted) !important;
+}
+
+.managerial-control-analyses__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.managerial-control-analyses__block {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.managerial-control-analyses__block h4 {
+  color: var(--text-secondary-strong);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.managerial-control-analyses__block ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.managerial-control-analyses__block li {
+  align-items: baseline;
+  display: flex;
+  font-size: 12px;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.managerial-control-analyses__block li span {
+  color: var(--text-secondary-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managerial-control-analyses__block li strong {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.managerial-control-analyses__concentration {
+  color: var(--text-secondary-strong);
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin: 12px 0 4px;
+}
+
+.managerial-control-filters {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.managerial-control-filters input[type="search"],
+.managerial-control-filters select {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.managerial-control-filters__search {
+  min-width: 220px;
+}
+
+.managerial-control-filters__check {
+  align-items: center;
+  color: var(--text-secondary-strong);
+  display: inline-flex;
+  font-size: 11.5px;
+  gap: 4px;
+}
+
+.managerial-control-items {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  overflow-x: auto;
+  padding: 0;
+}
+
+.managerial-control-item {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.managerial-control-item__row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 84px minmax(220px, 1.6fr) 52px 56px 96px 96px 74px 96px 128px 132px 108px;
+  min-width: 1180px;
+  padding: 9px 0;
+}
+
+.managerial-control-item--head .managerial-control-item__row {
+  border-bottom: 1px solid var(--app-border);
+}
+
+.managerial-control-item--head span {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.managerial-control-item__row > span {
+  font-size: 12px;
+}
+
+.managerial-control-item__code {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.managerial-control-item__description {
+  color: var(--text-secondary-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.managerial-control-item__qty,
+.managerial-control-item__pct,
+.managerial-control-item__value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.managerial-control-item__value {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.managerial-control-item__status {
+  border-radius: 999px;
+  cursor: help;
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  padding: 3px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.managerial-control-item__status--info {
+  background: var(--status-blue-bg);
+  color: var(--status-blue);
+}
+
+.managerial-control-item__status--caution {
+  background: var(--status-amber-bg);
+  color: var(--status-amber);
+}
+
+.managerial-control-item__status--neutral {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary-strong);
+}
+
+.managerial-control-item__toggle {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  color: var(--bba-gold-soft);
+  cursor: pointer;
+  display: flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 4px;
+  justify-content: center;
+  padding: 6px;
+}
+
+.managerial-control-item__toggle[aria-expanded="true"] .measurement-ver-mais__chevron {
+  transform: rotate(180deg);
+}
+
+.managerial-control-item__analysis {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  padding: 10px 0 14px;
+}
+
+.managerial-control-item__block {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.managerial-control-item__block h4 {
+  color: var(--text-secondary-strong);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.managerial-control-item__block dl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.managerial-control-item__block dt {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.managerial-control-item__block dd {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.managerial-control-item__block--muted p {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  margin: 0;
+}
+
+.managerial-control-item__group-heading {
+  color: var(--text-primary);
+  font-size: 12.5px;
+  margin: 0 0 8px;
+}
+
+.managerial-control-item__note {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+  margin: 6px 0 0;
+}
+
+.managerial-control-item__muted {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.managerial-control-item__source-footer {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+}
+
+.managerial-control-item__source-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 11.5px;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.managerial-control-item__source-toggle[aria-expanded="true"] .measurement-ver-mais__chevron {
+  transform: rotate(180deg);
+}
+
+.managerial-control-item__source-detail {
+  color: var(--text-secondary-strong);
+  font-size: 11.5px;
+  margin: 6px 0 0;
+}

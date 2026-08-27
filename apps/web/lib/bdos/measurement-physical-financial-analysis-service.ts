@@ -633,7 +633,7 @@ function sumFractionsToPercentPoints(fractions: ReadonlyArray<number | null>): s
 }
 
 /** "01.05.03" / "1-5-3" / "11.02" → "1.0" / "1.0" / "11.0". null quando o primeiro segmento não é inteiro positivo. Determinístico, sem fuzzy. */
-function resolveGroupCode(itemCode: string): string | null {
+export function resolveGroupCode(itemCode: string): string | null {
   const firstSegment = itemCode.trim().split(/[.\-\/\s]/)[0];
   if (!/^\d+$/.test(firstSegment)) {
     return null;
