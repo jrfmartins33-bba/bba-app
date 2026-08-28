@@ -944,6 +944,50 @@ export type {
   CostAttributionPolicy,
 } from "./domain/cost-center";
 
+// Camada operacional de Centros de Custo (Project Cost Entry + Allocation + Read Model)
+export {
+  CostDataNature,
+  CostEntrySourceKind,
+  CostEntryStatus,
+  CostFamily,
+  CostAllocationMethod,
+  CostAllocationValidationError,
+  ALLOCATION_BPS_TOTAL,
+  canonMoney,
+  moneyToCents,
+  sharePercent,
+  centsToMoney,
+  validateCostEntryAllocations,
+  buildAllocations,
+  buildProjectCostCentersReadModel,
+  formatBasisPointsPercent,
+  COST_FAMILY_LABELS_PT_BR,
+  COST_ALLOCATION_METHOD_LABELS_PT_BR,
+  COST_DATA_NATURE_LABELS_PT_BR,
+  FORBIDDEN_COMPARISON_TERMS,
+} from "./domain/cost-center";
+export type {
+  ProjectCostEntry,
+  ProjectCostAllocation,
+  AllocatableCostCenter,
+  CostAllocationInvariantReport,
+  AllocationIntent,
+  DirectAllocationIntent,
+  EqualSplitAllocationIntent,
+  CustomSplitAllocationIntent,
+  BuiltAllocation,
+  BuildProjectCostCentersReadModelInput,
+  ProjectCostCentersReadModel,
+  ReadModelCostCenterInput,
+  ReadModelEntryInput,
+  ReadModelCostCenterView,
+  ReadModelFamilyView,
+  ReadModelEntryView,
+  ReadModelAllocationView,
+  ReadModelMeasurementComparisonView,
+  MeasurementComparisonInput,
+} from "./domain/cost-center";
+
 export {
   ContractBaselineStatus,
   ContractBaselineValidationError,

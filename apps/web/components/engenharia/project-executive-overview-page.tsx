@@ -139,6 +139,7 @@ export function ProjectExecutiveOverviewPage({ projectId }: ProjectExecutiveOver
   const contractNumber = contractualFoundation.contractNumber ?? project.contractNumber ?? "—";
   const contractorName = contractualFoundation.contractorName ?? project.contractorName ?? "—";
   const projectStudioHref = `/bba-project?projeto=${encodeURIComponent(project.id)}${requestedOrganizationId ? `&empresa=${encodeURIComponent(requestedOrganizationId)}` : ""}`;
+  const costCentersHref = `/workspaces/engenharia/obras/${encodeURIComponent(project.id)}/centros-de-custo${requestedOrganizationId ? `?empresa=${encodeURIComponent(requestedOrganizationId)}` : ""}`;
   const historicalBudgetCents = contractualFoundation.historicalOfficialBudgetCents;
   const contractedValueCents = contractualFoundation.contractedValueCents;
   const hasFinancialComparison =
@@ -181,9 +182,14 @@ export function ProjectExecutiveOverviewPage({ projectId }: ProjectExecutiveOver
             Contrato nº {contractNumber} · Contratado: <strong>{contractorName}</strong>
           </p>
         </div>
-        <Link className="bba-button bba-button--ghost bba-button--sm" href={backHref}>
-          <ArrowLeft size={16} /> Voltar para Engenharia
-        </Link>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <Link className="bba-button bba-button--secondary bba-button--sm" href={costCentersHref}>
+            <Banknote size={16} /> Centros de Custo
+          </Link>
+          <Link className="bba-button bba-button--ghost bba-button--sm" href={backHref}>
+            <ArrowLeft size={16} /> Voltar para Engenharia
+          </Link>
+        </div>
       </section>
 
       {/* Destaque Principal — Faixa de Métricas Rápidas */}
@@ -379,6 +385,12 @@ export function ProjectExecutiveOverviewPage({ projectId }: ProjectExecutiveOver
               <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginTop: "0.5rem" }}>
                 Os centros de custo permitem separar a apropriação operacional de cada consorciado.
               </p>
+
+              <div className={styles.actionRow}>
+                <Link className="bba-button bba-button--primary bba-button--sm" href={costCentersHref}>
+                  <Banknote size={16} /> Abrir Centros de Custo
+                </Link>
+              </div>
             </div>
           </Card>
         )}

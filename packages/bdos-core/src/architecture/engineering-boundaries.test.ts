@@ -54,6 +54,10 @@ const OPERATIONAL_DOMAINS = [
   "budget-version",
   // Epic 21, Sprint 21.4A.1 - minimal document capability.
   "document-processing",
+  // Centros de Custo — Camada Operacional (Project Cost Entry + Allocation +
+  // Read Model). Domínio puro: só reutiliza `domain/measurement-certification`
+  // para decimal exato; nunca toca Decision/Executive/Cash/Revenue.
+  "cost-center",
 ] as const;
 
 // Rule A — exact repo-relative directories an operational domain may never
