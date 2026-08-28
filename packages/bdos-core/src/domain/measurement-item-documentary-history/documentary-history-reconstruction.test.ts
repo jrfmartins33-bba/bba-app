@@ -1,4 +1,5 @@
 import { buildXlsxFixture } from "../schedule-management/adapters/excel-import/xlsx-test-fixtures";
+import { createMeasurementMonetaryPolicy, MeasurementDecimalQuantizationMode } from "../measurement-certification";
 import { extractMemoriasDeCalculo } from "./parse-memoria-de-calculo";
 import { classifyMemoriaResumo } from "./documentary-history-taxonomy";
 import {
@@ -10,6 +11,13 @@ import {
   type DocumentaryCurvaSPeriod,
   type DocumentaryFormalPeriodLine
 } from "./documentary-history-reconstruction";
+
+// Política documental comprovada do BM08/Lagoa (measurement-bulletin-import-service).
+const DOC_POLICY = createMeasurementMonetaryPolicy({
+  key: "source-document-truncation-to-cents",
+  scale: 2,
+  quantizationMode: MeasurementDecimalQuantizationMode.TruncateTowardZero
+});
 import {
   MEASUREMENT_ITEM_DOCUMENTARY_HISTORY_SCHEMA_VERSION,
   MEASUREMENT_ITEM_DOCUMENTARY_OBSERVATION_SCHEMA_VERSION
@@ -137,24 +145,43 @@ runTest("7. formato numérico ambíguo por aba ('43.092' sem vírgula) -> campos
   assertEqual(p.unambiguous, false, "aba ambígua nunca é inequívoca");
 });
 
-runTest("8. identidade do item é por id operacional (código), nunca por descrição", () => {
+runTest("8. universo item a item: só abas que resolvem contra os 300 itens oficiais entram; estruturais/renomeadas ficam de fora", () => {
   const bytes = buildXlsxFixture([
     resumoSheet("01.02.01", "MEMÓRIA DE CÁLCULO - MEDIÇÃO Nº 08", { contract: 9, measured: 7, toMeasure: 1, balance: 1 }),
-    resumoSheet("99.99.99", "MEMÓRIA DE CÁLCULO - MEDIÇÃO Nº 08", { contract: 5, measured: 2, toMeasure: 1, balance: 2 })
+    resumoSheet("01.00.00", "MEMÓRIA DE CÁLCULO - MEDIÇÃO Nº 08", { contract: 5, measured: 2, toMeasure: 1, balance: 2 }), // linha estrutural de grupo
+    resumoSheet("99.99.99", "MEMÓRIA DE CÁLCULO - MEDIÇÃO Nº 08", { contract: 5, measured: 2, toMeasure: 1, balance: 2 }) // código sem item oficial
   ]);
   const memorias = extractMemoriasDeCalculo(bytes, "f.xlsx").parsed;
   const contractItems: DocumentaryContractItem[] = [
     { code: "01.02.01", managedServiceItemId: "op-1", unitPriceDecimal: "886.47", contractQuantityDecimal: "9", groupCode: "1.0" }
   ];
-  const observations = buildItemDocumentaryObservations({ memorias, contractItems });
-  const matched = observations.filter((o) => o.itemCode === "01.02.01");
-  const unmatched = observations.filter((o) => o.itemCode === "99.99.99");
-  assertEqual(matched.every((o) => o.identityBasis === "operational_item_id" && o.managedServiceItemId === "op-1"), true, "01.02.01 vinculado por id operacional");
-  assertEqual(unmatched.every((o) => o.identityBasis === "documentary_code_only" && o.managedServiceItemId === null), true, "99.99.99 sem item operacional -> só código documental, nunca vínculo definitivo");
+  const result = buildItemDocumentaryObservations({ memorias, contractItems, derivedReferenceMonetaryPolicy: DOC_POLICY });
 
-  const period = matched.find((o) => o.semanticField === "quantity_to_measure_in_period")!;
-  assertEqual(period.valueDecimal, "886.47", "valor DERIVADO = qtd (1) × preço unitário (886.47)");
-  assertEqual(period.valueIsDerived, true, "valor sempre marcado como derivado (memórias não trazem R$)");
+  assertEqual(result.observations.every((o) => o.itemCode === "01.02.01"), true, "só 01.02.01 gera observação");
+  assertEqual(result.observations.every((o) => o.identityBasis === "operational_item_id" && o.managedServiceItemId === "op-1"), true, "vínculo sempre por id operacional");
+  assertEqual([...result.memoriaCodesWithoutContractItem].sort().join(","), "01.00.00,99.99.99", "abas sem item oficial listadas à parte");
+  assertEqual(result.memoriasMatchingContractItems, 1, "1 das 3 abas corresponde a um item oficial");
+
+  const period = result.observations.find((o) => o.semanticField === "quantity_to_measure_in_period")!;
+  assertEqual(period.derivedReferenceValueDecimal, "886.47", "VALOR DERIVADO DE REFERÊNCIA = qtd (1) × preço (886.47), política truncate-to-cents");
+  assertEqual(period.derivedReferenceValueAvailable, true, "flag de valor derivado disponível");
+  assertEqual(period.derivedReferenceMonetaryPolicyKey, "source-document-truncation-to-cents", "política monetária rastreável no registro");
+});
+
+runTest("8b. sem política monetária explícita -> valor derivado fica null (nunca inventa política)", () => {
+  const bytes = buildXlsxFixture([
+    resumoSheet("01.02.01", "MEMÓRIA DE CÁLCULO - MEDIÇÃO Nº 08", { contract: 9, measured: 7, toMeasure: 1, balance: 1 })
+  ]);
+  const memorias = extractMemoriasDeCalculo(bytes, "f.xlsx").parsed;
+  const result = buildItemDocumentaryObservations({
+    memorias,
+    contractItems: [{ code: "01.02.01", managedServiceItemId: "op-1", unitPriceDecimal: "886.47", contractQuantityDecimal: "9", groupCode: "1.0" }]
+  });
+  const period = result.observations.find((o) => o.semanticField === "quantity_to_measure_in_period")!;
+  assertEqual(period.quantityDecimal, "1", "QUANTIDADE DOCUMENTAL preservada");
+  assertEqual(period.derivedReferenceValueDecimal, null, "sem política -> valor derivado indisponível");
+  assertEqual(period.derivedReferenceValueAvailable, false, "flag false");
+  assertEqual(period.derivedReferenceMonetaryPolicyKey, null, "nenhuma política registrada");
 });
 
 runTest("9. BM nº 08 (golden): 15 linhas formais -> grupo 1 (42.015,69) + grupo 2 (210.639,09) = obra junho (252.654,78) = Curva S", () => {
@@ -262,7 +289,11 @@ runTest("12. prévia de persistência entrega números exatos (não texto genér
     { code: "01.02.01", managedServiceItemId: "op-1", unitPriceDecimal: "886.47", contractQuantityDecimal: "9", groupCode: "1.0" },
     { code: "01.02.04", managedServiceItemId: "op-4", unitPriceDecimal: "100", contractQuantityDecimal: "9", groupCode: "1.0" }
   ];
-  const observations = buildItemDocumentaryObservations({ memorias: extraction.parsed, contractItems });
+  const { observations } = buildItemDocumentaryObservations({
+    memorias: extraction.parsed,
+    contractItems,
+    derivedReferenceMonetaryPolicy: DOC_POLICY
+  });
   const reconciliation = reconcileDocumentaryHistory({
     formalPeriodLines: [{ itemCode: "01.02.01", groupCode: "1.0", periodDate: "2026-06-01", valueDecimal: "886.47" }],
     curvaSGroupPeriods: [{ periodDate: "2026-06-01", groupCode: "1.0", actualPeriodValueDecimal: "886.47" }],
@@ -277,8 +308,9 @@ runTest("12. prévia de persistência entrega números exatos (não texto genér
     reconciliation
   });
 
-  assertEqual(preview.totalContractItems, 2, "total de itens contratuais");
+  assertEqual(preview.totalContractItems, 2, "total de itens contratuais = itens oficiais passados");
   assertEqual(preview.totalMemoriasFound, 2, "total de memórias");
+  assertEqual(preview.memoriasMatchingContractItems, 2, "as 2 abas resolvem contra os 2 itens oficiais");
   assertEqual(preview.periodsCoveredByMeasurementRef.join(","), "8", "só MED-08 nas fixtures");
   assertEqual(preview.executedNotProvenAsMeasured.length, 2, "01.02.01 (8≠7) e 01.02.04 (23,1≠9): 'executada' não provada como 'medida'");
   assertEqual(preview.itemsAboveContractQuantity.length, 1, "01.02.04: saldo negativo / executada acima do contrato");
@@ -286,6 +318,47 @@ runTest("12. prévia de persistência entrega números exatos (não texto genér
   assertEqual(preview.derivedFromCumulativeCount, 0, "nenhum valor derivado de acumulado nesta rodada");
   assertEqual(preview.divergences.length, 0, "sem divergências nas fixtures");
   assertTrue(preview.exceptionSourceCells.length >= 3, "células-fonte das exceções relevantes listadas");
+
+  // QUANTIDADE DOCUMENTAL (contagem) ≠ VALOR DERIVADO DE REFERÊNCIA (R$).
+  assertEqual(preview.documentaryQuantityObservationsByMeasurementRef[0].measurementRef, 8, "quantidade documental indexada por MED");
+  assertTrue(preview.documentaryQuantityObservationsByMeasurementRef[0].observationCount >= 1, "contagem de observações de quantidade");
+  assertEqual(preview.derivedReferenceMonetaryPolicyKey, "source-document-truncation-to-cents", "política do valor derivado rastreável");
+  assertTrue(
+    preview.derivedReferenceValueByMeasurementRef.length > 0 && "derivedReferenceValueDecimal" in preview.derivedReferenceValueByMeasurementRef[0],
+    "valor derivado exposto SEPARADO da quantidade, nomeado como referência (não 'valor documental')"
+  );
+});
+
+runTest("14. UNIVERSO CONTRATUAL: 300 itens + 36 linhas estruturais NÃO podem virar 336 contractItems", () => {
+  // 300 itens de serviço oficiais + 36 abas de memória estruturais (grupo/subgrupo).
+  const officialItems: DocumentaryContractItem[] = Array.from({ length: 300 }, (_, i) => {
+    const g = Math.floor(i / 30) + 1;
+    const code = `${String(g).padStart(2, "0")}.${String((i % 30) + 1).padStart(2, "0")}.01`;
+    return { code, managedServiceItemId: `op-${i}`, unitPriceDecimal: "1", contractQuantityDecimal: "10", groupCode: `${g}.0` };
+  });
+  const structuralSheets = Array.from({ length: 36 }, (_, i) =>
+    resumoSheet(`${String(Math.floor(i / 6) + 1).padStart(2, "0")}.0${(i % 6) + 1}.00`, "MEMÓRIA DE CÁLCULO - MEDIÇÃO Nº 05", { contract: 1 })
+  );
+  const itemSheets = officialItems.slice(0, 120).map((it) =>
+    resumoSheet(it.code, "MEMÓRIA DE CÁLCULO - MEDIÇÃO Nº 05", { contract: 10, measured: 4, toMeasure: 2, balance: 4 })
+  );
+  const memorias = extractMemoriasDeCalculo(buildXlsxFixture([...itemSheets, ...structuralSheets]), "f.xlsx").parsed;
+
+  const result = buildItemDocumentaryObservations({ memorias, contractItems: officialItems, derivedReferenceMonetaryPolicy: DOC_POLICY });
+  const preview = buildDocumentaryHistoryPreview({
+    memorias,
+    layoutCounts: extractMemoriasDeCalculo(buildXlsxFixture([...itemSheets, ...structuralSheets]), "f.xlsx").layoutCounts,
+    contractItems: officialItems,
+    observations: result.observations,
+    reconciliation: reconcileDocumentaryHistory({ formalPeriodLines: [], curvaSGroupPeriods: [], curvaSObraPeriods: [], contractItems: officialItems })
+  });
+
+  assertEqual(preview.totalContractItems, 300, "totalContractItems = 300, NUNCA 336");
+  assertEqual(preview.totalMemoriasFound, 156, "156 abas (120 de item + 36 estruturais)");
+  assertEqual(preview.memoriasMatchingContractItems, 120, "só 120 abas resolvem contra os 300 itens oficiais");
+  assertEqual(preview.memoriaCodesWithoutContractItem.length, 36, "as 36 linhas estruturais ficam FORA do universo item a item");
+  assertEqual(result.observations.every((o) => officialItems.some((it) => it.code === o.itemCode)), true, "nenhuma observação de código estrutural");
+  assertEqual(preview.itemsWithoutRecoverableHistory, 300 - preview.itemsWithAtLeastOneUnambiguousPeriod, "sem histórico recuperável = 300 − itens com período inequívoco (base sempre 300)");
 });
 
 runTest("13. observação de acumulado documental é preservada com escopo e MED de referência próprios", () => {

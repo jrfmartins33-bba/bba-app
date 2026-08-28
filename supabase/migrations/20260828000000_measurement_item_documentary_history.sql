@@ -128,9 +128,15 @@ COMMENT ON COLUMN public.measurement_item_documentary_history.is_unambiguous IS
 COMMENT ON COLUMN public.measurement_item_documentary_history.derived_from_cumulative IS
   'true quando a quantidade veio de diferença de acumulados, nunca lida direto. Deve ser explícito para qualquer consumidor.';
 
--- RLS: mesma disciplina de measurement_certified_item_balances / planning_datasets.
+-- RLS: esta tabela é EVIDÊNCIA HISTÓRICA DOCUMENTAL. O cliente
+-- (authenticated) pode LER conforme escopo; a ESCRITA acontece SOMENTE
+-- por caminho controlado de servidor (service_role, que ignora RLS) —
+-- nunca mutação direta arbitrária pelo cliente. Nenhum writer é criado
+-- nesta rodada; o processo de ingestão futuro será idempotente
+-- (ON CONFLICT DO UPDATE nos índices únicos parciais acima).
 ALTER TABLE public.measurement_item_documentary_history ENABLE ROW LEVEL SECURITY;
 
+-- Leitura: própria empresa ou admin BBA.
 DROP POLICY IF EXISTS measurement_item_documentary_history_select_company_or_admin ON public.measurement_item_documentary_history;
 CREATE POLICY measurement_item_documentary_history_select_company_or_admin
 ON public.measurement_item_documentary_history
@@ -138,20 +144,25 @@ FOR SELECT
 TO authenticated
 USING (company_id = get_my_company_id() OR is_bba_admin());
 
+-- Escrita pelo cliente: BLOQUEADA. INSERT/UPDATE/DELETE por authenticated
+-- não passam. service_role (ingestão server-side) não é afetado por RLS.
 DROP POLICY IF EXISTS measurement_item_documentary_history_insert_company_or_admin ON public.measurement_item_documentary_history;
-CREATE POLICY measurement_item_documentary_history_insert_company_or_admin
+DROP POLICY IF EXISTS measurement_item_documentary_history_update_company_or_admin ON public.measurement_item_documentary_history;
+
+DROP POLICY IF EXISTS measurement_item_documentary_history_client_insert_blocked ON public.measurement_item_documentary_history;
+CREATE POLICY measurement_item_documentary_history_client_insert_blocked
 ON public.measurement_item_documentary_history
 FOR INSERT
 TO authenticated
-WITH CHECK (company_id = get_my_company_id() OR is_bba_admin());
+WITH CHECK (false);
 
-DROP POLICY IF EXISTS measurement_item_documentary_history_update_company_or_admin ON public.measurement_item_documentary_history;
-CREATE POLICY measurement_item_documentary_history_update_company_or_admin
+DROP POLICY IF EXISTS measurement_item_documentary_history_client_update_blocked ON public.measurement_item_documentary_history;
+CREATE POLICY measurement_item_documentary_history_client_update_blocked
 ON public.measurement_item_documentary_history
 FOR UPDATE
 TO authenticated
-USING (company_id = get_my_company_id() OR is_bba_admin())
-WITH CHECK (company_id = get_my_company_id() OR is_bba_admin());
+USING (false)
+WITH CHECK (false);
 
 DROP POLICY IF EXISTS measurement_item_documentary_history_delete_blocked ON public.measurement_item_documentary_history;
 CREATE POLICY measurement_item_documentary_history_delete_blocked

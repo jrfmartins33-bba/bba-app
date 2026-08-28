@@ -8,11 +8,18 @@ import { resolve } from "node:path";
 const REPO_ROOT = resolve(process.cwd(), "..", "..");
 const SQL = readFileSync(resolve(REPO_ROOT, "supabase/migrations/20260828000000_measurement_item_documentary_history.sql"), "utf8");
 
-runTest("cria a tabela com RLS habilitada, DELETE bloqueado", () => {
+runTest("segurança: SELECT company-or-admin; INSERT/UPDATE/DELETE pelo cliente BLOQUEADOS (escrita só server-side)", () => {
   assertTrue(/CREATE TABLE IF NOT EXISTS public\.measurement_item_documentary_history/.test(SQL), "tabela");
   assertTrue(/ENABLE ROW LEVEL SECURITY/.test(SQL), "RLS");
+  assertTrue(
+    /measurement_item_documentary_history_select_company_or_admin[\s\S]*?FOR SELECT[\s\S]*?USING \(company_id = get_my_company_id\(\) OR is_bba_admin\(\)\)/.test(SQL),
+    "SELECT company-or-admin"
+  );
+  assertTrue(/measurement_item_documentary_history_client_insert_blocked[\s\S]*?FOR INSERT[\s\S]*?WITH CHECK \(false\)/.test(SQL), "INSERT do cliente bloqueado");
+  assertTrue(/measurement_item_documentary_history_client_update_blocked[\s\S]*?FOR UPDATE[\s\S]*?USING \(false\)[\s\S]*?WITH CHECK \(false\)/.test(SQL), "UPDATE do cliente bloqueado");
   assertTrue(/measurement_item_documentary_history_delete_blocked[\s\S]*?FOR DELETE[\s\S]*?USING \(false\)/.test(SQL), "DELETE bloqueado");
-  assertTrue(/company_id = get_my_company_id\(\) OR is_bba_admin\(\)/.test(SQL), "RLS company-or-admin");
+  assertTrue(/DROP POLICY IF EXISTS measurement_item_documentary_history_insert_company_or_admin/.test(SQL), "política antiga de INSERT company/admin removida");
+  assertTrue(/escrita.*acontece SOMENTE por caminho controlado de servidor|service_role/i.test(SQL), "comentário: escrita só server-side");
 });
 
 runTest("declara explicitamente que NÃO deve ser aplicada sem autorização e que nada é populado", () => {

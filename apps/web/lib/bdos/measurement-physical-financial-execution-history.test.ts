@@ -152,6 +152,40 @@ runTest("11 grupos oficiais reconhecidos e ordenados por número do grupo", () =
   assertEqual(codes.join(","), sorted.join(","), "ordenados por número do grupo");
 });
 
+runTest("grupo em jul/2026 com planejamento e realização AUSENTE -> null em tudo que depende de realizado; nunca 'abaixo do previsto'", () => {
+  const h = history();
+  // Ao menos 2 grupos têm planejado em julho e realização ausente (Curva S só realiza até junho).
+  const groupsJuly = h.groups
+    .map((g) => ({ groupCode: g.groupCode, groupName: g.groupName, july: g.points.find((p) => p.periodDate === "2026-07-01") ?? null }))
+    .filter((entry): entry is { groupCode: string; groupName: string; july: NonNullable<typeof entry.july> } => entry.july !== null);
+
+  const withPlannedJuly = groupsJuly.filter((entry) => entry.july.plannedPeriodValueDecimal !== "0.00" || entry.july.plannedAccumulatedValueDecimal !== "0.00");
+  assertTrue(withPlannedJuly.length >= 2, "pelo menos 2 grupos com planejamento em julho");
+
+  for (const entry of groupsJuly) {
+    assertEqual(entry.july.actualPeriodValueDecimal, null, `${entry.groupCode}: realizado no período de julho = null (ausência, nunca 0)`);
+    assertEqual(entry.july.actualAccumulatedValueDecimal, null, `${entry.groupCode}: acumulado realizado de julho = null (não carrega o acumulado anterior)`);
+    assertEqual(entry.july.actualAccumulatedPercent, null, `${entry.groupCode}: % realizado acumulado de julho = null`);
+    assertEqual(entry.july.deviationAccumulatedValueDecimal, null, `${entry.groupCode}: desvio de julho = null`);
+    assertEqual(entry.july.deviationAccumulatedPercentPoints, null, `${entry.groupCode}: desvio p.p. de julho = null`);
+    assertEqual(entry.july.situation, null, `${entry.groupCode}: situação de julho = null — nunca 'below_planned' num mês sem realização`);
+    assertTrue(entry.july.situation !== "below_planned" && entry.july.situation !== "above_planned", `${entry.groupCode}: nunca classificado como atrasado/adiantado em julho`);
+  }
+
+  // O planejado do grupo em julho segue disponível quando existe.
+  const g1July = groupsJuly.find((e) => e.groupCode === "1.0");
+  assertTrue(g1July !== undefined && Number.parseFloat(g1July.july.plannedPeriodValueDecimal) > 0, "grupo 1 mantém o planejado do período de julho");
+});
+
+runTest("grupo em junho/2026 (COM realização) continua com situação e acumulado normais — só o mês vazio muda", () => {
+  const h = history();
+  const g1June = h.groups.find((g) => g.groupCode === "1.0")?.points.find((p) => p.periodDate === "2026-06-01");
+  assertTrue(g1June !== undefined, "junho do grupo 1 presente");
+  assertEqual(g1June?.actualPeriodValueDecimal ?? null, "42015.69", "realizado no período de junho intacto");
+  assertEqual(g1June?.actualAccumulatedValueDecimal ?? null, "969649.18", "acumulado realizado de junho intacto");
+  assertTrue(g1June?.situation !== null, "situação de junho continua definida");
+});
+
 runTest("sem cronograma físico-financeiro consolidado -> indisponível, com motivo, nunca inventa", () => {
   const h = buildPhysicalFinancialExecutionHistory({ planningDataset: null, datasetId: null, sourceFileName: null });
   assertEqual(h.available, false, "indisponível");

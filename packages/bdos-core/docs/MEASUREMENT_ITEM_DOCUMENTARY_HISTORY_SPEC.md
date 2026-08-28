@@ -8,28 +8,36 @@
 > **reescrita para o grão de observação v2 e NÃO aplicada**; nenhum
 > histórico de negócio escrito no Supabase.
 
-## 0. Achados da rodada de Parte B (arquivo real `BM_08`)
+## 0. Achados da rodada de Parte B (arquivo real `BM_08`, universo = 300 itens autoritativos)
 
-- **177 abas** de memória em **7 cortes de medição heterogêneos**:
-  MED-01 (3), MED-02 (13), MED-04 (29), MED-05 (84), MED-06 (17),
-  MED-07 (13), **MED-08 (18)**. **Não existe** um "acumulado item a
-  item no mês X" para X < junho/2026 — cada aba congela o estado na
-  data do seu próprio cabeçalho.
-- **Só 2 das 177** abas têm a grade `PERÍODO | QUANTIDADE` parseável →
-  reconstrução mês a mês por item é **documentalmente impossível** em
-  geral.
-- **Nenhum valor monetário** nas memórias — o valor é sempre **derivado**
-  (`quantidade × preço unitário do contrato`).
+- **Base Contratual: exatamente 300 `managed_service_items`.** As 336
+  linhas `NN.NN.NN` do boletim incluem 36 cabeçalhos de grupo/subgrupo
+  (`01.00.00`, `01.02.00`…) — **nunca contadas como itens**.
+- **177 abas** de memória; **175 resolvem contra os 300 itens oficiais**.
+  As **2 restantes** (`01.07.09`, `02.07.49`) são **códigos transpostos**
+  dos itens reais `07.01.09` / `07.02.49` — ficam FORA do universo item a
+  item até haver confirmação humana da transposição (nunca vínculo
+  automático por similaridade).
+- **7 cortes de medição heterogêneos**: MED-01 (3), MED-02 (13),
+  MED-04 (29), MED-05 (84), MED-06 (17), MED-07 (13), **MED-08 (18)**.
+  **Não existe** um "acumulado item a item no mês X" para X < junho/2026.
+- **Só 2 das 177** abas têm a grade `PERÍODO | QUANTIDADE` parseável.
+- **QUANTIDADE DOCUMENTAL × VALOR DERIVADO:** as memórias trazem SÓ
+  quantidade. `quantidade × preço unitário` é **VALOR DERIVADO DE
+  REFERÊNCIA** (política monetária explícita, `source-document-truncation-to-cents`)
+  — nunca "valor documental", nunca evidência de reconciliação financeira.
 - A grade `MED-NN FINANCEIRO` da aba `BOLETIM DE MEDIÇÃO 08` **não
-  reconcilia** com o realizado mensal da Curva S (ex.: coluna MED-08
-  soma R$ 964.483,89 ≠ R$ 252.654,78) → confirmada como
+  reconcilia** (coluna MED-08 soma R$ 964.483,89 ≠ R$ 252.654,78) →
   `historical_grid_not_authoritative`.
 - **Único período que fecha item a item:** junho/2026, pelas **15 linhas
-  formais** do BM nº 08 → grupo 1 (R$ 42.015,69) + grupo 2
+  formais AUTORITATIVAS** do BM nº 08 → grupo 1 (R$ 42.015,69) + grupo 2
   (R$ 210.639,09) = obra (R$ 252.654,78) = Curva S. `reconciled_exact`.
-- Meses anteriores: `insufficient_documentary_basis` — **reportado, nunca
-  preenchido**. 108/177 abas inequívocas; 29 itens acima do contrato;
-  102 itens com "executada" ≠ "medida".
+- Meses anteriores e julho/2026: `insufficient_documentary_basis` —
+  **reportado, nunca preenchido**.
+- **107/300** itens com ≥1 período histórico inequívoco →
+  **193/300 sem histórico documental recuperável**. 29 itens acima do
+  contrato; 101 com "executada" ≠ "medida". 0 divergências, 0 cobertura
+  parcial, 0 valores derivados de acumulado.
 
 ## 1. Por que uma camada nova
 

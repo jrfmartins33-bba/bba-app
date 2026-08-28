@@ -5,6 +5,7 @@ import {
   subtractMeasurementDecimals,
   MeasurementDecimalQuantizationMode
 } from "../measurement-certification";
+import type { MeasurementMonetaryPolicy } from "../measurement-certification";
 import type { MemoriaSheetLayout, ParsedMemoriaResumo } from "./measurement-item-documentary-history.types";
 import { classifyMemoriaResumo, type DocumentaryFieldObservation } from "./documentary-history-taxonomy";
 
@@ -15,18 +16,25 @@ import { classifyMemoriaResumo, type DocumentaryFieldObservation } from "./docum
  * em decimal exato (measurement-certification), nunca float para
  * decisão. Divergência é REPORTADA, nunca compensada, nunca rateada.
  *
+ * QUANTIDADE DOCUMENTAL × VALOR DERIVADO — distinção obrigatória:
+ * as memórias trazem SÓ QUANTIDADE. Qualquer `quantidade × preço
+ * unitário contratado` é VALOR DERIVADO DE REFERÊNCIA — NUNCA
+ * "valor documental", NUNCA evidência de reconciliação financeira
+ * histórica. A política monetária do valor derivado entra
+ * EXPLICITAMENTE como input; sem política comprovada, o valor derivado
+ * fica `null` (não se inventa política).
+ *
  * REALIDADE DOCUMENTADA (arquivo real BM_08): as 177 abas de memória
  * estão em CORTES HETEROGÊNEOS (MED-01, 02, 04, 05, 06, 07, 08) — não
  * há um "acumulado item a item no mês X" para X < junho/2026. Só o
  * BM nº 08 (junho) tem valor por item AUTORITATIVO (as 15 linhas
- * formais). O parser expõe o que existe; a reconciliação classifica
- * honestamente o que fecha e o que fica "sem base documental".
+ * formais do boletim). O parser expõe o que existe; a reconciliação
+ * classifica honestamente o que fecha e o que fica "sem base documental".
  */
 
 const MONEY_SCALE = 2;
 const QUANTITY_SCALE = 6;
 const MONEY = MeasurementDecimalQuantizationMode.RoundHalfAwayFromZero;
-const MONEY_POLICY = { key: "BRL", scale: MONEY_SCALE, quantizationMode: MONEY };
 /** Política de centavos: até 1 centavo por grupo/período é "dentro da política", acima é divergência. */
 const CENTS_TOLERANCE_DECIMAL = "0.01";
 
@@ -57,11 +65,12 @@ export interface DocumentaryCurvaSObraPeriod {
   readonly actualPeriodValueDecimal: string | null;
 }
 
-export type IdentityResolutionBasis = "operational_item_id" | "documentary_code_only" | "unresolved";
+export type IdentityResolutionBasis = "operational_item_id" | "unresolved";
 
 export interface ItemDocumentaryObservation {
   readonly itemCode: string;
-  readonly managedServiceItemId: string | null;
+  /** SEMPRE não-nulo: só abas que resolvem contra um dos itens oficiais entram no universo item a item. */
+  readonly managedServiceItemId: string;
   readonly identityBasis: IdentityResolutionBasis;
   readonly groupCode: string | null;
   readonly sourceSheet: string;
@@ -71,11 +80,20 @@ export interface ItemDocumentaryObservation {
   readonly semanticField: DocumentaryFieldObservation["semanticField"];
   readonly scope: DocumentaryFieldObservation["scope"];
   readonly unit: string | null;
+  /** QUANTIDADE DOCUMENTAL — o que a memória realmente traz. null = ausência, nunca 0. */
   readonly quantityDecimal: string | null;
   readonly unitPriceDecimal: string | null;
-  /** quantidade × preço unitário — SEMPRE derivado (as memórias não trazem valor). null quando falta insumo. */
-  readonly valueDecimal: string | null;
-  readonly valueIsDerived: boolean;
+  /**
+   * VALOR DERIVADO DE REFERÊNCIA = quantidade × preço unitário do
+   * contrato, quantizado pela política monetária EXPLÍCITA fornecida.
+   * NÃO é valor documental; NÃO é evidência de reconciliação financeira.
+   * null quando falta quantidade, preço ou política comprovada.
+   */
+  readonly derivedReferenceValueDecimal: string | null;
+  /** true só quando `derivedReferenceValueDecimal` foi calculado. */
+  readonly derivedReferenceValueAvailable: boolean;
+  /** Chave da política monetária usada no valor derivado (rastreabilidade). null quando não houve valor derivado. */
+  readonly derivedReferenceMonetaryPolicyKey: string | null;
   readonly derivedFromCumulative: boolean;
   readonly isUnambiguous: boolean;
   readonly reasonIfAmbiguous: string | null;
@@ -84,46 +102,71 @@ export interface ItemDocumentaryObservation {
 
 export interface BuildItemDocumentaryObservationsInput {
   readonly memorias: ReadonlyArray<ParsedMemoriaResumo>;
+  /** APENAS os itens de serviço contratuais autoritativos (300 na Base Contratual da Lagoa). Grupos/subgrupos NUNCA entram. */
   readonly contractItems: ReadonlyArray<DocumentaryContractItem>;
+  /**
+   * Política monetária do VALOR DERIVADO DE REFERÊNCIA. Sem ela, o valor
+   * derivado fica null (não se inventa política). Para BM08/Lagoa a
+   * política documental comprovada é `source-document-truncation-to-cents`
+   * (scale 2, truncate toward zero) — deve ser passada explicitamente.
+   */
+  readonly derivedReferenceMonetaryPolicy?: MeasurementMonetaryPolicy | null;
 }
+
+export interface ItemDocumentaryObservationsResult {
+  readonly observations: ReadonlyArray<ItemDocumentaryObservation>;
+  /** Códigos de aba de memória que NÃO resolvem contra nenhum dos itens oficiais — ficam FORA do universo item a item. */
+  readonly memoriaCodesWithoutContractItem: ReadonlyArray<string>;
+  /** Quantas das abas de memória correspondem a um dos itens oficiais. */
+  readonly memoriasMatchingContractItems: number;
+}
+
+const PERIOD_RELEVANT_FIELDS = new Set<DocumentaryFieldObservation["semanticField"]>([
+  "quantity_to_measure_in_period",
+  "measured_accumulated_quantity_prior",
+  "executed_accumulated_quantity",
+  "monthly_series_quantity"
+]);
 
 export function buildItemDocumentaryObservations(
   input: BuildItemDocumentaryObservationsInput
-): ReadonlyArray<ItemDocumentaryObservation> {
+): ItemDocumentaryObservationsResult {
   const itemByCode = new Map(input.contractItems.map((item) => [item.code, item]));
-  const out: ItemDocumentaryObservation[] = [];
+  const policy = input.derivedReferenceMonetaryPolicy ?? null;
+  const observations: ItemDocumentaryObservation[] = [];
+  const withoutItem: string[] = [];
+  let matching = 0;
 
   for (const memoria of input.memorias) {
     const contractItem = itemByCode.get(memoria.itemCode) ?? null;
-    const managedServiceItemId = contractItem?.managedServiceItemId ?? null;
-    const identityBasis: IdentityResolutionBasis =
-      managedServiceItemId !== null ? "operational_item_id" : "documentary_code_only";
-    const unitPriceDecimal = contractItem?.unitPriceDecimal ?? null;
-    const groupCode = contractItem?.groupCode ?? null;
+    if (contractItem === null) {
+      // Aba de memória sem item oficial correspondente (código estrutural
+      // de grupo/subgrupo, item renomeado, etc.). FORA do universo item a
+      // item — nunca vira observação, nunca conta como item contratual.
+      withoutItem.push(memoria.itemCode);
+      continue;
+    }
+    matching += 1;
 
     for (const field of classifyMemoriaResumo(memoria)) {
-      // Só os campos relevantes à reconstrução de execução por período /
-      // acumulado entram como observação de item; `contract_quantity` e
-      // `contract_balance_quantity` são contexto, não execução.
-      if (
-        field.semanticField !== "quantity_to_measure_in_period" &&
-        field.semanticField !== "measured_accumulated_quantity_prior" &&
-        field.semanticField !== "executed_accumulated_quantity" &&
-        field.semanticField !== "monthly_series_quantity"
-      ) {
+      if (!PERIOD_RELEVANT_FIELDS.has(field.semanticField)) {
         continue;
       }
 
-      const valueDecimal =
-        field.quantityDecimal !== null && unitPriceDecimal !== null
-          ? calculateMeasurementLineValue({ quantity: field.quantityDecimal, unitValue: unitPriceDecimal, policy: MONEY_POLICY })
+      const derivedReferenceValueDecimal =
+        field.quantityDecimal !== null && contractItem.unitPriceDecimal !== null && policy !== null
+          ? calculateMeasurementLineValue({
+              quantity: field.quantityDecimal,
+              unitValue: contractItem.unitPriceDecimal,
+              policy
+            })
           : null;
 
-      out.push({
+      observations.push({
         itemCode: memoria.itemCode,
-        managedServiceItemId,
-        identityBasis,
-        groupCode,
+        managedServiceItemId: contractItem.managedServiceItemId,
+        identityBasis: "operational_item_id",
+        groupCode: contractItem.groupCode,
         sourceSheet: memoria.sheetName,
         layout: memoria.layout,
         measurementRef: field.measurementRef,
@@ -132,9 +175,10 @@ export function buildItemDocumentaryObservations(
         scope: field.scope,
         unit: field.unit,
         quantityDecimal: field.quantityDecimal,
-        unitPriceDecimal,
-        valueDecimal,
-        valueIsDerived: valueDecimal !== null,
+        unitPriceDecimal: contractItem.unitPriceDecimal,
+        derivedReferenceValueDecimal,
+        derivedReferenceValueAvailable: derivedReferenceValueDecimal !== null,
+        derivedReferenceMonetaryPolicyKey: derivedReferenceValueDecimal !== null ? policy?.key ?? null : null,
         derivedFromCumulative: field.derivedFromCumulative,
         isUnambiguous: field.isUnambiguous,
         reasonIfAmbiguous: field.reasonIfAmbiguous,
@@ -143,7 +187,11 @@ export function buildItemDocumentaryObservations(
     }
   }
 
-  return out;
+  return {
+    observations,
+    memoriaCodesWithoutContractItem: withoutItem,
+    memoriasMatchingContractItems: matching
+  };
 }
 
 // -------------------------------------------------------------------
@@ -314,14 +362,28 @@ export function reconcileDocumentaryHistory(input: ReconcileDocumentaryHistoryIn
 // -------------------------------------------------------------------
 
 export interface DocumentaryHistoryPreview {
+  /** = quantidade de itens de serviço AUTORITATIVOS passados (300 na Lagoa). NUNCA linhas estruturais. */
   readonly totalContractItems: number;
   readonly totalMemoriasFound: number;
+  /** Das memórias, quantas resolvem contra um dos itens oficiais (entram no universo item a item). */
+  readonly memoriasMatchingContractItems: number;
+  /** Códigos de aba de memória SEM item oficial correspondente (grupo/subgrupo, renomeado…). Ficam de fora. */
+  readonly memoriaCodesWithoutContractItem: ReadonlyArray<string>;
   readonly layoutCounts: Readonly<Record<MemoriaSheetLayout, number>>;
   readonly itemsWithAtLeastOneUnambiguousPeriod: number;
   readonly totalItemPeriodObservations: number;
   readonly ambiguousObservations: number;
   readonly periodsCoveredByMeasurementRef: ReadonlyArray<number>;
-  readonly documentaryValueByMeasurementRef: ReadonlyArray<{ readonly measurementRef: number | null; readonly valueDecimal: string }>;
+  /** QUANTIDADE DOCUMENTAL: nº de observações de quantidade por MED de referência (unidades heterogêneas -> nunca somadas). */
+  readonly documentaryQuantityObservationsByMeasurementRef: ReadonlyArray<{ readonly measurementRef: number | null; readonly observationCount: number }>;
+  /**
+   * VALOR DERIVADO DE REFERÊNCIA por MED (qtd × preço unitário, política
+   * monetária explícita). NÃO é histórico financeiro autoritativo e NÃO
+   * é usado em nenhuma reconciliação. Vazio quando nenhuma política foi
+   * fornecida ao builder de observações.
+   */
+  readonly derivedReferenceValueByMeasurementRef: ReadonlyArray<{ readonly measurementRef: number | null; readonly derivedReferenceValueDecimal: string }>;
+  readonly derivedReferenceMonetaryPolicyKey: string | null;
   readonly reconciliationByObraPeriod: ReadonlyArray<ObraPeriodReconciliation>;
   readonly reconciliationByGroupPeriod: ReadonlyArray<GroupPeriodReconciliation>;
   readonly divergences: ReadonlyArray<GroupPeriodReconciliation>;
@@ -336,12 +398,20 @@ export interface DocumentaryHistoryPreview {
 export interface BuildDocumentaryHistoryPreviewInput {
   readonly memorias: ReadonlyArray<ParsedMemoriaResumo>;
   readonly layoutCounts: Readonly<Record<MemoriaSheetLayout, number>>;
+  /** APENAS os itens de serviço contratuais autoritativos (300 na Lagoa). */
   readonly contractItems: ReadonlyArray<DocumentaryContractItem>;
   readonly observations: ReadonlyArray<ItemDocumentaryObservation>;
   readonly reconciliation: DocumentaryReconciliation;
 }
 
 export function buildDocumentaryHistoryPreview(input: BuildDocumentaryHistoryPreviewInput): DocumentaryHistoryPreview {
+  const contractCodes = new Set(input.contractItems.map((item) => item.code));
+  // Universo item a item = SÓ as memórias que resolvem contra um dos itens oficiais.
+  const officialMemorias = input.memorias.filter((memoria) => contractCodes.has(memoria.itemCode));
+  const memoriaCodesWithoutContractItem = input.memorias
+    .filter((memoria) => !contractCodes.has(memoria.itemCode))
+    .map((memoria) => memoria.itemCode);
+
   const periodFieldObservations = input.observations.filter(
     (observation) =>
       observation.semanticField === "quantity_to_measure_in_period" ||
@@ -349,35 +419,50 @@ export function buildDocumentaryHistoryPreview(input: BuildDocumentaryHistoryPre
   );
 
   const unambiguousPeriodItemCodes = new Set(
-    periodFieldObservations.filter((observation) => observation.isUnambiguous && observation.quantityDecimal !== null).map((o) => o.itemCode)
+    periodFieldObservations
+      .filter((observation) => observation.isUnambiguous && observation.quantityDecimal !== null)
+      .map((observation) => observation.itemCode)
   );
 
   const ambiguousObservations = input.observations.filter((observation) => !observation.isUnambiguous).length;
 
   const refSet = new Set<number>();
-  for (const memoria of input.memorias) {
+  for (const memoria of officialMemorias) {
     if (memoria.measurementNumber !== null) refSet.add(memoria.measurementNumber);
   }
   const periodsCoveredByMeasurementRef = Array.from(refSet).sort((a, b) => a - b);
 
-  const valueByRef = new Map<number | null, string[]>();
+  // QUANTIDADE DOCUMENTAL: contagem de observações por MED (unidades
+  // diferentes -> nunca somar quantidades).
+  const qtyCountByRef = new Map<number | null, number>();
+  // VALOR DERIVADO DE REFERÊNCIA: só quando o builder derivou (política explícita).
+  const derivedByRef = new Map<number | null, string[]>();
+  let derivedPolicyKey: string | null = null;
   for (const observation of periodFieldObservations) {
-    if (observation.valueDecimal === null) continue;
-    const key = observation.measurementRef;
-    const bucket = valueByRef.get(key) ?? [];
-    bucket.push(observation.valueDecimal);
-    valueByRef.set(key, bucket);
+    if (observation.quantityDecimal !== null) {
+      qtyCountByRef.set(observation.measurementRef, (qtyCountByRef.get(observation.measurementRef) ?? 0) + 1);
+    }
+    if (observation.derivedReferenceValueDecimal !== null) {
+      const bucket = derivedByRef.get(observation.measurementRef) ?? [];
+      bucket.push(observation.derivedReferenceValueDecimal);
+      derivedByRef.set(observation.measurementRef, bucket);
+      derivedPolicyKey = observation.derivedReferenceMonetaryPolicyKey;
+    }
   }
-  const documentaryValueByMeasurementRef = Array.from(valueByRef.entries())
-    .map(([measurementRef, values]) => ({ measurementRef, valueDecimal: addMeasurementDecimals(values, MONEY_SCALE) }))
+  const documentaryQuantityObservationsByMeasurementRef = Array.from(qtyCountByRef.entries())
+    .map(([measurementRef, observationCount]) => ({ measurementRef, observationCount }))
+    .sort((a, b) => (a.measurementRef ?? -1) - (b.measurementRef ?? -1));
+  const derivedReferenceValueByMeasurementRef = Array.from(derivedByRef.entries())
+    .map(([measurementRef, values]) => ({
+      measurementRef,
+      derivedReferenceValueDecimal: addMeasurementDecimals(values, MONEY_SCALE)
+    }))
     .sort((a, b) => (a.measurementRef ?? -1) - (b.measurementRef ?? -1));
 
   const divergences = input.reconciliation.byGroupPeriod.filter((row) => row.status === "divergent");
   const partialCoverage = input.reconciliation.byGroupPeriod.filter((row) => row.status === "partial_coverage");
 
-  const memoriaByCode = new Map(input.memorias.map((memoria) => [memoria.itemCode, memoria]));
-
-  const itemsAboveContractQuantity = input.memorias
+  const itemsAboveContractQuantity = officialMemorias
     .filter((memoria) => {
       const balanceNegative = memoria.contractBalanceQuantity !== null && memoria.contractBalanceQuantity < 0;
       const executedOver =
@@ -394,7 +479,7 @@ export function buildDocumentaryHistoryPreview(input: BuildDocumentaryHistoryPre
       sourceSheet: memoria.sheetName
     }));
 
-  const executedNotProvenAsMeasured = input.memorias
+  const executedNotProvenAsMeasured = officialMemorias
     .filter(
       (memoria) =>
         memoria.executedAccumulatedQuantity !== null &&
@@ -408,7 +493,8 @@ export function buildDocumentaryHistoryPreview(input: BuildDocumentaryHistoryPre
       sourceSheet: memoria.sheetName
     }));
 
-  const matchedCodes = new Set(input.observations.map((observation) => observation.itemCode));
+  // Sem histórico recuperável = itens oficiais SEM nenhuma observação de
+  // período inequívoca (a base é sempre os 300, nunca as memórias).
   const itemsWithoutRecoverableHistory = input.contractItems.filter(
     (item) => !unambiguousPeriodItemCodes.has(item.code)
   ).length;
@@ -427,18 +513,19 @@ export function buildDocumentaryHistoryPreview(input: BuildDocumentaryHistoryPre
     }))
   ];
 
-  void memoriaByCode;
-  void matchedCodes;
-
   return {
     totalContractItems: input.contractItems.length,
     totalMemoriasFound: input.memorias.length,
+    memoriasMatchingContractItems: officialMemorias.length,
+    memoriaCodesWithoutContractItem,
     layoutCounts: input.layoutCounts,
     itemsWithAtLeastOneUnambiguousPeriod: unambiguousPeriodItemCodes.size,
     totalItemPeriodObservations: periodFieldObservations.length,
     ambiguousObservations,
     periodsCoveredByMeasurementRef,
-    documentaryValueByMeasurementRef,
+    documentaryQuantityObservationsByMeasurementRef,
+    derivedReferenceValueByMeasurementRef,
+    derivedReferenceMonetaryPolicyKey: derivedPolicyKey,
     reconciliationByObraPeriod: input.reconciliation.byObraPeriod,
     reconciliationByGroupPeriod: input.reconciliation.byGroupPeriod,
     divergences,

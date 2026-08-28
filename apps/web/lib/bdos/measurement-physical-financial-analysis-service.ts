@@ -562,23 +562,35 @@ export function buildPhysicalFinancialExecutionHistory(
       const monthly = series.points[index];
       const window = series.points.slice(0, index + 1);
       const plannedPeriodValueDecimal = canonicalOrNull(monthly.plannedValue ?? null) ?? "0.00";
-      // null = mês sem realização documentada para o grupo (não 0).
-      const actualPeriodValueDecimal = canonicalOrNull(monthly.actualValue ?? null);
       const plannedAccumulatedValueDecimal = sumValues(window.map((wp) => wp.plannedValue));
-      const actualAccumulatedValueDecimal = sumValues(window.map((wp) => wp.actualValue));
       const plannedAccumulatedPercent = sumFractionsToPercentPoints(window.map((wp) => wp.plannedPercent));
-      const actualAccumulatedPercent = sumFractionsToPercentPoints(window.map((wp) => wp.actualPercent));
-      const deviationAccumulatedValueDecimal = subtractMeasurementDecimals(
-        actualAccumulatedValueDecimal,
-        plannedAccumulatedValueDecimal,
-        MONEY_SCALE
-      );
+
+      // MESMA SEMÂNTICA DA OBRA: se o PERÍODO CORRENTE do grupo não tem
+      // realização documentada (`monthly.actualValue` vazio), então TUDO
+      // que depende de realizado fica null — nunca 0, e nunca carregar o
+      // acumulado dos meses anteriores como se fosse a posição
+      // documental deste mês. O planejado segue disponível.
+      const hasActualThisPeriod = monthly.actualValue !== null && Number.isFinite(monthly.actualValue);
+      const actualPeriodValueDecimal = hasActualThisPeriod
+        ? canonicalOrNull(monthly.actualValue ?? null)
+        : null;
+      const actualAccumulatedValueDecimal = hasActualThisPeriod
+        ? sumValues(window.map((wp) => wp.actualValue))
+        : null;
+      const actualAccumulatedPercent = hasActualThisPeriod
+        ? sumFractionsToPercentPoints(window.map((wp) => wp.actualPercent))
+        : null;
+      const deviationAccumulatedValueDecimal =
+        actualAccumulatedValueDecimal !== null
+          ? subtractMeasurementDecimals(actualAccumulatedValueDecimal, plannedAccumulatedValueDecimal, MONEY_SCALE)
+          : null;
       const deviationAccumulatedPercentPoints =
-        plannedAccumulatedPercent !== null && actualAccumulatedPercent !== null
+        actualAccumulatedPercent !== null && plannedAccumulatedPercent !== null
           ? subtractMeasurementDecimals(actualAccumulatedPercent, plannedAccumulatedPercent, PERCENT_POINT_SCALE)
           : null;
       const nothingScheduled =
-        isCanonicalZero(plannedAccumulatedValueDecimal) && isCanonicalZero(actualAccumulatedValueDecimal);
+        isCanonicalZero(plannedAccumulatedValueDecimal) &&
+        (actualAccumulatedValueDecimal === null || isCanonicalZero(actualAccumulatedValueDecimal));
 
       points.push({
         periodLabel: datedPoints[index].period,
@@ -591,9 +603,12 @@ export function buildPhysicalFinancialExecutionHistory(
         actualAccumulatedPercent,
         deviationAccumulatedValueDecimal,
         deviationAccumulatedPercentPoints,
-        situation: nothingScheduled
-          ? "not_scheduled"
-          : classifySituation(deviationAccumulatedPercentPoints, deviationAccumulatedValueDecimal)
+        situation:
+          deviationAccumulatedValueDecimal === null
+            ? null
+            : nothingScheduled
+              ? "not_scheduled"
+              : classifySituation(deviationAccumulatedPercentPoints, deviationAccumulatedValueDecimal)
       });
     }
     groupHistories.push({ groupCode: activity.code, groupName: activity.name, points });

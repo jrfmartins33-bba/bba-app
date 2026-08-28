@@ -27,6 +27,8 @@ export type {
   DocumentaryCurvaSObraPeriod,
   IdentityResolutionBasis,
   ItemDocumentaryObservation,
+  ItemDocumentaryObservationsResult,
+  BuildItemDocumentaryObservationsInput,
   GroupPeriodReconciliationStatus,
   GroupPeriodReconciliation,
   ObraPeriodReconciliation,
