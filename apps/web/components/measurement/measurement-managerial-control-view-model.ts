@@ -89,6 +89,41 @@ export function managerialBarWidthPercent(executedPercent: string | null): numbe
   return parsed >= 100 ? 100 : Math.round(parsed);
 }
 
+// ---- "Evolução da execução" — rótulo de mês e texto-resumo ----
+
+/** "2026-06-01" -> "jun/26". Determinístico, sem Date/locale. */
+export function formatHistoryMonthLabel(point: { readonly periodLabel: string; readonly periodDate: string }): string {
+  const match = /^(\d{4})-(\d{2})/.exec(point.periodDate);
+  if (!match) return point.periodLabel;
+  const names = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  const monthIndex = Number(match[2]) - 1;
+  return `${names[monthIndex] ?? match[2]}/${match[1].slice(2)}`;
+}
+
+/**
+ * Texto-resumo da seção "Evolução da execução" QUANDO o período
+ * selecionado NÃO tem realização documentada. Construído genericamente
+ * do read model: nunca inventa acumulado — se não houver período
+ * anterior com realização, a parte do acumulado é omitida. Ausência
+ * nunca vira zero; período sem realização nunca vira atraso/adiantamento.
+ * Só formata; não recalcula nada.
+ */
+export function buildExecutionHistoryNoRealizationSummary(input: {
+  readonly selectedMonthLabel: string;
+  readonly plannedPeriodValueDecimal: string;
+  readonly lastRealized: { readonly monthLabel: string; readonly actualAccumulatedValueDecimal: string } | null;
+}): string {
+  const planned = `planejado no período: ${formatManagerialBRL(input.plannedPeriodValueDecimal)}`;
+  if (input.lastRealized === null) {
+    return `Sem realização registrada em ${input.selectedMonthLabel} · ${planned}.`;
+  }
+  return (
+    `Sem realização registrada em ${input.selectedMonthLabel} · ` +
+    `realizado acumulado disponível até ${input.lastRealized.monthLabel}: ` +
+    `${formatManagerialBRL(input.lastRealized.actualAccumulatedValueDecimal)} · ${planned}.`
+  );
+}
+
 // ---- filtro / ordenação (determinísticos, sobre dados já do servidor) ----
 
 export type ManagerialSortKey = "code" | "contract_value" | "registered_value" | "balance" | "executed_percent";

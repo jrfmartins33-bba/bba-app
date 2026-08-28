@@ -9,7 +9,9 @@ import { fetchManagerialControl, type ManagerialControlView } from "./measuremen
 import { MeasurementManagerialControlItemRow } from "./measurement-managerial-control-item-row";
 import {
   applyManagerialFilter,
+  buildExecutionHistoryNoRealizationSummary,
   DEFAULT_MANAGERIAL_FILTER,
+  formatHistoryMonthLabel,
   formatManagerialBRL,
   formatManagerialPercent,
   formatManagerialStatus,
@@ -359,15 +361,7 @@ function LoadedView({
   );
 }
 
-function shortMonthLabel(point: { readonly periodLabel: string; readonly periodDate: string }): string {
-  // "2026-06-01" -> "jun/26". Determinístico, sem Date/locale.
-  const match = /^(\d{4})-(\d{2})/.exec(point.periodDate);
-  if (!match) return point.periodLabel;
-  const names = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-  const monthIndex = Number(match[2]) - 1;
-  const name = names[monthIndex] ?? match[2];
-  return `${name}/${match[1].slice(2)}`;
-}
+const shortMonthLabel = formatHistoryMonthLabel;
 
 const historyBRL = (value: string | null): string => (value === null ? "—" : formatManagerialBRL(value));
 
@@ -399,6 +393,16 @@ function ExecutionHistorySection({ history }: { readonly history: PhysicalFinanc
 
   const clampedIndex = Math.min(selectedIndex, history.obra.length - 1);
   const point = history.obra[clampedIndex];
+  // Período selecionado sem realização documentada -> localizar o ÚLTIMO
+  // período ANTERIOR que tem realização, para o texto-resumo. Nunca
+  // inventa acumulado: se não houver, fica null.
+  const priorRealized =
+    point.situation === null
+      ? history.obra
+          .slice(0, clampedIndex)
+          .reverse()
+          .find((candidate) => candidate.actualAccumulatedValueDecimal !== null) ?? null
+      : null;
   const groupsForPeriod = history.groups
     .map((group) => ({ groupCode: group.groupCode, groupName: group.groupName, point: group.points[clampedIndex] ?? null }))
     .filter((entry): entry is { groupCode: string; groupName: string; point: PhysicalFinancialHistoryPoint } => entry.point !== null);
@@ -458,10 +462,26 @@ function ExecutionHistorySection({ history }: { readonly history: PhysicalFinanc
         />
       </div>
 
-      <p className="managerial-control-history__situation">
-        <HistorySituationBadge situation={point.situation} /> no acumulado até {shortMonthLabel(point)} · planejado no
-        período {historyBRL(point.plannedPeriodValueDecimal)}.
-      </p>
+      {point.situation !== null ? (
+        <p className="managerial-control-history__situation">
+          <HistorySituationBadge situation={point.situation} /> no acumulado até {shortMonthLabel(point)} · planejado no
+          período {historyBRL(point.plannedPeriodValueDecimal)}.
+        </p>
+      ) : (
+        <p className="managerial-control-history__situation">
+          {buildExecutionHistoryNoRealizationSummary({
+            selectedMonthLabel: shortMonthLabel(point),
+            plannedPeriodValueDecimal: point.plannedPeriodValueDecimal,
+            lastRealized:
+              priorRealized && priorRealized.actualAccumulatedValueDecimal !== null
+                ? {
+                    monthLabel: shortMonthLabel(priorRealized),
+                    actualAccumulatedValueDecimal: priorRealized.actualAccumulatedValueDecimal
+                  }
+                : null
+          })}
+        </p>
+      )}
 
       <details className="managerial-control-history__disclosure">
         <summary>Obra — mês a mês</summary>

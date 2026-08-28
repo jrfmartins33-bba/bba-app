@@ -3,9 +3,36 @@ import { resolve } from "node:path";
 import { importPlanningExcel } from "../../../../packages/bdos-core/src/domain/schedule-management/adapters/excel-import/excel-import";
 import {
   buildPhysicalFinancialExecutionHistory,
-  type PhysicalFinancialExecutionHistory
+  type PhysicalFinancialExecutionHistory,
+  type PhysicalFinancialHistoryPoint
 } from "./measurement-physical-financial-analysis-service";
+import {
+  buildExecutionHistoryNoRealizationSummary,
+  formatHistoryMonthLabel
+} from "../../components/measurement/measurement-managerial-control-view-model";
 import type { PlanningDataset } from "@bba/bdos-core/domain/schedule-management";
+
+/**
+ * Reproduz o que a UI faz: para um período SEM realização, procura o
+ * último período anterior COM realização e monta o texto-resumo. Só
+ * apresentação — nenhum recálculo.
+ */
+function noRealizationSummary(obra: ReadonlyArray<PhysicalFinancialHistoryPoint>, index: number): string {
+  const point = obra[index];
+  const prior =
+    obra
+      .slice(0, index)
+      .reverse()
+      .find((candidate) => candidate.actualAccumulatedValueDecimal !== null) ?? null;
+  return buildExecutionHistoryNoRealizationSummary({
+    selectedMonthLabel: formatHistoryMonthLabel(point),
+    plannedPeriodValueDecimal: point.plannedPeriodValueDecimal,
+    lastRealized:
+      prior && prior.actualAccumulatedValueDecimal !== null
+        ? { monthLabel: formatHistoryMonthLabel(prior), actualAccumulatedValueDecimal: prior.actualAccumulatedValueDecimal }
+        : null
+  });
+}
 
 // "Evolução da execução" (Parte A) — histórico OBRA × mês e GRUPO × mês
 // a partir da Curva S consolidada. Mesmas primitivas de
@@ -184,6 +211,87 @@ runTest("grupo em junho/2026 (COM realização) continua com situação e acumul
   assertEqual(g1June?.actualPeriodValueDecimal ?? null, "42015.69", "realizado no período de junho intacto");
   assertEqual(g1June?.actualAccumulatedValueDecimal ?? null, "969649.18", "acumulado realizado de junho intacto");
   assertTrue(g1June?.situation !== null, "situação de junho continua definida");
+});
+
+runTest("texto-resumo de jul/2026 (sem realização): aponta o acumulado disponível até jun/2026, não 'sem realização no acumulado'", () => {
+  const h = history();
+  const julyIndex = h.obra.findIndex((point) => point.periodDate === "2026-07-01");
+  assertTrue(julyIndex >= 0, "julho presente na série");
+  assertEqual(h.obra[julyIndex].situation, null, "julho sem realização documentada");
+
+  const text = noRealizationSummary(h.obra, julyIndex);
+  assertTrue(text.includes("Sem realização registrada em jul/26"), `contém 'Sem realização registrada em jul/26' -> ${text}`);
+  assertTrue(text.includes("realizado acumulado disponível até jun/26"), `contém 'realizado acumulado disponível até jun/26' -> ${text}`);
+  assertTrue(text.includes("R$ 4.772.540,69"), `contém o acumulado real R$ 4.772.540,69 -> ${text}`);
+  assertTrue(text.includes("planejado no período: R$ 445.843,94"), `contém 'planejado no período: R$ 445.843,94' -> ${text}`);
+  assertTrue(!text.includes("Sem realização no acumulado até jul/26"), "NÃO contém o texto antigo enganoso");
+});
+
+runTest("texto-resumo genérico: período futuro sem realizado + último período anterior realizado (sem hardcode)", () => {
+  const obra: PhysicalFinancialHistoryPoint[] = [
+    {
+      periodLabel: "mês 1",
+      periodDate: "2030-01-01",
+      plannedPeriodValueDecimal: "1000.00",
+      actualPeriodValueDecimal: "800.00",
+      plannedAccumulatedValueDecimal: "1000.00",
+      actualAccumulatedValueDecimal: "800.00",
+      plannedAccumulatedPercent: "50.00",
+      actualAccumulatedPercent: "40.00",
+      deviationAccumulatedValueDecimal: "-200.00",
+      deviationAccumulatedPercentPoints: "-10.00",
+      situation: "below_planned"
+    },
+    {
+      periodLabel: "mês 2",
+      periodDate: "2030-02-01",
+      plannedPeriodValueDecimal: "1000.00",
+      actualPeriodValueDecimal: null,
+      plannedAccumulatedValueDecimal: "2000.00",
+      actualAccumulatedValueDecimal: null,
+      plannedAccumulatedPercent: null,
+      actualAccumulatedPercent: null,
+      deviationAccumulatedValueDecimal: null,
+      deviationAccumulatedPercentPoints: null,
+      situation: null
+    }
+  ];
+  const text = noRealizationSummary(obra, 1);
+  assertEqual(
+    text,
+    "Sem realização registrada em fev/30 · realizado acumulado disponível até jan/30: R$ 800,00 · planejado no período: R$ 1.000,00.",
+    "frase montada genericamente do read model"
+  );
+});
+
+runTest("texto-resumo genérico: nenhum período anterior com realização -> não inventa acumulado", () => {
+  const obra: PhysicalFinancialHistoryPoint[] = [
+    {
+      periodLabel: "mês 1",
+      periodDate: "2030-01-01",
+      plannedPeriodValueDecimal: "1000.00",
+      actualPeriodValueDecimal: null,
+      plannedAccumulatedValueDecimal: "1000.00",
+      actualAccumulatedValueDecimal: null,
+      plannedAccumulatedPercent: null,
+      actualAccumulatedPercent: null,
+      deviationAccumulatedValueDecimal: null,
+      deviationAccumulatedPercentPoints: null,
+      situation: null
+    }
+  ];
+  const text = noRealizationSummary(obra, 0);
+  assertEqual(
+    text,
+    "Sem realização registrada em jan/30 · planejado no período: R$ 1.000,00.",
+    "sem acumulado anterior, a frase omite a parte do acumulado (nunca inventa)"
+  );
+});
+
+runTest("período COM realização mantém o texto atual (badge de situação + acumulado)", () => {
+  const h = history();
+  const juneIndex = h.obra.findIndex((point) => point.periodDate === "2026-06-01");
+  assertTrue(h.obra[juneIndex].situation !== null, "junho tem situação -> caminho do texto atual, não o de 'sem realização'");
 });
 
 runTest("sem cronograma físico-financeiro consolidado -> indisponível, com motivo, nunca inventa", () => {
