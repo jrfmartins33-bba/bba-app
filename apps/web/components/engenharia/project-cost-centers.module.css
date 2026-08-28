@@ -461,7 +461,19 @@
 
 .matrixTotalRow td {
   border-top: 2px solid var(--app-border);
-  background: rgba(185, 149, 79, 0.05);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.matrixHeadCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.matrixToneValue {
+  color: var(--cc-tone, var(--text-secondary));
+  font-weight: 600;
 }
 
 .matrixCards {
@@ -685,4 +697,122 @@
   font-size: 0.83rem;
   color: var(--text-secondary);
   line-height: 1.55;
+}
+
+/* =====================================================================
+   IDENTIDADE VISUAL DOS CENTROS DE CUSTO
+   O tom (--cc-tone) é APENAS identidade do Centro de Custo.
+   Nunca positivo/negativo/lucro/prejuízo. Sem verde e sem vermelho.
+   ===================================================================== */
+.tone1 { --cc-tone: #e2b979; }  /* âmbar premium BBA */
+.tone2 { --cc-tone: #7cc4e8; }  /* azul-claro/ciano premium */
+.tone3 { --cc-tone: #b9a3d6; }  /* violeta suave */
+.tone4 { --cc-tone: #e0a878; }  /* areia quente (não é vermelho) */
+.tone5 { --cc-tone: #8fb4cf; }  /* azul-aço */
+.tone6 { --cc-tone: #c9b98f; }  /* dourado neutro */
+
+.toneDot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--cc-tone, var(--text-muted));
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--app-divider);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary-strong);
+}
+
+/* ---- Seletor de período ---- */
+.periodPicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.periodPicker label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.periodSelect {
+  background: var(--app-card);
+  color: var(--text-primary);
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.periodSelect:hover {
+  border-color: var(--bba-gold);
+}
+
+/* ---- KPI com acento de identidade ---- */
+.kpiCardTone {
+  border-top: 3px solid var(--cc-tone, var(--app-border));
+}
+
+/* ---- Barra empilhada por Centro de Custo ---- */
+.stackedBar {
+  display: flex;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 0.5rem 0;
+}
+
+.stackedSeg {
+  height: 100%;
+  background: var(--cc-tone, var(--text-muted));
+  min-width: 2px;
+}
+
+.familyHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+/* ---- Chip de distribuição na tabela detalhada ---- */
+.distribChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-right: 0.6rem;
+  white-space: nowrap;
+}
+
+.allocationFull {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.matrixCardTotalMobile {
+  border-color: var(--app-border);
+  background: rgba(255, 255, 255, 0.04);
 }

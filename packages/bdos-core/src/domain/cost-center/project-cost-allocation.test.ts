@@ -22,6 +22,12 @@ import {
   validateCostEntryProvenance,
   formatBrlFromDecimal,
   formatPercentPtBr,
+  pickDefaultCostCenterPeriod,
+  buildAvailablePeriods,
+  formatCostCenterPeriodLabel,
+  costCenterToneKey,
+  deriveCostCenterDisplayLabel,
+  COST_CENTER_TONE_COUNT,
   type AllocatableCostCenter,
   type ProjectCostAllocation,
   type ProjectCostEntry,
@@ -54,24 +60,27 @@ function assertThrows(fn: () => void, snippet: string): void {
 const ORG = "org-generic-0001";
 const PROJ = "proj-generic-0001";
 
+// Fixtures com CÓDIGOS realistas (último segmento = rótulo curto). As
+// strings "CONJASF"/"HIDROMEC" aqui são DADOS DE TESTE — os arquivos de
+// domínio permanecem sem hardcode (verificado no teste 24).
 const CONJASF: ReadModelCostCenterInput = {
   id: "cc-A",
   organizationId: ORG,
   engineeringProjectId: PROJ,
-  code: "CC-A",
-  name: "Centro de Custo A",
+  code: "CC-GEN-CONJASF",
+  name: "Centro de Custo CONJASF — Projeto Genérico",
   consortiumMemberId: "member-A",
-  consortiumMemberName: "Consorciada A",
+  consortiumMemberName: "CONJASF",
   consortiumShareBasisPoints: 5000,
 };
 const HIDROMEC: ReadModelCostCenterInput = {
   id: "cc-B",
   organizationId: ORG,
   engineeringProjectId: PROJ,
-  code: "CC-B",
-  name: "Centro de Custo B",
+  code: "CC-GEN-HIDROMEC",
+  name: "Centro de Custo HIDROMEC — Projeto Genérico",
   consortiumMemberId: "member-B",
-  consortiumMemberName: "Consorciada B",
+  consortiumMemberName: "HIDROMEC",
   consortiumShareBasisPoints: 5000,
 };
 
@@ -178,6 +187,7 @@ function buildGoldenReadModel(measurementAvailable = true) {
     period: "2026-06",
     periodLabel: "jun/2026",
     dataNature: CostDataNature.Demonstrative,
+    availablePeriods: ["2026-06"],
     costCenters: [CONJASF, HIDROMEC],
     costEntries: buildGoldenEntries(),
     operationalLayerMaterialized: true,
@@ -455,8 +465,9 @@ runTest("nenhum hardcode Lagoa/CONJASF/HIDROMEC/UUID no domínio e read model", 
     "src/domain/cost-center/project-cost-allocation.ts",
     "src/domain/cost-center/project-cost-allocation.types.ts",
     "src/domain/cost-center/project-cost-centers-read-model.ts",
+    "src/domain/cost-center/cost-center-period.ts",
   ];
-  const banned = [/lagoa/i, /conjasf/i, /hidromec/i, /f82dd4af/i, /a0904068/i, /22\/2025/, /252654/];
+  const banned = [/lagoa/i, /conjasf/i, /hidromec/i, /f82dd4af/i, /a0904068/i, /22\/2025/, /252654/, /2026-06/];
   for (const rel of files) {
     const content = readFileSync(resolve(process.cwd(), rel), "utf8");
     for (const re of banned) {
@@ -796,16 +807,184 @@ runTest("UI de Centros de Custo — nenhum termo técnico interno visível", () 
     "data_nature",
     "allocation_method",
     "basis_points",
+    "competence_period",
+    "visualToneKey",
   ];
   for (const term of forbidden) {
     assert(!COST_CENTERS_COMPONENT.includes(term), `sem "${term}" no componente`);
   }
-  for (const token of ["ManualDemonstration", "EQUAL_SPLIT", "CUSTOM_SPLIT"]) {
+  for (const token of ["ManualDemonstration", "EQUAL_SPLIT", "CUSTOM_SPLIT", "FinancialEntry"]) {
     assert(!new RegExp(`\\b${token}\\b`).test(COST_CENTERS_COMPONENT), `sem enum "${token}"`);
   }
-  // "DIRECT" isolado (enum) não pode aparecer; "Demonstrative" só em comparação de tipo, nunca renderizado.
   assert(!/\bDIRECT\b/.test(COST_CENTERS_COMPONENT), "sem enum DIRECT");
+  assert(!/\bDemonstrative\b/.test(COST_CENTERS_COMPONENT), "sem enum Demonstrative (usa rm.isDemonstrative)");
+  assert(!/\bActual\b/.test(COST_CENTERS_COMPONENT), "sem enum Actual");
   assert(!/["'>]\s*(DIRECT|EQUAL_SPLIT|CUSTOM_SPLIT|ManualDemonstration|Actual)\s*[<"']/.test(COST_CENTERS_COMPONENT), "nenhum enum renderizado como texto");
+  // Sem nomes de consorciados hardcodados e sem hexadecimal no JSX (cores ficam no CSS).
+  assert(!/CONJASF|HIDROMEC/.test(COST_CENTERS_COMPONENT), "sem nome de consorciado hardcodado no componente");
+  assert(!/#[0-9a-fA-F]{3,8}\b/.test(COST_CENTERS_COMPONENT), "sem cor hexadecimal no componente (fica no CSS)");
+});
+
+// ================= PERÍODO GERENCIAL =================
+runTest("período default — CUSTO REGISTRADO > MEDIÇÃO FORMAL > MÊS CORRENTE", () => {
+  // 1. mês atual 2026-08, custos só em 2026-06 → 2026-06
+  assertEqual(
+    pickDefaultCostCenterPeriod({ costEntryPeriods: ["2026-06"], latestBulletinPeriod: "2026-08", currentYearMonth: "2026-08" }),
+    "2026-06",
+    "custo vence a medição e o mês corrente",
+  );
+  // 2. custos 2026-06 e 2026-07 → 2026-07
+  assertEqual(
+    pickDefaultCostCenterPeriod({ costEntryPeriods: ["2026-06", "2026-07"], latestBulletinPeriod: null, currentYearMonth: "2026-08" }),
+    "2026-07",
+    "período de custo mais recente",
+  );
+  // 3. nenhum custo, BM em 2026-06 → 2026-06
+  assertEqual(
+    pickDefaultCostCenterPeriod({ costEntryPeriods: [], latestBulletinPeriod: "2026-06", currentYearMonth: "2026-08" }),
+    "2026-06",
+    "medição formal como fallback",
+  );
+  // 4. nenhum custo, nenhum BM → mês corrente
+  assertEqual(
+    pickDefaultCostCenterPeriod({ costEntryPeriods: [], latestBulletinPeriod: null, currentYearMonth: "2026-08" }),
+    "2026-08",
+    "mês corrente como último fallback",
+  );
+  // valores inválidos são ignorados
+  assertEqual(
+    pickDefaultCostCenterPeriod({ costEntryPeriods: ["2026-13", "2026-06"], latestBulletinPeriod: null, currentYearMonth: "2026-08" }),
+    "2026-06",
+    "período inválido descartado",
+  );
+});
+
+runTest("availablePeriods — únicos, ordenados do mais recente ao mais antigo, com rótulo pt-BR", () => {
+  const list = buildAvailablePeriods(["2026-06", "2026-08", "2026-07", "2026-06"]);
+  assertEqual(list.map((p) => p.value).join(","), "2026-08,2026-07,2026-06", "ordem desc e sem duplicatas");
+  assertEqual(list[0].label, "ago/2026", "rótulo pt-BR");
+  assertEqual(formatCostCenterPeriodLabel("2026-06"), "jun/2026", "jun/2026");
+  // garante que o período exibido apareça mesmo sem custos (período explícito e vazio)
+  const withEnsure = buildAvailablePeriods([], "2026-08");
+  assertEqual(withEnsure.map((p) => p.value).join(","), "2026-08", "período atual preservado");
+});
+
+runTest("seletor de período — read model expõe availablePeriods e período atual", () => {
+  const rm = buildGoldenReadModel();
+  assertEqual(rm.availablePeriods.map((p) => p.value).join(","), "2026-06", "availablePeriods do caso atual");
+  assertEqual(rm.availablePeriods[0].label, "jun/2026", "rótulo do seletor");
+  assertEqual(rm.period, "2026-06", "período atual");
+  // componente navega preservando ?empresa= e setando ?periodo=
+  assert(/onSelectPeriod/.test(COST_CENTERS_COMPONENT), "componente tem handler de período");
+  assert(/query\.set\("empresa"/.test(COST_CENTERS_COMPONENT) && /query\.set\("periodo", value\)/.test(COST_CENTERS_COMPONENT), "preserva empresa e seta periodo");
+});
+
+// ================= IDENTIDADE VISUAL =================
+runTest("tom visual — determinístico e estável por ordem, sem comparação nominal", () => {
+  assertEqual(costCenterToneKey(0), "cost-center-tone-1", "índice 0 → tom 1");
+  assertEqual(costCenterToneKey(1), "cost-center-tone-2", "índice 1 → tom 2");
+  assertEqual(costCenterToneKey(COST_CENTER_TONE_COUNT), "cost-center-tone-1", "cicla após N tons");
+
+  const rm = buildGoldenReadModel();
+  assertEqual(rm.costCenters[0].toneKey, "cost-center-tone-1", "1º Centro de Custo → tom 1");
+  assertEqual(rm.costCenters[1].toneKey, "cost-center-tone-2", "2º Centro de Custo → tom 2");
+  // dois builds seguidos → mesmos tons (estável)
+  const rm2 = buildGoldenReadModel();
+  assertEqual(rm2.costCenters[0].toneKey, rm.costCenters[0].toneKey, "estável entre builds");
+
+  // nenhum hardcode "CONJASF → cor" no domínio
+  const src = readFileSync(resolve(process.cwd(), "src/domain/cost-center/project-cost-centers-read-model.ts"), "utf8");
+  assert(!/conjasf/i.test(src) && !/hidromec/i.test(src), "read model sem nome de consorciado");
+  assert(!/#[0-9a-fA-F]{3,8}\b/.test(src), "read model sem hexadecimal (cor vive no CSS)");
+});
+
+runTest("rótulo curto (displayLabel) para leitura gerencial + fullLabel preservado", () => {
+  const rm = buildGoldenReadModel();
+  assertEqual(rm.costCenters[0].displayLabel, "CONJASF", "displayLabel curto");
+  assertEqual(rm.costCenters[1].displayLabel, "HIDROMEC", "displayLabel curto");
+  assert(rm.costCenters[0].fullLabel.includes("Centro de Custo CONJASF"), "fullLabel completo preservado");
+  assertEqual(deriveCostCenterDisplayLabel("CC-LAGOA-CONJASF", null, "Centro de Custo CONJASF — Lagoa"), "CONJASF", "derivado do código");
+  assertEqual(deriveCostCenterDisplayLabel("SEMSEGMENTO", "Nome Comercial", "Nome Longo do Centro"), "Nome Comercial", "fallback nome comercial curto");
+  assertEqual(deriveCostCenterDisplayLabel("x", null, "Centro de Custo Fulano — Obra"), "Centro de Custo Fulano — Obra", "fallback nome completo");
+});
+
+runTest("matriz e alocações carregam o MESMO tom por Centro de Custo", () => {
+  const rm = buildGoldenReadModel();
+  for (let i = 0; i < rm.costCenters.length; i += 1) {
+    assertEqual(rm.costMatrix.costCenters[i].toneKey, rm.costCenters[i].toneKey, `coluna ${i} usa o tom do Centro de Custo`);
+    assertEqual(rm.costMatrix.costCenters[i].displayLabel, rm.costCenters[i].displayLabel, `coluna ${i} usa o rótulo curto`);
+  }
+  const toneById = new Map(rm.costCenters.map((c) => [c.id, c.toneKey]));
+  for (const e of rm.entries) {
+    for (const a of e.allocations) {
+      assertEqual(a.toneKey, toneById.get(a.costCenterId), "alocação usa o tom do Centro de Custo");
+      assert(a.costCenterDisplayLabel === "CONJASF" || a.costCenterDisplayLabel === "HIDROMEC", "alocação usa rótulo curto");
+    }
+  }
+  for (const f of rm.families) {
+    for (const c of f.costCenters) {
+      assertEqual(c.toneKey, toneById.get(c.costCenterId), "família×centro usa o tom do Centro de Custo");
+    }
+  }
+});
+
+runTest("barra empilhada por Centro de Custo — segmentos somam 100 e refletem a proporção", () => {
+  const rm = buildGoldenReadModel();
+  const fam = (f: CostFamily) => rm.families.find((x) => x.family === f)!;
+
+  const rh = fam(CostFamily.RH);
+  assertEqual(rh.costCenters.map((c) => c.barWidthPercent).reduce((a, b) => a + b, 0), 100, "RH segmentos somam 100");
+  assertEqual(rh.costCenters[0].amountFormatted, "R$ 70.200,00", "RH · CONJASF");
+  assertEqual(rh.costCenters[1].amountFormatted, "R$ 59.800,00", "RH · HIDROMEC");
+  assertEqual(rh.costCenters[0].shareWithinFamilyFormatted, "54,00%", "RH · CONJASF % dentro da família");
+
+  const comb = fam(CostFamily.Combustivel);
+  assertEqual(comb.costCenters.map((c) => c.barWidthPercent).join("/"), "50/50", "Combustível 50/50 visual");
+  assert(comb.costCenters.every((c) => c.shareWithinFamilyFormatted === "50,00%"), "Combustível meio a meio");
+
+  const loc = fam(CostFamily.LocacaoEquipamentos);
+  assertEqual(loc.costCenters[0].amountFormatted, "R$ 42.000,00", "Locação · CONJASF");
+  assertEqual(loc.costCenters[1].amountFormatted, "R$ 46.000,00", "Locação · HIDROMEC");
+  assertEqual(loc.costCenters.map((c) => c.barWidthPercent).reduce((a, b) => a + b, 0), 100, "Locação segmentos somam 100");
+});
+
+runTest("mini barra de rateio nas despesas — 2 segmentos para rateio, nenhum para atribuição direta", () => {
+  const rm = buildGoldenReadModel();
+  const byDesc = (n: string) => rm.entries.find((e) => e.description.includes(n))!;
+
+  const escav = byDesc("escavadeira");
+  assertEqual(escav.allocations.length, 2, "escavadeira: 2 destinos");
+  assertEqual(escav.allocations.map((a) => a.barWidthPercent).join("/"), "70/30", "escavadeira 70/30");
+
+  const comb = byDesc("Combustível da operação");
+  assertEqual(comb.allocations.map((a) => a.barWidthPercent).join("/"), "50/50", "combustível 50/50");
+
+  const caminhoes = byDesc("caminhões");
+  assertEqual(caminhoes.allocations.length, 1, "atribuição direta: só o Centro atribuído");
+  assertEqual(caminhoes.allocations[0].barWidthPercent, 100, "atribuição direta = 100");
+  assert(caminhoes.isSingleDirect, "flag de atribuição direta simples");
+});
+
+runTest("TOTAL e Não atribuído permanecem neutros (sem tom de Centro de Custo)", () => {
+  const rm = buildGoldenReadModel();
+  // columnTotals são ReadModelMatrixCell — não carregam toneKey.
+  assert(
+    !("toneKey" in (rm.costMatrix.columnTotals[0] as unknown as Record<string, unknown>)),
+    "coluna TOTAL sem tom",
+  );
+  assert(!("toneKey" in (rm.costMatrix as unknown as Record<string, unknown>)), "grandTotal sem tom");
+  // "Não atribuído" não é um Centro de Custo: não aparece em costCenters.
+  assert(rm.costCenters.every((c) => c.displayLabel !== "Não atribuído"), "Não atribuído não é Centro de Custo");
+});
+
+runTest("nenhum verde/vermelho como identidade de Centro de Custo (CSS)", () => {
+  const css = readFileSync(resolve(process.cwd(), "../../apps/web/components/engenharia/project-cost-centers.module.css"), "utf8");
+  const toneBlock = css.slice(css.indexOf("IDENTIDADE VISUAL DOS CENTROS DE CUSTO"));
+  const toneDefs = toneBlock.match(/\.tone[1-6]\s*\{[^}]*\}/g) ?? [];
+  assertEqual(toneDefs.length, 6, "6 tons definidos");
+  for (const def of toneDefs) {
+    assert(!/#22c55e|#16a34a|#22C55E|rgba?\([^)]*\bgreen\b|:\s*green|#ef4444|#dc2626|:\s*red|\bred\b/i.test(def), `tom sem verde/vermelho: ${def}`);
+  }
 });
 
 runTest("read model — rótulos de negócio em português (critério, natureza, família)", () => {

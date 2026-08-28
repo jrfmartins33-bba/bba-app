@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronDown, ChevronRight, Info, RotateCw } from "lucide-react";
 import { Card, SkeletonCard } from "@bba/ui";
 import type { ProjectCostCentersReadModel } from "@bba/bdos-core/domain/cost-center";
@@ -20,12 +20,20 @@ type ViewState =
 
 // NOTA: este componente NÃO calcula valor financeiro, participação, saldo
 // não atribuído nem proporção de barra. Tudo vem PRONTO do read model
-// (BDOS calcula, UI apresenta): strings já formatadas em BRL/percentual e
-// larguras de barra inteiras 0..100. Nenhuma conversão numérica de decimal
-// canônico acontece aqui.
+// (BDOS calcula, UI apresenta): strings já formatadas em BRL/percentual,
+// larguras de barra inteiras 0..100 e identidade visual por tom. Nenhuma
+// conversão numérica de decimal canônico acontece aqui.
+
+/** "cost-center-tone-2" → classe CSS do tom. O tom é só IDENTIDADE do Centro de Custo. */
+function toneClass(toneKey: string): string {
+  const n = toneKey.split("-").pop() ?? "1";
+  return styles[`tone${n}`] ?? styles.tone1;
+}
 
 export function ProjectCostCentersPage({ projectId }: ProjectCostCentersPageProps) {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const requestedOrganizationId = searchParams.get("empresa");
   const requestedPeriod = searchParams.get("periodo");
   const [state, setState] = useState<ViewState>({ phase: "loading" });
@@ -65,6 +73,16 @@ export function ProjectCostCentersPage({ projectId }: ProjectCostCentersPageProp
   useEffect(() => {
     void load();
   }, [load]);
+
+  const onSelectPeriod = useCallback(
+    (value: string) => {
+      const query = new URLSearchParams();
+      if (requestedOrganizationId) query.set("empresa", requestedOrganizationId);
+      query.set("periodo", value);
+      router.push(`${pathname}?${query.toString()}`);
+    },
+    [pathname, requestedOrganizationId, router],
+  );
 
   const organizationQuery = requestedOrganizationId
     ? `?empresa=${encodeURIComponent(requestedOrganizationId)}`
@@ -135,7 +153,24 @@ export function ProjectCostCentersPage({ projectId }: ProjectCostCentersPageProp
       backHref={backHref}
       expandedEntryId={expandedEntryId}
       setExpandedEntryId={setExpandedEntryId}
+      onSelectPeriod={onSelectPeriod}
     />
+  );
+}
+
+function ToneDot({ toneKey }: { toneKey: string }) {
+  return <span className={`${styles.toneDot} ${toneClass(toneKey)}`} aria-hidden="true" />;
+}
+
+function Legend({ items }: { items: ReadonlyArray<{ id: string; displayLabel: string; toneKey: string }> }) {
+  return (
+    <div className={styles.legend}>
+      {items.map((it) => (
+        <span className={styles.legendItem} key={it.id}>
+          <ToneDot toneKey={it.toneKey} /> {it.displayLabel}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -144,19 +179,26 @@ function CostCentersReady({
   backHref,
   expandedEntryId,
   setExpandedEntryId,
+  onSelectPeriod,
 }: {
   readModel: ProjectCostCentersReadModel;
   backHref: string;
   expandedEntryId: string | null;
   setExpandedEntryId: (id: string | null) => void;
+  onSelectPeriod: (value: string) => void;
 }) {
   const rm = readModel;
-  const isDemonstrative = rm.dataNature === "Demonstrative";
+  const isDemonstrative = rm.isDemonstrative;
   const notMaterialized = rm.operationalState === "not_materialized";
   const noEntries = !notMaterialized && !rm.hasCostEntries;
   const hasConsortiumShare = rm.costCenters.some((cc) => cc.consortiumSharePercent !== null);
   const mc = rm.measurementComparison;
   const matrix = rm.costMatrix;
+  const legendItems = rm.costCenters.map((cc) => ({
+    id: cc.id,
+    displayLabel: cc.displayLabel,
+    toneKey: cc.toneKey,
+  }));
 
   return (
     <div className={styles.container}>
@@ -171,7 +213,21 @@ function CostCentersReady({
             {isDemonstrative && <span className={styles.demoBadge}>DADOS DEMONSTRATIVOS</span>}
           </div>
           <p className={styles.subtitle}>Distribuição gerencial dos custos da obra</p>
-          <p style={{ color: "var(--text-secondary)", marginTop: "0.2rem" }}>Período: {rm.periodLabel}</p>
+          <div className={styles.periodPicker}>
+            <label htmlFor="cc-period">Período</label>
+            <select
+              id="cc-period"
+              className={styles.periodSelect}
+              value={rm.period}
+              onChange={(e) => onSelectPeriod(e.target.value)}
+            >
+              {rm.availablePeriods.map((p) => (
+                <option value={p.value} key={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <Link className="bba-button bba-button--ghost bba-button--sm" href={backHref}>
           <ArrowLeft size={16} /> Voltar para a obra
@@ -188,9 +244,7 @@ function CostCentersReady({
       {notMaterialized && (
         <div className={styles.emptyState}>Controle de custos ainda não disponível para esta obra.</div>
       )}
-      {noEntries && (
-        <div className={styles.emptyState}>Não há custos registrados para este período.</div>
-      )}
+      {noEntries && <div className={styles.emptyState}>Não há custos registrados para este período.</div>}
 
       {/* 2. RESUMO EXECUTIVO */}
       {rm.hasCostEntries && (
@@ -201,8 +255,10 @@ function CostCentersReady({
             <span className={styles.kpiSub}>{rm.entries.length} despesas</span>
           </div>
           {rm.costCenters.map((cc) => (
-            <div className={styles.kpiCard} key={cc.id}>
-              <span className={styles.kpiLabel}>{cc.name}</span>
+            <div className={`${styles.kpiCard} ${styles.kpiCardTone} ${toneClass(cc.toneKey)}`} key={cc.id}>
+              <span className={styles.kpiLabel}>
+                <ToneDot toneKey={cc.toneKey} /> {cc.displayLabel}
+              </span>
               <span className={styles.kpiValue}>{cc.allocatedCostFormatted}</span>
               <span className={styles.kpiSub}>{cc.costShareFormatted} dos custos</span>
             </div>
@@ -219,6 +275,8 @@ function CostCentersReady({
         {/* 3. CUSTOS POR CENTRO DE CUSTO E CATEGORIA — bloco principal */}
         {rm.hasCostEntries && matrix.rows.length > 0 && (
           <Card className={`${styles.cardFull} workspace-card`} title="Custos por Centro de Custo e Categoria">
+            <Legend items={legendItems} />
+
             {/* Desktop: matriz */}
             <div className={styles.matrixScroll}>
               <table className={styles.matrixTable}>
@@ -227,7 +285,9 @@ function CostCentersReady({
                     <th>Tipo de custo</th>
                     {matrix.costCenters.map((cc) => (
                       <th key={cc.id} className={styles.matrixNum}>
-                        {cc.name}
+                        <span className={styles.matrixHeadCell}>
+                          <ToneDot toneKey={cc.toneKey} /> {cc.displayLabel}
+                        </span>
                       </th>
                     ))}
                     <th className={styles.matrixNum}>Total</th>
@@ -237,8 +297,11 @@ function CostCentersReady({
                   {matrix.rows.map((row) => (
                     <tr key={row.family}>
                       <td className={styles.matrixRowLabel}>{row.familyLabel}</td>
-                      {row.cells.map((cell) => (
-                        <td key={cell.costCenterId} className={styles.matrixNum}>
+                      {row.cells.map((cell, i) => (
+                        <td
+                          key={cell.costCenterId}
+                          className={`${styles.matrixNum} ${styles.matrixToneValue} ${toneClass(matrix.costCenters[i].toneKey)}`}
+                        >
                           {cell.amountFormatted}
                         </td>
                       ))}
@@ -266,60 +329,61 @@ function CostCentersReady({
                     <span>{row.familyLabel}</span>
                     <strong>{row.totalFormatted}</strong>
                   </div>
-                  {row.cells.map((cell) => {
-                    const col = matrix.costCenters.find((c) => c.id === cell.costCenterId);
-                    return (
-                      <div className={styles.matrixCardRow} key={cell.costCenterId}>
-                        <span>{col?.name ?? col?.code}</span>
-                        <span>{cell.amountFormatted}</span>
-                      </div>
-                    );
-                  })}
+                  {row.cells.map((cell, i) => (
+                    <div className={styles.matrixCardRow} key={cell.costCenterId}>
+                      <span>
+                        <ToneDot toneKey={matrix.costCenters[i].toneKey} /> {matrix.costCenters[i].displayLabel}
+                      </span>
+                      <span>{cell.amountFormatted}</span>
+                    </div>
+                  ))}
                 </div>
               ))}
-              <div className={`${styles.matrixCard} ${styles.matrixCardTotal}`}>
+              <div className={`${styles.matrixCard} ${styles.matrixCardTotalMobile}`}>
                 <div className={styles.matrixCardHead}>
                   <span>Total</span>
                   <strong>{matrix.grandTotalFormatted}</strong>
                 </div>
-                {matrix.columnTotals.map((cell) => {
-                  const col = matrix.costCenters.find((c) => c.id === cell.costCenterId);
-                  return (
-                    <div className={styles.matrixCardRow} key={cell.costCenterId}>
-                      <span>{col?.name ?? col?.code}</span>
-                      <strong>{cell.amountFormatted}</strong>
-                    </div>
-                  );
-                })}
+                {matrix.columnTotals.map((cell, i) => (
+                  <div className={styles.matrixCardRow} key={cell.costCenterId}>
+                    <span>{matrix.costCenters[i].displayLabel}</span>
+                    <strong>{cell.amountFormatted}</strong>
+                  </div>
+                ))}
               </div>
             </div>
           </Card>
         )}
 
-        {/* 4. COMPOSIÇÃO POR TIPO DE CUSTO */}
+        {/* 4. COMPOSIÇÃO POR TIPO DE CUSTO — barra empilhada por Centro de Custo */}
         {rm.families.length > 0 && (
           <Card className={`${styles.cardFull} workspace-card`} title="Composição por tipo de custo">
+            <Legend items={legendItems} />
             {rm.families.map((f) => (
               <div className={styles.familyBlock} key={f.family}>
-                <div className={styles.familyRow}>
-                  <div className={styles.familyName}>{f.familyLabel}</div>
-                  <div className={styles.familyBarTrack}>
-                    <div className={styles.familyBarFill} style={{ width: `${f.barWidthPercent}%` }} />
-                  </div>
-                  <div className={styles.familyValue}>
-                    <strong>{f.amountFormatted}</strong>
-                    {f.shareFormatted}
-                  </div>
+                <div className={styles.familyHead}>
+                  <span className={styles.familyName}>{f.familyLabel}</span>
+                  <span className={styles.familyValue}>
+                    <strong>{f.amountFormatted}</strong> · {f.shareFormatted}
+                  </span>
+                </div>
+                <div className={styles.stackedBar}>
+                  {f.costCenters.map((c) => (
+                    <div
+                      key={c.costCenterId}
+                      className={`${styles.stackedSeg} ${toneClass(c.toneKey)}`}
+                      style={{ width: `${c.barWidthPercent}%` }}
+                      title={`${c.costCenterDisplayLabel} · ${c.amountFormatted} · ${c.shareWithinFamilyFormatted}`}
+                    />
+                  ))}
                 </div>
                 <div className={styles.familyCenters}>
-                  {f.costCenters.map((c) => {
-                    const col = matrix.costCenters.find((m) => m.id === c.costCenterId);
-                    return (
-                      <span className={styles.familyCenterChip} key={c.costCenterId}>
-                        {col?.name ?? c.costCenterCode}: <strong>{c.amountFormatted}</strong>
-                      </span>
-                    );
-                  })}
+                  {f.costCenters.map((c) => (
+                    <span className={styles.familyCenterChip} key={c.costCenterId}>
+                      <ToneDot toneKey={c.toneKey} /> {c.costCenterDisplayLabel}: <strong>{c.amountFormatted}</strong>{" "}
+                      ({c.shareWithinFamilyFormatted})
+                    </span>
+                  ))}
                 </div>
               </div>
             ))}
@@ -342,15 +406,32 @@ function CostCentersReady({
                     </div>
                     <div className={styles.distribCardAmount}>{entry.amountFormatted}</div>
                   </div>
+
                   <div className={styles.distribTargets}>
                     {entry.allocations.map((a) => (
                       <div className={styles.distribTargetRow} key={a.costCenterId}>
-                        <span>{a.costCenterName}</span>
+                        <span>
+                          <ToneDot toneKey={a.toneKey} /> {a.costCenterDisplayLabel}
+                        </span>
                         <span>{a.amountFormatted}</span>
                         <span className={styles.distribTargetPct}>{a.percentageFormatted}</span>
                       </div>
                     ))}
                   </div>
+
+                  {entry.allocations.length > 1 && (
+                    <div className={styles.stackedBar}>
+                      {entry.allocations.map((a) => (
+                        <div
+                          key={a.costCenterId}
+                          className={`${styles.stackedSeg} ${toneClass(a.toneKey)}`}
+                          style={{ width: `${a.barWidthPercent}%` }}
+                          title={`${a.costCenterDisplayLabel} · ${a.percentageFormatted}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+
                   <div className={styles.distribCardFoot}>
                     <span className={styles.criterionTag}>{entry.criterionLabel}</span>
                     <span className={styles.natureTag}>{entry.natureLabel}</span>
@@ -373,7 +454,9 @@ function CostCentersReady({
                 <div className={styles.compareHeading}>Participação no consórcio</div>
                 {rm.costCenters.map((cc) => (
                   <div className={styles.compareRow} key={cc.id}>
-                    <span>{cc.name}</span>
+                    <span>
+                      <ToneDot toneKey={cc.toneKey} /> {cc.displayLabel}
+                    </span>
                     <strong>{cc.consortiumShareFormatted}</strong>
                   </div>
                 ))}
@@ -382,7 +465,9 @@ function CostCentersReady({
                 <div className={styles.compareHeading}>Distribuição dos custos demonstrativos</div>
                 {rm.costCenters.map((cc) => (
                   <div className={styles.compareRow} key={cc.id}>
-                    <span>{cc.name}</span>
+                    <span>
+                      <ToneDot toneKey={cc.toneKey} /> {cc.displayLabel}
+                    </span>
                     <strong>{cc.costShareFormatted}</strong>
                   </div>
                 ))}
@@ -410,9 +495,6 @@ function CostCentersReady({
                 <tbody>
                   {rm.entries.map((entry) => {
                     const expanded = expandedEntryId === entry.id;
-                    const distrib = entry.allocations
-                      .map((a) => `${a.costCenterName} ${a.percentageFormatted}`)
-                      .join(" · ");
                     return (
                       <Fragment key={entry.id}>
                         <tr>
@@ -429,7 +511,13 @@ function CostCentersReady({
                           </td>
                           <td>{entry.category ?? entry.familyLabel}</td>
                           <td className={styles.expenseAmount}>{entry.amountFormatted}</td>
-                          <td className={styles.distribCell}>{distrib}</td>
+                          <td className={styles.distribCell}>
+                            {entry.allocations.map((a) => (
+                              <span className={styles.distribChip} key={a.costCenterId}>
+                                <ToneDot toneKey={a.toneKey} /> {a.costCenterDisplayLabel} {a.percentageFormatted}
+                              </span>
+                            ))}
+                          </td>
                           <td>
                             <span className={styles.criterionTag}>{entry.criterionLabel}</span>
                           </td>
@@ -443,7 +531,8 @@ function CostCentersReady({
                               {entry.allocations.map((a) => (
                                 <div className={styles.allocationLine} key={a.costCenterId}>
                                   <span>
-                                    <strong>{a.costCenterName}</strong>
+                                    <ToneDot toneKey={a.toneKey} /> <strong>{a.costCenterDisplayLabel}</strong>
+                                    <span className={styles.allocationFull}> — {a.costCenterName}</span>
                                   </span>
                                   <span>{a.percentageFormatted}</span>
                                   <span>{a.amountFormatted}</span>
@@ -517,6 +606,7 @@ function CostCentersReady({
                 A diferença demonstrativa não é lucro, margem, ganho ou economia — apenas o contraste entre o valor
                 medido e os custos utilizados nesta simulação.
               </li>
+              <li>As cores identificam cada Centro de Custo; não indicam desempenho, positivo ou negativo.</li>
             </ul>
           </Card>
         )}

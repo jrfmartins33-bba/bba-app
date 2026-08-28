@@ -24,6 +24,7 @@ import {
   sharePercent,
   validateCostEntryAllocations,
 } from "./project-cost-allocation";
+import { buildAvailablePeriods, type AvailablePeriodOption } from "./cost-center-period";
 import {
   CostAllocationMethod,
   CostDataNature,
@@ -56,6 +57,47 @@ export const COST_DATA_NATURE_LABELS_PT_BR: Record<CostDataNature, string> = {
 
 /** Termos proibidos para a comparação quando a natureza é Demonstrative. */
 export const FORBIDDEN_COMPARISON_TERMS = ["lucro", "margem", "ganho", "economia"] as const;
+
+/**
+ * Quantidade de tons visuais disponíveis para Centros de Custo. O tom é
+ * apenas IDENTIDADE do Centro de Custo — nunca positivo/negativo/lucro.
+ * A UI resolve `toneKey` para um token/classe CSS; nada de hexadecimal
+ * no read model.
+ */
+export const COST_CENTER_TONE_COUNT = 6;
+
+/** Tom determinístico por ordem estável do Centro de Custo. Ex.: "cost-center-tone-1". */
+export function costCenterToneKey(stableIndex: number): string {
+  const n = ((stableIndex % COST_CENTER_TONE_COUNT) + COST_CENTER_TONE_COUNT) % COST_CENTER_TONE_COUNT;
+  return `cost-center-tone-${n + 1}`;
+}
+
+/**
+ * Rótulo curto para leitura gerencial, sem substring frágil na UI.
+ * Preferência: último segmento do código (ex.: "CC-OBRA-XYZ" → "XYZ");
+ * senão o nome comercial curto do consorciado; senão o nome completo do
+ * Centro de Custo.
+ */
+export function deriveCostCenterDisplayLabel(
+  code: string,
+  consortiumMemberName: string | null,
+  name: string,
+): string {
+  const segment = code.includes("-") ? (code.split("-").pop() ?? "").trim() : "";
+  if (/^[A-Za-z0-9]{2,}$/.test(segment)) {
+    return segment.toUpperCase();
+  }
+  if (
+    consortiumMemberName &&
+    consortiumMemberName.trim().length > 0 &&
+    consortiumMemberName.length <= 24 &&
+    !consortiumMemberName.includes("—") &&
+    !consortiumMemberName.includes(" - ")
+  ) {
+    return consortiumMemberName.trim();
+  }
+  return name;
+}
 
 export interface ReadModelCostCenterInput extends AllocatableCostCenter {
   readonly consortiumMemberId: string | null;
@@ -93,18 +135,26 @@ export interface BuildProjectCostCentersReadModelInput {
   /** true quando as tabelas operacionais existem e foram consultadas. */
   readonly operationalLayerMaterialized: boolean;
   readonly measurementComparison: MeasurementComparisonInput;
+  /** Períodos "YYYY-MM" que possuem custos registrados nesta obra (qualquer ordem). */
+  readonly availablePeriods?: ReadonlyArray<string>;
 }
 
 export interface ReadModelAllocationView {
   readonly costCenterId: string;
   readonly costCenterCode: string;
   readonly costCenterName: string;
+  /** Rótulo curto para leitura gerencial (ex.: "XYZ"). */
+  readonly costCenterDisplayLabel: string;
+  /** Tom visual (identidade do Centro de Custo), ex.: "cost-center-tone-2". */
+  readonly toneKey: string;
   readonly amountDecimal: string;
   /** Apresentação pronta: "R$ 54.000,00". A UI nunca reformata dinheiro. */
   readonly amountFormatted: string;
   readonly percentage: string | null;
   /** Apresentação pronta: "100,00%" | "—". */
   readonly percentageFormatted: string;
+  /** Largura de segmento 0..100 (inteiro) para a mini barra de rateio — layout, não valor. */
+  readonly barWidthPercent: number;
   readonly method: CostAllocationMethod;
   readonly methodLabel: string;
   readonly basisPoints: number;
@@ -141,6 +191,12 @@ export interface ReadModelCostCenterView {
   readonly id: string;
   readonly code: string;
   readonly name: string;
+  /** Rótulo curto para a maior parte da UI (ex.: "XYZ"). */
+  readonly displayLabel: string;
+  /** Rótulo completo para tooltip / detalhe / acessibilidade. */
+  readonly fullLabel: string;
+  /** Identidade visual determinística e estável ("cost-center-tone-1"…). */
+  readonly toneKey: string;
   readonly consortiumMemberId: string | null;
   readonly consortiumMemberName: string | null;
   readonly consortiumSharePercent: string | null;
@@ -157,8 +213,14 @@ export interface ReadModelCostCenterView {
 export interface ReadModelFamilyCostCenterView {
   readonly costCenterId: string;
   readonly costCenterCode: string;
+  readonly costCenterDisplayLabel: string;
+  readonly toneKey: string;
   readonly amountDecimal: string;
   readonly amountFormatted: string;
+  /** Participação DENTRO da família (não do total geral). Ex.: "54,00%". */
+  readonly shareWithinFamilyFormatted: string;
+  /** Largura do segmento na barra empilhada da família, 0..100 (inteiro). Segmentos somam 100. */
+  readonly barWidthPercent: number;
 }
 
 export interface ReadModelFamilyView {
@@ -187,9 +249,16 @@ export interface ReadModelMatrixRow {
   readonly totalDecimal: string;
   readonly totalFormatted: string;
 }
+export interface ReadModelMatrixColumn {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+  readonly displayLabel: string;
+  readonly toneKey: string;
+}
 export interface ReadModelCostMatrix {
   /** Colunas da matriz — todos os Centros de Custo da obra, em ordem estável. */
-  readonly costCenters: ReadonlyArray<{ readonly id: string; readonly code: string; readonly name: string }>;
+  readonly costCenters: ReadonlyArray<ReadModelMatrixColumn>;
   readonly rows: ReadonlyArray<ReadModelMatrixRow>;
   /** Linha "TOTAL" — uma célula por Centro de Custo, na mesma ordem das colunas. */
   readonly columnTotals: ReadonlyArray<ReadModelMatrixCell>;
@@ -217,8 +286,12 @@ export interface ProjectCostCentersReadModel {
   readonly projectName: string | null;
   readonly period: string;
   readonly periodLabel: string;
+  /** Períodos com custos, mais recente → mais antigo, rótulo pt-BR pronto. Inclui o período atual mesmo se vazio. */
+  readonly availablePeriods: ReadonlyArray<AvailablePeriodOption>;
   readonly dataNature: CostDataNature;
   readonly dataNatureLabel: string;
+  /** Decisão do domínio: a natureza dos custos deste período é demonstrativa? */
+  readonly isDemonstrative: boolean;
   /**
    * "materialized"        → camada operacional existe e foi lida (pode ter 0 custos).
    * "not_materialized"    → tabelas ainda não existem; Centros de Custo exibidos, sem custos.
@@ -268,6 +341,21 @@ export function buildProjectCostCentersReadModel(
     ]),
   );
 
+  // Identidade visual determinística por ORDEM ESTÁVEL do Centro de Custo
+  // (a lista já vem ordenada por código do repositório). Nunca por
+  // comparação nominal (por nome do consorciado).
+  const toneByCostCenterId = new Map<string, string>();
+  const displayLabelByCostCenterId = new Map<string, string>();
+  input.costCenters.forEach((cc, index) => {
+    toneByCostCenterId.set(cc.id, costCenterToneKey(index));
+    displayLabelByCostCenterId.set(
+      cc.id,
+      deriveCostCenterDisplayLabel(cc.code, cc.consortiumMemberName, cc.name),
+    );
+  });
+  const toneOf = (id: string): string => toneByCostCenterId.get(id) ?? costCenterToneKey(0);
+  const displayLabelOf = (id: string): string => displayLabelByCostCenterId.get(id) ?? id;
+
   // Valida cada custo + alocações contra todas as invariantes (lança em violação).
   const reports = input.costEntries.map((e) =>
     validateCostEntryAllocations(e.entry, e.allocations, costCentersById),
@@ -310,6 +398,9 @@ export function buildProjectCostCentersReadModel(
       id: cc.id,
       code: cc.code,
       name: cc.name,
+      displayLabel: displayLabelOf(cc.id),
+      fullLabel: cc.name,
+      toneKey: toneOf(cc.id),
       consortiumMemberId: cc.consortiumMemberId,
       consortiumMemberName: cc.consortiumMemberName,
       consortiumSharePercent,
@@ -350,18 +441,31 @@ export function buildProjectCostCentersReadModel(
 
   const families: ReadModelFamilyView[] = orderedFamilies.map((family) => {
     const amountDecimal = canonMoney(familyTotals.get(family) ?? "0.00");
+    const familyTotalCents = moneyToCents(amountDecimal);
     const perCenter = familyByCostCenter.get(family) ?? new Map<string, string>();
-    const familyCostCenters: ReadModelFamilyCostCenterView[] = input.costCenters
-      .filter((cc) => perCenter.has(cc.id))
-      .map((cc) => {
-        const centerAmount = canonMoney(perCenter.get(cc.id) ?? "0.00");
-        return {
-          costCenterId: cc.id,
-          costCenterCode: cc.code,
-          amountDecimal: centerAmount,
-          amountFormatted: formatBrlFromDecimal(centerAmount),
-        };
-      });
+    const centersInFamily = input.costCenters.filter((cc) => perCenter.has(cc.id));
+    // Segmentos da barra empilhada: somam EXATAMENTE 100 (o último absorve o resíduo).
+    let assignedSegment = 0;
+    const familyCostCenters: ReadModelFamilyCostCenterView[] = centersInFamily.map((cc, idx) => {
+      const centerAmount = canonMoney(perCenter.get(cc.id) ?? "0.00");
+      const centerCents = moneyToCents(centerAmount);
+      const withinShare = familyTotalCents > 0n ? sharePercent(centerAmount, amountDecimal) : "0.00";
+      const isLast = idx === centersInFamily.length - 1;
+      const rawSegment =
+        familyTotalCents > 0n ? Number((centerCents * 100n + familyTotalCents / 2n) / familyTotalCents) : 0;
+      const segment = isLast ? Math.max(0, 100 - assignedSegment) : rawSegment;
+      assignedSegment += segment;
+      return {
+        costCenterId: cc.id,
+        costCenterCode: cc.code,
+        costCenterDisplayLabel: displayLabelOf(cc.id),
+        toneKey: toneOf(cc.id),
+        amountDecimal: centerAmount,
+        amountFormatted: formatBrlFromDecimal(centerAmount),
+        shareWithinFamilyFormatted: formatPercentPtBr(withinShare),
+        barWidthPercent: segment,
+      };
+    });
     const share = sharePercent(amountDecimal, totalCostDecimal);
     return {
       family,
@@ -377,7 +481,13 @@ export function buildProjectCostCentersReadModel(
   });
 
   // ---- Matriz Categoria × Centro de Custo (pronta para render) ----
-  const matrixColumns = input.costCenters.map((cc) => ({ id: cc.id, code: cc.code, name: cc.name }));
+  const matrixColumns: ReadModelMatrixColumn[] = input.costCenters.map((cc) => ({
+    id: cc.id,
+    code: cc.code,
+    name: cc.name,
+    displayLabel: displayLabelOf(cc.id),
+    toneKey: toneOf(cc.id),
+  }));
   const matrixRows: ReadModelMatrixRow[] = orderedFamilies.map((family) => {
     const perCenter = familyByCostCenter.get(family) ?? new Map<string, string>();
     const cells: ReadModelMatrixCell[] = input.costCenters.map((cc) => {
@@ -439,18 +549,30 @@ export function buildProjectCostCentersReadModel(
       isSingleDirect,
       criterionLabel,
       distributionNote,
-      allocations: allocations.map((alloc) => {
+      allocations: allocations.map((alloc, allocIndex) => {
         const cc = costCentersById.get(alloc.projectCostCenterId);
         const allocAmount = canonMoney(alloc.allocatedAmountDecimal);
         const percentage = sharePercent(alloc.allocatedAmountDecimal, entry.amountDecimal);
+        // Segmento da mini barra de rateio: basis points → 0..100; o
+        // último segmento absorve o resíduo para somar exatamente 100.
+        const isLastAlloc = allocIndex === allocations.length - 1;
+        const priorSegments = allocations
+          .slice(0, allocIndex)
+          .reduce((sum, a) => sum + Math.round(a.allocationBasisPoints / 100), 0);
+        const barWidthPercent = isLastAlloc
+          ? Math.max(0, 100 - priorSegments)
+          : Math.round(alloc.allocationBasisPoints / 100);
         return {
           costCenterId: alloc.projectCostCenterId,
           costCenterCode: cc?.code ?? alloc.projectCostCenterId,
           costCenterName: cc?.name ?? alloc.projectCostCenterId,
+          costCenterDisplayLabel: displayLabelOf(alloc.projectCostCenterId),
+          toneKey: toneOf(alloc.projectCostCenterId),
           amountDecimal: allocAmount,
           amountFormatted: formatBrlFromDecimal(allocAmount),
           percentage,
           percentageFormatted: formatPercentPtBr(percentage),
+          barWidthPercent,
           method: alloc.allocationMethod,
           methodLabel: COST_ALLOCATION_METHOD_LABELS_PT_BR[alloc.allocationMethod],
           basisPoints: alloc.allocationBasisPoints,
@@ -474,8 +596,10 @@ export function buildProjectCostCentersReadModel(
     projectName: input.projectName,
     period: input.period,
     periodLabel: input.periodLabel,
+    availablePeriods: buildAvailablePeriods(input.availablePeriods ?? [], input.period),
     dataNature: input.dataNature,
     dataNatureLabel: COST_DATA_NATURE_LABELS_PT_BR[input.dataNature],
+    isDemonstrative: input.dataNature === CostDataNature.Demonstrative,
     operationalState: input.operationalLayerMaterialized ? "materialized" : "not_materialized",
     hasCostEntries: input.costEntries.length > 0,
     totalCostDecimal: canonMoney(totalCostDecimal),

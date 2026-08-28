@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildProjectCostCentersReadModel,
+  formatCostCenterPeriodLabel,
+  isYearMonth,
+  pickDefaultCostCenterPeriod,
   CostAllocationMethod,
   CostDataNature,
   CostEntrySourceKind,
@@ -32,24 +35,15 @@ import {
  * O cálculo é 100% do domínio (buildProjectCostCentersReadModel).
  */
 
-const MONTH_LABELS_PT_BR = [
-  "jan", "fev", "mar", "abr", "mai", "jun",
-  "jul", "ago", "set", "out", "nov", "dez",
-];
+/** Reexport para as rotas — validação/rotulagem de período vivem no domínio. */
+export const isValidYearMonth = isYearMonth;
+export const formatPeriodLabelPtBr = formatCostCenterPeriodLabel;
 
-export function isValidYearMonth(value: string | null | undefined): value is string {
-  return typeof value === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
-}
-
-/**
- * Período gerencial default (sem hardcode): o mês do boletim de medição
- * formal mais recente da obra; na ausência, o mês corrente (UTC).
- */
-export async function resolveDefaultCostCenterPeriod(
+/** "YYYY-MM" do boletim de medição formal mais recente da obra, ou null. */
+async function findLatestBulletinPeriod(
   queryClient: SupabaseClient,
   params: { organizationId: string; projectId: string },
-): Promise<string> {
-  const nowYm = new Date().toISOString().slice(0, 7);
+): Promise<string | null> {
   const { data, error } = await queryClient
     .from("measurement_bulletins")
     .select("header, created_at")
@@ -59,19 +53,53 @@ export async function resolveDefaultCostCenterPeriod(
     .limit(1)
     .maybeSingle();
 
-  if (error || !data) return nowYm;
+  if (error || !data) return null;
   const header = (data.header as Record<string, unknown> | null) ?? {};
   const start = typeof header.startDate === "string" ? header.startDate : null;
   const match = start ? /^(\d{4})-(\d{2})/.exec(start) : null;
-  return match ? `${match[1]}-${match[2]}` : nowYm;
+  return match ? `${match[1]}-${match[2]}` : null;
 }
 
-export function formatPeriodLabelPtBr(period: string): string {
-  const match = /^(\d{4})-(\d{2})$/.exec(period);
-  if (!match) return period;
-  const monthIndex = Number(match[2]) - 1;
-  if (monthIndex < 0 || monthIndex > 11) return period;
-  return `${MONTH_LABELS_PT_BR[monthIndex]}/${match[1]}`;
+/** Períodos "YYYY-MM" distintos que possuem custos registrados nesta obra. [] se a tabela ainda não existe. */
+export async function listCostEntryPeriods(
+  queryClient: SupabaseClient,
+  params: { organizationId: string; projectId: string },
+): Promise<ReadonlyArray<string>> {
+  const { data, error } = await queryClient
+    .from("project_cost_entries")
+    .select("competence_period")
+    .eq("company_id", params.organizationId)
+    .eq("engineering_project_id", params.projectId);
+
+  if (error) {
+    if (isMissingRelationError(error)) return [];
+    throw error;
+  }
+  const periods = new Set<string>();
+  for (const row of (data ?? []) as Array<{ competence_period: string | null }>) {
+    if (isYearMonth(row.competence_period)) periods.add(row.competence_period);
+  }
+  return [...periods];
+}
+
+/**
+ * Período gerencial default. Prioridade:
+ *   CUSTO REGISTRADO  >  MEDIÇÃO FORMAL  >  MÊS CORRENTE.
+ * A medição é base da COMPARAÇÃO gerencial, não do período da tela de custos.
+ */
+export async function resolveDefaultCostCenterPeriod(
+  queryClient: SupabaseClient,
+  params: { organizationId: string; projectId: string },
+): Promise<string> {
+  const [costEntryPeriods, latestBulletinPeriod] = await Promise.all([
+    listCostEntryPeriods(queryClient, params),
+    findLatestBulletinPeriod(queryClient, params),
+  ]);
+  return pickDefaultCostCenterPeriod({
+    costEntryPeriods,
+    latestBulletinPeriod,
+    currentYearMonth: new Date().toISOString().slice(0, 7),
+  });
 }
 
 function isMissingRelationError(error: unknown): boolean {
@@ -303,12 +331,12 @@ export async function loadProjectCostCentersReadModel(
     }
   }
 
-  // 3. Medição formal do período (reutiliza a infraestrutura existente).
-  const measurementComparison = await resolveMeasurementComparison(queryClient, {
-    organizationId,
-    projectId,
-    period,
-  });
+  // 3. Medição formal do período (reutiliza a infraestrutura existente)
+  //    + períodos com custos (para o seletor).
+  const [measurementComparison, availablePeriods] = await Promise.all([
+    resolveMeasurementComparison(queryClient, { organizationId, projectId, period }),
+    listCostEntryPeriods(queryClient, { organizationId, projectId }),
+  ]);
 
   return buildProjectCostCentersReadModel({
     organizationId,
@@ -316,6 +344,7 @@ export async function loadProjectCostCentersReadModel(
     projectName: project.name ?? null,
     period,
     periodLabel: formatPeriodLabelPtBr(period),
+    availablePeriods,
     dataNature,
     costCenters: readModelCostCenters,
     costEntries,

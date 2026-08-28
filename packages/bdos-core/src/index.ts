@@ -964,6 +964,13 @@ export {
   formatBasisPointsPercent,
   formatBrlFromDecimal,
   formatPercentPtBr,
+  costCenterToneKey,
+  deriveCostCenterDisplayLabel,
+  COST_CENTER_TONE_COUNT,
+  pickDefaultCostCenterPeriod,
+  buildAvailablePeriods,
+  formatCostCenterPeriodLabel,
+  isYearMonth,
   COST_FAMILY_LABELS_PT_BR,
   COST_ALLOCATION_METHOD_LABELS_PT_BR,
   COST_DATA_NATURE_LABELS_PT_BR,
@@ -992,7 +999,10 @@ export type {
   ReadModelCostMatrix,
   ReadModelMatrixRow,
   ReadModelMatrixCell,
+  ReadModelMatrixColumn,
   MeasurementComparisonInput,
+  AvailablePeriodOption,
+  PickDefaultCostCenterPeriodInput,
 } from "./domain/cost-center";
 
 export {
