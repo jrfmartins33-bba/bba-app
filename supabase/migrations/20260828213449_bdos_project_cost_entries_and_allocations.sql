@@ -1,6 +1,6 @@
 -- ============================================================================
 -- BDOS — Centros de Custo · CAMADA OPERACIONAL (Custo do Projeto + Alocação)
--- Migration: 20260828120000_bdos_project_cost_entries_and_allocations.sql
+-- Migration: 20260828213449_bdos_project_cost_entries_and_allocations.sql
 --
 -- PREPARADA PARA REVISÃO HUMANA. Esta migration é estritamente ADITIVA:
 --   1. NÃO altera nenhuma tabela existente (nem financial_lancamentos,

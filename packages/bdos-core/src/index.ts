@@ -985,9 +985,13 @@ export type {
   ReadModelEntryInput,
   ReadModelCostCenterView,
   ReadModelFamilyView,
+  ReadModelFamilyCostCenterView,
   ReadModelEntryView,
   ReadModelAllocationView,
   ReadModelMeasurementComparisonView,
+  ReadModelCostMatrix,
+  ReadModelMatrixRow,
+  ReadModelMatrixCell,
   MeasurementComparisonInput,
 } from "./domain/cost-center";
 

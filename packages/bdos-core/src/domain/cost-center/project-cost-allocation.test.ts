@@ -467,7 +467,7 @@ runTest("nenhum hardcode Lagoa/CONJASF/HIDROMEC/UUID no domínio e read model", 
 
 // 25
 const MIGRATION_SQL = readFileSync(
-  resolve(process.cwd(), "../../supabase/migrations/20260828120000_bdos_project_cost_entries_and_allocations.sql"),
+  resolve(process.cwd(), "../../supabase/migrations/20260828213449_bdos_project_cost_entries_and_allocations.sql"),
   "utf8",
 );
 
@@ -774,15 +774,121 @@ runTest("formatBrlFromDecimal / formatPercentPtBr — bigint, sem float", () => 
   assertEqual(formatPercentPtBr(null), "—", "percent ausente");
 });
 
+const COST_CENTERS_COMPONENT = readFileSync(
+  resolve(process.cwd(), "../../apps/web/components/engenharia/project-cost-centers-page.tsx"),
+  "utf8",
+);
+
 runTest("componente Centros de Custo não recalcula valor financeiro (sem Number/Math sobre decimais)", () => {
-  const component = readFileSync(
-    resolve(process.cwd(), "../../apps/web/components/engenharia/project-cost-centers-page.tsx"),
-    "utf8",
-  );
-  assert(!/Number\(/.test(component), "sem Number( no componente");
-  assert(!/parseFloat|parseInt/.test(component), "sem parseFloat/parseInt no componente");
-  assert(!/Math\.(max|min|round|abs)\s*\([^)]*(amount|Decimal|Value)/i.test(component), "sem Math sobre valores");
-  assert(!/\bNumber\b|\btoLocaleString\b/.test(component), "sem toLocaleString/Number");
+  assert(!/Number\(/.test(COST_CENTERS_COMPONENT), "sem Number( no componente");
+  assert(!/parseFloat|parseInt/.test(COST_CENTERS_COMPONENT), "sem parseFloat/parseInt no componente");
+  assert(!/Math\.(max|min|round|abs)\s*\([^)]*(amount|Decimal|Value)/i.test(COST_CENTERS_COMPONENT), "sem Math sobre valores");
+  assert(!/\bNumber\b|\btoLocaleString\b/.test(COST_CENTERS_COMPONENT), "sem toLocaleString/Number");
+});
+
+runTest("UI de Centros de Custo — nenhum termo técnico interno visível", () => {
+  const forbidden = [
+    "financial_lancamentos",
+    "project_cost_entries",
+    "project_cost_allocations",
+    "source_record_key",
+    "source_kind",
+    "data_nature",
+    "allocation_method",
+    "basis_points",
+  ];
+  for (const term of forbidden) {
+    assert(!COST_CENTERS_COMPONENT.includes(term), `sem "${term}" no componente`);
+  }
+  for (const token of ["ManualDemonstration", "EQUAL_SPLIT", "CUSTOM_SPLIT"]) {
+    assert(!new RegExp(`\\b${token}\\b`).test(COST_CENTERS_COMPONENT), `sem enum "${token}"`);
+  }
+  // "DIRECT" isolado (enum) não pode aparecer; "Demonstrative" só em comparação de tipo, nunca renderizado.
+  assert(!/\bDIRECT\b/.test(COST_CENTERS_COMPONENT), "sem enum DIRECT");
+  assert(!/["'>]\s*(DIRECT|EQUAL_SPLIT|CUSTOM_SPLIT|ManualDemonstration|Actual)\s*[<"']/.test(COST_CENTERS_COMPONENT), "nenhum enum renderizado como texto");
+});
+
+runTest("read model — rótulos de negócio em português (critério, natureza, família)", () => {
+  const rm = buildGoldenReadModel();
+  const labels = new Set(rm.entries.map((e) => e.criterionLabel));
+  assert(labels.has("Atribuição direta"), "critério: Atribuição direta");
+  assert(labels.has("Rateio igual"), "critério: Rateio igual");
+  assert(labels.has("Rateio específico"), "critério: Rateio específico");
+  assert(rm.entries.every((e) => e.natureLabel === "Demonstrativo"), "natureza: Demonstrativo");
+  const families = new Set(rm.families.map((f) => f.familyLabel));
+  assert(families.has("RH") && families.has("Combustível") && families.has("Locação de Equipamentos"), "famílias em pt-BR");
+  // nenhum enum cru vaza para os rótulos
+  const allLabels = [
+    ...rm.entries.map((e) => e.criterionLabel),
+    ...rm.entries.map((e) => e.natureLabel),
+    ...rm.families.map((f) => f.familyLabel),
+    ...rm.entries.flatMap((e) => e.allocations.map((a) => a.methodLabel)),
+  ].join("|");
+  for (const token of ["DIRECT", "EQUAL_SPLIT", "CUSTOM_SPLIT", "ManualDemonstration", "Demonstrative", "Actual"]) {
+    assert(!allLabels.includes(token), `rótulo sem "${token}"`);
+  }
+});
+
+// ---- Matriz Categoria × Centro de Custo (do read model, não da UI) ----
+runTest("matriz — RH/Combustível/Locação × CONJASF/HIDROMEC + totais", () => {
+  const rm = buildGoldenReadModel();
+  const m = rm.costMatrix;
+  assertEqual(m.costCenters.length, 2, "2 colunas");
+  assertEqual(m.costCenters[0].id, CONJASF.id, "coluna 0 = CONJASF");
+  assertEqual(m.costCenters[1].id, HIDROMEC.id, "coluna 1 = HIDROMEC");
+
+  const row = (fam: CostFamily) => m.rows.find((r) => r.family === fam)!;
+
+  assertEqual(row(CostFamily.RH).cells[0].amountFormatted, "R$ 70.200,00", "RH × CONJASF");
+  assertEqual(row(CostFamily.RH).cells[1].amountFormatted, "R$ 59.800,00", "RH × HIDROMEC");
+  assertEqual(row(CostFamily.RH).totalFormatted, "R$ 130.000,00", "RH total");
+
+  assertEqual(row(CostFamily.Combustivel).cells[0].amountFormatted, "R$ 12.000,00", "Combustível × CONJASF");
+  assertEqual(row(CostFamily.Combustivel).cells[1].amountFormatted, "R$ 12.000,00", "Combustível × HIDROMEC");
+  assertEqual(row(CostFamily.Combustivel).totalFormatted, "R$ 24.000,00", "Combustível total");
+
+  assertEqual(row(CostFamily.LocacaoEquipamentos).cells[0].amountFormatted, "R$ 42.000,00", "Locação × CONJASF");
+  assertEqual(row(CostFamily.LocacaoEquipamentos).cells[1].amountFormatted, "R$ 46.000,00", "Locação × HIDROMEC");
+  assertEqual(row(CostFamily.LocacaoEquipamentos).totalFormatted, "R$ 88.000,00", "Locação total");
+
+  assertEqual(m.columnTotals[0].amountFormatted, "R$ 124.200,00", "coluna CONJASF total");
+  assertEqual(m.columnTotals[1].amountFormatted, "R$ 117.800,00", "coluna HIDROMEC total");
+  assertEqual(m.grandTotalFormatted, "R$ 242.000,00", "total geral da matriz");
+
+  // reconciliação em centavos: soma das linhas por coluna = total da coluna
+  for (let col = 0; col < 2; col += 1) {
+    const sumCol = m.rows.reduce((s, r) => s + Number(moneyToCents(r.cells[col].amountDecimal)), 0);
+    assertEqual(sumCol, Number(moneyToCents(m.columnTotals[col].amountDecimal)), `coluna ${col} fecha`);
+  }
+  const sumRows = m.rows.reduce((s, r) => s + Number(moneyToCents(r.totalDecimal)), 0);
+  assertEqual(sumRows, Number(moneyToCents(m.grandTotalDecimal)), "linhas fecham no total geral");
+});
+
+runTest("como os custos foram distribuídos — critérios e percentuais por despesa", () => {
+  const rm = buildGoldenReadModel();
+  const byDesc = (needle: string) => rm.entries.find((e) => e.description.includes(needle))!;
+
+  const combustivel = byDesc("Combustível da operação");
+  assertEqual(combustivel.criterionLabel, "Rateio igual", "combustível: rateio igual");
+  assertEqual(combustivel.allocations.map((a) => a.percentageFormatted).join("/"), "50,00%/50,00%", "combustível 50/50");
+  assert(combustivel.distributionNote !== null && /não decorre da participação societária/i.test(combustivel.distributionNote), "nota do rateio 50/50");
+
+  const escavadeira = byDesc("escavadeira");
+  assertEqual(escavadeira.criterionLabel, "Rateio específico", "escavadeira: rateio específico");
+  assertEqual(escavadeira.allocations.map((a) => a.percentageFormatted).join("/"), "70,00%/30,00%", "escavadeira 70/30");
+
+  const caminhoes = byDesc("caminhões");
+  assertEqual(caminhoes.criterionLabel, "Atribuição direta", "caminhões: atribuição direta");
+  assert(caminhoes.isSingleDirect, "caminhões: atribuição direta simples");
+  assertEqual(caminhoes.allocations[0].costCenterId, HIDROMEC.id, "caminhões → HIDROMEC");
+  assertEqual(caminhoes.allocations[0].percentageFormatted, "100,00%", "caminhões 100%");
+
+  for (const needle of ["Folha operacional — CONJASF", "Folha operacional — HIDROMEC", "Encargos trabalhistas — CONJASF", "Encargos trabalhistas — HIDROMEC"]) {
+    const e = byDesc(needle);
+    assertEqual(e.criterionLabel, "Atribuição direta", `${needle}: atribuição direta`);
+    assert(e.isSingleDirect, `${needle}: direta simples`);
+    assertEqual(e.distributionNote, null, `${needle}: sem nota de rateio`);
+  }
 });
 
 // invariantes adicionais

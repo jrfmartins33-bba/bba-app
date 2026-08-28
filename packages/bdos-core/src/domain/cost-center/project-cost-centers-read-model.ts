@@ -128,6 +128,12 @@ export interface ReadModelEntryView {
   readonly unallocatedFormatted: string;
   /** Decisão do domínio, não da UI: existe valor não atribuído nesta despesa? */
   readonly hasUnallocatedAmount: boolean;
+  /** true quando a despesa tem uma única atribuição de 100% (atribuição direta simples). */
+  readonly isSingleDirect: boolean;
+  /** Rótulo pronto do critério predominante da despesa ("Atribuição direta" | "Rateio igual" | "Rateio específico"). */
+  readonly criterionLabel: string;
+  /** Explicação pronta do rateio, quando houver (ex.: 50/50 não decorre do consórcio). null para atribuição direta. */
+  readonly distributionNote: string | null;
   readonly allocations: ReadonlyArray<ReadModelAllocationView>;
 }
 
@@ -165,6 +171,30 @@ export interface ReadModelFamilyView {
   /** Largura de barra 0..100 (inteiro), normalizada pela maior família — layout, não valor. */
   readonly barWidthPercent: number;
   readonly costCenters: ReadonlyArray<ReadModelFamilyCostCenterView>;
+}
+
+/** Matriz "Custos por Centro de Custo e Categoria" — pronta para render. */
+export interface ReadModelMatrixCell {
+  readonly costCenterId: string;
+  readonly amountDecimal: string;
+  readonly amountFormatted: string;
+}
+export interface ReadModelMatrixRow {
+  readonly family: CostFamily;
+  readonly familyLabel: string;
+  /** Uma célula por Centro de Custo, na MESMA ordem de `costMatrix.costCenters`. */
+  readonly cells: ReadonlyArray<ReadModelMatrixCell>;
+  readonly totalDecimal: string;
+  readonly totalFormatted: string;
+}
+export interface ReadModelCostMatrix {
+  /** Colunas da matriz — todos os Centros de Custo da obra, em ordem estável. */
+  readonly costCenters: ReadonlyArray<{ readonly id: string; readonly code: string; readonly name: string }>;
+  readonly rows: ReadonlyArray<ReadModelMatrixRow>;
+  /** Linha "TOTAL" — uma célula por Centro de Custo, na mesma ordem das colunas. */
+  readonly columnTotals: ReadonlyArray<ReadModelMatrixCell>;
+  readonly grandTotalDecimal: string;
+  readonly grandTotalFormatted: string;
 }
 
 export interface ReadModelMeasurementComparisonView {
@@ -205,10 +235,14 @@ export interface ProjectCostCentersReadModel {
   readonly hasUnallocatedAmount: boolean;
   readonly costCenters: ReadonlyArray<ReadModelCostCenterView>;
   readonly families: ReadonlyArray<ReadModelFamilyView>;
+  /** Matriz Categoria × Centro de Custo pronta para apresentação. */
+  readonly costMatrix: ReadModelCostMatrix;
   readonly entries: ReadonlyArray<ReadModelEntryView>;
   readonly measurementComparison: ReadModelMeasurementComparisonView;
-  /** Nota gerencial fixa: consórcio ≠ distribuição de custos. */
+  /** Nota gerencial curta: consórcio ≠ distribuição de custos. */
   readonly consortiumVsCostNote: string;
+  /** Nota gerencial completa (bloco "Participação societária × distribuição dos custos"). */
+  readonly consortiumVsCostDetailNote: string;
 }
 
 const FAMILY_ORDER: ReadonlyArray<CostFamily> = [
@@ -342,10 +376,50 @@ export function buildProjectCostCentersReadModel(
     };
   });
 
+  // ---- Matriz Categoria × Centro de Custo (pronta para render) ----
+  const matrixColumns = input.costCenters.map((cc) => ({ id: cc.id, code: cc.code, name: cc.name }));
+  const matrixRows: ReadModelMatrixRow[] = orderedFamilies.map((family) => {
+    const perCenter = familyByCostCenter.get(family) ?? new Map<string, string>();
+    const cells: ReadModelMatrixCell[] = input.costCenters.map((cc) => {
+      const amt = canonMoney(perCenter.get(cc.id) ?? "0.00");
+      return { costCenterId: cc.id, amountDecimal: amt, amountFormatted: formatBrlFromDecimal(amt) };
+    });
+    const totalDecimal = canonMoney(familyTotals.get(family) ?? "0.00");
+    return {
+      family,
+      familyLabel: COST_FAMILY_LABELS_PT_BR[family],
+      cells,
+      totalDecimal,
+      totalFormatted: formatBrlFromDecimal(totalDecimal),
+    };
+  });
+  const matrixColumnTotals: ReadModelMatrixCell[] = input.costCenters.map((cc) => {
+    const amt = canonMoney(allocatedByCostCenter.get(cc.id) ?? "0.00");
+    return { costCenterId: cc.id, amountDecimal: amt, amountFormatted: formatBrlFromDecimal(amt) };
+  });
+  const costMatrix: ReadModelCostMatrix = {
+    costCenters: matrixColumns,
+    rows: matrixRows,
+    columnTotals: matrixColumnTotals,
+    grandTotalDecimal: canonMoney(allocatedCostDecimal),
+    grandTotalFormatted: formatBrlFromDecimal(allocatedCostDecimal),
+  };
+
   // ---- Despesas ----
   const entries: ReadModelEntryView[] = input.costEntries.map(({ entry, allocations }, index) => {
     const report = reports[index];
     const entryAmount = canonMoney(entry.amountDecimal);
+    const primaryMethod = allocations[0]?.allocationMethod ?? null;
+    const isSingleDirect = allocations.length === 1 && primaryMethod === CostAllocationMethod.Direct;
+    const criterionLabel = primaryMethod !== null ? COST_ALLOCATION_METHOD_LABELS_PT_BR[primaryMethod] : "—";
+    const storedRationale = allocations
+      .map((a) => a.rationale)
+      .find((r): r is string => typeof r === "string" && r.trim() !== "");
+    const distributionNote =
+      storedRationale ??
+      (primaryMethod === CostAllocationMethod.EqualSplit || primaryMethod === CostAllocationMethod.CustomSplit
+        ? "Critério de rateio definido especificamente para esta despesa. Não decorre da participação societária do consórcio."
+        : null);
     return {
       id: entry.id,
       description: entry.description,
@@ -362,6 +436,9 @@ export function buildProjectCostCentersReadModel(
       unallocatedDecimal: report.unallocatedDecimal,
       unallocatedFormatted: formatBrlFromDecimal(report.unallocatedDecimal),
       hasUnallocatedAmount: moneyToCents(report.unallocatedDecimal) !== 0n,
+      isSingleDirect,
+      criterionLabel,
+      distributionNote,
       allocations: allocations.map((alloc) => {
         const cc = costCentersById.get(alloc.projectCostCenterId);
         const allocAmount = canonMoney(alloc.allocatedAmountDecimal);
@@ -410,10 +487,14 @@ export function buildProjectCostCentersReadModel(
     hasUnallocatedAmount: moneyToCents(unallocatedCostDecimal) !== 0n,
     costCenters,
     families,
+    costMatrix,
     entries,
     measurementComparison,
     consortiumVsCostNote:
       "A participação no consórcio não determina automaticamente a distribuição dos custos.",
+    consortiumVsCostDetailNote:
+      "A participação no consórcio não determina automaticamente a distribuição dos custos. " +
+      "Cada despesa pode ter atribuição direta ou critério específico de rateio.",
   };
 }
 
