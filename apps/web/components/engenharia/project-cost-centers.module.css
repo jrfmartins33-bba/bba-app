@@ -88,8 +88,11 @@
   gap: 0.3rem;
 }
 
+/* TOTAL / CONSOLIDADO — institucional NEUTRO. Nunca o código visual de um
+   Centro de Custo (o dourado agora é a identidade do 1º Centro de Custo). */
 .kpiCardPrimary {
-  border-color: rgba(185, 149, 79, 0.4);
+  border-color: var(--app-border);
+  border-left: 3px solid var(--text-secondary-strong);
   background: linear-gradient(135deg, rgba(12, 31, 63, 0.85) 0%, rgba(18, 49, 95, 0.6) 100%);
 }
 
@@ -566,6 +569,9 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1rem;
+  /* altura natural por conteúdo: cards simples ficam compactos, cards com
+     rateio/justificativa crescem sem esticar os vizinhos. */
+  align-items: start;
 }
 
 .distribCard {
@@ -794,6 +800,30 @@
   justify-content: space-between;
   align-items: baseline;
   gap: 0.75rem;
+}
+
+.familyValueStrong {
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* "Participação no custo total: 53,72%" — % do tipo de custo no total geral. */
+.familySubShare {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 0.15rem;
+}
+
+/* Rótulo da barra empilhada — distribuição INTERNA entre Centros de Custo. */
+.stackedBarCaption {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-top: 0.5rem;
 }
 
 /* ---- Chip de distribuição na tabela detalhada ---- */

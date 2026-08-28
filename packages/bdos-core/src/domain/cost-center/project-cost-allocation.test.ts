@@ -789,6 +789,11 @@ const COST_CENTERS_COMPONENT = readFileSync(
   resolve(process.cwd(), "../../apps/web/components/engenharia/project-cost-centers-page.tsx"),
   "utf8",
 );
+const COST_CENTERS_CSS = readFileSync(
+  resolve(process.cwd(), "../../apps/web/components/engenharia/project-cost-centers.module.css"),
+  "utf8",
+);
+const countOccurrences = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
 
 runTest("componente Centros de Custo não recalcula valor financeiro (sem Number/Math sobre decimais)", () => {
   assert(!/Number\(/.test(COST_CENTERS_COMPONENT), "sem Number( no componente");
@@ -978,13 +983,79 @@ runTest("TOTAL e Não atribuído permanecem neutros (sem tom de Centro de Custo)
 });
 
 runTest("nenhum verde/vermelho como identidade de Centro de Custo (CSS)", () => {
-  const css = readFileSync(resolve(process.cwd(), "../../apps/web/components/engenharia/project-cost-centers.module.css"), "utf8");
-  const toneBlock = css.slice(css.indexOf("IDENTIDADE VISUAL DOS CENTROS DE CUSTO"));
+  const toneBlock = COST_CENTERS_CSS.slice(COST_CENTERS_CSS.indexOf("IDENTIDADE VISUAL DOS CENTROS DE CUSTO"));
   const toneDefs = toneBlock.match(/\.tone[1-6]\s*\{[^}]*\}/g) ?? [];
   assertEqual(toneDefs.length, 6, "6 tons definidos");
   for (const def of toneDefs) {
     assert(!/#22c55e|#16a34a|#22C55E|rgba?\([^)]*\bgreen\b|:\s*green|#ef4444|#dc2626|:\s*red|\bred\b/i.test(def), `tom sem verde/vermelho: ${def}`);
   }
+});
+
+// ================= REFINAMENTO FINAL DE UI =================
+runTest("card TOTAL/CONSOLIDADO é institucional NEUTRO — nunca a cor de um Centro de Custo", () => {
+  // O valor do card total não usa mais o destaque dourado (identidade do 1º Centro de Custo).
+  assert(!/kpiValuePrimary/.test(COST_CENTERS_COMPONENT), "componente não usa mais kpiValuePrimary no total");
+  // O card total usa kpiCardPrimary (institucional) e NÃO recebe toneClass/kpiCardTone.
+  const primaryLine = COST_CENTERS_COMPONENT.split("\n").find((l) => l.includes("styles.kpiCardPrimary")) ?? "";
+  assert(primaryLine.length > 0, "card institucional presente");
+  assert(!/toneClass|kpiCardTone/.test(primaryLine), "card total sem tom de Centro de Custo");
+  // Os cards de Centro de Custo continuam com tom; os tons 1 e 2 não mudaram.
+  assert(/kpiCardTone.*toneClass\(cc\.toneKey\)/.test(COST_CENTERS_COMPONENT), "cards de Centro de Custo com tom");
+  const rm = buildGoldenReadModel();
+  assertEqual(rm.costCenters[0].toneKey, "cost-center-tone-1", "1º Centro de Custo mantém tom 1");
+  assertEqual(rm.costCenters[1].toneKey, "cost-center-tone-2", "2º Centro de Custo mantém tom 2");
+  // CSS: kpiCardPrimary não usa dourado do consorciado.
+  const kpiPrimaryDef = COST_CENTERS_CSS.match(/\.kpiCardPrimary\s*\{[^}]*\}/)?.[0] ?? "";
+  assert(!/#d8bd85|bba-gold-soft|185,\s*149,\s*79/.test(kpiPrimaryDef), "kpiCardPrimary sem código visual do consorciado");
+});
+
+runTest("Composição por tipo de custo — 'Participação no custo total' explícito + rótulo da barra", () => {
+  assert(
+    /Participação no custo total: \{f\.shareFormatted\}/.test(COST_CENTERS_COMPONENT),
+    "texto 'Participação no custo total: {%}' presente",
+  );
+  assert(
+    /Distribuição entre Centros de Custo/.test(COST_CENTERS_COMPONENT),
+    "rótulo da barra empilhada presente",
+  );
+  const rm = buildGoldenReadModel();
+  const byFam = new Map(rm.families.map((f) => [f.family, f.shareFormatted]));
+  assertEqual(byFam.get(CostFamily.RH), "53,72%", "RH — participação no custo total");
+  assertEqual(byFam.get(CostFamily.Combustivel), "9,92%", "Combustível — participação no custo total");
+  assertEqual(byFam.get(CostFamily.LocacaoEquipamentos), "36,36%", "Locação — participação no custo total");
+  // A barra continua representando a distribuição INTERNA entre Centros de Custo.
+  const rh = rm.families.find((f) => f.family === CostFamily.RH)!;
+  assertEqual(rh.costCenters.map((c) => c.shareWithinFamilyFormatted).join("/"), "54,00%/46,00%", "distribuição interna RH");
+  assertEqual(rh.costCenters.map((c) => c.barWidthPercent).reduce((a, b) => a + b, 0), 100, "segmentos somam 100");
+});
+
+runTest("cards de distribuição — altura natural por conteúdo (sem altura fixa)", () => {
+  assert(/\.distribList\s*\{[^}]*align-items:\s*start/.test(COST_CENTERS_CSS), ".distribList usa align-items: start");
+  const distribCardDef = COST_CENTERS_CSS.match(/\.distribCard\s*\{[^}]*\}/)?.[0] ?? "";
+  assert(distribCardDef.length > 0, ".distribCard definido");
+  assert(!/\bheight:\s*\d/.test(distribCardDef) && !/min-height:/.test(distribCardDef), "sem altura fixa/mínima no card");
+  // Justificativa do rateio continua sendo renderizada.
+  assert(/entry\.distributionNote && <p className=\{styles\.distribNote\}>/.test(COST_CENTERS_COMPONENT), "justificativa preservada");
+});
+
+runTest("badge DEMONSTRATIVO removido só do bloco 'Como os custos foram distribuídos'", () => {
+  // Natureza aparece uma única vez no componente — na tabela 'Despesas detalhadas'.
+  assertEqual(countOccurrences(COST_CENTERS_COMPONENT, "entry.natureLabel"), 1, "natureLabel renderizado uma vez");
+  assertEqual(countOccurrences(COST_CENTERS_COMPONENT, "styles.natureTag"), 1, "natureTag usado uma vez (tabela detalhada)");
+  // A seção 'Como os custos foram distribuídos' não referencia mais natureLabel.
+  const distribSection = COST_CENTERS_COMPONENT.slice(
+    COST_CENTERS_COMPONENT.indexOf("Como os custos foram distribuídos"),
+    COST_CENTERS_COMPONENT.indexOf("PARTICIPAÇÃO SOCIETÁRIA"),
+  );
+  assert(!/natureLabel|natureTag/.test(distribSection), "bloco de distribuição sem badge de natureza");
+  // Badge principal e coluna Natureza da tabela detalhada permanecem.
+  assert(/DADOS DEMONSTRATIVOS/.test(COST_CENTERS_COMPONENT), "badge principal no topo permanece");
+  assert(/<th>Natureza<\/th>/.test(COST_CENTERS_COMPONENT), "coluna Natureza na tabela detalhada permanece");
+  // Disclaimers da Simulação Gerencial permanecem.
+  assert(/mc\.disclaimer && <p/.test(COST_CENTERS_COMPONENT) && /mc\.neutralStatement && <p/.test(COST_CENTERS_COMPONENT), "disclaimers da simulação permanecem");
+  // Natureza continua no domínio/read model.
+  const rm = buildGoldenReadModel();
+  assert(rm.entries.every((e) => e.natureLabel === "Demonstrativo"), "natureza permanece no read model");
 });
 
 runTest("read model — rótulos de negócio em português (critério, natureza, família)", () => {

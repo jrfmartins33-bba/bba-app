@@ -249,10 +249,11 @@ function CostCentersReady({
       {/* 2. RESUMO EXECUTIVO */}
       {rm.hasCostEntries && (
         <div className={styles.kpiGrid}>
+          {/* Card institucional do TOTAL — neutro, nunca a cor de um Centro de Custo. */}
           <div className={`${styles.kpiCard} ${styles.kpiCardPrimary}`}>
             <span className={styles.kpiLabel}>{isDemonstrative ? "Custos demonstrativos" : "Custos do período"}</span>
-            <span className={`${styles.kpiValue} ${styles.kpiValuePrimary}`}>{rm.totalCostFormatted}</span>
-            <span className={styles.kpiSub}>{rm.entries.length} despesas</span>
+            <span className={styles.kpiValue}>{rm.totalCostFormatted}</span>
+            <span className={styles.kpiSub}>Total consolidado · {rm.entries.length} despesas</span>
           </div>
           {rm.costCenters.map((cc) => (
             <div className={`${styles.kpiCard} ${styles.kpiCardTone} ${toneClass(cc.toneKey)}`} key={cc.id}>
@@ -363,10 +364,10 @@ function CostCentersReady({
               <div className={styles.familyBlock} key={f.family}>
                 <div className={styles.familyHead}>
                   <span className={styles.familyName}>{f.familyLabel}</span>
-                  <span className={styles.familyValue}>
-                    <strong>{f.amountFormatted}</strong> · {f.shareFormatted}
-                  </span>
+                  <strong className={styles.familyValueStrong}>{f.amountFormatted}</strong>
                 </div>
+                <div className={styles.familySubShare}>Participação no custo total: {f.shareFormatted}</div>
+                <div className={styles.stackedBarCaption}>Distribuição entre Centros de Custo</div>
                 <div className={styles.stackedBar}>
                   {f.costCenters.map((c) => (
                     <div
@@ -432,9 +433,9 @@ function CostCentersReady({
                     </div>
                   )}
 
+                  {/* Natureza fica no badge do topo da página e na tabela detalhada — aqui seria redundante. */}
                   <div className={styles.distribCardFoot}>
                     <span className={styles.criterionTag}>{entry.criterionLabel}</span>
-                    <span className={styles.natureTag}>{entry.natureLabel}</span>
                   </div>
                   {entry.distributionNote && <p className={styles.distribNote}>{entry.distributionNote}</p>}
                 </div>
