@@ -117,27 +117,43 @@ então "108" ainda precisa de **detecção de formato por aba** + revisão.
 - `MeasurementItemDocumentaryHistoryRecordProposal` — grão de
   persistência (item × boletim de origem).
 
-## 6. Persistência proposta (migration `20260828000000`, **NÃO aplicada**)
+## 6. Persistência proposta (migration `20260828000000`, **NÃO aplicada**) — grão de observação v2
 
 Tabela `measurement_item_documentary_history`:
 - **Granularidade:** 1 linha por `(managed_service_item_id,
-  measurement_bulletin_import_id)`.
-- **Colunas de quantidade:** `NUMERIC(20,6)`, **nullable** (ausência
-  documental = NULL). `contract_quantity`, `executed_accumulated_quantity`,
-  `measured_accumulated_quantity`, `quantity_to_measure_in_period`,
-  `contract_balance_quantity` — nunca derivadas umas das outras.
-- **Confiabilidade:** `layout` (enum) + `unambiguous BOOLEAN` — linhas
-  `unambiguous = false` nunca alimentam decisão automática.
+  measurement_bulletin_import_id, semantic_field, measurement_ref)` —
+  observação item × campo semântico × Nº de medição de referência.
+- **Identidade:** SÓ `managed_service_item_id` (FK NOT NULL). Sem coluna
+  `identity_basis`; vínculo por descrição/similaridade nunca é aceito.
+- **QUANTIDADE DOCUMENTAL:** `quantity_decimal NUMERIC(20,6) NOT NULL`
+  (ausência documental fica FORA da tabela).
+- **VALOR DERIVADO DE REFERÊNCIA:** `derived_reference_value_decimal
+  NUMERIC(20,2)` + `derived_reference_monetary_policy_key TEXT`, com
+  `CHECK (value IS NULL OR policy_key IS NOT NULL)`. Não é "valor
+  documental"; não reconcilia com a Curva S. Sem política comprovada →
+  NULL. `source-document-truncation-to-cents` NÃO é default da tabela.
+- **Só INEQUÍVOCA persiste:** `CHECK (is_unambiguous = true AND
+  semantic_field <> 'ambiguous' AND numeric_format_hint <> 'ambiguous')`.
+  As **205 observações ambíguas** ficam no parser/preview/relatório de
+  exceções — **nunca** nesta tabela.
 - **Proveniência obrigatória:** `source_sheet_name`, `source_file_name`,
-  `item_code`, `measurement_bulletin_import_id`.
-- **Idempotência:** índice único `(managed_service_item_id,
-  measurement_bulletin_import_id)`; reimportar o mesmo boletim faz
-  `ON CONFLICT DO UPDATE` (writer futuro), nunca duplica.
-- **RLS:** company-or-admin em SELECT/INSERT/UPDATE; DELETE bloqueado.
-- **Linhas estimadas:** até **177** por importação de boletim (uma por
-  aba de memória); ~1.900 se acumulado por todos os BMs históricos do
-  contrato (MED-01…MED-08 × ~177+ itens), a confirmar quando os BMs
-  anteriores forem importados.
+  `source_cells TEXT[]`, `item_code`.
+- **Idempotência:** dois índices únicos parciais (`measurement_ref`
+  pode ser NULL para a grade PERÍODO|QUANTIDADE); `ON CONFLICT DO
+  UPDATE` no processo de ingestão futuro.
+- **Segurança (GRANT/REVOKE explícitos, não só RLS):** `anon`/PUBLIC →
+  nada; `authenticated` → SELECT apenas (filtrado por RLS company-or-admin);
+  `service_role` → SELECT + INSERT + UPDATE; **DELETE não concedido a
+  papel de aplicação nenhum**. RLS também bloqueia INSERT/UPDATE/DELETE
+  do cliente (defesa em profundidade).
+- **Linhas EXATAS do BM nº 08 (universo = 300 itens, se autorizado):**
+  **337 persistíveis** — `quantity_to_measure_in_period` 107 +
+  `measured_accumulated_quantity_prior` 107 +
+  `executed_accumulated_quantity` 107 + `monthly_series_quantity` 16.
+  **205 excluídas por ambiguidade documental.** 107 `managed_service_items`
+  distintos; **193/300 sem nenhuma linha persistível**. 337/337 com
+  valor derivado (política `source-document-truncation-to-cents`), 0
+  `derived_from_cumulative`.
 
 ## 7. Reconciliação possível
 

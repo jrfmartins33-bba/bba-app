@@ -18,7 +18,9 @@ export type {
 export {
   buildItemDocumentaryObservations,
   reconcileDocumentaryHistory,
-  buildDocumentaryHistoryPreview
+  buildDocumentaryHistoryPreview,
+  buildDocumentaryPersistencePlan,
+  isPersistableObservation
 } from "./documentary-history-reconstruction";
 export type {
   DocumentaryContractItem,
@@ -33,5 +35,6 @@ export type {
   GroupPeriodReconciliation,
   ObraPeriodReconciliation,
   DocumentaryReconciliation,
-  DocumentaryHistoryPreview
+  DocumentaryHistoryPreview,
+  DocumentaryPersistencePlan
 } from "./documentary-history-reconstruction";

@@ -65,12 +65,19 @@ export interface DocumentaryCurvaSObraPeriod {
   readonly actualPeriodValueDecimal: string | null;
 }
 
-export type IdentityResolutionBasis = "operational_item_id" | "unresolved";
+/**
+ * Só existe UMA base de identidade persistível: o id operacional
+ * autoritativo (`managed_service_items`). Vínculo por descrição ou por
+ * similaridade NUNCA é aceito; abas que não resolvem por código não
+ * viram observação (ficam em `memoriaCodesWithoutContractItem`).
+ */
+export type IdentityResolutionBasis = "operational_item_id";
 
 export interface ItemDocumentaryObservation {
   readonly itemCode: string;
   /** SEMPRE não-nulo: só abas que resolvem contra um dos itens oficiais entram no universo item a item. */
   readonly managedServiceItemId: string;
+  /** SEMPRE 'operational_item_id' — não há outra base de identidade persistível. */
   readonly identityBasis: IdentityResolutionBasis;
   readonly groupCode: string | null;
   readonly sourceSheet: string;
@@ -393,6 +400,93 @@ export interface DocumentaryHistoryPreview {
   readonly executedNotProvenAsMeasured: ReadonlyArray<{ readonly itemCode: string; readonly executedAccumulatedQuantityDecimal: string | null; readonly measuredAccumulatedQuantityDecimal: string | null; readonly sourceSheet: string }>;
   readonly derivedFromCumulativeCount: number;
   readonly exceptionSourceCells: ReadonlyArray<{ readonly kind: string; readonly itemCode: string; readonly cells: ReadonlyArray<string> }>;
+  /**
+   * Plano EXATO da futura persistência (nenhum "~"). Linha persistível =
+   * observação `is_unambiguous = true` + `quantity_decimal` presente +
+   * `semantic_field <> 'ambiguous'`. As demais ficam EXCLUÍDAS POR
+   * AMBIGUIDADE DOCUMENTAL — reportadas, nunca gravadas, nunca contadas
+   * na futura escrita.
+   */
+  readonly persistencePlan: DocumentaryPersistencePlan;
+}
+
+export interface DocumentaryPersistencePlan {
+  readonly persistableRowCount: number;
+  readonly excludedByAmbiguityCount: number;
+  readonly totalItemPeriodObservations: number;
+  readonly rowsBySemanticField: ReadonlyArray<{ readonly semanticField: string; readonly count: number }>;
+  readonly rowsByMeasurementRef: ReadonlyArray<{ readonly measurementRef: number | null; readonly count: number }>;
+  readonly distinctManagedServiceItemIds: number;
+  readonly itemsWithNoPersistableRow: number;
+  readonly rowsWithDerivedReferenceValue: number;
+  readonly rowsWithoutDerivedReferenceValue: number;
+  readonly rowsByMonetaryPolicyKey: ReadonlyArray<{ readonly policyKey: string; readonly count: number }>;
+  readonly rowsDerivedFromCumulative: number;
+}
+
+const PERSISTABLE_SEMANTIC_FIELDS = new Set<string>([
+  "quantity_to_measure_in_period",
+  "measured_accumulated_quantity_prior",
+  "executed_accumulated_quantity",
+  "monthly_series_quantity"
+]);
+
+/** true = a observação pode virar linha na measurement_item_documentary_history. */
+export function isPersistableObservation(observation: ItemDocumentaryObservation): boolean {
+  return (
+    observation.isUnambiguous &&
+    observation.quantityDecimal !== null &&
+    observation.semanticField !== "ambiguous" &&
+    PERSISTABLE_SEMANTIC_FIELDS.has(observation.semanticField)
+  );
+}
+
+export function buildDocumentaryPersistencePlan(
+  observations: ReadonlyArray<ItemDocumentaryObservation>,
+  contractItemsCount: number
+): DocumentaryPersistencePlan {
+  const persistable = observations.filter(isPersistableObservation);
+  const bySemantic = new Map<string, number>();
+  const byRef = new Map<number | null, number>();
+  const byPolicy = new Map<string, number>();
+  const distinctItems = new Set<string>();
+  let withDerived = 0;
+  let withoutDerived = 0;
+  let derivedFromCumulative = 0;
+
+  for (const observation of persistable) {
+    bySemantic.set(observation.semanticField, (bySemantic.get(observation.semanticField) ?? 0) + 1);
+    byRef.set(observation.measurementRef, (byRef.get(observation.measurementRef) ?? 0) + 1);
+    distinctItems.add(observation.managedServiceItemId);
+    if (observation.derivedReferenceValueDecimal !== null) {
+      withDerived += 1;
+      const key = observation.derivedReferenceMonetaryPolicyKey ?? "(sem política)";
+      byPolicy.set(key, (byPolicy.get(key) ?? 0) + 1);
+    } else {
+      withoutDerived += 1;
+    }
+    if (observation.derivedFromCumulative) derivedFromCumulative += 1;
+  }
+
+  return {
+    persistableRowCount: persistable.length,
+    excludedByAmbiguityCount: observations.length - persistable.length,
+    totalItemPeriodObservations: observations.length,
+    rowsBySemanticField: Array.from(bySemantic.entries())
+      .map(([semanticField, count]) => ({ semanticField, count }))
+      .sort((a, b) => a.semanticField.localeCompare(b.semanticField)),
+    rowsByMeasurementRef: Array.from(byRef.entries())
+      .map(([measurementRef, count]) => ({ measurementRef, count }))
+      .sort((a, b) => (a.measurementRef ?? -1) - (b.measurementRef ?? -1)),
+    distinctManagedServiceItemIds: distinctItems.size,
+    itemsWithNoPersistableRow: contractItemsCount - distinctItems.size,
+    rowsWithDerivedReferenceValue: withDerived,
+    rowsWithoutDerivedReferenceValue: withoutDerived,
+    rowsByMonetaryPolicyKey: Array.from(byPolicy.entries())
+      .map(([policyKey, count]) => ({ policyKey, count }))
+      .sort((a, b) => a.policyKey.localeCompare(b.policyKey)),
+    rowsDerivedFromCumulative: derivedFromCumulative
+  };
 }
 
 export interface BuildDocumentaryHistoryPreviewInput {
@@ -534,7 +628,8 @@ export function buildDocumentaryHistoryPreview(input: BuildDocumentaryHistoryPre
     itemsAboveContractQuantity,
     executedNotProvenAsMeasured,
     derivedFromCumulativeCount: input.observations.filter((observation) => observation.derivedFromCumulative).length,
-    exceptionSourceCells
+    exceptionSourceCells,
+    persistencePlan: buildDocumentaryPersistencePlan(input.observations, input.contractItems.length)
   };
 }
 

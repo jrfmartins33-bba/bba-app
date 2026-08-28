@@ -4,7 +4,9 @@ import { extractMemoriasDeCalculo } from "./parse-memoria-de-calculo";
 import { classifyMemoriaResumo } from "./documentary-history-taxonomy";
 import {
   buildDocumentaryHistoryPreview,
+  buildDocumentaryPersistencePlan,
   buildItemDocumentaryObservations,
+  isPersistableObservation,
   reconcileDocumentaryHistory,
   type DocumentaryContractItem,
   type DocumentaryCurvaSObraPeriod,
@@ -372,6 +374,70 @@ runTest("13. observação de acumulado documental é preservada com escopo e MED
   assertEqual(measured.measurementRef, 5, "acumulado 'em medições anteriores' -> MED da aba (6) − 1");
   assertEqual(measured.quantityDecimal, "40", "quantidade acumulada preservada verbatim");
   assertEqual(measured.derivedFromCumulative, false, "lido direto, não derivado");
+});
+
+runTest("15. identidade persistível é SOMENTE 'operational_item_id' — não há mais base documental/unresolved", () => {
+  const bytes = buildXlsxFixture([
+    resumoSheet("01.02.01", "MEMÓRIA DE CÁLCULO - MEDIÇÃO Nº 08", { contract: 9, measured: 7, toMeasure: 1, balance: 1 })
+  ]);
+  const { observations } = buildItemDocumentaryObservations({
+    memorias: extractMemoriasDeCalculo(bytes, "f.xlsx").parsed,
+    contractItems: [{ code: "01.02.01", managedServiceItemId: "op-1", unitPriceDecimal: "1", contractQuantityDecimal: "9", groupCode: "1.0" }],
+    derivedReferenceMonetaryPolicy: DOC_POLICY
+  });
+  assertEqual(observations.length > 0, true, "gera observações");
+  assertEqual(
+    observations.every((o) => o.identityBasis === "operational_item_id" && o.managedServiceItemId === "op-1"),
+    true,
+    "toda observação tem identidade operacional autoritativa"
+  );
+});
+
+runTest("16. PLANO DE PERSISTÊNCIA — contagens EXATAS; as ambíguas ficam FORA", () => {
+  const bytes = buildXlsxFixture([
+    // 2 abas inequívocas (MED-08) e 1 aba label_bleed (ambígua)
+    resumoSheet("01.02.01", "MEMÓRIA DE CÁLCULO - MEDIÇÃO Nº 08", { contract: 9, executed: 8, measured: 7, toMeasure: 1, balance: 1 }),
+    resumoSheet("01.02.02", "MEMÓRIA DE CÁLCULO - MEDIÇÃO Nº 08", { contract: 9, executed: 8, measured: 7, toMeasure: 1, balance: 1 }),
+    {
+      name: "01.03.03",
+      rows: [
+        ["MEMÓRIA DE CÁLCULO - MEDIÇÃO Nº 04"],
+        ["", "RESUMO"],
+        ["", "Quantidade Contratada........................................................"],
+        ["", "Quantidade medida acumulada em medições anteriores.........................."],
+        ["", "Quantidade a medir no período.............................................."]
+      ]
+    }
+  ]);
+  const contractItems: DocumentaryContractItem[] = [
+    { code: "01.02.01", managedServiceItemId: "op-1", unitPriceDecimal: "886.47", contractQuantityDecimal: "9", groupCode: "1.0" },
+    { code: "01.02.02", managedServiceItemId: "op-2", unitPriceDecimal: "1152.65", contractQuantityDecimal: "9", groupCode: "1.0" },
+    { code: "01.03.03", managedServiceItemId: "op-3", unitPriceDecimal: "1", contractQuantityDecimal: "1", groupCode: "1.0" }
+  ];
+  const { observations } = buildItemDocumentaryObservations({
+    memorias: extractMemoriasDeCalculo(bytes, "f.xlsx").parsed,
+    contractItems,
+    derivedReferenceMonetaryPolicy: DOC_POLICY
+  });
+  const plan = buildDocumentaryPersistencePlan(observations, 300);
+
+  // 01.02.01 e 01.02.02: 3 campos inequívocos cada (a medir, medida acum, executada acum) = 6 linhas persistíveis.
+  assertEqual(plan.persistableRowCount, 6, "6 linhas persistíveis (2 itens × 3 campos inequívocos)");
+  assertEqual(
+    plan.rowsBySemanticField.map((r) => `${r.semanticField}:${r.count}`).join(","),
+    "executed_accumulated_quantity:2,measured_accumulated_quantity_prior:2,quantity_to_measure_in_period:2",
+    "por semantic_field, contagem exata"
+  );
+  assertEqual(plan.distinctManagedServiceItemIds, 2, "2 itens com linha persistível");
+  assertEqual(plan.itemsWithNoPersistableRow, 298, "298 dos 300 sem linha persistível");
+  assertEqual(plan.rowsWithDerivedReferenceValue, 6, "todas com valor derivado de referência");
+  assertEqual(plan.rowsWithoutDerivedReferenceValue, 0, "nenhuma sem valor derivado");
+  assertEqual(plan.rowsByMonetaryPolicyKey.map((r) => `${r.policyKey}:${r.count}`).join(","), "source-document-truncation-to-cents:6", "política única, rastreada");
+  assertEqual(plan.rowsDerivedFromCumulative, 0, "nenhuma derivada de acumulado");
+  // A aba ambígua (01.03.03, label_bleed, campos vazios) gerou observações, mas NENHUMA persistível.
+  assertEqual(plan.excludedByAmbiguityCount, plan.totalItemPeriodObservations - plan.persistableRowCount, "excluídas = total − persistíveis");
+  assertTrue(plan.excludedByAmbiguityCount >= 3, "as observações da aba ambígua ficaram de fora");
+  assertEqual(observations.filter((o) => o.itemCode === "01.03.03" && isPersistableObservation(o)).length, 0, "aba label_bleed: zero linhas persistíveis");
 });
 
 function runTest(name: string, testCase: () => void): void {
