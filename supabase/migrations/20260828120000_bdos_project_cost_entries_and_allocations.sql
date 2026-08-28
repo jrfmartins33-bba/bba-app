@@ -75,12 +75,23 @@ CREATE TABLE IF NOT EXISTS project_cost_entries (
   created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-  -- Custo real NÃO pode ficar sem rastro de origem: quando data_nature =
-  -- 'Actual', exige-se um vínculo (lançamento financeiro OU categoria).
-  CONSTRAINT project_cost_entries_actual_requires_origin CHECK (
-    data_nature <> 'Actual'
-    OR financial_lancamento_id IS NOT NULL
-    OR financial_categoria_id IS NOT NULL
+  -- PROVENIÊNCIA — a origem do custo é declarada em source_kind.
+  -- financial_categoria_id CLASSIFICA o custo; NUNCA prova sua origem.
+  --
+  -- Regra A: source_kind = 'ManualDemonstration' ⇒ data_nature = 'Demonstrative'.
+  CONSTRAINT project_cost_entries_manual_demo_is_demonstrative CHECK (
+    source_kind <> 'ManualDemonstration' OR data_nature = 'Demonstrative'
+  ),
+  -- Regra B: data_nature = 'Actual' ⇒ source_kind <> 'ManualDemonstration'.
+  -- (contrapositiva de A; mantida explícita por clareza de revisão.)
+  CONSTRAINT project_cost_entries_actual_not_manual_demo CHECK (
+    data_nature <> 'Actual' OR source_kind <> 'ManualDemonstration'
+  ),
+  -- Regra C: source_kind = 'FinancialEntry' ⇒ financial_lancamento_id NOT NULL.
+  -- As demais origens de custo real (Payroll, Document, Import, Integration,
+  -- ManualControlled) permanecem válidas sem exigir financial_lancamento_id.
+  CONSTRAINT project_cost_entries_financial_entry_requires_lancamento CHECK (
+    source_kind <> 'FinancialEntry' OR financial_lancamento_id IS NOT NULL
   )
 );
 
@@ -109,6 +120,36 @@ CREATE UNIQUE INDEX IF NOT EXISTS project_cost_entries_natural_key_idx
     cost_family,
     lower(btrim(description))
   );
+
+-- ESTRATÉGIA DE IDEMPOTÊNCIA DA FUTURA ESCRITA (não executada nesta rodada).
+--
+-- project_cost_entries_natural_key_idx é um UNIQUE INDEX (parcialmente por
+-- EXPRESSÃO: lower(btrim(description))), NÃO uma UNIQUE CONSTRAINT nomeada.
+-- Portanto o writer NUNCA deve usar `ON CONFLICT ON CONSTRAINT
+-- project_cost_entries_natural_key_idx` (o Postgres exige uma constraint
+-- real; um índice não é uma constraint). A forma correta é INFERÊNCIA DO
+-- ÍNDICE pela lista de colunas + a MESMA expressão do índice:
+--
+--   INSERT INTO project_cost_entries
+--     (company_id, engineering_project_id, financial_lancamento_id,
+--      financial_categoria_id, cost_family, description, supplier_name,
+--      amount_decimal, competence_period, competence_date, data_nature,
+--      source_kind, status, notes, metadata)
+--   VALUES (...)
+--   ON CONFLICT (company_id, engineering_project_id, competence_period,
+--                data_nature, cost_family, lower(btrim(description)))
+--   DO NOTHING
+--   RETURNING id;
+--
+-- Se `RETURNING id` vier vazio (linha já existia), o writer relê o id:
+--   SELECT id FROM project_cost_entries
+--    WHERE company_id = $1 AND engineering_project_id = $2
+--      AND competence_period = $3 AND data_nature = $4
+--      AND cost_family = $5 AND lower(btrim(description)) = lower(btrim($6));
+--
+-- Nenhuma coluna gerada nem constraint redundante é necessária: a
+-- inferência do índice por expressão é suficiente e é a sintaxe suportada
+-- por PostgreSQL 15 / Supabase.
 
 COMMENT ON TABLE project_cost_entries IS
   'Custo do projeto antes da distribuição entre Centros de Custo. data_nature separa dado demonstrativo de custo real. Não substitui nem duplica financial_lancamentos.';
@@ -255,13 +296,26 @@ CREATE POLICY project_cost_allocations_read ON project_cost_allocations
   FOR SELECT TO authenticated
   USING (company_id = get_my_company_id() OR is_bba_admin());
 
--- PUBLIC / anon: nenhum acesso (nenhum GRANT).
--- authenticated: apenas SELECT, conforme RLS acima. Sem INSERT/UPDATE/DELETE.
+-- REVOKE explícito ANTES de qualquer GRANT — não depender de default
+-- privileges do PostgreSQL/Supabase. Estado conhecido: ninguém tem nada.
+REVOKE ALL ON project_cost_entries FROM PUBLIC;
+REVOKE ALL ON project_cost_entries FROM anon;
+REVOKE ALL ON project_cost_entries FROM authenticated;
+REVOKE ALL ON project_cost_entries FROM service_role;
+
+REVOKE ALL ON project_cost_allocations FROM PUBLIC;
+REVOKE ALL ON project_cost_allocations FROM anon;
+REVOKE ALL ON project_cost_allocations FROM authenticated;
+REVOKE ALL ON project_cost_allocations FROM service_role;
+
+-- PUBLIC / anon: nenhum GRANT (permanecem sem acesso).
+-- authenticated: apenas SELECT, sujeito à RLS company-or-admin acima.
+--   Nenhuma policy de INSERT/UPDATE/DELETE para authenticated.
 GRANT SELECT ON project_cost_entries TO authenticated;
 GRANT SELECT ON project_cost_allocations TO authenticated;
 
 -- service_role: SELECT/INSERT/UPDATE (escrita server-side controlada).
--- DELETE NÃO é concedido ao writer da aplicação nesta rodada.
+-- DELETE NÃO é concedido a ninguém pela aplicação nesta rodada.
 GRANT SELECT, INSERT, UPDATE ON project_cost_entries TO service_role;
 GRANT SELECT, INSERT, UPDATE ON project_cost_allocations TO service_role;
 

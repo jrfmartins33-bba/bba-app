@@ -100,7 +100,11 @@ export interface ReadModelAllocationView {
   readonly costCenterCode: string;
   readonly costCenterName: string;
   readonly amountDecimal: string;
+  /** Apresentação pronta: "R$ 54.000,00". A UI nunca reformata dinheiro. */
+  readonly amountFormatted: string;
   readonly percentage: string | null;
+  /** Apresentação pronta: "100,00%" | "—". */
+  readonly percentageFormatted: string;
   readonly method: CostAllocationMethod;
   readonly methodLabel: string;
   readonly basisPoints: number;
@@ -115,11 +119,15 @@ export interface ReadModelEntryView {
   readonly category: string | null;
   readonly supplierName: string | null;
   readonly amountDecimal: string;
+  readonly amountFormatted: string;
   readonly nature: CostDataNature;
   readonly natureLabel: string;
   readonly competence: string;
   readonly allocationStatus: CostEntryStatus;
   readonly unallocatedDecimal: string;
+  readonly unallocatedFormatted: string;
+  /** Decisão do domínio, não da UI: existe valor não atribuído nesta despesa? */
+  readonly hasUnallocatedAmount: boolean;
   readonly allocations: ReadonlyArray<ReadModelAllocationView>;
 }
 
@@ -130,21 +138,32 @@ export interface ReadModelCostCenterView {
   readonly consortiumMemberId: string | null;
   readonly consortiumMemberName: string | null;
   readonly consortiumSharePercent: string | null;
+  readonly consortiumShareFormatted: string;
+  /** Largura de barra 0..100 (inteiro) — dica de layout, não valor financeiro. */
+  readonly consortiumShareBarWidthPercent: number;
   readonly allocatedCostDecimal: string;
+  readonly allocatedCostFormatted: string;
   readonly costSharePercent: string | null;
+  readonly costShareFormatted: string;
+  readonly costShareBarWidthPercent: number;
 }
 
 export interface ReadModelFamilyCostCenterView {
   readonly costCenterId: string;
   readonly costCenterCode: string;
   readonly amountDecimal: string;
+  readonly amountFormatted: string;
 }
 
 export interface ReadModelFamilyView {
   readonly family: CostFamily;
   readonly familyLabel: string;
   readonly amountDecimal: string;
+  readonly amountFormatted: string;
   readonly sharePercent: string | null;
+  readonly shareFormatted: string;
+  /** Largura de barra 0..100 (inteiro), normalizada pela maior família — layout, não valor. */
+  readonly barWidthPercent: number;
   readonly costCenters: ReadonlyArray<ReadModelFamilyCostCenterView>;
 }
 
@@ -152,8 +171,11 @@ export interface ReadModelMeasurementComparisonView {
   readonly available: boolean;
   readonly measurementLabel: string | null;
   readonly measuredValueDecimal: string | null;
+  readonly measuredValueFormatted: string | null;
   readonly demonstrativeCostValueDecimal: string | null;
+  readonly demonstrativeCostValueFormatted: string | null;
   readonly demonstrativeDifferenceDecimal: string | null;
+  readonly demonstrativeDifferenceFormatted: string | null;
   /** Texto neutro pronto do domínio. Nunca usa lucro/margem/ganho/economia para natureza Demonstrative. */
   readonly neutralStatement: string | null;
   readonly disclaimer: string | null;
@@ -174,8 +196,13 @@ export interface ProjectCostCentersReadModel {
   readonly operationalState: "materialized" | "not_materialized";
   readonly hasCostEntries: boolean;
   readonly totalCostDecimal: string;
+  readonly totalCostFormatted: string;
   readonly allocatedCostDecimal: string;
+  readonly allocatedCostFormatted: string;
   readonly unallocatedCostDecimal: string;
+  readonly unallocatedCostFormatted: string;
+  /** Decisão do domínio: há valor não atribuído no período? */
+  readonly hasUnallocatedAmount: boolean;
   readonly costCenters: ReadonlyArray<ReadModelCostCenterView>;
   readonly families: ReadonlyArray<ReadModelFamilyView>;
   readonly entries: ReadonlyArray<ReadModelEntryView>;
@@ -239,19 +266,26 @@ export function buildProjectCostCentersReadModel(
   }
 
   const costCenters: ReadModelCostCenterView[] = input.costCenters.map((cc) => {
-    const allocated = allocatedByCostCenter.get(cc.id) ?? "0.00";
+    const allocated = canonMoney(allocatedByCostCenter.get(cc.id) ?? "0.00");
+    const consortiumSharePercent =
+      cc.consortiumShareBasisPoints !== null
+        ? formatBasisPointsPercent(cc.consortiumShareBasisPoints)
+        : null;
+    const costSharePercent = sharePercent(allocated, totalCostDecimal);
     return {
       id: cc.id,
       code: cc.code,
       name: cc.name,
       consortiumMemberId: cc.consortiumMemberId,
       consortiumMemberName: cc.consortiumMemberName,
-      consortiumSharePercent:
-        cc.consortiumShareBasisPoints !== null
-          ? formatBasisPointsPercent(cc.consortiumShareBasisPoints)
-          : null,
-      allocatedCostDecimal: canonMoney(allocated),
-      costSharePercent: sharePercent(allocated, totalCostDecimal),
+      consortiumSharePercent,
+      consortiumShareFormatted: formatPercentPtBr(consortiumSharePercent),
+      consortiumShareBarWidthPercent: percentStringToBarWidth(consortiumSharePercent),
+      allocatedCostDecimal: allocated,
+      allocatedCostFormatted: formatBrlFromDecimal(allocated),
+      costSharePercent,
+      costShareFormatted: formatPercentPtBr(costSharePercent),
+      costShareBarWidthPercent: percentStringToBarWidth(costSharePercent),
     };
   });
 
@@ -274,21 +308,36 @@ export function buildProjectCostCentersReadModel(
     familyByCostCenter.set(entry.costFamily, perCenter);
   }
 
-  const families: ReadModelFamilyView[] = FAMILY_ORDER.filter((f) => familyTotals.has(f)).map((family) => {
+  const orderedFamilies = FAMILY_ORDER.filter((f) => familyTotals.has(f));
+  const maxFamilyCents = orderedFamilies.reduce((max, f) => {
+    const cents = moneyToCents(canonMoney(familyTotals.get(f) ?? "0.00"));
+    return cents > max ? cents : max;
+  }, 0n);
+
+  const families: ReadModelFamilyView[] = orderedFamilies.map((family) => {
     const amountDecimal = canonMoney(familyTotals.get(family) ?? "0.00");
     const perCenter = familyByCostCenter.get(family) ?? new Map<string, string>();
     const familyCostCenters: ReadModelFamilyCostCenterView[] = input.costCenters
       .filter((cc) => perCenter.has(cc.id))
-      .map((cc) => ({
-        costCenterId: cc.id,
-        costCenterCode: cc.code,
-        amountDecimal: canonMoney(perCenter.get(cc.id) ?? "0.00"),
-      }));
+      .map((cc) => {
+        const centerAmount = canonMoney(perCenter.get(cc.id) ?? "0.00");
+        return {
+          costCenterId: cc.id,
+          costCenterCode: cc.code,
+          amountDecimal: centerAmount,
+          amountFormatted: formatBrlFromDecimal(centerAmount),
+        };
+      });
+    const share = sharePercent(amountDecimal, totalCostDecimal);
     return {
       family,
       familyLabel: COST_FAMILY_LABELS_PT_BR[family],
       amountDecimal,
-      sharePercent: sharePercent(amountDecimal, totalCostDecimal),
+      amountFormatted: formatBrlFromDecimal(amountDecimal),
+      sharePercent: share,
+      shareFormatted: formatPercentPtBr(share),
+      barWidthPercent:
+        maxFamilyCents > 0n ? Number((moneyToCents(amountDecimal) * 100n) / maxFamilyCents) : 0,
       costCenters: familyCostCenters,
     };
   });
@@ -296,6 +345,7 @@ export function buildProjectCostCentersReadModel(
   // ---- Despesas ----
   const entries: ReadModelEntryView[] = input.costEntries.map(({ entry, allocations }, index) => {
     const report = reports[index];
+    const entryAmount = canonMoney(entry.amountDecimal);
     return {
       id: entry.id,
       description: entry.description,
@@ -303,20 +353,27 @@ export function buildProjectCostCentersReadModel(
       familyLabel: COST_FAMILY_LABELS_PT_BR[entry.costFamily],
       category: entry.categoryLabel,
       supplierName: entry.supplierName,
-      amountDecimal: canonMoney(entry.amountDecimal),
+      amountDecimal: entryAmount,
+      amountFormatted: formatBrlFromDecimal(entryAmount),
       nature: entry.dataNature,
       natureLabel: COST_DATA_NATURE_LABELS_PT_BR[entry.dataNature],
       competence: entry.competencePeriod,
       allocationStatus: entry.status,
       unallocatedDecimal: report.unallocatedDecimal,
+      unallocatedFormatted: formatBrlFromDecimal(report.unallocatedDecimal),
+      hasUnallocatedAmount: moneyToCents(report.unallocatedDecimal) !== 0n,
       allocations: allocations.map((alloc) => {
         const cc = costCentersById.get(alloc.projectCostCenterId);
+        const allocAmount = canonMoney(alloc.allocatedAmountDecimal);
+        const percentage = sharePercent(alloc.allocatedAmountDecimal, entry.amountDecimal);
         return {
           costCenterId: alloc.projectCostCenterId,
           costCenterCode: cc?.code ?? alloc.projectCostCenterId,
           costCenterName: cc?.name ?? alloc.projectCostCenterId,
-          amountDecimal: canonMoney(alloc.allocatedAmountDecimal),
-          percentage: sharePercent(alloc.allocatedAmountDecimal, entry.amountDecimal),
+          amountDecimal: allocAmount,
+          amountFormatted: formatBrlFromDecimal(allocAmount),
+          percentage,
+          percentageFormatted: formatPercentPtBr(percentage),
           method: alloc.allocationMethod,
           methodLabel: COST_ALLOCATION_METHOD_LABELS_PT_BR[alloc.allocationMethod],
           basisPoints: alloc.allocationBasisPoints,
@@ -345,8 +402,12 @@ export function buildProjectCostCentersReadModel(
     operationalState: input.operationalLayerMaterialized ? "materialized" : "not_materialized",
     hasCostEntries: input.costEntries.length > 0,
     totalCostDecimal: canonMoney(totalCostDecimal),
+    totalCostFormatted: formatBrlFromDecimal(totalCostDecimal),
     allocatedCostDecimal: canonMoney(allocatedCostDecimal),
+    allocatedCostFormatted: formatBrlFromDecimal(allocatedCostDecimal),
     unallocatedCostDecimal: canonMoney(unallocatedCostDecimal),
+    unallocatedCostFormatted: formatBrlFromDecimal(unallocatedCostDecimal),
+    hasUnallocatedAmount: moneyToCents(unallocatedCostDecimal) !== 0n,
     costCenters,
     families,
     entries,
@@ -367,8 +428,11 @@ function buildMeasurementComparisonView(
       available: false,
       measurementLabel: input.measurementLabel,
       measuredValueDecimal: null,
+      measuredValueFormatted: null,
       demonstrativeCostValueDecimal: null,
+      demonstrativeCostValueFormatted: null,
       demonstrativeDifferenceDecimal: null,
+      demonstrativeDifferenceFormatted: null,
       neutralStatement: null,
       disclaimer: null,
     };
@@ -383,8 +447,11 @@ function buildMeasurementComparisonView(
     available: true,
     measurementLabel: input.measurementLabel,
     measuredValueDecimal: measured,
+    measuredValueFormatted: formatBrlFromDecimal(measured),
     demonstrativeCostValueDecimal: cost,
+    demonstrativeCostValueFormatted: formatBrlFromDecimal(cost),
     demonstrativeDifferenceDecimal: difference,
+    demonstrativeDifferenceFormatted: formatBrlFromDecimal(difference),
     neutralStatement: isDemonstrative
       ? "Diferença demonstrativa entre o valor medido e os custos utilizados nesta simulação."
       : "Diferença entre o valor medido no período e os custos apropriados.",
@@ -400,4 +467,37 @@ export function formatBasisPointsPercent(basisPoints: number): string {
   const whole = Math.floor(clamped / 100);
   const frac = (clamped % 100).toString().padStart(2, "0");
   return `${whole}.${frac}`;
+}
+
+/**
+ * "54000.00" → "R$ 54.000,00". Puramente por manipulação de string sobre
+ * o decimal canônico de 2 casas — NUNCA converte para Number/float. É a
+ * apresentação pronta que a UI renderiza sem recalcular nada.
+ */
+export function formatBrlFromDecimal(decimal: string): string {
+  const canon = canonMoney(decimal);
+  const negative = canon.startsWith("-");
+  const unsigned = negative ? canon.slice(1) : canon;
+  const [intPartRaw, fracPartRaw = "00"] = unsigned.split(".");
+  const fracPart = (fracPartRaw + "00").slice(0, 2);
+  const intPart = intPartRaw.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `${negative ? "- " : ""}R$ ${intPart},${fracPart}`;
+}
+
+/** "51.32" → "51,32%". null → "—". Apresentação; sem recálculo. */
+export function formatPercentPtBr(value: string | null): string {
+  return value === null ? "—" : `${value.replace(".", ",")}%`;
+}
+
+/**
+ * String percentual "51.32" → inteiro 0..100 para largura de barra CSS.
+ * É uma dica de layout derivada de um percentual JÁ calculado pelo
+ * domínio — não recalcula valor financeiro nem participação.
+ */
+function percentStringToBarWidth(value: string | null): number {
+  if (value === null) return 0;
+  const [wholeRaw] = value.split(".");
+  const whole = Number.parseInt(wholeRaw, 10);
+  if (!Number.isFinite(whole)) return 0;
+  return Math.max(0, Math.min(100, whole));
 }

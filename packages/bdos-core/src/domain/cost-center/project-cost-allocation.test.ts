@@ -19,6 +19,9 @@ import {
   moneyToCents,
   sharePercent,
   validateCostEntryAllocations,
+  validateCostEntryProvenance,
+  formatBrlFromDecimal,
+  formatPercentPtBr,
   type AllocatableCostCenter,
   type ProjectCostAllocation,
   type ProjectCostEntry,
@@ -457,16 +460,210 @@ runTest("nenhum hardcode Lagoa/CONJASF/HIDROMEC/UUID no domínio e read model", 
 });
 
 // 25
+const MIGRATION_SQL = readFileSync(
+  resolve(process.cwd(), "../../supabase/migrations/20260828120000_bdos_project_cost_entries_and_allocations.sql"),
+  "utf8",
+);
+
+/** SQL sem comentários de linha (`-- ...`) — para checar apenas o que EXECUTA. */
+const MIGRATION_SQL_EXECUTABLE = MIGRATION_SQL.split("\n")
+  .map((line) => line.replace(/--.*$/, ""))
+  .join("\n");
+
 runTest("migration da camada operacional permanece marcada como NÃO APLICAR", () => {
-  const migration = readFileSync(
-    resolve(process.cwd(), "../../supabase/migrations/20260828120000_bdos_project_cost_entries_and_allocations.sql"),
+  assert(MIGRATION_SQL.includes("NÃO APLICAR"), "cabeçalho de não-aplicação presente");
+  assert(/project_cost_entries/.test(MIGRATION_SQL), "cria project_cost_entries");
+  assert(/project_cost_allocations/.test(MIGRATION_SQL), "cria project_cost_allocations");
+  assert(
+    !/INSERT\s+INTO\s+project_cost_(entries|allocations)/i.test(MIGRATION_SQL_EXECUTABLE),
+    "sem business rows (INSERT executável)",
+  );
+  assert(
+    !/INSERT\s+INTO\s+financial_lancamentos/i.test(MIGRATION_SQL_EXECUTABLE),
+    "não toca o Financeiro real",
+  );
+  assert(!/INSERT\s+INTO\s+financial_categorias/i.test(MIGRATION_SQL_EXECUTABLE), "não cria categorias");
+});
+
+runTest("migration — idempotência referencia o UNIQUE INDEX por inferência, nunca ON CONFLICT ON CONSTRAINT", () => {
+  assert(
+    /CREATE UNIQUE INDEX[^;]*project_cost_entries_natural_key_idx/i.test(MIGRATION_SQL),
+    "natural key é UNIQUE INDEX (não constraint)",
+  );
+  assert(
+    !/ON CONFLICT ON CONSTRAINT\s+project_cost_entries_natural_key_idx/i.test(MIGRATION_SQL),
+    "não usa ON CONFLICT ON CONSTRAINT com nome de índice",
+  );
+  // A estratégia documentada usa inferência por colunas + a MESMA expressão do índice.
+  assert(
+    /ON CONFLICT \(company_id, engineering_project_id, competence_period,/i.test(MIGRATION_SQL),
+    "inferência do índice por lista de colunas",
+  );
+  assert(/cost_family, lower\(btrim\(description\)\)\)/i.test(MIGRATION_SQL), "inclui a expressão lower(btrim(description))");
+  assert(/DO NOTHING/i.test(MIGRATION_SQL) && /RETURNING id/i.test(MIGRATION_SQL), "DO NOTHING + releitura do id");
+});
+
+runTest("migration — proveniência: source_kind vs data_nature; categoria não é prova de origem", () => {
+  assert(
+    !/project_cost_entries_actual_requires_origin/.test(MIGRATION_SQL),
+    "CHECK antigo (categoria satisfazia origem) foi removido",
+  );
+  assert(
+    /CONSTRAINT project_cost_entries_manual_demo_is_demonstrative CHECK \(\s*source_kind <> 'ManualDemonstration' OR data_nature = 'Demonstrative'/i.test(
+      MIGRATION_SQL,
+    ),
+    "Regra A no banco",
+  );
+  assert(
+    /CONSTRAINT project_cost_entries_actual_not_manual_demo CHECK \(\s*data_nature <> 'Actual' OR source_kind <> 'ManualDemonstration'/i.test(
+      MIGRATION_SQL,
+    ),
+    "Regra B no banco",
+  );
+  assert(
+    /CONSTRAINT project_cost_entries_financial_entry_requires_lancamento CHECK \(\s*source_kind <> 'FinancialEntry' OR financial_lancamento_id IS NOT NULL/i.test(
+      MIGRATION_SQL,
+    ),
+    "Regra C no banco",
+  );
+  // financial_categoria_id nunca aparece como condição que satisfaz proveniência.
+  assert(
+    !/OR\s+financial_categoria_id IS NOT NULL/i.test(MIGRATION_SQL_EXECUTABLE),
+    "categoria financeira não é tratada como prova de origem",
+  );
+});
+
+runTest("migration — REVOKE explícito antes dos GRANTs; sem DELETE; RLS só SELECT p/ authenticated", () => {
+  for (const role of ["PUBLIC", "anon", "authenticated", "service_role"]) {
+    assert(
+      new RegExp(`REVOKE ALL ON project_cost_entries FROM ${role};`).test(MIGRATION_SQL),
+      `REVOKE ALL project_cost_entries FROM ${role}`,
+    );
+    assert(
+      new RegExp(`REVOKE ALL ON project_cost_allocations FROM ${role};`).test(MIGRATION_SQL),
+      `REVOKE ALL project_cost_allocations FROM ${role}`,
+    );
+  }
+  assert(/GRANT SELECT ON project_cost_entries TO authenticated;/.test(MIGRATION_SQL), "authenticated: SELECT");
+  assert(/GRANT SELECT ON project_cost_allocations TO authenticated;/.test(MIGRATION_SQL), "authenticated: SELECT");
+  assert(
+    /GRANT SELECT, INSERT, UPDATE ON project_cost_entries TO service_role;/.test(MIGRATION_SQL),
+    "service_role: SELECT/INSERT/UPDATE",
+  );
+  assert(
+    /GRANT SELECT, INSERT, UPDATE ON project_cost_allocations TO service_role;/.test(MIGRATION_SQL),
+    "service_role: SELECT/INSERT/UPDATE",
+  );
+  const grantStatements = MIGRATION_SQL_EXECUTABLE.match(/GRANT[\s\S]*?;/gi) ?? [];
+  assert(grantStatements.length > 0, "há GRANTs para inspecionar");
+  assert(grantStatements.every((g) => !/\bDELETE\b/i.test(g)), "nenhum GRANT concede DELETE");
+  const policyStatements = MIGRATION_SQL_EXECUTABLE.match(/CREATE POLICY[\s\S]*?;/gi) ?? [];
+  assert(
+    policyStatements.every((p) => /FOR SELECT/i.test(p) && !/FOR (INSERT|UPDATE|DELETE|ALL)/i.test(p)),
+    "toda policy é FOR SELECT (sem escrita p/ authenticated)",
+  );
+  assert(
+    /REVOKE ALL ON project_cost_entries FROM[\s\S]*GRANT SELECT ON project_cost_entries TO authenticated/.test(MIGRATION_SQL),
+    "REVOKE vem antes do GRANT",
+  );
+});
+
+// Proveniência (domínio) — categoria classifica, source_kind prova origem
+runTest("proveniência: Actual + ManualDemonstration é recusado", () => {
+  const e: ProjectCostEntry = {
+    ...entry("x", CostFamily.RH, "Folha de Pagamento", "1000.00"),
+    dataNature: CostDataNature.Actual,
+    sourceKind: CostEntrySourceKind.ManualDemonstration,
+  };
+  assertThrows(() => validateCostEntryProvenance(e), "ManualDemonstration");
+});
+
+runTest("proveniência: Demonstrative + ManualDemonstration é aceito", () => {
+  validateCostEntryProvenance({
+    ...entry("x", CostFamily.RH, "Folha de Pagamento", "1000.00"),
+    dataNature: CostDataNature.Demonstrative,
+    sourceKind: CostEntrySourceKind.ManualDemonstration,
+  });
+});
+
+runTest("proveniência: FinancialEntry sem financial_lancamento_id é recusado", () => {
+  const e: ProjectCostEntry = {
+    ...entry("x", CostFamily.RH, "Folha de Pagamento", "1000.00"),
+    dataNature: CostDataNature.Actual,
+    sourceKind: CostEntrySourceKind.FinancialEntry,
+    financialLancamentoId: null,
+  };
+  assertThrows(() => validateCostEntryProvenance(e), "financial_lancamento_id");
+});
+
+runTest("proveniência: Actual só com categoria + ManualDemonstration é recusado (categoria ≠ origem)", () => {
+  const e: ProjectCostEntry = {
+    ...entry("x", CostFamily.Combustivel, "Combustível", "1000.00"),
+    dataNature: CostDataNature.Actual,
+    sourceKind: CostEntrySourceKind.ManualDemonstration,
+    financialCategoriaId: "cat-combustivel",
+    financialLancamentoId: null,
+  };
+  assertThrows(() => validateCostEntryProvenance(e), "ManualDemonstration");
+});
+
+runTest("proveniência: Actual + Document é permitido (sem exigir financial_lancamento_id)", () => {
+  validateCostEntryProvenance({
+    ...entry("x", CostFamily.LocacaoEquipamentos, "Locação de Equipamentos", "1000.00"),
+    dataNature: CostDataNature.Actual,
+    sourceKind: CostEntrySourceKind.Document,
+    financialLancamentoId: null,
+  });
+});
+
+// Apresentação vem pronta do domínio — a UI não recalcula valor financeiro
+runTest("read model entrega apresentação pronta (BRL/percent) e semântica hasUnallocatedAmount", () => {
+  const rm = buildGoldenReadModel();
+  assertEqual(rm.totalCostFormatted, "R$ 242.000,00", "total formatado no domínio");
+  assertEqual(rm.unallocatedCostFormatted, "R$ 0,00", "não atribuído formatado");
+  assertEqual(rm.hasUnallocatedAmount, false, "sem valor não atribuído (decisão do domínio)");
+
+  const a = rm.costCenters.find((c) => c.id === CONJASF.id)!;
+  assertEqual(a.allocatedCostFormatted, "R$ 124.200,00", "centro: BRL pronto");
+  assertEqual(a.costShareFormatted, "51,32%", "centro: percent pronto");
+  assertEqual(a.consortiumShareFormatted, "50,00%", "centro: societária pronta");
+  assert(a.costShareBarWidthPercent === 51 && a.consortiumShareBarWidthPercent === 50, "larguras de barra 0..100 inteiras");
+
+  const rh = rm.families.find((f) => f.family === CostFamily.RH)!;
+  assertEqual(rh.amountFormatted, "R$ 130.000,00", "família: BRL pronto");
+  assertEqual(rh.shareFormatted, "53,72%", "família: percent pronto");
+  assertEqual(rh.barWidthPercent, 100, "família maior normaliza a 100");
+  const comb = rm.families.find((f) => f.family === CostFamily.Combustivel)!;
+  assert(comb.barWidthPercent > 0 && comb.barWidthPercent < 100, "família menor entre 0 e 100");
+
+  const e6 = rm.entries.find((e) => e.description.includes("escavadeira"))!;
+  assertEqual(e6.amountFormatted, "R$ 60.000,00", "despesa: BRL pronto");
+  assertEqual(e6.hasUnallocatedAmount, false, "despesa reconciliada");
+  assertEqual(e6.allocations[0].percentageFormatted, "70,00%", "alocação: percent pronto");
+  assertEqual(e6.allocations[0].amountFormatted, "R$ 42.000,00", "alocação: BRL pronto");
+
+  assertEqual(rm.measurementComparison.demonstrativeDifferenceFormatted, "R$ 10.654,78", "diferença formatada");
+});
+
+runTest("formatBrlFromDecimal / formatPercentPtBr — bigint, sem float", () => {
+  assertEqual(formatBrlFromDecimal("54000.00"), "R$ 54.000,00", "milhar");
+  assertEqual(formatBrlFromDecimal("252654.78"), "R$ 252.654,78", "centavos preservados");
+  assertEqual(formatBrlFromDecimal("0"), "R$ 0,00", "zero");
+  assertEqual(formatBrlFromDecimal("-1234.5"), "- R$ 1.234,50", "negativo e pad");
+  assertEqual(formatBrlFromDecimal("1000000.00"), "R$ 1.000.000,00", "milhão");
+  assertEqual(formatPercentPtBr("48.68"), "48,68%", "percent pt-BR");
+  assertEqual(formatPercentPtBr(null), "—", "percent ausente");
+});
+
+runTest("componente Centros de Custo não recalcula valor financeiro (sem Number/Math sobre decimais)", () => {
+  const component = readFileSync(
+    resolve(process.cwd(), "../../apps/web/components/engenharia/project-cost-centers-page.tsx"),
     "utf8",
   );
-  assert(migration.includes("NÃO APLICAR"), "cabeçalho de não-aplicação presente");
-  assert(/project_cost_entries/.test(migration), "cria project_cost_entries");
-  assert(/project_cost_allocations/.test(migration), "cria project_cost_allocations");
-  assert(!/INSERT\s+INTO\s+project_cost_(entries|allocations)/i.test(migration), "sem business rows");
-  assert(!/INSERT\s+INTO\s+financial_lancamentos/i.test(migration), "não toca o Financeiro real");
+  assert(!/Number\(/.test(component), "sem Number( no componente");
+  assert(!/parseFloat|parseInt/.test(component), "sem parseFloat/parseInt no componente");
+  assert(!/Math\.(max|min|round|abs)\s*\([^)]*(amount|Decimal|Value)/i.test(component), "sem Math sobre valores");
+  assert(!/\bNumber\b|\btoLocaleString\b/.test(component), "sem toLocaleString/Number");
 });
 
 // invariantes adicionais

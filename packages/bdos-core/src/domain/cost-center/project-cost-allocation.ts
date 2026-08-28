@@ -30,6 +30,8 @@ import {
 } from "../measurement-certification";
 import {
   CostAllocationMethod,
+  CostDataNature,
+  CostEntrySourceKind,
   CostEntryStatus,
   type AllocatableCostCenter,
   type ProjectCostAllocation,
@@ -78,6 +80,55 @@ function absBig(v: bigint): bigint {
 }
 
 // ---------------------------------------------------------------------------
+// Proveniência do custo — origem vs. natureza
+// ---------------------------------------------------------------------------
+
+/**
+ * `financial_categoria_id` CLASSIFICA o custo — nunca prova sua origem.
+ * A proveniência é declarada em `source_kind`. Regras mínimas:
+ *
+ *   A. source_kind = ManualDemonstration ⇒ data_nature = Demonstrative.
+ *   B. data_nature = Actual ⇒ source_kind ≠ ManualDemonstration.
+ *      (A e B são contrapositivas; ambas são checadas por clareza.)
+ *   C. source_kind = FinancialEntry ⇒ financial_lancamento_id ≠ null.
+ *
+ * As demais origens de custo real (Payroll, Document, Import, Integration,
+ * ManualControlled) permanecem válidas SEM exigir financial_lancamento_id;
+ * o que precisa ser explícito é a natureza da origem em `source_kind`.
+ */
+export function validateCostEntryProvenance(entry: ProjectCostEntry): void {
+  // Regra A
+  if (
+    entry.sourceKind === CostEntrySourceKind.ManualDemonstration &&
+    entry.dataNature !== CostDataNature.Demonstrative
+  ) {
+    throw new CostAllocationValidationError(
+      `Custo ${entry.id}: source_kind = ManualDemonstration exige data_nature = Demonstrative.`,
+    );
+  }
+
+  // Regra B
+  if (
+    entry.dataNature === CostDataNature.Actual &&
+    entry.sourceKind === CostEntrySourceKind.ManualDemonstration
+  ) {
+    throw new CostAllocationValidationError(
+      `Custo ${entry.id}: data_nature = Actual não pode ter source_kind = ManualDemonstration.`,
+    );
+  }
+
+  // Regra C
+  if (
+    entry.sourceKind === CostEntrySourceKind.FinancialEntry &&
+    (entry.financialLancamentoId === null || entry.financialLancamentoId === undefined)
+  ) {
+    throw new CostAllocationValidationError(
+      `Custo ${entry.id}: source_kind = FinancialEntry exige financial_lancamento_id (a categoria financeira não prova origem).`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Validação de invariantes
 // ---------------------------------------------------------------------------
 
@@ -106,6 +157,9 @@ export function validateCostEntryAllocations(
   if (moneyToCents(entry.amountDecimal) <= 0n) {
     throw new CostAllocationValidationError(`Custo ${entry.id}: amount_decimal deve ser > 0.`);
   }
+
+  // Proveniência: origem (source_kind) vs. natureza (data_nature).
+  validateCostEntryProvenance(entry);
 
   const seenCostCenters = new Set<string>();
 

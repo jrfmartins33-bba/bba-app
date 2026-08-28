@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronDown, ChevronRight, Info, RotateCw } from "lucide-react";
@@ -18,17 +18,11 @@ type ViewState =
   | { readonly phase: "not_found" }
   | { readonly phase: "error"; readonly message: string };
 
-function brl(decimal: string | null): string {
-  if (decimal === null) return "—";
-  const value = Number(decimal);
-  if (!Number.isFinite(value)) return "—";
-  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-function pct(value: string | null): string {
-  if (value === null) return "—";
-  return `${value.replace(".", ",")}%`;
-}
+// NOTA: este componente NÃO calcula valor financeiro, participação, saldo
+// não atribuído nem proporção de barra. Tudo vem PRONTO do read model
+// (BDOS calcula, UI apresenta): strings já formatadas em BRL/percentual e
+// larguras de barra inteiras 0..100. Nenhuma conversão numérica de decimal
+// canônico acontece aqui.
 
 export function ProjectCostCentersPage({ projectId }: ProjectCostCentersPageProps) {
   const searchParams = useSearchParams();
@@ -135,7 +129,14 @@ export function ProjectCostCentersPage({ projectId }: ProjectCostCentersPageProp
     );
   }
 
-  return <CostCentersReady readModel={state.readModel} backHref={backHref} expandedEntryId={expandedEntryId} setExpandedEntryId={setExpandedEntryId} />;
+  return (
+    <CostCentersReady
+      readModel={state.readModel}
+      backHref={backHref}
+      expandedEntryId={expandedEntryId}
+      setExpandedEntryId={setExpandedEntryId}
+    />
+  );
 }
 
 function CostCentersReady({
@@ -152,12 +153,8 @@ function CostCentersReady({
   const rm = readModel;
   const isDemonstrative = rm.dataNature === "Demonstrative";
   const notMaterialized = rm.operationalState === "not_materialized";
-  const societyCostCenter = rm.costCenters.find((cc) => cc.consortiumSharePercent !== null);
-
-  const maxFamilyValue = useMemo(
-    () => rm.families.reduce((max, f) => Math.max(max, Number(f.amountDecimal)), 0),
-    [rm.families],
-  );
+  const hasConsortiumShare = rm.costCenters.some((cc) => cc.consortiumSharePercent !== null);
+  const mc = rm.measurementComparison;
 
   return (
     <div className={styles.container}>
@@ -200,22 +197,24 @@ function CostCentersReady({
         <div className={`${styles.kpiCard} ${styles.kpiCardPrimary}`}>
           <span className={styles.kpiLabel}>{isDemonstrative ? "Custos demonstrativos" : "Custos do período"}</span>
           <span className={`${styles.kpiValue} ${styles.kpiValuePrimary}`}>
-            {rm.hasCostEntries ? brl(rm.totalCostDecimal) : "—"}
+            {rm.hasCostEntries ? rm.totalCostFormatted : "—"}
           </span>
-          <span className={styles.kpiSub}>{rm.hasCostEntries ? `${rm.entries.length} despesas` : "Sem despesas materializadas"}</span>
+          <span className={styles.kpiSub}>
+            {rm.hasCostEntries ? `${rm.entries.length} despesas` : "Sem despesas materializadas"}
+          </span>
         </div>
         {rm.costCenters.map((cc) => (
           <div className={styles.kpiCard} key={cc.id}>
             <span className={styles.kpiLabel}>{cc.name}</span>
-            <span className={styles.kpiValue}>{rm.hasCostEntries ? brl(cc.allocatedCostDecimal) : "—"}</span>
+            <span className={styles.kpiValue}>{rm.hasCostEntries ? cc.allocatedCostFormatted : "—"}</span>
             <span className={styles.kpiSub}>
-              {rm.hasCostEntries ? `${pct(cc.costSharePercent)} dos custos` : "Aguardando custos"}
+              {rm.hasCostEntries ? `${cc.costShareFormatted} dos custos` : "Aguardando custos"}
             </span>
           </div>
         ))}
         <div className={styles.kpiCard}>
           <span className={styles.kpiLabel}>Não atribuído</span>
-          <span className={styles.kpiValue}>{rm.hasCostEntries ? brl(rm.unallocatedCostDecimal) : "—"}</span>
+          <span className={styles.kpiValue}>{rm.hasCostEntries ? rm.unallocatedCostFormatted : "—"}</span>
           <span className={styles.kpiSub}>
             {rm.hasCostEntries ? "Total − soma das alocações" : "Sem base para cálculo"}
           </span>
@@ -226,51 +225,48 @@ function CostCentersReady({
         {/* Distribuição por Centro de Custo */}
         <Card className={`${styles.cardFull} workspace-card`} title="Distribuição por Centro de Custo">
           <div className={styles.ccList}>
-            {rm.costCenters.map((cc) => {
-              const costWidth = cc.costSharePercent ? Math.min(100, Number(cc.costSharePercent)) : 0;
-              const societyWidth = cc.consortiumSharePercent ? Math.min(100, Number(cc.consortiumSharePercent)) : 0;
-              return (
-                <div className={styles.ccCard} key={cc.id}>
-                  <div>
-                    <div className={styles.ccName}>{cc.name}</div>
-                    <div className={styles.ccCode}>{cc.code}</div>
-                    {cc.consortiumMemberName && (
-                      <div className={styles.note}>Consorciada: {cc.consortiumMemberName}</div>
-                    )}
-                  </div>
+            {rm.costCenters.map((cc) => (
+              <div className={styles.ccCard} key={cc.id}>
+                <div>
+                  <div className={styles.ccName}>{cc.name}</div>
+                  <div className={styles.ccCode}>{cc.code}</div>
+                  {cc.consortiumMemberName && (
+                    <div className={styles.note}>Consorciada: {cc.consortiumMemberName}</div>
+                  )}
+                </div>
 
-                  <div>
-                    <div className={styles.ccMetricRow}>
-                      <span>Participação no consórcio</span>
-                      <strong>{pct(cc.consortiumSharePercent)}</strong>
-                    </div>
-                    <div className={styles.shareTrack}>
-                      <div className={styles.shareFillSociety} style={{ width: `${societyWidth}%` }} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className={styles.ccMetricRow}>
-                      <span>Participação nos custos</span>
-                      <strong>{rm.hasCostEntries ? pct(cc.costSharePercent) : "—"}</strong>
-                    </div>
-                    <div className={styles.shareTrack}>
-                      <div className={styles.shareFillCost} style={{ width: `${costWidth}%` }} />
-                    </div>
-                  </div>
-
+                <div>
                   <div className={styles.ccMetricRow}>
-                    <span>{isDemonstrative ? "Custos demonstrativos" : "Custos atribuídos"}</span>
-                    <strong>{rm.hasCostEntries ? brl(cc.allocatedCostDecimal) : "—"}</strong>
+                    <span>Participação no consórcio</span>
+                    <strong>{cc.consortiumShareFormatted}</strong>
+                  </div>
+                  <div className={styles.shareTrack}>
+                    <div
+                      className={styles.shareFillSociety}
+                      style={{ width: `${cc.consortiumShareBarWidthPercent}%` }}
+                    />
                   </div>
                 </div>
-              );
-            })}
+
+                <div>
+                  <div className={styles.ccMetricRow}>
+                    <span>Participação nos custos</span>
+                    <strong>{rm.hasCostEntries ? cc.costShareFormatted : "—"}</strong>
+                  </div>
+                  <div className={styles.shareTrack}>
+                    <div className={styles.shareFillCost} style={{ width: `${cc.costShareBarWidthPercent}%` }} />
+                  </div>
+                </div>
+
+                <div className={styles.ccMetricRow}>
+                  <span>{isDemonstrative ? "Custos demonstrativos" : "Custos atribuídos"}</span>
+                  <strong>{rm.hasCostEntries ? cc.allocatedCostFormatted : "—"}</strong>
+                </div>
+              </div>
+            ))}
           </div>
 
-          {societyCostCenter && (
-            <p className={styles.note}>{rm.consortiumVsCostNote}</p>
-          )}
+          {hasConsortiumShare && <p className={styles.note}>{rm.consortiumVsCostNote}</p>}
         </Card>
 
         {/* Por categoria / família */}
@@ -281,18 +277,15 @@ function CostCentersReady({
                 <div>
                   <div className={styles.familyName}>{f.familyLabel}</div>
                   <div className={styles.familyBreakdown}>
-                    {f.costCenters.map((c) => `${c.costCenterCode} ${brl(c.amountDecimal)}`).join(" · ")}
+                    {f.costCenters.map((c) => `${c.costCenterCode} ${c.amountFormatted}`).join(" · ")}
                   </div>
                 </div>
                 <div className={styles.familyBarTrack}>
-                  <div
-                    className={styles.familyBarFill}
-                    style={{ width: `${maxFamilyValue > 0 ? (Number(f.amountDecimal) / maxFamilyValue) * 100 : 0}%` }}
-                  />
+                  <div className={styles.familyBarFill} style={{ width: `${f.barWidthPercent}%` }} />
                 </div>
                 <div className={styles.familyValue}>
-                  <strong>{brl(f.amountDecimal)}</strong>
-                  {pct(f.sharePercent)}
+                  <strong>{f.amountFormatted}</strong>
+                  {f.shareFormatted}
                 </div>
               </div>
             ))}
@@ -318,7 +311,7 @@ function CostCentersReady({
                   {rm.entries.map((entry) => {
                     const expanded = expandedEntryId === entry.id;
                     const distrib = entry.allocations
-                      .map((a) => `${a.costCenterCode} ${pct(a.percentage)}`)
+                      .map((a) => `${a.costCenterCode} ${a.percentageFormatted}`)
                       .join(" · ");
                     return (
                       <Fragment key={entry.id}>
@@ -335,12 +328,10 @@ function CostCentersReady({
                             </button>
                           </td>
                           <td>{entry.category ?? entry.familyLabel}</td>
-                          <td className={styles.expenseAmount}>{brl(entry.amountDecimal)}</td>
+                          <td className={styles.expenseAmount}>{entry.amountFormatted}</td>
                           <td className={styles.distribCell}>{distrib}</td>
                           <td>
-                            <span className={styles.methodTag}>
-                              {entry.allocations[0]?.methodLabel ?? "—"}
-                            </span>
+                            <span className={styles.methodTag}>{entry.allocations[0]?.methodLabel ?? "—"}</span>
                           </td>
                           <td>
                             <span className={styles.natureTag}>{entry.natureLabel}</span>
@@ -354,18 +345,18 @@ function CostCentersReady({
                                   <span>
                                     <strong>{a.costCenterName}</strong>
                                   </span>
-                                  <span>{pct(a.percentage)}</span>
-                                  <span>{brl(a.amountDecimal)}</span>
+                                  <span>{a.percentageFormatted}</span>
+                                  <span>{a.amountFormatted}</span>
                                   <span>{a.methodLabel}</span>
                                 </div>
                               ))}
-                              {Number(entry.unallocatedDecimal) !== 0 && (
+                              {entry.hasUnallocatedAmount && (
                                 <div className={styles.allocationLine}>
                                   <span>
                                     <strong>Não atribuído</strong>
                                   </span>
                                   <span>—</span>
-                                  <span>{brl(entry.unallocatedDecimal)}</span>
+                                  <span>{entry.unallocatedFormatted}</span>
                                   <span>—</span>
                                 </div>
                               )}
@@ -382,40 +373,30 @@ function CostCentersReady({
         )}
 
         {/* Simulação gerencial do período — só quando a medição foi localizada */}
-        {rm.measurementComparison.available && (
+        {mc.available && (
           <Card className={`${styles.cardFull} workspace-card`} title="Simulação gerencial do período">
             <div className={styles.simCard}>
               <div className={styles.simGrid}>
                 <div className={styles.simMetric}>
                   <span className={styles.simMetricLabel}>Valor medido</span>
-                  <span className={styles.simMetricValue}>
-                    {brl(rm.measurementComparison.measuredValueDecimal)}
-                  </span>
-                  {rm.measurementComparison.measurementLabel && (
-                    <span className={styles.simDisclaimer}>{rm.measurementComparison.measurementLabel}</span>
-                  )}
+                  <span className={styles.simMetricValue}>{mc.measuredValueFormatted}</span>
+                  {mc.measurementLabel && <span className={styles.simDisclaimer}>{mc.measurementLabel}</span>}
                 </div>
                 <div className={styles.simMetric}>
                   <span className={styles.simMetricLabel}>
                     {isDemonstrative ? "Custos demonstrativos" : "Custos do período"}
                   </span>
-                  <span className={styles.simMetricValue}>
-                    {brl(rm.measurementComparison.demonstrativeCostValueDecimal)}
-                  </span>
+                  <span className={styles.simMetricValue}>{mc.demonstrativeCostValueFormatted}</span>
                 </div>
                 <div className={styles.simMetric}>
                   <span className={styles.simMetricLabel}>Diferença demonstrativa</span>
                   <span className={`${styles.simMetricValue} ${styles.simMetricValueDiff}`}>
-                    {brl(rm.measurementComparison.demonstrativeDifferenceDecimal)}
+                    {mc.demonstrativeDifferenceFormatted}
                   </span>
                 </div>
               </div>
-              {rm.measurementComparison.neutralStatement && (
-                <p className={styles.simDisclaimer}>{rm.measurementComparison.neutralStatement}</p>
-              )}
-              {rm.measurementComparison.disclaimer && (
-                <p className={styles.simDisclaimer}>{rm.measurementComparison.disclaimer}</p>
-              )}
+              {mc.neutralStatement && <p className={styles.simDisclaimer}>{mc.neutralStatement}</p>}
+              {mc.disclaimer && <p className={styles.simDisclaimer}>{mc.disclaimer}</p>}
             </div>
           </Card>
         )}
