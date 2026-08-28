@@ -405,6 +405,213 @@ export function buildMeasurementPhysicalFinancialAnalysis(
   };
 }
 
+// ===================================================================
+// HISTÓRICO DA EXECUÇÃO (OBRA × MÊS e GRUPO × MÊS) — Parte A.
+//
+// Mesma fonte e mesmas primitivas de `buildMeasurementPhysicalFinancialAnalysis`
+// (série agregada da Curva S + séries mensais por grupo do Planning
+// Dataset consolidado). A diferença é o eixo: aqui devolvemos a série
+// INTEIRA (todos os períodos canônicos), não só o mês da medição atual.
+// A Curva S é a espinha dorsal histórica da OBRA e dos GRUPOS; ela NÃO
+// substitui o histórico item a item (Camada B). Nenhum cálculo novo:
+// planejado/realizado no período da OBRA saem por SUBTRAÇÃO DECIMAL
+// EXATA de acumulados consecutivos (a série agregada só traz acumulado);
+// os do GRUPO já são mensais na planilha e o acumulado é a soma decimal
+// de `points[0..i]`. Nada de float, nada de UI.
+// ===================================================================
+
+export interface PhysicalFinancialHistoryPoint {
+  readonly periodLabel: string;
+  readonly periodDate: string;
+  readonly plannedPeriodValueDecimal: string;
+  /** null quando a Curva S ainda não traz realização para o período (mês futuro) — nunca 0, nunca negativo. */
+  readonly actualPeriodValueDecimal: string | null;
+  readonly plannedAccumulatedValueDecimal: string;
+  /** null quando não há acumulado realizado documentado para o período. */
+  readonly actualAccumulatedValueDecimal: string | null;
+  readonly plannedAccumulatedPercent: string | null;
+  readonly actualAccumulatedPercent: string | null;
+  /** realizado acumulado − planejado acumulado (negativo = abaixo do previsto). null quando não há realização documentada. */
+  readonly deviationAccumulatedValueDecimal: string | null;
+  readonly deviationAccumulatedPercentPoints: string | null;
+  /** null quando não há realização documentada no período para comparar. */
+  readonly situation: PhysicalFinancialSituation | null;
+}
+
+export interface PhysicalFinancialGroupHistory {
+  readonly groupCode: string;
+  readonly groupName: string;
+  readonly points: ReadonlyArray<PhysicalFinancialHistoryPoint>;
+}
+
+export interface PhysicalFinancialExecutionHistory {
+  readonly available: boolean;
+  readonly unavailableReason: string | null;
+  readonly sourceFileName: string | null;
+  readonly sourceSheetName: string | null;
+  readonly datasetId: string | null;
+  readonly periods: ReadonlyArray<{ readonly label: string; readonly date: string }>;
+  readonly obra: ReadonlyArray<PhysicalFinancialHistoryPoint>;
+  readonly groups: ReadonlyArray<PhysicalFinancialGroupHistory>;
+}
+
+export interface PhysicalFinancialExecutionHistoryInput {
+  readonly planningDataset: PlanningDataset | null;
+  readonly datasetId: string | null;
+  readonly sourceFileName: string | null;
+}
+
+const EMPTY_HISTORY = (overrides: Partial<PhysicalFinancialExecutionHistory>): PhysicalFinancialExecutionHistory => ({
+  available: false,
+  unavailableReason: null,
+  sourceFileName: null,
+  sourceSheetName: null,
+  datasetId: null,
+  periods: [],
+  obra: [],
+  groups: [],
+  ...overrides
+});
+
+export function buildPhysicalFinancialExecutionHistory(
+  input: PhysicalFinancialExecutionHistoryInput
+): PhysicalFinancialExecutionHistory {
+  const dataset = input.planningDataset;
+  if (!dataset || dataset.detectedType !== "fisico-financeiro") {
+    return EMPTY_HISTORY({
+      unavailableReason: "Ainda não há um cronograma físico-financeiro consolidado importado para esta obra.",
+      datasetId: input.datasetId,
+      sourceFileName: input.sourceFileName
+    });
+  }
+
+  const aggregateSeries = dataset.periodSeries.find((series) => series.activityId === null) ?? null;
+  const datedPoints = (aggregateSeries?.points ?? []).filter((point) => point.date !== null);
+  if (!aggregateSeries || datedPoints.length === 0) {
+    return EMPTY_HISTORY({
+      unavailableReason: "O cronograma físico-financeiro consolidado ainda não traz a série histórica mensal da obra.",
+      datasetId: input.datasetId,
+      sourceFileName: input.sourceFileName,
+      sourceSheetName: dataset.origin.sheetName
+    });
+  }
+
+  const periods = datedPoints.map((point) => ({ label: point.period, date: point.date as string }));
+
+  // OBRA: os pontos são ACUMULADOS. planejado/realizado NO PERÍODO =
+  // acumulado_i − acumulado_{i-1} (subtração decimal exata; acumulado
+  // "anterior" ao primeiro ponto é 0).
+  const obra: PhysicalFinancialHistoryPoint[] = datedPoints.map((point, index) => {
+    const previous = index > 0 ? datedPoints[index - 1] : null;
+    const plannedAccumulatedValueDecimal = canonicalOrNull(point.plannedValue) ?? "0.00";
+    const prevPlannedAccumulated = previous ? canonicalOrNull(previous.plannedValue) ?? "0.00" : "0.00";
+    const plannedPeriodValueDecimal = subtractMeasurementDecimals(plannedAccumulatedValueDecimal, prevPlannedAccumulated, MONEY_SCALE);
+
+    // Realizado: a célula "...ACUMULADO..." pode estar VAZIA num mês
+    // ainda não realizado (ex.: mês final do cronograma com a medição
+    // do período ainda em aberto). Vazio = SEM DADO -> null em tudo que
+    // depende de realização; nunca 0, nunca acumulado_anterior negativo.
+    const actualAccumulatedRaw = canonicalOrNull(point.actualValue);
+    const prevActualAccumulatedRaw = previous ? canonicalOrNull(previous.actualValue) : null;
+    const actualAccumulatedValueDecimal = actualAccumulatedRaw;
+    const actualPeriodValueDecimal =
+      actualAccumulatedRaw !== null
+        ? subtractMeasurementDecimals(actualAccumulatedRaw, prevActualAccumulatedRaw ?? "0.00", MONEY_SCALE)
+        : null;
+
+    const plannedAccumulatedPercent = fractionToPercentPoints(point.plannedPercent);
+    const actualAccumulatedPercent = fractionToPercentPoints(point.actualPercent);
+    const deviationAccumulatedValueDecimal =
+      actualAccumulatedRaw !== null
+        ? subtractMeasurementDecimals(actualAccumulatedRaw, plannedAccumulatedValueDecimal, MONEY_SCALE)
+        : null;
+    const deviationAccumulatedPercentPoints =
+      plannedAccumulatedPercent !== null && actualAccumulatedPercent !== null
+        ? subtractMeasurementDecimals(actualAccumulatedPercent, plannedAccumulatedPercent, PERCENT_POINT_SCALE)
+        : null;
+
+    return {
+      periodLabel: point.period,
+      periodDate: point.date as string,
+      plannedPeriodValueDecimal,
+      actualPeriodValueDecimal,
+      plannedAccumulatedValueDecimal,
+      actualAccumulatedValueDecimal,
+      plannedAccumulatedPercent,
+      actualAccumulatedPercent,
+      deviationAccumulatedValueDecimal,
+      deviationAccumulatedPercentPoints,
+      situation:
+        deviationAccumulatedValueDecimal === null
+          ? null
+          : classifySituation(deviationAccumulatedPercentPoints, deviationAccumulatedValueDecimal)
+    };
+  });
+
+  // GRUPOS: pontos MENSAIS. Acumulado = soma decimal de points[0..i].
+  const activityById = new Map(dataset.activities.map((activity) => [activity.id, activity]));
+  const groupHistories: PhysicalFinancialGroupHistory[] = [];
+  for (const series of dataset.periodSeries) {
+    if (series.activityId === null) continue;
+    const activity = activityById.get(series.activityId);
+    if (!activity || !GROUP_CODE_PATTERN.test(activity.code)) continue;
+
+    const points: PhysicalFinancialHistoryPoint[] = [];
+    const upperBound = Math.min(series.points.length, datedPoints.length);
+    for (let index = 0; index < upperBound; index++) {
+      const monthly = series.points[index];
+      const window = series.points.slice(0, index + 1);
+      const plannedPeriodValueDecimal = canonicalOrNull(monthly.plannedValue ?? null) ?? "0.00";
+      // null = mês sem realização documentada para o grupo (não 0).
+      const actualPeriodValueDecimal = canonicalOrNull(monthly.actualValue ?? null);
+      const plannedAccumulatedValueDecimal = sumValues(window.map((wp) => wp.plannedValue));
+      const actualAccumulatedValueDecimal = sumValues(window.map((wp) => wp.actualValue));
+      const plannedAccumulatedPercent = sumFractionsToPercentPoints(window.map((wp) => wp.plannedPercent));
+      const actualAccumulatedPercent = sumFractionsToPercentPoints(window.map((wp) => wp.actualPercent));
+      const deviationAccumulatedValueDecimal = subtractMeasurementDecimals(
+        actualAccumulatedValueDecimal,
+        plannedAccumulatedValueDecimal,
+        MONEY_SCALE
+      );
+      const deviationAccumulatedPercentPoints =
+        plannedAccumulatedPercent !== null && actualAccumulatedPercent !== null
+          ? subtractMeasurementDecimals(actualAccumulatedPercent, plannedAccumulatedPercent, PERCENT_POINT_SCALE)
+          : null;
+      const nothingScheduled =
+        isCanonicalZero(plannedAccumulatedValueDecimal) && isCanonicalZero(actualAccumulatedValueDecimal);
+
+      points.push({
+        periodLabel: datedPoints[index].period,
+        periodDate: datedPoints[index].date as string,
+        plannedPeriodValueDecimal,
+        actualPeriodValueDecimal,
+        plannedAccumulatedValueDecimal,
+        actualAccumulatedValueDecimal,
+        plannedAccumulatedPercent,
+        actualAccumulatedPercent,
+        deviationAccumulatedValueDecimal,
+        deviationAccumulatedPercentPoints,
+        situation: nothingScheduled
+          ? "not_scheduled"
+          : classifySituation(deviationAccumulatedPercentPoints, deviationAccumulatedValueDecimal)
+      });
+    }
+    groupHistories.push({ groupCode: activity.code, groupName: activity.name, points });
+  }
+  groupHistories.sort((a, b) => groupSortKey(a.groupCode) - groupSortKey(b.groupCode));
+
+  return {
+    available: true,
+    unavailableReason: null,
+    sourceFileName: input.sourceFileName ?? dataset.origin.fileName,
+    sourceSheetName: dataset.origin.sheetName,
+    datasetId: input.datasetId,
+    periods,
+    obra,
+    groups: groupHistories
+  };
+}
+
 /** Série agregada: os pontos JÁ são acumulados (linhas "...ACUMULADO..." da planilha). */
 function buildObraReading(point: PlanningDataset["periodSeries"][number]["points"][number]): PhysicalFinancialObraReading {
   const plannedValue = canonicalOrNull(point.plannedValue);

@@ -24,6 +24,15 @@
 
 export const MEASUREMENT_ITEM_DOCUMENTARY_HISTORY_SCHEMA_VERSION = 1;
 
+/**
+ * Grão do MODELO DE OBSERVAÇÃO item × período (v2 — proposto, NÃO
+ * materializado). Diferente do snapshot v1 (uma linha por item por
+ * boletim): aqui uma linha por (item, período/medição, campo semântico),
+ * com proveniência de célula e classificação de ambiguidade. Ver
+ * documentary-history-taxonomy.ts / documentary-history-observation.ts.
+ */
+export const MEASUREMENT_ITEM_DOCUMENTARY_OBSERVATION_SCHEMA_VERSION = 2;
+
 /** Taxonomia de layouts encontrados nas abas de memória. */
 export type MemoriaSheetLayout =
   | "resumo_value_after_unit" // "9 MÊS" — valor antes da unidade na leitura, rótulo à esquerda
@@ -39,6 +48,23 @@ export interface ParsedMemoriaResumo {
   readonly hidden: boolean;
   readonly layout: MemoriaSheetLayout;
   readonly unit: string | null;
+  /**
+   * Cabeçalho "MEMÓRIA DE CÁLCULO - MEDIÇÃO Nº NN - MÊS / ANO" verbatim.
+   * Cada aba carrega SUA PRÓPRIA data de medição — as abas NÃO estão
+   * todas no mesmo corte. `null` quando não há cabeçalho reconhecível.
+   */
+  readonly measurementHeaderRaw: string | null;
+  /** Nº da medição da aba (1..N) extraído do cabeçalho. `null` quando ilegível. */
+  readonly measurementNumber: number | null;
+  /** Rótulo do mês/ano da aba ("JUNHO / 2026") verbatim do cabeçalho. `null` quando ausente. */
+  readonly measurementPeriodLabel: string | null;
+  /**
+   * Detecção de formato numérico POR ABA — os arquivos misturam vírgula
+   * decimal ("430,92") e ponto de milhar ("43.092"). `ambiguous` quando
+   * a aba não fornece pista suficiente; nesse caso os campos numéricos
+   * NÃO são inequívocos.
+   */
+  readonly numericFormatHint: "comma_decimal" | "dot_decimal" | "ambiguous";
   /** Cada campo pode faltar (null) — nunca inferido a partir de outro. */
   readonly contractQuantity: number | null;
   readonly executedAccumulatedQuantity: number | null;

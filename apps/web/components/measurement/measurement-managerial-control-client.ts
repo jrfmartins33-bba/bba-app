@@ -62,6 +62,13 @@ function extractValidView(payload: unknown): ManagerialControlView | null {
   if (typeof s.currentBulletinCertified !== "boolean") return null;
   if (typeof s.documentaryHistoryImported !== "boolean") return null;
 
+  // "Evolução da execução" (Parte A): opcional; quando presente é um
+  // objeto com `available` boolean. Nunca bloqueia a view se ausente.
+  if (c.executionHistory !== undefined && c.executionHistory !== null) {
+    if (typeof c.executionHistory !== "object") return null;
+    if (typeof (c.executionHistory as { available?: unknown }).available !== "boolean") return null;
+  }
+
   const a = c.analyses as Record<string, unknown> | undefined;
   if (!a || !Array.isArray(a.topByRegisteredValue) || !Array.isArray(a.itemsMeasuredThisPeriod)) return null;
 

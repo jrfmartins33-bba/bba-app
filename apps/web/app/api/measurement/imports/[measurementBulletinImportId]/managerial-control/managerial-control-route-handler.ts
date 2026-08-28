@@ -13,6 +13,7 @@ import { listPlanningDatasetsByType } from "@/lib/bdos/repository";
 import { createContractBaselineRepository } from "@/lib/bdos/contract-baseline-server-repository";
 import {
   buildMeasurementPhysicalFinancialAnalysis,
+  buildPhysicalFinancialExecutionHistory,
   selectConsolidatedPhysicalFinancialDataset
 } from "@/lib/bdos/measurement-physical-financial-analysis-service";
 import {
@@ -134,12 +135,24 @@ export function buildManagerialControlReader(supabase: SupabaseClient): Manageri
         }))
       );
       const selectedDataset = selection.outcome === "selected" ? selection.selected.dataset : null;
+      const selectedDatasetId = selection.outcome === "selected" ? selection.selected.id : null;
+      const selectedDatasetFileName = selection.outcome === "selected" ? selection.selected.fileName : null;
       const physicalFinancial = buildMeasurementPhysicalFinancialAnalysis({
         planningDataset: selectedDataset,
-        datasetId: selection.outcome === "selected" ? selection.selected.id : null,
-        sourceFileName: selection.outcome === "selected" ? selection.selected.fileName : null,
+        datasetId: selectedDatasetId,
+        sourceFileName: selectedDatasetFileName,
         measurementPeriod: { startDate: periodStartDate, endDate: periodEndDate },
         measuredItemCodes: contractItems.map((i) => i.code)
+      });
+
+      // "Evolução da execução" (Parte A) -- mesma fonte/dataset já
+      // selecionado, só que a série histórica INTEIRA (OBRA × mês e
+      // GRUPO × mês). Reaproveita as primitivas físico-financeiras; não
+      // reimporta a Curva S, não cria tabela, não move cálculo para a UI.
+      const executionHistory = buildPhysicalFinancialExecutionHistory({
+        planningDataset: selectedDataset,
+        datasetId: selectedDatasetId,
+        sourceFileName: selectedDatasetFileName
       });
 
       return {
@@ -169,7 +182,8 @@ export function buildManagerialControlReader(supabase: SupabaseClient): Manageri
         certificationRegistered: hasCertification,
         currentBulletinCertified,
         physicalFinancial,
-        contractReconciliation
+        contractReconciliation,
+        executionHistory
       };
     }
   };

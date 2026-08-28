@@ -1,8 +1,35 @@
 # Camada B — Histórico Documental Item a Item (MED-01…MED-N)
 
-> Status: **ESPECIFICAÇÃO. NÃO MATERIALIZADA.** Parser protótipo, tipos de
-> domínio, testes e migration criados no repositório; migration **não
-> aplicada**; nenhum histórico de negócio escrito no Supabase.
+> Status: **ESPECIFICAÇÃO + PARSER/RECONCILIAÇÃO PRONTOS. NÃO
+> MATERIALIZADA.** Parser de produção (com detecção de formato numérico
+> e Nº de medição por aba), taxonomia semântica, modelo de observação
+> item × período, motor de reconciliação ITENS→GRUPO→OBRA→Curva S,
+> prévia exata e testes — todos no repositório. Migration `20260828000000`
+> **reescrita para o grão de observação v2 e NÃO aplicada**; nenhum
+> histórico de negócio escrito no Supabase.
+
+## 0. Achados da rodada de Parte B (arquivo real `BM_08`)
+
+- **177 abas** de memória em **7 cortes de medição heterogêneos**:
+  MED-01 (3), MED-02 (13), MED-04 (29), MED-05 (84), MED-06 (17),
+  MED-07 (13), **MED-08 (18)**. **Não existe** um "acumulado item a
+  item no mês X" para X < junho/2026 — cada aba congela o estado na
+  data do seu próprio cabeçalho.
+- **Só 2 das 177** abas têm a grade `PERÍODO | QUANTIDADE` parseável →
+  reconstrução mês a mês por item é **documentalmente impossível** em
+  geral.
+- **Nenhum valor monetário** nas memórias — o valor é sempre **derivado**
+  (`quantidade × preço unitário do contrato`).
+- A grade `MED-NN FINANCEIRO` da aba `BOLETIM DE MEDIÇÃO 08` **não
+  reconcilia** com o realizado mensal da Curva S (ex.: coluna MED-08
+  soma R$ 964.483,89 ≠ R$ 252.654,78) → confirmada como
+  `historical_grid_not_authoritative`.
+- **Único período que fecha item a item:** junho/2026, pelas **15 linhas
+  formais** do BM nº 08 → grupo 1 (R$ 42.015,69) + grupo 2
+  (R$ 210.639,09) = obra (R$ 252.654,78) = Curva S. `reconciled_exact`.
+- Meses anteriores: `insufficient_documentary_basis` — **reportado, nunca
+  preenchido**. 108/177 abas inequívocas; 29 itens acima do contrato;
+  102 itens com "executada" ≠ "medida".
 
 ## 1. Por que uma camada nova
 

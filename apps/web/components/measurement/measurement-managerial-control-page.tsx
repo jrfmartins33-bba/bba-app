@@ -18,6 +18,11 @@ import {
   type ManagerialSortKey
 } from "./measurement-managerial-control-view-model";
 import type { ManagerialItemStatus } from "@/lib/bdos/measurement-managerial-control-service";
+import type {
+  PhysicalFinancialExecutionHistory,
+  PhysicalFinancialHistoryPoint
+} from "@/lib/bdos/measurement-physical-financial-analysis-service";
+import { formatPhysicalFinancialSituation, physicalFinancialSituationTone } from "./measurement-review-view-model";
 
 type PageState =
   | { readonly status: "loading" }
@@ -272,6 +277,10 @@ function LoadedView({
         </p>
       </Card>
 
+      <Card className="span-12 workspace-card managerial-control-history" title="Evolução da execução">
+        <ExecutionHistorySection history={view.executionHistory} />
+      </Card>
+
       <Card
         action={<span className="measurement-section-count">{filteredItems.length} de {view.items.length}</span>}
         className="span-12 workspace-card managerial-control-table-card"
@@ -347,6 +356,201 @@ function LoadedView({
         </div>
       </Card>
     </>
+  );
+}
+
+function shortMonthLabel(point: { readonly periodLabel: string; readonly periodDate: string }): string {
+  // "2026-06-01" -> "jun/26". Determinístico, sem Date/locale.
+  const match = /^(\d{4})-(\d{2})/.exec(point.periodDate);
+  if (!match) return point.periodLabel;
+  const names = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  const monthIndex = Number(match[2]) - 1;
+  const name = names[monthIndex] ?? match[2];
+  return `${name}/${match[1].slice(2)}`;
+}
+
+const historyBRL = (value: string | null): string => (value === null ? "—" : formatManagerialBRL(value));
+
+function HistorySituationBadge({ situation }: { readonly situation: PhysicalFinancialHistoryPoint["situation"] }) {
+  if (situation === null) {
+    return <span className="managerial-control-item__status managerial-control-item__status--neutral">Sem realização</span>;
+  }
+  return (
+    <span
+      className={`managerial-control-item__status managerial-control-item__status--${physicalFinancialSituationTone(situation)}`}
+    >
+      {formatPhysicalFinancialSituation(situation)}
+    </span>
+  );
+}
+
+function ExecutionHistorySection({ history }: { readonly history: PhysicalFinancialExecutionHistory | null }) {
+  const periodCount = history?.obra.length ?? 0;
+  const [selectedIndex, setSelectedIndex] = useState(() => Math.max(0, periodCount - 1));
+
+  if (!history || !history.available || history.obra.length === 0) {
+    return (
+      <p className="managerial-control-history__empty">
+        {history?.unavailableReason ??
+          "A evolução mensal ficará disponível quando houver um cronograma físico-financeiro consolidado para esta obra."}
+      </p>
+    );
+  }
+
+  const clampedIndex = Math.min(selectedIndex, history.obra.length - 1);
+  const point = history.obra[clampedIndex];
+  const groupsForPeriod = history.groups
+    .map((group) => ({ groupCode: group.groupCode, groupName: group.groupName, point: group.points[clampedIndex] ?? null }))
+    .filter((entry): entry is { groupCode: string; groupName: string; point: PhysicalFinancialHistoryPoint } => entry.point !== null);
+
+  return (
+    <div className="managerial-control-history__body">
+      <div className="managerial-control-history__toolbar">
+        <label className="managerial-control-history__period">
+          <span>Período</span>
+          <select
+            aria-label="Período da evolução"
+            onChange={(event) => setSelectedIndex(Number(event.target.value))}
+            value={String(clampedIndex)}
+          >
+            {history.obra.map((historyPoint, index) => (
+              <option key={historyPoint.periodDate} value={String(index)}>
+                {shortMonthLabel(historyPoint)} · {historyPoint.periodLabel}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="managerial-control-history__source">
+          Curva S{history.sourceFileName ? ` · ${history.sourceFileName}` : ""} — espinha dorsal histórica da obra e dos
+          grupos; não substitui o histórico item a item.
+        </span>
+      </div>
+
+      <div className="managerial-control-history__kpis">
+        <HistoryTile label="Realizado no período" value={historyBRL(point.actualPeriodValueDecimal)} />
+        <HistoryTile
+          label="Realizado acumulado"
+          value={historyBRL(point.actualAccumulatedValueDecimal)}
+          hint={
+            point.actualAccumulatedPercent
+              ? `${formatManagerialPercent(point.actualAccumulatedPercent)} do previsto total`
+              : undefined
+          }
+        />
+        <HistoryTile
+          label="Planejado acumulado"
+          value={historyBRL(point.plannedAccumulatedValueDecimal)}
+          hint={
+            point.plannedAccumulatedPercent
+              ? `${formatManagerialPercent(point.plannedAccumulatedPercent)} do previsto total`
+              : undefined
+          }
+        />
+        <HistoryTile
+          label="Desvio acumulado"
+          value={historyBRL(point.deviationAccumulatedValueDecimal)}
+          hint={
+            point.deviationAccumulatedPercentPoints
+              ? `${formatManagerialPercent(point.deviationAccumulatedPercentPoints)} p.p.`
+              : undefined
+          }
+          tone={point.situation === null ? "neutral" : physicalFinancialSituationTone(point.situation)}
+        />
+      </div>
+
+      <p className="managerial-control-history__situation">
+        <HistorySituationBadge situation={point.situation} /> no acumulado até {shortMonthLabel(point)} · planejado no
+        período {historyBRL(point.plannedPeriodValueDecimal)}.
+      </p>
+
+      <details className="managerial-control-history__disclosure">
+        <summary>Obra — mês a mês</summary>
+        <div className="managerial-control-history__table-wrap">
+          <table className="managerial-control-history__table">
+            <thead>
+              <tr>
+                <th>Mês</th>
+                <th>Realizado no período</th>
+                <th>Realizado acumulado</th>
+                <th>Planejado acumulado</th>
+                <th>Desvio acumulado</th>
+                <th>Situação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.obra.map((historyPoint) => (
+                <tr key={historyPoint.periodDate}>
+                  <td>{shortMonthLabel(historyPoint)}</td>
+                  <td>{historyBRL(historyPoint.actualPeriodValueDecimal)}</td>
+                  <td>{historyBRL(historyPoint.actualAccumulatedValueDecimal)}</td>
+                  <td>{historyBRL(historyPoint.plannedAccumulatedValueDecimal)}</td>
+                  <td>{historyBRL(historyPoint.deviationAccumulatedValueDecimal)}</td>
+                  <td>
+                    <HistorySituationBadge situation={historyPoint.situation} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      {groupsForPeriod.length > 0 ? (
+        <details className="managerial-control-history__disclosure">
+          <summary>Grupos — {shortMonthLabel(point)}</summary>
+          <div className="managerial-control-history__table-wrap">
+            <table className="managerial-control-history__table">
+              <thead>
+                <tr>
+                  <th>Grupo</th>
+                  <th>Realizado no período</th>
+                  <th>Realizado acumulado</th>
+                  <th>Planejado acumulado</th>
+                  <th>Desvio acumulado</th>
+                  <th>Situação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groupsForPeriod.map((entry) => (
+                  <tr key={entry.groupCode}>
+                    <td>
+                      <b>{entry.groupCode}</b> {entry.groupName}
+                    </td>
+                    <td>{historyBRL(entry.point.actualPeriodValueDecimal)}</td>
+                    <td>{historyBRL(entry.point.actualAccumulatedValueDecimal)}</td>
+                    <td>{historyBRL(entry.point.plannedAccumulatedValueDecimal)}</td>
+                    <td>{historyBRL(entry.point.deviationAccumulatedValueDecimal)}</td>
+                    <td>
+                      <HistorySituationBadge situation={entry.point.situation} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+function HistoryTile({
+  label,
+  value,
+  hint,
+  tone
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly hint?: string;
+  readonly tone?: "info" | "neutral" | "caution";
+}) {
+  return (
+    <div className={`managerial-control-history__tile${tone ? ` managerial-control-history__tile--${tone}` : ""}`}>
+      <span className="managerial-control-history__tile-label">{label}</span>
+      <span className="managerial-control-history__tile-value">{value}</span>
+      {hint ? <span className="managerial-control-history__tile-hint">{hint}</span> : null}
+    </div>
   );
 }
 

@@ -30,7 +30,11 @@ import {
   MeasurementDecimalQuantizationMode
 } from "@bba/bdos-core/domain/measurement-certification";
 import { resolveGroupCode } from "./measurement-physical-financial-analysis-service";
-import type { MeasurementPhysicalFinancialAnalysis, PhysicalFinancialSituation } from "./measurement-physical-financial-analysis-service";
+import type {
+  MeasurementPhysicalFinancialAnalysis,
+  PhysicalFinancialExecutionHistory,
+  PhysicalFinancialSituation
+} from "./measurement-physical-financial-analysis-service";
 
 const MONEY_SCALE = 2;
 const QUANTITY_SCALE = 6;
@@ -177,6 +181,14 @@ export interface ManagerialControlView {
   readonly items: ReadonlyArray<ManagerialControlItem>;
   readonly summary: ManagerialControlSummary;
   readonly analyses: ManagerialControlAnalyses;
+  /**
+   * "Evolução da execução" (Parte A) — histórico mensal OBRA × MÊS e
+   * GRUPO × MÊS da Curva S consolidada. Espinha dorsal histórica; NÃO
+   * substitui o histórico item a item (Camada B). null quando não há
+   * cronograma físico-financeiro consolidado. Só é ECOADO aqui — todo o
+   * cálculo vem de `buildPhysicalFinancialExecutionHistory`.
+   */
+  readonly executionHistory: PhysicalFinancialExecutionHistory | null;
 }
 
 // -------------------------------------------------------------------
@@ -236,6 +248,8 @@ export interface BuildManagerialControlViewInput {
   readonly currentBulletinCertified: boolean;
   /** Reconciliação contratual autoritativa. null quando o projeto não tem Base Contratual rastreável -- aí o consolidado cai para a soma dos itens (best effort, com nota). */
   readonly contractReconciliation: ManagerialControlContractReconciliation | null;
+  /** "Evolução da execução" (Parte A) — série histórica OBRA/GRUPO × mês, já calculada por `buildPhysicalFinancialExecutionHistory`. Só ecoada na view. */
+  readonly executionHistory?: PhysicalFinancialExecutionHistory | null;
 }
 
 const TOP_N = 5;
@@ -247,7 +261,8 @@ export function buildManagerialControlView(input: BuildManagerialControlViewInpu
       unavailableReason: "Ainda não há base contratual de itens importada para esta obra.",
       items: [],
       summary: emptySummary(input),
-      analyses: emptyAnalyses()
+      analyses: emptyAnalyses(),
+      executionHistory: input.executionHistory ?? null
     };
   }
 
@@ -276,7 +291,14 @@ export function buildManagerialControlView(input: BuildManagerialControlViewInpu
   const summary = buildSummary(items, input);
   const analyses = buildAnalyses(items);
 
-  return { available: true, unavailableReason: null, items, summary, analyses };
+  return {
+    available: true,
+    unavailableReason: null,
+    items,
+    summary,
+    analyses,
+    executionHistory: input.executionHistory ?? null
+  };
 }
 
 function buildItem(

@@ -5841,3 +5841,199 @@ button {
   font-variant-numeric: tabular-nums;
   margin: 6px 0 0;
 }
+
+/* -------- Evolução da execução (Parte A: OBRA/GRUPO x mês) -------- */
+
+.managerial-control-history__empty {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.managerial-control-history__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.managerial-control-history__toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.managerial-control-history__period {
+  align-items: center;
+  color: var(--text-muted);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.managerial-control-history__period select {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  padding: 7px 10px;
+  text-transform: none;
+}
+
+.managerial-control-history__period select:focus-visible {
+  border-color: var(--bba-gold);
+  outline: none;
+}
+
+.managerial-control-history__source {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  max-width: 520px;
+}
+
+.managerial-control-history__kpis {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.managerial-control-history__tile {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 13px 15px;
+}
+
+.managerial-control-history__tile--caution {
+  background: linear-gradient(180deg, var(--status-amber-bg), rgba(245, 158, 11, 0.03));
+  border-color: rgba(245, 158, 11, 0.32);
+}
+
+.managerial-control-history__tile--info {
+  background: linear-gradient(180deg, var(--status-blue-bg), rgba(96, 165, 250, 0.03));
+  border-color: rgba(96, 165, 250, 0.32);
+}
+
+.managerial-control-history__tile-label {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.managerial-control-history__tile-value {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.managerial-control-history__tile-hint {
+  color: var(--text-secondary-strong);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.managerial-control-history__situation {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.managerial-control-history__disclosure {
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  padding: 0 14px;
+}
+
+.managerial-control-history__disclosure > summary {
+  color: var(--text-secondary-strong);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  list-style: none;
+  padding: 11px 0;
+  text-transform: uppercase;
+}
+
+.managerial-control-history__disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.managerial-control-history__disclosure > summary::before {
+  color: var(--text-muted);
+  content: "+";
+  display: inline-block;
+  font-weight: 700;
+  margin-right: 8px;
+  width: 10px;
+}
+
+.managerial-control-history__disclosure[open] > summary {
+  border-bottom: 1px solid var(--app-divider);
+}
+
+.managerial-control-history__disclosure[open] > summary::before {
+  content: "\2013";
+}
+
+.managerial-control-history__table-wrap {
+  overflow-x: auto;
+  padding: 10px 0 12px;
+}
+
+.managerial-control-history__table {
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 640px;
+  width: 100%;
+}
+
+.managerial-control-history__table th {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 6px 10px 6px 0;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.managerial-control-history__table th:first-child,
+.managerial-control-history__table td:first-child {
+  text-align: left;
+}
+
+.managerial-control-history__table td {
+  border-top: 1px solid var(--app-divider);
+  color: var(--text-secondary-strong);
+  font-variant-numeric: tabular-nums;
+  padding: 7px 10px 7px 0;
+  text-align: right;
+}
+
+.managerial-control-history__table td:first-child {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.managerial-control-history__table td b {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  margin-right: 4px;
+}
