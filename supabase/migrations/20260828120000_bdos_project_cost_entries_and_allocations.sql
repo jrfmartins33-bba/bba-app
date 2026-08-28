@@ -66,6 +66,15 @@ CREATE TABLE IF NOT EXISTS project_cost_entries (
                              'ManualDemonstration', 'FinancialEntry', 'Payroll',
                              'Document', 'Import', 'Integration', 'ManualControlled')),
 
+  -- IDENTIDADE DE ORIGEM / IDEMPOTÊNCIA. Identificador estável do registro
+  -- na sua fonte (lançamento financeiro, linha de importação, documento,
+  -- integração, fluxo controlado, ou massa demonstrativa determinística).
+  -- A DESCRIÇÃO é atributo de APRESENTAÇÃO — nunca identidade. Pode
+  -- permanecer NULL para origens que ainda não têm contrato de identidade
+  -- estável; obrigatória para 'ManualDemonstration' (garante idempotência
+  -- da massa demonstrativa).
+  source_record_key        TEXT,
+
   status                   TEXT NOT NULL DEFAULT 'Draft'
                            CHECK (status IN ('Draft', 'Allocated')),
 
@@ -92,6 +101,15 @@ CREATE TABLE IF NOT EXISTS project_cost_entries (
   -- ManualControlled) permanecem válidas sem exigir financial_lancamento_id.
   CONSTRAINT project_cost_entries_financial_entry_requires_lancamento CHECK (
     source_kind <> 'FinancialEntry' OR financial_lancamento_id IS NOT NULL
+  ),
+  -- source_record_key, quando informado, não pode ser string vazia.
+  CONSTRAINT project_cost_entries_source_record_key_not_blank CHECK (
+    source_record_key IS NULL OR btrim(source_record_key) <> ''
+  ),
+  -- Massa demonstrativa é idempotente por identidade explícita, nunca por
+  -- descrição: 'ManualDemonstration' exige source_record_key.
+  CONSTRAINT project_cost_entries_manual_demo_requires_source_key CHECK (
+    source_kind <> 'ManualDemonstration' OR source_record_key IS NOT NULL
   )
 );
 
@@ -106,50 +124,47 @@ CREATE INDEX IF NOT EXISTS project_cost_entries_nature_idx
 CREATE INDEX IF NOT EXISTS project_cost_entries_financial_lancamento_idx
   ON project_cost_entries (financial_lancamento_id) WHERE financial_lancamento_id IS NOT NULL;
 
--- Idempotência da futura escrita: uma chave natural estável por
--- (empresa, obra, período, natureza, família, descrição normalizada).
--- NÃO usa a descrição livre como única chave — normaliza e combina com a
--- dimensão gerencial completa. Uma segunda execução do carregador
--- demonstrativo colide aqui em vez de duplicar.
-CREATE UNIQUE INDEX IF NOT EXISTS project_cost_entries_natural_key_idx
+-- IDENTIDADE / IDEMPOTÊNCIA — por origem explícita, NUNCA por descrição.
+-- A descrição é atributo de apresentação: duas despesas reais legítimas
+-- podem coincidir em empresa + obra + mês + natureza + família + descrição
+-- (ex.: duas notas de combustível "Combustível da operação compartilhada"
+-- no mesmo mês). Só a identidade de origem distingue/reconcilia registros.
+CREATE UNIQUE INDEX IF NOT EXISTS project_cost_entries_source_record_key_unique_idx
   ON project_cost_entries (
     company_id,
     engineering_project_id,
-    competence_period,
-    data_nature,
-    cost_family,
-    lower(btrim(description))
-  );
+    source_kind,
+    source_record_key
+  )
+  WHERE source_record_key IS NOT NULL;
 
 -- ESTRATÉGIA DE IDEMPOTÊNCIA DA FUTURA ESCRITA (não executada nesta rodada).
 --
--- project_cost_entries_natural_key_idx é um UNIQUE INDEX (parcialmente por
--- EXPRESSÃO: lower(btrim(description))), NÃO uma UNIQUE CONSTRAINT nomeada.
--- Portanto o writer NUNCA deve usar `ON CONFLICT ON CONSTRAINT
--- project_cost_entries_natural_key_idx` (o Postgres exige uma constraint
--- real; um índice não é uma constraint). A forma correta é INFERÊNCIA DO
--- ÍNDICE pela lista de colunas + a MESMA expressão do índice:
+-- project_cost_entries_source_record_key_unique_idx é um UNIQUE INDEX
+-- PARCIAL (WHERE source_record_key IS NOT NULL), NÃO uma UNIQUE CONSTRAINT
+-- nomeada. O writer NUNCA usa `ON CONFLICT ON CONSTRAINT <nome-de-índice>`
+-- (o Postgres exige uma constraint real). A forma correta é INFERÊNCIA DO
+-- ÍNDICE PARCIAL pela lista de colunas + o MESMO predicado WHERE do índice:
 --
 --   INSERT INTO project_cost_entries
 --     (company_id, engineering_project_id, financial_lancamento_id,
 --      financial_categoria_id, cost_family, description, supplier_name,
 --      amount_decimal, competence_period, competence_date, data_nature,
---      source_kind, status, notes, metadata)
+--      source_kind, source_record_key, status, notes, metadata)
 --   VALUES (...)
---   ON CONFLICT (company_id, engineering_project_id, competence_period,
---                data_nature, cost_family, lower(btrim(description)))
+--   ON CONFLICT (company_id, engineering_project_id, source_kind, source_record_key)
+--     WHERE source_record_key IS NOT NULL
 --   DO NOTHING
 --   RETURNING id;
 --
--- Se `RETURNING id` vier vazio (linha já existia), o writer relê o id:
+-- Se `RETURNING id` vier vazio (linha já existia), o writer relê o id
+-- SEM tocar na descrição:
 --   SELECT id FROM project_cost_entries
 --    WHERE company_id = $1 AND engineering_project_id = $2
---      AND competence_period = $3 AND data_nature = $4
---      AND cost_family = $5 AND lower(btrim(description)) = lower(btrim($6));
+--      AND source_kind = $3 AND source_record_key = $4;
 --
--- Nenhuma coluna gerada nem constraint redundante é necessária: a
--- inferência do índice por expressão é suficiente e é a sintaxe suportada
--- por PostgreSQL 15 / Supabase.
+-- A descrição não participa de nenhum UNIQUE de identidade da tabela e
+-- nunca é usada como fallback de identidade.
 
 COMMENT ON TABLE project_cost_entries IS
   'Custo do projeto antes da distribuição entre Centros de Custo. data_nature separa dado demonstrativo de custo real. Não substitui nem duplica financial_lancamentos.';

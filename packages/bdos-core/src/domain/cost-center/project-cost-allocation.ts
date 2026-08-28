@@ -126,6 +126,24 @@ export function validateCostEntryProvenance(entry: ProjectCostEntry): void {
       `Custo ${entry.id}: source_kind = FinancialEntry exige financial_lancamento_id (a categoria financeira não prova origem).`,
     );
   }
+
+  // Identidade de origem: quando informada, não pode ser vazia.
+  if (entry.sourceRecordKey !== null && entry.sourceRecordKey !== undefined && entry.sourceRecordKey.trim() === "") {
+    throw new CostAllocationValidationError(
+      `Custo ${entry.id}: source_record_key não pode ser string vazia.`,
+    );
+  }
+
+  // Massa demonstrativa é idempotente por identidade explícita, nunca por
+  // descrição: ManualDemonstration exige source_record_key.
+  if (
+    entry.sourceKind === CostEntrySourceKind.ManualDemonstration &&
+    (entry.sourceRecordKey === null || entry.sourceRecordKey === undefined || entry.sourceRecordKey.trim() === "")
+  ) {
+    throw new CostAllocationValidationError(
+      `Custo ${entry.id}: source_kind = ManualDemonstration exige source_record_key (identidade determinística; a descrição não é identidade).`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

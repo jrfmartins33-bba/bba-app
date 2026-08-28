@@ -86,6 +86,7 @@ function entry(
   family: CostFamily,
   categoryLabel: string,
   amountDecimal: string,
+  sourceRecordKey?: string | null,
 ): ProjectCostEntry {
   seq += 1;
   return {
@@ -102,6 +103,11 @@ function entry(
     competencePeriod: "2026-06",
     dataNature: CostDataNature.Demonstrative,
     sourceKind: CostEntrySourceKind.ManualDemonstration,
+    // Identidade determinística — nunca a descrição.
+    sourceRecordKey:
+      sourceRecordKey === undefined
+        ? `demo-cost-center-2026-06-${String(seq).padStart(3, "0")}`
+        : sourceRecordKey,
     status: CostEntryStatus.Allocated,
     notes: null,
     metadata: {},
@@ -485,22 +491,54 @@ runTest("migration da camada operacional permanece marcada como NÃO APLICAR", (
   assert(!/INSERT\s+INTO\s+financial_categorias/i.test(MIGRATION_SQL_EXECUTABLE), "não cria categorias");
 });
 
-runTest("migration — idempotência referencia o UNIQUE INDEX por inferência, nunca ON CONFLICT ON CONSTRAINT", () => {
+runTest("migration — idempotência por identidade de origem (source_record_key), nunca por descrição", () => {
+  // A chave de idempotência antiga (baseada em descrição) foi REMOVIDA.
   assert(
-    /CREATE UNIQUE INDEX[^;]*project_cost_entries_natural_key_idx/i.test(MIGRATION_SQL),
-    "natural key é UNIQUE INDEX (não constraint)",
+    !/project_cost_entries_natural_key_idx/.test(MIGRATION_SQL),
+    "índice natural baseado em descrição foi removido",
   );
   assert(
-    !/ON CONFLICT ON CONSTRAINT\s+project_cost_entries_natural_key_idx/i.test(MIGRATION_SQL),
-    "não usa ON CONFLICT ON CONSTRAINT com nome de índice",
+    !/CREATE UNIQUE INDEX[\s\S]*lower\(btrim\(description\)\)/i.test(MIGRATION_SQL),
+    "nenhum UNIQUE INDEX inclui lower(btrim(description))",
   );
-  // A estratégia documentada usa inferência por colunas + a MESMA expressão do índice.
+  // Nova identidade: UNIQUE INDEX PARCIAL sobre (company, obra, source_kind, source_record_key).
   assert(
-    /ON CONFLICT \(company_id, engineering_project_id, competence_period,/i.test(MIGRATION_SQL),
-    "inferência do índice por lista de colunas",
+    /CREATE UNIQUE INDEX[^;]*project_cost_entries_source_record_key_unique_idx[\s\S]*?ON project_cost_entries \(\s*company_id,\s*engineering_project_id,\s*source_kind,\s*source_record_key\s*\)\s*WHERE source_record_key IS NOT NULL/i.test(
+      MIGRATION_SQL,
+    ),
+    "UNIQUE INDEX parcial por identidade de origem",
   );
-  assert(/cost_family, lower\(btrim\(description\)\)\)/i.test(MIGRATION_SQL), "inclui a expressão lower(btrim(description))");
+  // Coluna + CHECKs de identidade.
+  assert(/\bsource_record_key\s+TEXT\b/i.test(MIGRATION_SQL), "coluna source_record_key TEXT nullable");
+  assert(
+    /CONSTRAINT project_cost_entries_source_record_key_not_blank CHECK \(\s*source_record_key IS NULL OR btrim\(source_record_key\) <> ''/i.test(
+      MIGRATION_SQL,
+    ),
+    "source_record_key não pode ser vazia",
+  );
+  assert(
+    /CONSTRAINT project_cost_entries_manual_demo_requires_source_key CHECK \(\s*source_kind <> 'ManualDemonstration' OR source_record_key IS NOT NULL/i.test(
+      MIGRATION_SQL,
+    ),
+    "ManualDemonstration exige source_record_key",
+  );
+  // Estratégia de escrita: ON CONFLICT por inferência do índice PARCIAL, nunca ON CONFLICT ON CONSTRAINT <nome>.
+  assert(
+    !/ON CONFLICT ON CONSTRAINT\s+project_cost_entries/i.test(MIGRATION_SQL),
+    "não usa ON CONFLICT ON CONSTRAINT com nome (índice não é constraint)",
+  );
+  assert(
+    /ON CONFLICT \(company_id, engineering_project_id, source_kind, source_record_key\)\s*\n?\s*--?\s*WHERE source_record_key IS NOT NULL/i.test(
+      MIGRATION_SQL,
+    ),
+    "inferência do índice parcial (colunas + predicado WHERE)",
+  );
   assert(/DO NOTHING/i.test(MIGRATION_SQL) && /RETURNING id/i.test(MIGRATION_SQL), "DO NOTHING + releitura do id");
+  // A releitura documentada NÃO toca na descrição.
+  assert(
+    !/SELECT id FROM project_cost_entries[\s\S]*btrim\(description\)/i.test(MIGRATION_SQL),
+    "releitura do id nunca por descrição",
+  );
 });
 
 runTest("migration — proveniência: source_kind vs data_nature; categoria não é prova de origem", () => {
@@ -614,6 +652,87 @@ runTest("proveniência: Actual + Document é permitido (sem exigir financial_lan
     sourceKind: CostEntrySourceKind.Document,
     financialLancamentoId: null,
   });
+});
+
+// ---- Identidade / idempotência por source_record_key (não por descrição) ----
+
+runTest("mesma descrição + source_record_key diferentes ⇒ DUAS despesas distintas", () => {
+  seq = 0;
+  allocSeq = 0;
+  const DESC = "Combustível da operação compartilhada";
+  const eA = entry(DESC, CostFamily.Combustivel, "Combustível", "24000.00", "nf-combustivel-A");
+  const eB = entry(DESC, CostFamily.Combustivel, "Combustível", "24000.00", "nf-combustivel-B");
+  assert(eA.description === eB.description, "descrição idêntica");
+  assert(eA.competencePeriod === eB.competencePeriod && eA.costFamily === eB.costFamily && eA.dataNature === eB.dataNature, "mesma empresa/obra/mês/natureza/família");
+  assert(eA.sourceRecordKey !== eB.sourceRecordKey, "só a identidade de origem difere");
+
+  // O domínio aceita as duas — a descrição não é identidade.
+  validateCostEntryProvenance(eA);
+  validateCostEntryProvenance(eB);
+
+  const rm = buildProjectCostCentersReadModel({
+    organizationId: ORG,
+    engineeringProjectId: PROJ,
+    projectName: null,
+    period: "2026-06",
+    periodLabel: "jun/2026",
+    dataNature: CostDataNature.Demonstrative,
+    costCenters: [CONJASF, HIDROMEC],
+    costEntries: [
+      { entry: eA, allocations: [alloc(eA, CONJASF.id, CostAllocationMethod.Direct, 10000, "24000.00")] },
+      { entry: eB, allocations: [alloc(eB, HIDROMEC.id, CostAllocationMethod.Direct, 10000, "24000.00")] },
+    ],
+    operationalLayerMaterialized: true,
+    measurementComparison: { available: false, measuredValueDecimal: null, measurementLabel: null },
+  });
+  assertEqual(rm.entries.length, 2, "duas despesas distintas coexistem");
+  assertEqual(rm.totalCostFormatted, "R$ 48.000,00", "somam as duas");
+});
+
+runTest("colisão de identidade: mesma (empresa, obra, source_kind, source_record_key)", () => {
+  // A UNIQUE INDEX PARCIAL da migration é a barreira física dessa colisão;
+  // aqui confirmamos que a estratégia de escrita infere ESSE índice.
+  assert(
+    /project_cost_entries_source_record_key_unique_idx/.test(MIGRATION_SQL),
+    "índice único parcial de identidade existe",
+  );
+  assert(
+    /ON CONFLICT \(company_id, engineering_project_id, source_kind, source_record_key\)/i.test(MIGRATION_SQL),
+    "escrita infere o índice de identidade (colisão vira DO NOTHING)",
+  );
+});
+
+runTest("ManualDemonstration exige source_record_key (nunca a descrição)", () => {
+  const e: ProjectCostEntry = {
+    ...entry("Combustível da operação compartilhada", CostFamily.Combustivel, "Combustível", "24000.00"),
+    sourceKind: CostEntrySourceKind.ManualDemonstration,
+    sourceRecordKey: null,
+  };
+  assertThrows(() => validateCostEntryProvenance(e), "source_record_key");
+  assertThrows(
+    () => validateCostEntryProvenance({ ...e, sourceRecordKey: "   " }),
+    "source_record_key",
+  );
+});
+
+runTest("descrição não faz parte de nenhum UNIQUE de identidade (migration)", () => {
+  assert(!/project_cost_entries_natural_key_idx/.test(MIGRATION_SQL), "chave antiga por descrição removida");
+  const uniqueIndexes = MIGRATION_SQL.match(/CREATE UNIQUE INDEX[\s\S]*?;/gi) ?? [];
+  assert(uniqueIndexes.length > 0, "há UNIQUE INDEX para inspecionar");
+  assert(
+    uniqueIndexes.every((idx) => !/description/i.test(idx)),
+    "nenhum UNIQUE INDEX referencia description",
+  );
+});
+
+runTest("massa demonstrativa: 7 source_record_keys determinísticas e distintas", () => {
+  const rm = buildGoldenEntries();
+  const keys = rm.map(({ entry: e }) => e.sourceRecordKey);
+  assertEqual(keys.length, 7, "7 chaves");
+  assert(new Set(keys).size === 7, "todas distintas");
+  assertEqual(keys[0], "demo-cost-center-2026-06-001", "D1");
+  assertEqual(keys[6], "demo-cost-center-2026-06-007", "D7");
+  assert(rm.every(({ entry: e }) => e.sourceKind === CostEntrySourceKind.ManualDemonstration && e.dataNature === CostDataNature.Demonstrative), "todas ManualDemonstration/Demonstrative");
 });
 
 // Apresentação vem pronta do domínio — a UI não recalcula valor financeiro

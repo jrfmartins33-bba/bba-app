@@ -106,6 +106,7 @@ interface CostEntryRow {
   competence_period: string;
   data_nature: string;
   source_kind: string;
+  source_record_key: string | null;
   status: string;
   notes: string | null;
   metadata: Record<string, unknown> | null;
@@ -216,7 +217,7 @@ export async function loadProjectCostCentersReadModel(
   const entriesResult = await queryClient
     .from("project_cost_entries")
     .select(
-      "id, company_id, engineering_project_id, financial_lancamento_id, financial_categoria_id, cost_family, description, supplier_name, amount_decimal, competence_period, data_nature, source_kind, status, notes, metadata",
+      "id, company_id, engineering_project_id, financial_lancamento_id, financial_categoria_id, cost_family, description, supplier_name, amount_decimal, competence_period, data_nature, source_kind, source_record_key, status, notes, metadata",
     )
     .eq("company_id", organizationId)
     .eq("engineering_project_id", projectId)
@@ -293,6 +294,7 @@ export async function loadProjectCostCentersReadModel(
         sourceKind: (Object.values(CostEntrySourceKind) as string[]).includes(row.source_kind)
           ? (row.source_kind as CostEntrySourceKind)
           : CostEntrySourceKind.ManualControlled,
+        sourceRecordKey: row.source_record_key,
         status: row.status === "Allocated" ? CostEntryStatus.Allocated : CostEntryStatus.Draft,
         notes: row.notes,
         metadata: row.metadata ?? {},

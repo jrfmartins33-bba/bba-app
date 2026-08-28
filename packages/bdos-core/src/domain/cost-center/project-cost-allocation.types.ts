@@ -93,6 +93,13 @@ export interface ProjectCostEntry {
   readonly competencePeriod: string;
   readonly dataNature: CostDataNature;
   readonly sourceKind: CostEntrySourceKind;
+  /**
+   * Identidade estável do registro na sua fonte — é a chave de
+   * idempotência. NUNCA a descrição (atributo de apresentação).
+   * Obrigatória para `ManualDemonstration`; nullable para origens sem
+   * contrato de identidade definido.
+   */
+  readonly sourceRecordKey: string | null;
   readonly status: CostEntryStatus;
   readonly notes: string | null;
   readonly metadata: Readonly<Record<string, unknown>>;
