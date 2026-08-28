@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { CircleCheck, TrendingUp, TriangleAlert, Wallet } from "lucide-react";
 import { Card } from "@bba/ui";
 import { useBbaStore } from "@bba/lib";
 import { fetchManagerialControl, type ManagerialControlView } from "./measurement-managerial-control-client";
@@ -11,7 +12,6 @@ import {
   DEFAULT_MANAGERIAL_FILTER,
   formatManagerialBRL,
   formatManagerialPercent,
-  formatManagerialQuantity,
   formatManagerialStatus,
   MANAGERIAL_STATUS_ORDER,
   type ManagerialFilterState,
@@ -110,140 +110,165 @@ function LoadedView({
     );
   }
 
+  const contractReferenceDecimal = s.contractOfficialValueDecimal ?? s.itemsCanonicalSumDecimal;
+  const registeredPercentLabel = s.bdosRegisteredFinancialPercent
+    ? formatManagerialPercent(s.bdosRegisteredFinancialPercent)
+    : null;
+  const bulletinLabel = s.currentBulletinNumber ?? "atual";
+  const headline =
+    `${s.itemsWithBdosMeasurement} de ${s.totalItems} itens com medição registrada · ` +
+    `registrado ${formatManagerialBRL(s.bdosRegisteredValueTotalDecimal)}` +
+    `${registeredPercentLabel ? ` (${registeredPercentLabel})` : ""} de ${formatManagerialBRL(contractReferenceDecimal)} · ` +
+    `saldo consolidado ${formatManagerialBRL(s.contractBalanceTotalDecimal)}`;
+
   return (
     <>
       <Card className="span-12 workspace-card managerial-control-summary" title="Controle Gerencial da Execução">
-        <p className="managerial-control-summary__subtitle">Posição item a item do contrato</p>
+        <p className="managerial-control-summary__subtitle">Posição item a item do contrato · {s.totalItems} itens</p>
 
-        <dl className="workspace-fact-list managerial-control-summary__facts">
-          <div className="workspace-fact"><dt>Itens contratados</dt><dd>{s.totalItems}</dd></div>
-          <div className="workspace-fact"><dt>Com medição registrada</dt><dd>{s.itemsWithBdosMeasurement}</dd></div>
-          <div className="workspace-fact"><dt>Sem medição registrada</dt><dd>{s.itemsWithoutBdosMeasurement}</dd></div>
-          <div className="workspace-fact"><dt>Medidos no BM {s.currentBulletinNumber ?? "atual"}</dt><dd>{s.itemsMeasuredThisPeriod}</dd></div>
-          <div className="workspace-fact"><dt>Qtd. contratada atingida</dt><dd>{s.itemsContractQuantityReached}</dd></div>
-          <div className="workspace-fact"><dt>Acima da qtd. contratada</dt><dd>{s.itemsAboveContractQuantity}</dd></div>
-          <div className="workspace-fact"><dt>Base insuficiente</dt><dd>{s.itemsInsufficientBasis}</dd></div>
-          <div className="workspace-fact">
-            <dt>Valor do contrato</dt>
-            <dd>{s.contractOfficialValueDecimal ? formatManagerialBRL(s.contractOfficialValueDecimal) : formatManagerialBRL(s.itemsCanonicalSumDecimal)}</dd>
+        <div className="managerial-control-kpis">
+          <div className="managerial-control-kpi managerial-control-kpi--accent">
+            <span className="managerial-control-kpi__label">Valor do contrato</span>
+            <span className="managerial-control-kpi__value">{formatManagerialBRL(contractReferenceDecimal)}</span>
+            <span className="managerial-control-kpi__hint">
+              {s.contractOfficialValueDecimal ? "Base Contratual da Obra" : "Soma dos itens (base contratual indisponível)"}
+            </span>
           </div>
-          <div className="workspace-fact">
-            <dt>Registrado (BM {s.currentBulletinNumber ?? "atual"}{s.currentBulletinCertified ? ", certificado" : ""})</dt>
-            <dd>{formatManagerialBRL(s.bdosRegisteredValueTotalDecimal)}{s.bdosRegisteredFinancialPercent ? ` · ${formatManagerialPercent(s.bdosRegisteredFinancialPercent)}` : ""}</dd>
+          <div className="managerial-control-kpi">
+            <span className="managerial-control-kpi__label">
+              Registrado · BM {bulletinLabel}{s.currentBulletinCertified ? " · certificado" : ""}
+            </span>
+            <span className="managerial-control-kpi__value">{formatManagerialBRL(s.bdosRegisteredValueTotalDecimal)}</span>
+            <span className="managerial-control-kpi__hint">
+              {registeredPercentLabel ? `${registeredPercentLabel} do contrato` : "—"}
+            </span>
           </div>
-          <div className="workspace-fact"><dt>Saldo consolidado (contrato − registrado)</dt><dd>{formatManagerialBRL(s.contractBalanceTotalDecimal)}</dd></div>
-        </dl>
-
-        {s.contractOfficialValueDecimal && s.itemsTechnicalTotalDecimal && s.contractRoundingAdjustmentDecimal ? (
-          <p className="managerial-control-summary__recon">
-            Reconciliação contratual (Base Contratual da Obra): soma técnica dos itens{" "}
-            {formatManagerialBRL(s.itemsTechnicalTotalDecimal)} + ajuste contratual de arredondamento{" "}
-            {formatManagerialBRL(s.contractRoundingAdjustmentDecimal)} = valor oficial do contrato{" "}
-            {formatManagerialBRL(s.contractOfficialValueDecimal)}. O ajuste nunca é rateado pelos itens.
-          </p>
-        ) : null}
-
-        <div className="managerial-control-summary__truth-note">
-          <p>
-            <strong>Histórico acumulado item a item ainda não importado.</strong> O sistema registra por item somente o BM{" "}
-            {s.currentBulletinNumber ?? "atual"} ({s.currentPeriodLabel ?? "período atual"}). As medições anteriores
-            (MED-01…MED-{(s.currentBulletinNumber ?? 1) - 1}) existem apenas nas memórias de cálculo do arquivo-fonte e não foram
-            importadas. <em>&ldquo;Sem medição registrada&rdquo;</em> não significa ausência de execução da obra.
-          </p>
-          {s.certificationRegistered ? null : (
-            <p>
-              Nenhuma certificação histórica registrada — <em>&ldquo;certificado = R$ 0,00&rdquo;</em> significa isso, não
-              &ldquo;nenhuma execução realizada&rdquo;.
-            </p>
-          )}
-          <p>
-            {s.currentBulletinCertified
-              ? `O BM ${s.currentBulletinNumber ?? "atual"} já está certificado — a posição registrada é o acumulado certificado, sem somar o BM de novo (o valor do período continua visível à parte).`
-              : `O BM ${s.currentBulletinNumber ?? "atual"} ainda não está certificado — a posição registrada é o acumulado certificado anterior + o BM atual, sem dupla contagem.`}
-          </p>
-          {s.obraReference ? (
-            <p className="managerial-control-summary__obra-ref">
-              Posição físico-financeira da obra (Curva S, grupo a grupo): realizado acumulado{" "}
-              <strong>{formatManagerialBRL(s.obraReference.actualAccumulatedValueDecimal)}</strong>
-              {s.obraReference.actualAccumulatedPercent ? ` (${formatManagerialPercent(s.obraReference.actualAccumulatedPercent)})` : ""} — não decompõe
-              nos itens porque o histórico item a item não está importado.
-            </p>
-          ) : null}
-          {s.currentBulletinTotalValueDecimal && s.currentBulletinLinesSumDecimal ? (
-            <p className="managerial-control-summary__recon">
-              Reconciliação do BM {s.currentBulletinNumber}: soma das linhas {formatManagerialBRL(s.currentBulletinLinesSumDecimal)} = total do
-              boletim {formatManagerialBRL(s.currentBulletinTotalValueDecimal)}.
-            </p>
-          ) : null}
+          <div className="managerial-control-kpi">
+            <span className="managerial-control-kpi__label">Saldo consolidado</span>
+            <span className="managerial-control-kpi__value">{formatManagerialBRL(s.contractBalanceTotalDecimal)}</span>
+            <span className="managerial-control-kpi__hint">Contrato − registrado</span>
+          </div>
         </div>
+
+        <p className="managerial-control-headline">{headline}</p>
+
+        <div className="managerial-control-counters">
+          <Counter n={s.totalItems} label="contratados" />
+          <Counter n={s.itemsWithBdosMeasurement} label="com medição" />
+          <Counter n={s.itemsWithoutBdosMeasurement} label="sem medição" />
+          <Counter n={s.itemsMeasuredThisPeriod} label={`medidos no BM ${bulletinLabel}`} />
+          <Counter n={s.itemsContractQuantityReached} label="qtd. contratada atingida" />
+          {s.itemsAboveContractQuantity > 0 ? (
+            <Counter n={s.itemsAboveContractQuantity} label="acima da qtd. contratada" tone="caution" />
+          ) : null}
+          {s.itemsInsufficientBasis > 0 ? <Counter n={s.itemsInsufficientBasis} label="base insuficiente" /> : null}
+        </div>
+
+        <details className="managerial-control-legend">
+          <summary>Como ler estes números</summary>
+          <div className="managerial-control-legend__body">
+            <p>
+              <strong>Histórico acumulado item a item ainda não importado.</strong> O sistema registra por item apenas o
+              BM {bulletinLabel} ({s.currentPeriodLabel ?? "período atual"}); as medições anteriores existem só nas
+              memórias de cálculo do arquivo-fonte. &ldquo;Sem medição registrada&rdquo; não é ausência de execução da
+              obra{s.certificationRegistered
+                ? ""
+                : ". Nenhuma certificação histórica registrada — “certificado = R$ 0,00” significa isso"}.
+            </p>
+            <p>
+              {s.currentBulletinCertified
+                ? `O BM ${bulletinLabel} já está certificado — a posição registrada é o acumulado certificado, sem somar o BM de novo (o valor do período continua visível item a item).`
+                : `O BM ${bulletinLabel} ainda não está certificado — a posição registrada é o acumulado certificado anterior + o BM atual, sem dupla contagem.`}
+            </p>
+            {s.contractOfficialValueDecimal && s.itemsTechnicalTotalDecimal && s.contractRoundingAdjustmentDecimal ? (
+              <p>
+                <strong>Reconciliação contratual (Base Contratual da Obra):</strong> soma técnica dos itens{" "}
+                {formatManagerialBRL(s.itemsTechnicalTotalDecimal)} + ajuste contratual de arredondamento{" "}
+                {formatManagerialBRL(s.contractRoundingAdjustmentDecimal)} = valor oficial do contrato{" "}
+                {formatManagerialBRL(s.contractOfficialValueDecimal)}. O ajuste nunca é rateado pelos itens.
+              </p>
+            ) : null}
+            {s.obraReference ? (
+              <p>
+                Posição físico-financeira da obra (Curva S, grupo a grupo): realizado acumulado{" "}
+                <strong>{formatManagerialBRL(s.obraReference.actualAccumulatedValueDecimal)}</strong>
+                {s.obraReference.actualAccumulatedPercent
+                  ? ` (${formatManagerialPercent(s.obraReference.actualAccumulatedPercent)})`
+                  : ""}{" "}
+                — não decompõe nos itens porque o histórico item a item não está importado.
+              </p>
+            ) : null}
+            {s.currentBulletinTotalValueDecimal && s.currentBulletinLinesSumDecimal ? (
+              <p>
+                Reconciliação do BM {s.currentBulletinNumber}: soma das linhas{" "}
+                {formatManagerialBRL(s.currentBulletinLinesSumDecimal)} = total do boletim{" "}
+                {formatManagerialBRL(s.currentBulletinTotalValueDecimal)}.
+              </p>
+            ) : null}
+          </div>
+        </details>
       </Card>
 
       <Card className="span-12 workspace-card managerial-control-analyses" title="Análises gerenciais">
         <div className="managerial-control-analyses__grid">
-          <AnalysisBlock title={`Maior valor registrado acumulado (BM ${s.currentBulletinNumber ?? "atual"})`}>
-            {view.analyses.topByRegisteredValue.length === 0 ? (
-              <p className="managerial-control-item__muted">Nenhum item com valor registrado.</p>
-            ) : (
-              <ul>
-                {view.analyses.topByRegisteredValue.map((i) => (
-                  <li key={i.code}>
-                    <span>{i.code} — {i.description}</span>
-                    <strong>{formatManagerialBRL(i.valueDecimal)}</strong>
-                  </li>
-                ))}
-              </ul>
-            )}
+          <AnalysisBlock
+            icon={<TrendingUp aria-hidden="true" size={15} />}
+            title={`Maiores valores registrados · BM ${bulletinLabel}`}
+            variant="value"
+          >
+            <RankedList
+              empty="Nenhum item com valor registrado."
+              rows={view.analyses.topByRegisteredValue.map((i) => ({
+                code: i.code,
+                description: i.description,
+                metric: formatManagerialBRL(i.valueDecimal)
+              }))}
+            />
           </AnalysisBlock>
 
-          <AnalysisBlock title="Maior saldo contratual">
-            <ul>
-              {view.analyses.topByContractBalance.map((i) => (
-                <li key={i.code}>
-                  <span>{i.code} — {i.description}</span>
-                  <strong>{formatManagerialBRL(i.valueDecimal)}</strong>
-                </li>
-              ))}
-            </ul>
+          <AnalysisBlock icon={<Wallet aria-hidden="true" size={15} />} title="Maiores saldos contratuais" variant="balance">
+            <RankedList
+              empty="Sem saldos a exibir."
+              rows={view.analyses.topByContractBalance.map((i) => ({
+                code: i.code,
+                description: i.description,
+                metric: formatManagerialBRL(i.valueDecimal)
+              }))}
+            />
           </AnalysisBlock>
 
-          <AnalysisBlock title="Itens que atingiram 100% da quantidade contratada">
-            {view.analyses.itemsAtFullContractQuantity.length === 0 ? (
-              <p className="managerial-control-item__muted">Nenhum.</p>
-            ) : (
-              <ul>
-                {view.analyses.itemsAtFullContractQuantity.map((i) => (
-                  <li key={i.code}><span>{i.code} — {i.description}</span></li>
-                ))}
-              </ul>
-            )}
+          <AnalysisBlock icon={<CircleCheck aria-hidden="true" size={15} />} title="Atingiram 100% da quantidade" variant="full">
+            <RankedList
+              empty="Nenhum item atingiu 100% da quantidade contratada."
+              rows={view.analyses.itemsAtFullContractQuantity.map((i) => ({ code: i.code, description: i.description }))}
+            />
           </AnalysisBlock>
 
-          <AnalysisBlock title="Itens acima da quantidade contratada">
-            {view.analyses.itemsAboveContractQuantity.length === 0 ? (
-              <p className="managerial-control-item__muted">Nenhum.</p>
-            ) : (
-              <ul>
-                {view.analyses.itemsAboveContractQuantity.map((i) => (
-                  <li key={i.code}>
-                    <span>{i.code} — {i.description}</span>
-                    <strong>{formatManagerialPercent(i.executedPercent) ?? "—"}</strong>
-                  </li>
-                ))}
-              </ul>
-            )}
+          <AnalysisBlock
+            icon={<TriangleAlert aria-hidden="true" size={15} />}
+            title="Acima da quantidade contratada"
+            variant="above"
+          >
+            <RankedList
+              empty="Nenhum item acima da quantidade contratada."
+              rows={view.analyses.itemsAboveContractQuantity.map((i) => ({
+                code: i.code,
+                description: i.description,
+                metric: formatManagerialPercent(i.executedPercent) ?? "—"
+              }))}
+            />
           </AnalysisBlock>
         </div>
 
-        {view.analyses.valueConcentration ? (
-          <p className="managerial-control-analyses__concentration">
-            Os {view.analyses.valueConcentration.topCount} maiores itens concentram aproximadamente{" "}
-            {formatManagerialPercent(view.analyses.valueConcentration.sharePercent) ?? "—"} do valor registrado no BM{" "}
-            {s.currentBulletinNumber ?? "atual"} ({formatManagerialBRL(view.analyses.valueConcentration.topValueDecimal)} de{" "}
-            {formatManagerialBRL(view.analyses.valueConcentration.totalValueDecimal)}).
-          </p>
-        ) : null}
-        <p className="managerial-control-item__muted">
-          {view.analyses.itemsWithoutMeasurementCount} itens ainda sem medição registrada no sistema.
+        <p className="managerial-control-analyses__note">
+          {view.analyses.valueConcentration
+            ? `Os ${view.analyses.valueConcentration.topCount} maiores itens concentram ${
+                formatManagerialPercent(view.analyses.valueConcentration.sharePercent) ?? "—"
+              } do valor registrado no BM ${bulletinLabel} (${formatManagerialBRL(
+                view.analyses.valueConcentration.topValueDecimal
+              )} de ${formatManagerialBRL(view.analyses.valueConcentration.totalValueDecimal)}). `
+            : ""}
+          {view.analyses.itemsWithoutMeasurementCount} itens ainda sem medição registrada.
         </p>
       </Card>
 
@@ -302,36 +327,82 @@ function LoadedView({
           </label>
         </div>
 
-        <ul className="managerial-control-items">
-          <li className="managerial-control-item managerial-control-item--head" aria-hidden="true">
-            <div className="managerial-control-item__row">
-              <span className="managerial-control-item__code">Código</span>
-              <span className="managerial-control-item__description">Serviço</span>
-              <span className="managerial-control-item__group">Grupo</span>
-              <span className="managerial-control-item__unit">Unid.</span>
-              <span className="managerial-control-item__qty">Qtd. contratada</span>
-              <span className="managerial-control-item__qty">Qtd. registrada</span>
-              <span className="managerial-control-item__pct">% exec.</span>
-              <span className="managerial-control-item__qty">Saldo qtd.</span>
-              <span className="managerial-control-item__value">Valor registrado</span>
-              <span className="managerial-control-item__status">Situação</span>
-              <span className="managerial-control-item__toggle" />
-            </div>
-          </li>
-          {filteredItems.map((item) => (
-            <MeasurementManagerialControlItemRow item={item} key={item.id} />
-          ))}
-        </ul>
+        <div className="managerial-control-panel">
+          <ul className="managerial-control-items">
+            <li className="managerial-control-item managerial-control-item--head" aria-hidden="true">
+              <div className="managerial-control-item__row">
+                <span className="managerial-control-item__code">Código</span>
+                <span className="managerial-control-item__description">Serviço</span>
+                <span className="managerial-control-item__group">Grupo</span>
+                <span className="managerial-control-item__exec">% executado</span>
+                <span className="managerial-control-item__value">Valor registrado</span>
+                <span className="managerial-control-item__status">Situação</span>
+                <span className="managerial-control-item__toggle" />
+              </div>
+            </li>
+            {filteredItems.map((item) => (
+              <MeasurementManagerialControlItemRow item={item} key={item.id} />
+            ))}
+          </ul>
+        </div>
       </Card>
     </>
   );
 }
 
-function AnalysisBlock({ title, children }: { readonly title: string; readonly children: React.ReactNode }) {
+function Counter({ n, label, tone }: { readonly n: number; readonly label: string; readonly tone?: "caution" }) {
   return (
-    <section className="managerial-control-analyses__block">
-      <h4>{title}</h4>
+    <span className={`managerial-control-counter${tone ? ` managerial-control-counter--${tone}` : ""}`}>
+      <span className="managerial-control-counter__n">{n}</span>
+      <span className="managerial-control-counter__label">{label}</span>
+    </span>
+  );
+}
+
+function AnalysisBlock({
+  variant,
+  icon,
+  title,
+  children
+}: {
+  readonly variant: "value" | "balance" | "full" | "above";
+  readonly icon: ReactNode;
+  readonly title: string;
+  readonly children: ReactNode;
+}) {
+  return (
+    <section className={`managerial-control-analyses__block managerial-control-analyses__block--${variant}`}>
+      <div className="managerial-control-analyses__head">
+        {icon}
+        <h4>{title}</h4>
+      </div>
       {children}
     </section>
+  );
+}
+
+function RankedList({
+  rows,
+  empty
+}: {
+  readonly rows: ReadonlyArray<{ readonly code: string; readonly description: string; readonly metric?: string }>;
+  readonly empty: string;
+}) {
+  if (rows.length === 0) {
+    return <p className="managerial-control-analyses__empty">{empty}</p>;
+  }
+  return (
+    <ol>
+      {rows.map((row, index) => (
+        <li key={row.code}>
+          <span className="managerial-control-analyses__rank">{index + 1}</span>
+          <span className="managerial-control-analyses__name">
+            <b>{row.code}</b>
+            {row.description}
+          </span>
+          {row.metric ? <span className="managerial-control-analyses__metric">{row.metric}</span> : <span />}
+        </li>
+      ))}
+    </ol>
   );
 }

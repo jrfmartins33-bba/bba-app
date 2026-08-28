@@ -75,6 +75,20 @@ export function formatManagerialPercent(decimal: string | null): string | null {
   return `${negative ? "−" : ""}${(negative ? decimal.slice(1) : decimal).replace(".", ",")}%`;
 }
 
+/**
+ * Largura (0–100) da barrinha de progresso na linha do item —
+ * PURAMENTE VISUAL. Nunca é um cálculo de negócio: o "% executado"
+ * mostrado ao usuário continua vindo pronto do servidor
+ * (`item.executedPercent`); aqui só se decide quantos pixels a barra
+ * ocupa, saturando em 100 para quantidades acima da contratada.
+ */
+export function managerialBarWidthPercent(executedPercent: string | null): number {
+  if (executedPercent === null) return 0;
+  const parsed = Number(executedPercent);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return parsed >= 100 ? 100 : Math.round(parsed);
+}
+
 // ---- filtro / ordenação (determinísticos, sobre dados já do servidor) ----
 
 export type ManagerialSortKey = "code" | "contract_value" | "registered_value" | "balance" | "executed_percent";
