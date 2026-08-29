@@ -17,6 +17,7 @@
     "./services/contract-baseline": "./src/services/contract-baseline/index.ts",
     "./domain/consortium": "./src/domain/consortium/index.ts",
     "./domain/cost-center": "./src/domain/cost-center/index.ts",
+    "./domain/inbound-channel": "./src/domain/inbound-channel/index.ts",
     "./domain/contract-baseline": "./src/domain/contract-baseline/index.ts",
     "./domain/contract-execution-item-link": "./src/domain/contract-execution-item-link/index.ts",
     "./domain/measurement-certification": "./src/domain/measurement-certification/index.ts",
