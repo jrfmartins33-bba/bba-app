@@ -5,7 +5,9 @@ import { useParams } from "next/navigation";
 import { Card, Button } from "@bba/ui";
 import { formatBudgetMoneyPtBr, formatBudgetNumberPtBr, formatBudgetPercentPtBr } from "@/lib/bdos/format-budget-number";
 import { toHumanReviewActionError } from "@/lib/bdos/to-human-review-error";
+import { lotPresentation } from "@/lib/budget/consolidated-budget-catalog";
 import { ReviewActionDialog } from "./ReviewActionDialog";
+import { getReviewPaginationState } from "./review-pagination";
 
 // Workspace Operacional da Revisão do Orçamento Oficial (Epic 21.5A / Sprint 21.5C.2B Premium)
 
@@ -414,8 +416,9 @@ export default function OrcamentoRevisaoPage() {
     }
   }
 
-  const pageRows = filteredRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const pagination = getReviewPaginationState(page, totalPages);
+  const pageRows = filteredRows.slice(pagination.pageIndex * PAGE_SIZE, (pagination.pageIndex + 1) * PAGE_SIZE);
 
   async function callAction(body: Record<string, unknown>, successMessage?: string) {
     setBusy(true);
@@ -512,7 +515,7 @@ export default function OrcamentoRevisaoPage() {
     setDialog({
       isOpen: true,
       type: "bulkAcceptDivergences",
-      title: `Accept ${divergentSelectedCount} diferença(s) documentais em lote`,
+      title: `Aceitar ${divergentSelectedCount} diferença(s) documentais em lote`,
       description: `${divergentSelectedCount} item(ns) com diferença documental serão aceitos exatamente como publicados. Informe a justificativa técnica para auditoria:`,
       requireJustification: true,
       justificationPlaceholder: "Ex.: Diferenças documentais conferidas na planilha oficial publicada.",
@@ -546,12 +549,13 @@ export default function OrcamentoRevisaoPage() {
   }
 
   function openConsolidateDialog() {
+    const lotLabel = lotPresentation(reviewContext?.procurementLotTitle ?? null, "Lot").title;
     setDialog({
       isOpen: true,
       type: "consolidate",
-      title: "Consolidar Orçamento Oficial Revisado",
-      description: "Esta ação finalizará a sessão de revisão e gerará a versão oficial consolidada do orçamento. A ação é irreversível.",
-      confirmLabel: "Consolidar Orçamento",
+      title: `Confirmar ${lotLabel}`,
+      description: `Esta ação finalizará a revisão e confirmará o orçamento oficial do ${lotLabel}. A ação é irreversível.`,
+      confirmLabel: `Confirmar ${lotLabel}`,
     });
   }
 
@@ -602,7 +606,8 @@ export default function OrcamentoRevisaoPage() {
     } else if (dialog.type === "restore" && dialog.targetRowId) {
       await callAction({ action: "restore", rowId: dialog.targetRowId }, "Item restaurado com sucesso.");
     } else if (dialog.type === "consolidate") {
-      await callAction({ action: "consolidate" }, "Orçamento Oficial Revisado consolidado com sucesso.");
+      const lotLabel = lotPresentation(reviewContext?.procurementLotTitle ?? null, "Lot").title;
+      await callAction({ action: "consolidate" }, `✓ Revisão concluída. ${lotLabel} confirmado.`);
     }
   }
 
@@ -647,6 +652,7 @@ export default function OrcamentoRevisaoPage() {
   };
 
   const divergentCount = Array.from(reconciliationByRowId.values()).filter((r) => r.status === "diverges").length;
+  const lotLabel = lotPresentation(reviewContext?.procurementLotTitle ?? null, "Lot").title;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
@@ -689,7 +695,7 @@ export default function OrcamentoRevisaoPage() {
                   borderRadius: "4px",
                 }}
               >
-                {session.status === "Consolidated" ? "Consolidado" : "Em revisão"}
+                {session.status === "Consolidated" ? "Confirmado" : "Em revisão"}
               </span>
             </div>
             <h1 style={{ fontSize: "1.5rem", fontWeight: 800, margin: "0 0 0.35rem 0", color: "#f8fafc", lineHeight: 1.3 }}>
@@ -781,7 +787,7 @@ export default function OrcamentoRevisaoPage() {
 
       <Card title="Resumo">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "1rem" }}>
-          <Stat label="Estado" value={session.status === "Consolidated" ? "Revisado e consolidado" : "Em revisão"} />
+          <Stat label="Estado" value={session.status === "Consolidated" ? "Revisado e confirmado" : "Em revisão"} />
           <Stat label="Lotes" value={String(lotes.length)} />
           <Stat label="Linhas" value={String(totalRows)} />
           <Stat label="Revisadas" value={`${confirmedCount} / ${totalRows}`} />
@@ -789,13 +795,15 @@ export default function OrcamentoRevisaoPage() {
           <Stat label="Corrigidas" value={String(correctedCount)} />
           <Stat label="Não pertencem" value={String(notBudgetCount)} />
         </div>
-        {reconciliation && (
+        {session.status === "Consolidated" ? (
+          <p style={{ color: "#34d399", fontWeight: 600 }}>✓ Revisão concluída. {lotLabel} confirmado.</p>
+        ) : reconciliation ? (
           <div style={{ marginTop: "1rem" }}>
             {reconciliation.readiness.ready ? (
-              <p style={{ color: "#34d399", fontWeight: 600 }}>✓ Pronto para consolidação final do Orçamento Oficial.</p>
+              <p style={{ color: "#34d399", fontWeight: 600 }}>✓ {lotLabel} pronto para confirmação final.</p>
             ) : (
               <div>
-                <p style={{ color: "#fca5a5", fontWeight: 600 }}>Pendências para consolidação:</p>
+                <p style={{ color: "#fca5a5", fontWeight: 600 }}>Pendências para confirmação:</p>
                 <ul style={{ margin: "0.25rem 0", paddingLeft: "1.2rem", color: "#d1d5db", fontSize: "0.85rem" }}>
                   {reconciliation.readiness.blockers.map((blocker) => (
                     <li key={blocker}>{blocker}</li>
@@ -804,12 +812,12 @@ export default function OrcamentoRevisaoPage() {
               </div>
             )}
             <div style={{ marginTop: "0.75rem" }}>
-              <Button disabled={!reconciliation.readiness.ready || busy || session.status === "Consolidated"} onClick={openConsolidateDialog}>
-                {session.status === "Consolidated" ? "Já consolidado" : "Consolidar Orçamento Oficial Revisado"}
+              <Button disabled={!reconciliation.readiness.ready || busy} onClick={openConsolidateDialog}>
+                Confirmar {lotLabel}
               </Button>
             </div>
           </div>
-        )}
+        ) : null}
       </Card>
 
       <Card title="Filtros">
@@ -1005,22 +1013,29 @@ export default function OrcamentoRevisaoPage() {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            gap: "0.75rem",
+            flexWrap: "wrap",
           }}
         >
           <div style={{ display: "flex", gap: "0.5rem" }}>
-            <Button disabled={page === 0} onClick={() => changePage(0)}>
+            <Button disabled={pagination.firstDisabled} onClick={() => changePage(pagination.firstPageIndex)}>
               ⏮ Primeira
             </Button>
-            <Button disabled={page === 0} onClick={() => changePage(page - 1)}>
+            <Button disabled={pagination.previousDisabled} onClick={() => changePage(pagination.previousPageIndex)}>
               ← Anterior
             </Button>
           </div>
           <span style={{ fontWeight: 600, fontSize: "0.875rem" }}>
-            Página {page + 1} de {totalPages}
+            Página {pagination.pageIndex + 1} de {pagination.totalPages}
           </span>
-          <Button disabled={page >= totalPages - 1} onClick={() => changePage(page + 1)}>
-            Próxima →
-          </Button>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <Button disabled={pagination.nextDisabled} onClick={() => changePage(pagination.nextPageIndex)}>
+              Próxima →
+            </Button>
+            <Button disabled={pagination.lastDisabled} onClick={() => changePage(pagination.lastPageIndex)}>
+              Última ⏭
+            </Button>
+          </div>
         </div>
       </Card>
 

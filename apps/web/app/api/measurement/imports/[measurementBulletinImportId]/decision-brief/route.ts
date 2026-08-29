@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseRouteHandlerClient, requireAuthenticatedCompany } from "@/lib/supabase/server";
+import { getSupabaseRouteHandlerClient, requireAuthenticatedActor } from "@/lib/supabase/server";
 import { buildMeasurementDecisionBriefImportReader, handleGetMeasurementDecisionBrief } from "./measurement-decision-brief-route-handler";
 
 /**
@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_request: Request, context: { params: { measurementBulletinImportId: string } }): Promise<NextResponse> {
   const supabase = getSupabaseRouteHandlerClient();
-  const auth = await requireAuthenticatedCompany(supabase);
+  const auth = await requireAuthenticatedActor(supabase);
 
   try {
     const outcome = await handleGetMeasurementDecisionBrief(

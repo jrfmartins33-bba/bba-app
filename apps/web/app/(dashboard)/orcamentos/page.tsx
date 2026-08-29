@@ -1,179 +1,454 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { BudgetPageHeader } from "@/components/budget/budget-page-header";
 import { BudgetEmptyState } from "@/components/budget/budget-empty-state";
+import catalogStyles from "@/components/budget/official-budget-catalog.module.css";
+import scenarioStyles from "@/components/budget/proposal-scenarios.module.css";
+import {
+  contractStatusLabel,
+  formatPercentageBasisPointsPtBr,
+  lotPresentation,
+  resolveContractedDocumentChain,
+  sortBudgetsByLotAscending,
+  type ConsolidatedBudgetProcessDto,
+  type ConsolidatedBudgetSummaryDto,
+  type ConsolidatedBudgetCatalogDto,
+} from "@/lib/budget/consolidated-budget-catalog";
+import { formatBasisPointsPtBr, formatCentsPtBr, type ProposalScenarioDto } from "@/lib/proposal-scenarios";
+import type { BudgetOrganizationAccessKind, BudgetOrganizationOption } from "@/lib/budget/budget-organization-policy";
 
-// Epic 21.5A — /orcamentos deixa de ser sempre vazio (enunciado §43):
-// quando existe uma BudgetVersion Consolidated acessível à organização
-// do usuário autenticado, mostra o orçamento real; senão, mantém o
-// estado vazio existente. Human-first (enunciado §44/§45): nenhum campo
-// técnico (fingerprint, grammarId, evidence, engineVersion) aparece
-// aqui — só o que a fonte documental realmente contém.
-
-interface BudgetLine {
-  readonly id: string;
-  readonly kind: "Group" | "Subgroup" | "ServiceItem";
-  readonly description: { readonly status: "Confirmed"; readonly text: string } | { readonly status: "AbsentFromSource" };
-  readonly externalCode: string | null;
-  readonly parentLineId: string | null;
-  readonly position: number;
-  readonly totalCents: number | null;
-  readonly metadata: Readonly<Record<string, unknown>>;
-}
-
-interface BudgetVersionDto {
-  readonly id: string;
-  readonly status: "Draft" | "Consolidated";
-  readonly lines: ReadonlyArray<BudgetLine>;
-}
-
-function centsToBRL(cents: number): string {
-  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-function calculateTotal(lines: ReadonlyArray<BudgetLine>, lineId: string): number {
-  const line = lines.find((l) => l.id === lineId);
-  if (!line) return 0;
-  if (line.kind === "ServiceItem") return line.totalCents ?? 0;
-  return lines.filter((l) => l.parentLineId === lineId).reduce((sum, child) => sum + calculateTotal(lines, child.id), 0);
-}
-
-function orderedChildren(lines: ReadonlyArray<BudgetLine>, parentId: string | null): ReadonlyArray<BudgetLine> {
-  return lines.filter((l) => l.parentLineId === parentId).slice().sort((a, b) => a.position - b.position);
-}
-
-function lineText(line: BudgetLine): string {
-  return line.description.status === "Confirmed" ? line.description.text : "—";
+interface CatalogPayload extends ConsolidatedBudgetCatalogDto {
+  readonly accessKind: BudgetOrganizationAccessKind;
+  readonly organization: BudgetOrganizationOption | null;
+  readonly organizations: ReadonlyArray<BudgetOrganizationOption>;
+  readonly organizationSelectionRequired: boolean;
+  readonly scenarios?: ReadonlyArray<ProposalScenarioDto>;
 }
 
 export default function OrcamentosPage() {
-  const [budgetVersion, setBudgetVersion] = useState<BudgetVersionDto | null | undefined>(undefined);
+  return (
+    <Suspense fallback={<><BudgetPageHeader isDemonstration={false} /><section className="section-grid"><p>Carregando orçamentos…</p></section></>}>
+      <OrcamentosContent />
+    </Suspense>
+  );
+}
+
+function OrcamentosContent() {
+  const searchParams = useSearchParams();
+  const requestedOrganizationId = searchParams.get("empresa");
+  const [catalog, setCatalog] = useState<ConsolidatedBudgetCatalogDto | undefined>(undefined);
+  const [scenarios, setScenarios] = useState<ReadonlyArray<ProposalScenarioDto>>([]);
+  const [accessKind, setAccessKind] = useState<BudgetOrganizationAccessKind | null>(null);
+  const [organization, setOrganization] = useState<BudgetOrganizationOption | null>(null);
+  const [organizations, setOrganizations] = useState<ReadonlyArray<BudgetOrganizationOption>>([]);
+  const [organizationSelectionRequired, setOrganizationSelectionRequired] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/orcamentos/consolidado")
-      .then((res) => (res.ok ? res.json() : { budgetVersion: null }))
-      .then((data) => setBudgetVersion(data.budgetVersion))
-      .catch(() => setBudgetVersion(null));
-  }, []);
+    const controller = new AbortController();
+    setCatalog(undefined);
+    setScenarios([]);
+    setOrganization(null);
+    setOrganizationSelectionRequired(false);
+    const organizationQuery = requestedOrganizationId ? `?empresa=${encodeURIComponent(requestedOrganizationId)}` : "";
+    fetch(`/api/orcamentos/consolidado/resumo${organizationQuery}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Não foi possível carregar os orçamentos oficiais.");
+        return (await response.json()) as CatalogPayload;
+      })
+      .then((payload) => {
+        setCatalog({ budgets: payload.budgets, processes: payload.processes });
+        setScenarios(payload.scenarios ?? []);
+        setAccessKind(payload.accessKind);
+        setOrganization(payload.organization);
+        setOrganizations(payload.organizations);
+        setOrganizationSelectionRequired(payload.organizationSelectionRequired);
+        setLoadError(null);
+      })
+      .catch((cause: Error) => {
+        if (cause.name !== "AbortError") {
+          setLoadError(cause.message);
+          setCatalog({ budgets: [], processes: [] });
+        }
+      });
+    return () => controller.abort();
+  }, [requestedOrganizationId]);
 
-  if (budgetVersion === undefined) {
+  const organizationIdForLinks = accessKind === "bba_admin" ? organization?.id ?? null : null;
+
+  const scenariosByBudget = useMemo(() => {
+    const grouped = new Map<string, ProposalScenarioDto[]>();
+    for (const scenario of scenarios) {
+      const current = grouped.get(scenario.sourceBudgetId) ?? [];
+      current.push(scenario);
+      grouped.set(scenario.sourceBudgetId, current);
+    }
+    return grouped;
+  }, [scenarios]);
+
+  if (catalog === undefined) {
+    return <><BudgetPageHeader isDemonstration={false} /><section className="section-grid"><p>Carregando orçamentos…</p></section></>;
+  }
+
+  if (loadError) {
     return (
       <>
         <BudgetPageHeader isDemonstration={false} />
         <section className="section-grid">
-          <p>Carregando...</p>
+          <div className={catalogStyles.error} role="alert"><strong>Não foi possível abrir Orçamentos.</strong><span>{loadError}</span></div>
         </section>
       </>
     );
   }
 
-  if (budgetVersion === null) {
+  if (organizationSelectionRequired) {
     return (
       <>
         <BudgetPageHeader isDemonstration={false} />
-        <section className="section-grid">
-          <BudgetEmptyState />
+        <section className={`section-grid ${catalogStyles.page}`}>
+          <OrganizationSelector organizations={organizations} />
         </section>
       </>
     );
   }
 
-  const lotGroups = orderedChildren(budgetVersion.lines, null).filter(
-    (line) => typeof line.metadata.lotReference === "string",
-  );
-  const lotesByReference = new Map<string, BudgetLine[]>();
-  lotGroups.forEach((line) => {
-    const lot = String(line.metadata.lotReference);
-    const list = lotesByReference.get(lot) ?? [];
-    list.push(line);
-    lotesByReference.set(lot, list);
-  });
-
-  const totalGeral = Array.from(lotesByReference.values())
-    .flat()
-    .reduce((sum, line) => sum + calculateTotal(budgetVersion.lines, line.id), 0);
+  if (catalog.budgets.length === 0) {
+    return <><BudgetPageHeader isDemonstration={false} /><section className="section-grid">{accessKind === "bba_admin" && organization ? <OrganizationContext organization={organization} organizations={organizations} /> : null}<BudgetEmptyState /></section></>;
+  }
 
   return (
     <>
       <BudgetPageHeader isDemonstration={false} />
-      <section className="section-grid" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-        <div className="bba-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
-            <div>
-              <h2>Orçamento Oficial Revisado</h2>
-              <p style={{ color: "#666" }}>
-                Representação estruturada do orçamento publicado pelo órgão, conferida no BBA.
-              </p>
-            </div>
-            <Link href="/orcamentos/importar" className="bba-button bba-button--secondary bba-button--sm">
-              Importar outro orçamento
-            </Link>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "1rem", marginTop: "1rem" }}>
-            <div>
-              <div style={{ fontSize: "0.75rem", color: "#666" }}>Origem</div>
-              <div>Documento oficial</div>
-            </div>
-            <div>
-              <div style={{ fontSize: "0.75rem", color: "#666" }}>Estado</div>
-              <div>{budgetVersion.status === "Consolidated" ? "Revisado e consolidado" : "Em revisão"}</div>
-            </div>
-            {Array.from(lotesByReference.entries()).map(([lot, groups]) => (
-              <div key={lot}>
-                <div style={{ fontSize: "0.75rem", color: "#666" }}>{lot}</div>
-                <div style={{ fontWeight: 700 }}>
-                  {centsToBRL(groups.reduce((sum, line) => sum + calculateTotal(budgetVersion.lines, line.id), 0))}
-                </div>
-              </div>
-            ))}
-            <div>
-              <div style={{ fontSize: "0.75rem", color: "#666" }}>Total geral</div>
-              <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>{centsToBRL(totalGeral)}</div>
-            </div>
+      <section className={`section-grid ${catalogStyles.page}`}>
+        {accessKind === "bba_admin" && organization ? <OrganizationContext organization={organization} organizations={organizations} /> : null}
+        <div className={catalogStyles.topActions}>
+          <Link href="/workspaces/engenharia" className="bba-button bba-button--ghost bba-button--sm">Voltar ao Workspace Engenharia</Link>
+          <div className={catalogStyles.importAction}>
+            <Link href="/orcamentos/importar" className="bba-button bba-button--secondary bba-button--sm">Importar outro orçamento</Link>
+            <span>Inicia outro fluxo documental e não substitui os orçamentos confirmados.</span>
           </div>
         </div>
 
-        {Array.from(lotesByReference.entries()).map(([lot, groups]) => (
-          <div className="bba-card" key={lot}>
-            <h3>{lot}</h3>
-            {groups
-              .slice()
-              .sort((a, b) => a.position - b.position)
-              .map((group) => (
-                <BudgetLineTree key={group.id} lines={budgetVersion.lines} line={group} depth={0} />
-              ))}
-          </div>
+        {catalog.processes.map((process) => process.presentationKind === "Lots" ? (
+          <LotsProcess
+            key={process.procurementCaseId}
+            process={process}
+            scenariosByBudget={scenariosByBudget}
+            organizationIdForLinks={organizationIdForLinks}
+          />
+        ) : (
+          <DocumentChainProcess
+            key={process.procurementCaseId}
+            process={process}
+            scenariosByBudget={scenariosByBudget}
+            organizationIdForLinks={organizationIdForLinks}
+          />
         ))}
       </section>
     </>
   );
 }
 
-function BudgetLineTree({ lines, line, depth }: { lines: ReadonlyArray<BudgetLine>; line: BudgetLine; depth: number }) {
-  const [expanded, setExpanded] = useState(depth < 1);
-  const children = orderedChildren(lines, line.id);
-  const total = calculateTotal(lines, line.id);
-  const isLeaf = line.kind === "ServiceItem";
+function LotsProcess({
+  process,
+  scenariosByBudget,
+  organizationIdForLinks,
+}: {
+  readonly process: ConsolidatedBudgetProcessDto;
+  readonly scenariosByBudget: ReadonlyMap<string, ReadonlyArray<ProposalScenarioDto>>;
+  readonly organizationIdForLinks: string | null;
+}) {
+  return (
+    <section className={`${catalogStyles.process} ${catalogStyles.lotsProcess}`} aria-labelledby={`process-${process.procurementCaseId}`}>
+      <div className={`${catalogStyles.processHeader} ${catalogStyles.lotsProcessHeader}`}>
+        <div>
+          <p className={catalogStyles.eyebrow}>Orçamento Oficial</p>
+          <h2 id={`process-${process.procurementCaseId}`}>{process.title}</h2>
+          <p className={catalogStyles.processMode}>Análise por lotes e cenários</p>
+        </div>
+        <dl className={catalogStyles.processSummary}>
+          <div><dt>Escopo confirmado</dt><dd>{process.budgets.length} {process.budgets.length === 1 ? "lote confirmado" : "lotes confirmados"}</dd></div>
+          <div><dt>Valor total dos lotes</dt><dd>{formatCentsPtBr(process.totalOfficialValueCents)}</dd></div>
+        </dl>
+      </div>
+      <p className={catalogStyles.contextNote}>O total é apenas a soma visual dos lotes. Cada orçamento e cada cenário continuam independentes.</p>
+      <div className={catalogStyles.lotGrid}>
+        {sortBudgetsByLotAscending(process.budgets).map((budget) => (
+          <BudgetCard
+            key={budget.id}
+            budget={budget}
+            scenarios={scenariosByBudget.get(budget.id) ?? []}
+            organizationIdForLinks={organizationIdForLinks}
+            scenarioEmptyMessage="Nenhum cenário criado para este lote."
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DocumentChainProcess({
+  process,
+  scenariosByBudget,
+  organizationIdForLinks,
+}: {
+  readonly process: ConsolidatedBudgetProcessDto;
+  readonly scenariosByBudget: ReadonlyMap<string, ReadonlyArray<ProposalScenarioDto>>;
+  readonly organizationIdForLinks: string | null;
+}) {
+  const contractedChain = resolveContractedDocumentChain(process);
+
+  if (contractedChain) {
+    const {
+      officialBudget,
+      winningProposal,
+      differenceCents,
+      differenceBasisPoints,
+      officialBarBasisPoints,
+      contractedBarBasisPoints,
+      comparisonKind,
+    } = contractedChain;
+    const comparisonLabel = comparisonKind === "Reduction"
+      ? "Redução contratada"
+      : comparisonKind === "Increase" ? "Acréscimo contratado" : "Sem diferença contratual";
+
+    return (
+      <section className={`${catalogStyles.process} ${catalogStyles.documentProcess}`} aria-labelledby={`process-${process.procurementCaseId}`}>
+        <div className={`${catalogStyles.processHeader} ${catalogStyles.contractedProcessHeader}`}>
+          <div>
+            <p className={catalogStyles.eyebrow}>Processo de Licitação e Contratação</p>
+            <h2 id={`process-${process.procurementCaseId}`}>{process.title}</h2>
+            <p className={catalogStyles.processMode}>Contrato vigente · Referência econômica da execução</p>
+          </div>
+        </div>
+
+        <article className={catalogStyles.contractHero} aria-labelledby={`winning-proposal-${winningProposal.id}`}>
+          <div className={catalogStyles.contractHeroTop}>
+            <div>
+              <p className={catalogStyles.contractHeroEyebrow}>Proposta Vencedora</p>
+              <h3 id={`winning-proposal-${winningProposal.id}`}>{formatContractorName(winningProposal.contractorName)}</h3>
+              {winningProposal.contractNumber ? <p className={catalogStyles.contractNumber}>Contrato nº {winningProposal.contractNumber}</p> : null}
+            </div>
+            <span className={catalogStyles.executionBadge}>{contractStatusLabel(winningProposal.contractStatus)}</span>
+          </div>
+          <div className={catalogStyles.contractHeroBody}>
+            <div>
+              <span className={catalogStyles.contractValueLabel}>Valor contratado</span>
+              <p className={catalogStyles.contractValue}>{formatCentsPtBr(winningProposal.officialValueCents)}</p>
+              <div className={catalogStyles.contractMetrics}>
+                <span><strong>{winningProposal.serviceItemCount}</strong> itens de serviço</span>
+                {winningProposal.lineCount !== null ? <span><strong>{winningProposal.lineCount}</strong> linhas</span> : null}
+              </div>
+            </div>
+            <Link
+              href={withOrganization(`/orcamentos/${winningProposal.id}`, organizationIdForLinks)}
+              className={catalogStyles.contractPrimaryAction}
+            >
+              Ver proposta e itens contratados
+            </Link>
+          </div>
+        </article>
+
+        <section className={catalogStyles.contractComparison} aria-labelledby={`comparison-${winningProposal.id}`}>
+          <div className={catalogStyles.comparisonHeading}>
+            <div>
+              <p className={catalogStyles.comparisonEyebrow}>Comparação da contratação</p>
+              <h3 id={`comparison-${winningProposal.id}`}>Da referência da licitação ao valor contratado</h3>
+            </div>
+            <div className={catalogStyles.comparisonResult}>
+              <span>{comparisonLabel}</span>
+              <strong>{formatCentsPtBr(differenceCents)}</strong>
+              <em>{formatPercentageBasisPointsPtBr(differenceBasisPoints)}</em>
+            </div>
+          </div>
+
+          <div className={catalogStyles.comparisonFlow}>
+            <div>
+              <span>Orçamento oficial</span>
+              <strong>{formatCentsPtBr(officialBudget.officialValueCents)}</strong>
+            </div>
+            <span className={catalogStyles.comparisonArrow} aria-hidden="true">→</span>
+            <div>
+              <span>Valor contratado</span>
+              <strong>{formatCentsPtBr(winningProposal.officialValueCents)}</strong>
+            </div>
+          </div>
+
+          <div className={catalogStyles.comparisonBars} aria-label="Barras proporcionais do orçamento oficial e do valor contratado">
+            <div className={catalogStyles.comparisonBarRow}>
+              <div><span>Orçamento oficial</span><strong>{formatCentsPtBr(officialBudget.officialValueCents)}</strong></div>
+              <div className={catalogStyles.comparisonTrack}>
+                <span className={`${catalogStyles.comparisonFill} ${catalogStyles.officialComparisonFill}`} style={comparisonBarStyle(officialBarBasisPoints)} />
+              </div>
+            </div>
+            <div className={catalogStyles.comparisonBarRow}>
+              <div><span>Valor contratado</span><strong>{formatCentsPtBr(winningProposal.officialValueCents)}</strong></div>
+              <div className={catalogStyles.comparisonTrack}>
+                <span className={`${catalogStyles.comparisonFill} ${catalogStyles.contractedComparisonFill}`} style={comparisonBarStyle(contractedBarBasisPoints)} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <article className={catalogStyles.officialReference} aria-labelledby={`official-reference-${officialBudget.id}`}>
+          <div>
+            <p className={catalogStyles.lotScope}>Referência da licitação</p>
+            <h3 id={`official-reference-${officialBudget.id}`}>Orçamento Oficial</h3>
+            <p>Documento de origem usado como referência para a contratação.</p>
+          </div>
+          <div className={catalogStyles.officialReferenceSummary}>
+            <strong>{formatCentsPtBr(officialBudget.officialValueCents)}</strong>
+            <span>{officialBudget.serviceItemCount} itens de serviço · {officialBudget.lineCount ?? "—"} linhas</span>
+          </div>
+          <Link
+            href={withOrganization(`/orcamentos/${officialBudget.id}`, organizationIdForLinks)}
+            className={scenarioStyles.secondary}
+          >
+            Consultar orçamento oficial
+          </Link>
+        </article>
+      </section>
+    );
+  }
 
   return (
-    <div style={{ marginLeft: `${depth * 1.25}rem`, borderBottom: depth === 0 ? "1px solid #eee" : undefined, padding: "0.35rem 0" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          {!isLeaf && children.length > 0 && (
-            <button onClick={() => setExpanded((v) => !v)} style={{ border: "none", background: "none", cursor: "pointer" }}>
-              {expanded ? "▾" : "▸"}
-            </button>
-          )}
-          <span style={{ fontWeight: line.kind !== "ServiceItem" ? 700 : 400 }}>
-            {line.externalCode ? `${line.externalCode} — ` : ""}
-            {lineText(line)}
-          </span>
-        </div>
-        <span style={{ fontWeight: line.kind !== "ServiceItem" ? 700 : 400 }}>{centsToBRL(total)}</span>
+    <section className={`${catalogStyles.process} ${catalogStyles.documentProcess}`} aria-labelledby={`process-${process.procurementCaseId}`}>
+      <div className={catalogStyles.processHeader}>
+        <div><p className={catalogStyles.eyebrow}>Processo de Licitação e Contratação</p><h2 id={`process-${process.procurementCaseId}`}>{process.title}</h2></div>
       </div>
-      {expanded && children.map((child) => <BudgetLineTree key={child.id} lines={lines} line={child} depth={depth + 1} />)}
-    </div>
+      <div className={catalogStyles.documentChain}>
+        {process.budgets.map((budget, index) => (
+          <div className={catalogStyles.documentStep} key={budget.id}>
+            {index > 0 ? <div className={catalogStyles.documentConnector} aria-label={budget.documentKind === "WinningProposal" ? "Proposta vencedora" : "Versão derivada"}><span>↓</span><strong>{budget.documentKind === "WinningProposal" ? "Proposta vencedora" : "Versão derivada"}</strong></div> : null}
+            <BudgetCard
+              budget={budget}
+              scenarios={scenariosByBudget.get(budget.id) ?? []}
+              organizationIdForLinks={organizationIdForLinks}
+              scenarioEmptyMessage="Nenhum cenário criado para este orçamento oficial."
+            />
+          </div>
+        ))}
+      </div>
+    </section>
   );
+}
+
+function BudgetCard({
+  budget,
+  scenarios,
+  organizationIdForLinks,
+  scenarioEmptyMessage,
+}: {
+  readonly budget: ConsolidatedBudgetSummaryDto;
+  readonly scenarios: ReadonlyArray<ProposalScenarioDto>;
+  readonly organizationIdForLinks: string | null;
+  readonly scenarioEmptyMessage: string;
+}) {
+  const isLot = budget.scopeKind === "Lot";
+  const isWinningProposal = budget.documentKind === "WinningProposal";
+  const isDerived = budget.documentKind === "DerivedVersion";
+  const permitsScenarios = budget.scenarioCreationAllowed;
+  const presentation = lotPresentation(budget.procurementLotTitle, budget.scopeKind);
+  const title = isLot ? presentation.title : isWinningProposal ? "Proposta Vencedora" : isDerived ? "Versão Derivada" : "Orçamento Oficial";
+  const scopeLabel = isLot ? "Lote independente" : isWinningProposal ? "Proposta contratada" : isDerived ? "Documento derivado" : "Documento de origem";
+
+  return (
+    <article className={`${catalogStyles.lotCard} ${!isLot ? catalogStyles.documentCard : ""}`}>
+      <div className={catalogStyles.lotHeader}>
+        <div>
+          <p className={catalogStyles.lotScope}>{scopeLabel}</p>
+          <h3>{title}</h3>
+          {isLot && presentation.detail ? <p>{presentation.detail}</p> : null}
+          {!isLot && budget.contractorName ? <p className={catalogStyles.contractorName}>{budget.contractorName}</p> : null}
+        </div>
+        <span className={catalogStyles.confirmed}>{isWinningProposal ? "Confirmada" : "Confirmado"}</span>
+      </div>
+      <p className={catalogStyles.value}>{formatCentsPtBr(budget.officialValueCents)}</p>
+      <div className={catalogStyles.metrics}>
+        <span><strong>{budget.serviceItemCount}</strong> itens de serviço</span>
+        {budget.lineCount !== null ? <span><strong>{budget.lineCount}</strong> linhas</span> : null}
+        {isLot ? <span>Revisão {budget.revision}</span> : null}
+      </div>
+      <div className={catalogStyles.cardActions}>
+        <Link href={withOrganization(`/orcamentos/${budget.id}`, organizationIdForLinks)} className={scenarioStyles.secondary}>
+          {isWinningProposal ? "Ver proposta e itens contratados" : "Ver orçamento"}
+        </Link>
+        {permitsScenarios ? <Link href={withOrganization(`/orcamentos/cenarios/novo?orcamento=${budget.id}`, organizationIdForLinks)} className={scenarioStyles.primary}>Criar cenário</Link> : null}
+      </div>
+      {permitsScenarios ? <ScenarioList budgetId={budget.id} scenarios={scenarios} organizationIdForLinks={organizationIdForLinks} emptyMessage={scenarioEmptyMessage} /> : null}
+    </article>
+  );
+}
+
+function ScenarioList({
+  budgetId,
+  scenarios,
+  organizationIdForLinks,
+  emptyMessage,
+}: {
+  readonly budgetId: string;
+  readonly scenarios: ReadonlyArray<ProposalScenarioDto>;
+  readonly organizationIdForLinks: string | null;
+  readonly emptyMessage: string;
+}) {
+  return (
+    <section className={catalogStyles.scenarios} aria-labelledby={`scenarios-${budgetId}`}>
+      <div className={catalogStyles.scenarioHeading}>
+        <h4 id={`scenarios-${budgetId}`}>Cenários de Proposta</h4>
+        {scenarios.length > 1 ? <Link href={withOrganization(`/orcamentos/cenarios/comparar?orcamento=${budgetId}`, organizationIdForLinks)} className={catalogStyles.textLink}>Comparar</Link> : null}
+      </div>
+      {scenarios.length === 0 ? <p>{emptyMessage}</p> : <ul>{scenarios.map((scenario) => (
+        <li key={scenario.id}>
+          <div><strong>{scenario.name}</strong><span>{formatCentsPtBr(scenario.targetValueCents)} · {formatBasisPointsPtBr(scenario.differenceBasisPoints, scenario.comparisonKind)}</span></div>
+          <div><Link href={withOrganization(`/orcamentos/cenarios/${scenario.id}`, organizationIdForLinks)}>Abrir</Link><Link href={withOrganization(`/orcamentos/cenarios/novo?duplicar=${scenario.id}`, organizationIdForLinks)}>Duplicar</Link></div>
+        </li>
+      ))}</ul>}
+    </section>
+  );
+}
+
+function OrganizationContext({
+  organization,
+  organizations,
+}: {
+  readonly organization: BudgetOrganizationOption;
+  readonly organizations: ReadonlyArray<BudgetOrganizationOption>;
+}) {
+  return (
+    <section className={catalogStyles.organizationContext} aria-label="Empresa selecionada">
+      <div><span>Empresa</span><strong>{organization.name}</strong></div>
+      {organizations.length > 1 ? <Link href="/orcamentos" className={catalogStyles.textLink}>Trocar empresa</Link> : null}
+    </section>
+  );
+}
+
+function OrganizationSelector({ organizations }: { readonly organizations: ReadonlyArray<BudgetOrganizationOption> }) {
+  return (
+    <section className={catalogStyles.organizationSelector} aria-labelledby="organization-selector-title">
+      <div><p className={catalogStyles.eyebrow}>Orçamentos Oficiais</p><h2 id="organization-selector-title">Selecione a empresa</h2><p>Escolha a empresa cliente cujos processos, lotes e cenários você deseja visualizar.</p></div>
+      {organizations.length === 0 ? <p>Nenhuma empresa possui orçamento confirmado neste momento.</p> : (
+        <div className={catalogStyles.organizationGrid}>
+          {organizations.map((option) => <Link key={option.id} href={`/orcamentos?empresa=${encodeURIComponent(option.id)}`}><span>Empresa cliente</span><strong>{option.name}</strong></Link>)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function withOrganization(path: string, organizationId: string | null): string {
+  if (!organizationId) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}empresa=${encodeURIComponent(organizationId)}`;
+}
+
+function formatContractorName(name: string | null): string {
+  if (!name?.trim()) return "Contratada";
+  return name.trim().replace(/^CONSÓRCIO\b/u, "Consórcio");
+}
+
+function comparisonBarStyle(basisPoints: number): CSSProperties {
+  const width = Math.max(0, Math.min(10_000, basisPoints)) / 100;
+  return { "--comparison-width": `${width}%` } as CSSProperties;
 }

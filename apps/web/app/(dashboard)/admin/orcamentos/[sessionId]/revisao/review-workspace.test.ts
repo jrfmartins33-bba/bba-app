@@ -4,7 +4,7 @@ import { bulkConfirmBudgetReviewRowsService, bulkAcceptBudgetReviewRowDivergence
 import type { BudgetReviewRepository } from "../../../../../../../../packages/bdos-core/src/services/budget-official-review/index";
 
 import { BudgetReviewSessionStatus } from "../../../../../../../../packages/bdos-core/src/domain/budget-official-review/index";
-import { BudgetVersionStatus } from "../../../../../../../../packages/bdos-core/src/domain/budget-version/index";
+import { BudgetLineKind, BudgetVersionStatus } from "../../../../../../../../packages/bdos-core/src/domain/budget-version/index";
 import type { BudgetReviewSession } from "../../../../../../../../packages/bdos-core/src/domain/budget-official-review/index";
 
 function assertEqual<T>(actual: T, expected: T, message: string) {
@@ -161,16 +161,15 @@ async function main() {
 
     const sessionRes = createBudgetReviewSession({
       id: "sess-corr-test",
-      procurementCase: { id: "case-123", organizationId: "comp-123" },
-      procurementLot: { id: "lot-123", procurementCaseId: "case-123" },
-      budgetVersion: { id: "bv-123", procurementCaseId: "case-123", status: BudgetVersionStatus.Draft },
-      documentVersion: { id: "dv-123", organizationId: "comp-123", sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
-      sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      procurementCase: { id: "case-123", organizationId: "comp-123" } as never,
+      procurementLotId: "lot-123",
+      budgetVersion: { id: "bv-123", procurementCaseId: "case-123", status: BudgetVersionStatus.Draft } as never,
+      documentVersion: { id: "dv-123", organizationId: "comp-123", sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" } as never,
       sourceSha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       acquisitionMechanism: "xlsx_structured_import",
       acquisitionMechanismVersion: "1.0",
-      actor: "admin-test",
-      occurredAt: "2026-08-10T00:00:00Z",
+      createdBy: "admin-test",
+      createdAt: "2026-08-10T00:00:00Z",
     });
 
     if (!sessionRes.success) {
@@ -183,7 +182,7 @@ async function main() {
       rows: [
         {
           id: "group-corr-1",
-          kind: "Group",
+          kind: BudgetLineKind.Group,
           lotReference: "Lote 01",
           parentRowId: null,
           position: 0,
@@ -207,7 +206,7 @@ async function main() {
         },
         {
           id: "row-corr-1",
-          kind: "ServiceItem",
+          kind: BudgetLineKind.ServiceItem,
           lotReference: "Lote 01",
           parentRowId: "group-corr-1",
           position: 0,

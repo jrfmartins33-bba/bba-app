@@ -90,16 +90,21 @@ const toMeasurementBulletinImportRecord = (data: Record<string, unknown>): Measu
   analysisResult: data.analysis_result ?? null
 });
 
+// `companyId` opcional -- omitido só quando o chamador já confirmou
+// (requireAuthenticatedActor) que o ator é bba_admin, autorizado pela
+// RLS a ler qualquer empresa (`company_id = get_my_company_id() OR
+// is_bba_admin()`). Continua sendo o filtro obrigatório para todo
+// cliente comum -- este parâmetro nunca é opcional nas chamadas
+// company-scoped já existentes.
 export const getMeasurementBulletinImportById = async (
   supabase: SupabaseClient,
-  params: { id: string; companyId: string }
+  params: { id: string; companyId?: string }
 ): Promise<MeasurementBulletinImportRecord | null> => {
-  const { data, error } = await supabase
-    .from("measurement_bulletin_imports")
-    .select(selectMeasurementBulletinImportColumns)
-    .eq("id", params.id)
-    .eq("company_id", params.companyId)
-    .maybeSingle();
+  let query = supabase.from("measurement_bulletin_imports").select(selectMeasurementBulletinImportColumns).eq("id", params.id);
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+  const { data, error } = await query.maybeSingle();
 
   if (error) {
     throw error;
@@ -189,6 +194,58 @@ export const listMeasurementBulletinImportsByCompany = async (
   const idsWithAnalysis = new Set((rowsWithAnalysis ?? []).map((row: Record<string, unknown>) => row.id as string));
 
   return (data ?? []).map((row) => toMeasurementBulletinImportSummary(row as Record<string, unknown>, idsWithAnalysis.has((row as Record<string, unknown>).id as string)));
+};
+
+export interface MeasurementBulletinImportSummaryWithCompany extends MeasurementBulletinImportSummary {
+  readonly companyId: string;
+  /** `companies.name` -- null só se a empresa referenciada foi removida (nunca acontece hoje, DELETE bloqueado em toda a cadeia). */
+  readonly companyName: string | null;
+}
+
+const selectMeasurementBulletinImportSummaryWithCompanyColumns =
+  "id, file_name, status, uploaded_at, updated_at, company_id, companies(name)";
+
+// Cross-tenant -- exclusivo para bba_admin (RLS já autoriza via
+// is_bba_admin() nas policies de measurement_bulletin_imports;
+// requireAuthenticatedActor, na fronteira da rota, é quem garante que
+// só um admin real chega até aqui). Nunca aceita companyId: listar
+// "todas as empresas para um cliente comum" não é um caso de uso,
+// seria uma forma de bypass -- a distinção entre esta função e
+// listMeasurementBulletinImportsByCompany é a própria fronteira de
+// autorização, não um parâmetro opcional.
+export const listAllMeasurementBulletinImportsForAdmin = async (
+  supabase: SupabaseClient
+): Promise<ReadonlyArray<MeasurementBulletinImportSummaryWithCompany>> => {
+  const { data, error } = await supabase
+    .from("measurement_bulletin_imports")
+    .select(selectMeasurementBulletinImportSummaryWithCompanyColumns)
+    .order("uploaded_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  const { data: rowsWithAnalysis, error: analysisError } = await supabase
+    .from("measurement_bulletin_imports")
+    .select("id")
+    .not("analysis_result", "is", null);
+
+  if (analysisError) {
+    throw analysisError;
+  }
+
+  const idsWithAnalysis = new Set((rowsWithAnalysis ?? []).map((row: Record<string, unknown>) => row.id as string));
+
+  return (data ?? []).map((row) => {
+    const typedRow = row as Record<string, unknown>;
+    const company = typedRow.companies as { name: string | null } | { name: string | null }[] | null;
+    const companyName = Array.isArray(company) ? (company[0]?.name ?? null) : (company?.name ?? null);
+    return {
+      ...toMeasurementBulletinImportSummary(typedRow, idsWithAnalysis.has(typedRow.id as string)),
+      companyId: typedRow.company_id as string,
+      companyName
+    };
+  });
 };
 
 export const updateMeasurementBulletinImportStatus = async (
@@ -395,6 +452,8 @@ export interface ManagedServiceItemRecord {
   readonly unit: string;
   readonly contractQuantity: number;
   readonly unitPrice: number;
+  readonly contractQuantityDecimal: string;
+  readonly unitPriceDecimal: string;
 }
 
 const selectManagedServiceItemColumns =
@@ -409,7 +468,9 @@ const toManagedServiceItemRecord = (data: Record<string, unknown>): ManagedServi
   description: data.description as string,
   unit: data.unit as string,
   contractQuantity: Number(data.contract_quantity),
-  unitPrice: Number(data.unit_price)
+  unitPrice: Number(data.unit_price),
+  contractQuantityDecimal: String(data.contract_quantity),
+  unitPriceDecimal: String(data.unit_price)
 });
 
 export type FindMatchingManagedServiceItemOutcome = "matched" | "created";
@@ -641,16 +702,19 @@ export const listMeasurementWorkspacesByProjectAndPeriod = async (
 // vinculado a um import, se existir. O que fazer com o resultado
 // (already_completed / resumed / workspace_closed / ...) é decisão do
 // Application Service, nunca desta função.
+// `companyId` opcional -- mesma disciplina de getMeasurementBulletinImportById.
 export const getMeasurementWorkspaceByImportId = async (
   supabase: SupabaseClient,
-  params: { measurementBulletinImportId: string; companyId: string }
+  params: { measurementBulletinImportId: string; companyId?: string }
 ): Promise<MeasurementWorkspaceRecord | null> => {
-  const { data, error } = await supabase
+  let query = supabase
     .from("measurement_workspaces")
     .select(selectMeasurementWorkspaceColumns)
-    .eq("measurement_bulletin_import_id", params.measurementBulletinImportId)
-    .eq("company_id", params.companyId)
-    .maybeSingle();
+    .eq("measurement_bulletin_import_id", params.measurementBulletinImportId);
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+  const { data, error } = await query.maybeSingle();
 
   if (error) {
     throw error;
@@ -690,6 +754,9 @@ export interface MeasurementWorkspaceLineRecord {
   readonly quantity: number;
   readonly unitValue: number;
   readonly totalValue: number;
+  readonly quantityDecimal: string;
+  readonly unitValueDecimal: string;
+  readonly totalValueDecimal: string;
   readonly declaredQuantity: number | null;
   readonly declaredUnitValue: number | null;
   readonly declaredTotalValue: number | null;
@@ -700,10 +767,14 @@ export interface MeasurementWorkspaceLineRecord {
   readonly sourceRowNumber: number | null;
   readonly sourcePhysicalColumn: string | null;
   readonly sourceFinancialColumn: string | null;
+  readonly sourceQuantityRaw: string | null;
+  readonly canonicalQuantityScale: number | null;
+  readonly monetaryPolicyKey: string | null;
+  readonly monetaryScale: number | null;
 }
 
 const selectMeasurementWorkspaceLineColumns =
-  "id, measurement_workspace_id, managed_service_item_id, quantity, unit_value, total_value, declared_quantity, declared_unit_value, declared_total_value, source_sheet_name, source_row_number, source_physical_column, source_financial_column";
+  "id, measurement_workspace_id, managed_service_item_id, quantity, unit_value, total_value, declared_quantity, declared_unit_value, declared_total_value, source_sheet_name, source_row_number, source_physical_column, source_financial_column, source_quantity_raw, canonical_quantity_scale, monetary_policy_key, monetary_scale";
 
 const toMeasurementWorkspaceLineRecord = (data: Record<string, unknown>): MeasurementWorkspaceLineRecord => ({
   id: data.id as string,
@@ -712,13 +783,26 @@ const toMeasurementWorkspaceLineRecord = (data: Record<string, unknown>): Measur
   quantity: Number(data.quantity),
   unitValue: Number(data.unit_value),
   totalValue: Number(data.total_value),
+  quantityDecimal: String(data.quantity),
+  unitValueDecimal: String(data.unit_value),
+  totalValueDecimal: String(data.total_value),
   declaredQuantity: data.declared_quantity === null ? null : Number(data.declared_quantity),
   declaredUnitValue: data.declared_unit_value === null ? null : Number(data.declared_unit_value),
   declaredTotalValue: data.declared_total_value === null ? null : Number(data.declared_total_value),
   sourceSheetName: (data.source_sheet_name as string | null) ?? null,
   sourceRowNumber: data.source_row_number === null || data.source_row_number === undefined ? null : Number(data.source_row_number),
   sourcePhysicalColumn: (data.source_physical_column as string | null) ?? null,
-  sourceFinancialColumn: (data.source_financial_column as string | null) ?? null
+  sourceFinancialColumn: (data.source_financial_column as string | null) ?? null,
+  sourceQuantityRaw: (data.source_quantity_raw as string | null) ?? null,
+  canonicalQuantityScale:
+    data.canonical_quantity_scale === null || data.canonical_quantity_scale === undefined
+      ? null
+      : Number(data.canonical_quantity_scale),
+  monetaryPolicyKey: (data.monetary_policy_key as string | null) ?? null,
+  monetaryScale:
+    data.monetary_scale === null || data.monetary_scale === undefined
+      ? null
+      : Number(data.monetary_scale)
 });
 
 // total_value é sempre passado pelo Application Service já recalculado
@@ -740,9 +824,9 @@ export const insertMeasurementWorkspaceLine = async (
     id: string;
     measurementWorkspaceId: string;
     managedServiceItemId: string;
-    quantity: number;
-    unitValue: number;
-    totalValue: number;
+    quantity: number | string;
+    unitValue: number | string;
+    totalValue: number | string;
     declaredQuantity: number | null;
     declaredUnitValue: number | null;
     declaredTotalValue: number | null;
@@ -750,6 +834,10 @@ export const insertMeasurementWorkspaceLine = async (
     sourceRowNumber: number | null;
     sourcePhysicalColumn: string | null;
     sourceFinancialColumn: string | null;
+    sourceQuantityRaw: string | null;
+    canonicalQuantityScale: number;
+    monetaryPolicyKey: string;
+    monetaryScale: number;
     notes?: string;
   }
 ): Promise<MeasurementWorkspaceLineRecord> => {
@@ -769,6 +857,10 @@ export const insertMeasurementWorkspaceLine = async (
       source_row_number: params.sourceRowNumber,
       source_physical_column: params.sourcePhysicalColumn,
       source_financial_column: params.sourceFinancialColumn,
+      source_quantity_raw: params.sourceQuantityRaw,
+      canonical_quantity_scale: params.canonicalQuantityScale,
+      monetary_policy_key: params.monetaryPolicyKey,
+      monetary_scale: params.monetaryScale,
       ...(params.notes ? { notes: params.notes } : {})
     })
     .select(selectMeasurementWorkspaceLineColumns)
@@ -828,9 +920,9 @@ export const updateMeasurementWorkspaceLine = async (
   params: {
     id: string;
     measurementWorkspaceId: string;
-    quantity: number;
-    unitValue: number;
-    totalValue: number;
+    quantity: number | string;
+    unitValue: number | string;
+    totalValue: number | string;
     declaredQuantity: number | null;
     declaredUnitValue: number | null;
     declaredTotalValue: number | null;
@@ -838,6 +930,10 @@ export const updateMeasurementWorkspaceLine = async (
     sourceRowNumber: number | null;
     sourcePhysicalColumn: string | null;
     sourceFinancialColumn: string | null;
+    sourceQuantityRaw: string | null;
+    canonicalQuantityScale: number;
+    monetaryPolicyKey: string;
+    monetaryScale: number;
   }
 ): Promise<MeasurementWorkspaceLineRecord | null> => {
   const { data, error } = await supabase
@@ -852,7 +948,11 @@ export const updateMeasurementWorkspaceLine = async (
       source_sheet_name: params.sourceSheetName,
       source_row_number: params.sourceRowNumber,
       source_physical_column: params.sourcePhysicalColumn,
-      source_financial_column: params.sourceFinancialColumn
+      source_financial_column: params.sourceFinancialColumn,
+      source_quantity_raw: params.sourceQuantityRaw,
+      canonical_quantity_scale: params.canonicalQuantityScale,
+      monetary_policy_key: params.monetaryPolicyKey,
+      monetary_scale: params.monetaryScale
     })
     .eq("id", params.id)
     .eq("measurement_workspace_id", params.measurementWorkspaceId)
@@ -900,11 +1000,19 @@ export interface MeasurementBulletinRecord {
   readonly periodNumber: number;
   readonly issueDate: string;
   readonly status: MeasurementBulletinStatus;
+  readonly reference: Record<string, unknown>;
+  readonly header: Record<string, unknown>;
+  readonly decimalContext: Record<string, unknown>;
+  readonly lines: unknown;
+  readonly totals: unknown;
+  readonly validationIssues: unknown;
+  readonly trace: unknown;
+  readonly metadata: Record<string, unknown>;
   readonly finalizedAt: string | null;
 }
 
 const selectMeasurementBulletinColumns =
-  "id, company_id, engineering_project_id, measurement_workspace_id, bulletin_number, period_number, issue_date, status, finalized_at";
+  "id, company_id, engineering_project_id, measurement_workspace_id, bulletin_number, period_number, issue_date, status, reference, header, decimal_context, lines, totals, validation_issues, trace, metadata, finalized_at";
 
 const toMeasurementBulletinRecord = (data: Record<string, unknown>): MeasurementBulletinRecord => ({
   id: data.id as string,
@@ -915,13 +1023,31 @@ const toMeasurementBulletinRecord = (data: Record<string, unknown>): Measurement
   periodNumber: Number(data.period_number),
   issueDate: data.issue_date as string,
   status: data.status as MeasurementBulletinStatus,
+  reference: (data.reference as Record<string, unknown>) ?? {},
+  header: (data.header as Record<string, unknown>) ?? {},
+  decimalContext: (data.decimal_context as Record<string, unknown>) ?? {},
+  lines: data.lines,
+  totals: data.totals,
+  validationIssues: data.validation_issues,
+  trace: data.trace ?? [],
+  metadata: (data.metadata as Record<string, unknown>) ?? {},
   finalizedAt: (data.finalized_at as string | null) ?? null
 });
 
 // bulletinNumber já vem decidido pelo Application Service (regra de
 // numeração, Sprint 4.0) — este repository nunca escolhe o número,
-// só grava o que recebe. lines/totals/validationIssues são gravados
-// verbatim (JSONB), mesma disciplina de insertPlanningDataset.
+// só grava o que recebe. O envelope formal completo (reference, header,
+// decimalContext, lines, totals, validationIssues, trace, metadata) é
+// gravado verbatim (JSONB) para garantir rastreabilidade determinística.
+//
+// reference/header/decimalContext/validationIssues/trace/metadata são
+// obrigatórios (não opcionais), sem fallback `?? {}`/`?? []` --
+// correção pós-3C.1C: um repository que inventa `{}`/`[]` quando o
+// chamador omite o envelope é exatamente o tipo de bypass que o
+// trigger de consistência do banco (enforce_measurement_bulletin_envelope_consistency)
+// foi corrigido para rejeitar. O chamador (Application Service) é
+// quem já produziu o envelope real via o domínio (bulletin-generator)
+// -- este repository nunca decide o que "vazio" deveria significar.
 export const insertMeasurementBulletin = async (
   supabase: SupabaseClient,
   params: {
@@ -932,9 +1058,14 @@ export const insertMeasurementBulletin = async (
     bulletinNumber: number;
     periodNumber: number;
     issueDate: string;
+    reference: unknown;
+    header: unknown;
+    decimalContext: unknown;
     lines: unknown;
     totals: unknown;
     validationIssues: unknown;
+    trace: unknown;
+    metadata: unknown;
   }
 ): Promise<MeasurementBulletinRecord> => {
   const { data, error } = await supabase
@@ -947,9 +1078,14 @@ export const insertMeasurementBulletin = async (
       bulletin_number: params.bulletinNumber,
       period_number: params.periodNumber,
       issue_date: params.issueDate,
+      reference: params.reference,
+      header: params.header,
+      decimal_context: params.decimalContext,
       lines: params.lines,
       totals: params.totals,
-      validation_issues: params.validationIssues
+      validation_issues: params.validationIssues,
+      trace: params.trace,
+      metadata: params.metadata
     })
     .select(selectMeasurementBulletinColumns)
     .single();
@@ -984,21 +1120,341 @@ export const getMeasurementBulletinById = async (
 // (Sprint 3) recusa no banco qualquer UPDATE quando o boletim já está
 // Finalized, sem exceção. finalizedAt só é passado na transição para
 // 'Finalized' (o CHECK measurement_bulletins_finalized_at_consistent
-// exige os dois juntos ou nenhum).
+// exige os dois juntos ou nenhum). Permite evoluir validation_issues,
+// trace e metadata durante as transições de domínio.
 export const updateMeasurementBulletinStatus = async (
   supabase: SupabaseClient,
-  params: { id: string; companyId: string; status: MeasurementBulletinStatus; finalizedAt?: string }
+  params: {
+    id: string;
+    companyId: string;
+    status: MeasurementBulletinStatus;
+    validationIssues?: unknown;
+    trace?: unknown;
+    metadata?: unknown;
+    finalizedAt?: string;
+  }
 ): Promise<void> => {
+  const payload: Record<string, unknown> = {
+    status: params.status,
+    ...(params.finalizedAt ? { finalized_at: params.finalizedAt } : {}),
+    ...(params.validationIssues !== undefined ? { validation_issues: params.validationIssues } : {}),
+    ...(params.trace !== undefined ? { trace: params.trace } : {}),
+    ...(params.metadata !== undefined ? { metadata: params.metadata } : {})
+  };
+
   const { error } = await supabase
     .from("measurement_bulletins")
-    .update({
-      status: params.status,
-      ...(params.finalizedAt ? { finalized_at: params.finalizedAt } : {})
-    })
+    .update(payload)
     .eq("id", params.id)
     .eq("company_id", params.companyId);
 
   if (error) {
     throw error;
   }
+};
+
+// Leitura por workspace (não por id do boletim) -- ponto de entrada real
+// para a tela de um import específico, que só conhece o workspace
+// (via measurement_workspaces.measurement_bulletin_import_id), nunca o
+// id do boletim formal diretamente. Um workspace pode, em tese, ter
+// mais de um boletim ao longo do tempo (ex.: um Cancelled seguido de
+// um novo) -- `order by created_at desc, limit 1` devolve sempre o
+// mais recente, nunca uma leitura ambígua.
+// `companyId` opcional -- mesma disciplina de getMeasurementBulletinImportById.
+export const getMeasurementBulletinByWorkspaceId = async (
+  supabase: SupabaseClient,
+  params: { measurementWorkspaceId: string; companyId?: string }
+): Promise<MeasurementBulletinRecord | null> => {
+  let query = supabase
+    .from("measurement_bulletins")
+    .select(selectMeasurementBulletinColumns)
+    .eq("measurement_workspace_id", params.measurementWorkspaceId);
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as Record<string, unknown>[];
+  return rows.length > 0 ? toMeasurementBulletinRecord(rows[0]!) : null;
+};
+
+// ---------------------------------------------------------------
+// measurement_bulletin_line_sources
+// ---------------------------------------------------------------
+
+export interface MeasurementBulletinLineSourceRecord {
+  readonly bulletinLineId: string;
+  readonly measurementWorkspaceLineId: string;
+}
+
+// Leitura com detalhe (ao contrário de countMeasurementBulletinLineSources,
+// que só conta) -- a tela "Revisar medição" precisa saber, por linha
+// do boletim formal, qual measurement_workspace_line a originou, para
+// então reaproveitar sourceSheetName/sourceRowNumber/sourcePhysicalColumn/
+// sourceFinancialColumn já persistidos nessa linha de workspace (nunca
+// duplicados aqui).
+export const listMeasurementBulletinLineSources = async (
+  supabase: SupabaseClient,
+  params: { measurementBulletinId: string }
+): Promise<ReadonlyArray<MeasurementBulletinLineSourceRecord>> => {
+  const { data, error } = await supabase
+    .from("measurement_bulletin_line_sources")
+    .select("bulletin_line_id, measurement_workspace_line_id")
+    .eq("measurement_bulletin_id", params.measurementBulletinId);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((row) => ({
+    bulletinLineId: row.bulletin_line_id as string,
+    measurementWorkspaceLineId: row.measurement_workspace_line_id as string
+  }));
+};
+
+// Só a contagem -- a tela de status formal (Etapa 3C.2) só precisa
+// comprovar "todas as linhas têm fonte relacional", nunca exibir o
+// conteúdo de cada fonte. `head: true` evita trazer as 15 linhas
+// inteiras do banco só para contar.
+export const countMeasurementBulletinLineSources = async (
+  supabase: SupabaseClient,
+  params: { measurementBulletinId: string }
+): Promise<number> => {
+  const { count, error } = await supabase
+    .from("measurement_bulletin_line_sources")
+    .select("id", { count: "exact", head: true })
+    .eq("measurement_bulletin_id", params.measurementBulletinId);
+
+  if (error) {
+    throw error;
+  }
+
+  return count ?? 0;
+};
+
+// ---------------------------------------------------------------
+// measurement_cycles
+// ---------------------------------------------------------------
+
+export type MeasurementCycleRecordStatus = "draft" | "measured" | "bulletin_generated" | "certified" | "closed";
+
+export interface MeasurementCycleRecord {
+  readonly id: string;
+  readonly measurementWorkspaceId: string;
+  readonly measurementBulletinId: string | null;
+  readonly status: MeasurementCycleRecordStatus;
+}
+
+const selectMeasurementCycleColumns = "id, measurement_workspace_id, measurement_bulletin_id, status";
+
+const toMeasurementCycleRecord = (data: Record<string, unknown>): MeasurementCycleRecord => ({
+  id: data.id as string,
+  measurementWorkspaceId: data.measurement_workspace_id as string,
+  measurementBulletinId: (data.measurement_bulletin_id as string | null) ?? null,
+  status: data.status as MeasurementCycleRecordStatus
+});
+
+// UNIQUE(measurement_workspace_id) no banco garante no máximo um ciclo
+// por workspace -- maybeSingle() é seguro aqui, ao contrário do
+// boletim (que não tem essa mesma garantia de unicidade).
+// `companyId` opcional -- mesma disciplina de getMeasurementBulletinImportById.
+export const getMeasurementCycleByWorkspaceId = async (
+  supabase: SupabaseClient,
+  params: { measurementWorkspaceId: string; companyId?: string }
+): Promise<MeasurementCycleRecord | null> => {
+  let query = supabase
+    .from("measurement_cycles")
+    .select(selectMeasurementCycleColumns)
+    .eq("measurement_workspace_id", params.measurementWorkspaceId);
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+  const { data, error } = await query.maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ? toMeasurementCycleRecord(data) : null;
+};
+
+// Prévia de certificação (Revisar medição): "acumulado certificado
+// antes desta medição" é a soma dos totais dos DEMAIS boletins do
+// mesmo contract_baseline cujo ciclo já chegou a certified/closed --
+// nunca uma nova view/migration (as views measurement_certified_item_*
+// já existem mas são por item, não por boletim; este é o número por
+// boletim/contrato que a tela pede). Dois SELECTs simples, sem RPC:
+// primeiro os boletins já certificados do contrato, depois seus totais.
+export interface CertifiedMeasurementBulletinTotal {
+  readonly measurementBulletinId: string;
+  readonly totalValueDecimal: string;
+}
+
+const CERTIFIED_OR_CLOSED_CYCLE_STATUSES = ["certified", "closed"];
+
+export const listCertifiedMeasurementBulletinTotalsForContractBaseline = async (
+  supabase: SupabaseClient,
+  params: { contractBaselineId: string; companyId: string; excludingMeasurementBulletinId: string }
+): Promise<ReadonlyArray<CertifiedMeasurementBulletinTotal>> => {
+  const { data: cycles, error: cyclesError } = await supabase
+    .from("measurement_cycles")
+    .select("measurement_bulletin_id")
+    .eq("contract_baseline_id", params.contractBaselineId)
+    .eq("company_id", params.companyId)
+    .in("status", CERTIFIED_OR_CLOSED_CYCLE_STATUSES)
+    .not("measurement_bulletin_id", "is", null);
+
+  if (cyclesError) {
+    throw cyclesError;
+  }
+
+  const bulletinIds = Array.from(
+    new Set(
+      (cycles ?? [])
+        .map((row) => row.measurement_bulletin_id as string | null)
+        .filter((id): id is string => id !== null && id !== params.excludingMeasurementBulletinId)
+    )
+  );
+
+  if (bulletinIds.length === 0) {
+    return [];
+  }
+
+  const { data: bulletins, error: bulletinsError } = await supabase
+    .from("measurement_bulletins")
+    .select("id, totals")
+    .in("id", bulletinIds);
+
+  if (bulletinsError) {
+    throw bulletinsError;
+  }
+
+  return (bulletins ?? []).map((row) => {
+    const totals = (row.totals as Record<string, unknown> | null) ?? {};
+    return {
+      measurementBulletinId: row.id as string,
+      totalValueDecimal: typeof totals.canonicalTotalValue === "string" ? totals.canonicalTotalValue : "0"
+    };
+  });
+};
+
+// ---------------------------------------------------------------
+// Controle Gerencial da Execução (item a item) -- leituras
+// somente-leitura da Base Contratual da Obra e da posição
+// certificada por item. Nenhuma escrita.
+// ---------------------------------------------------------------
+
+export interface ManagedServiceItemContractRecord {
+  readonly id: string;
+  readonly code: string;
+  readonly description: string;
+  readonly unit: string | null;
+  readonly contractQuantityDecimal: string;
+  readonly unitPriceDecimal: string;
+  readonly measurementType: string;
+}
+
+export const listManagedServiceItems = async (
+  supabase: SupabaseClient,
+  params: { engineeringProjectId: string; companyId: string | null }
+): Promise<ReadonlyArray<ManagedServiceItemContractRecord>> => {
+  let query = supabase
+    .from("managed_service_items")
+    .select("id, code, description, unit, contract_quantity, unit_price, measurement_type")
+    .eq("engineering_project_id", params.engineeringProjectId);
+
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((row) => {
+    const record = row as Record<string, unknown>;
+    return {
+      id: record.id as string,
+      code: typeof record.code === "string" ? record.code : "",
+      description: typeof record.description === "string" ? record.description : "",
+      unit: (record.unit as string | null) ?? null,
+      contractQuantityDecimal: record.contract_quantity === null ? "0" : String(record.contract_quantity),
+      unitPriceDecimal: record.unit_price === null ? "0" : String(record.unit_price),
+      measurementType: typeof record.measurement_type === "string" ? record.measurement_type : "quantity"
+    };
+  });
+};
+
+export interface CertifiedItemBalanceRecord {
+  readonly managedServiceItemId: string;
+  readonly contractQuantityDecimal: string;
+  readonly unitPriceDecimal: string;
+  /** total contratual do item, autoritativo quando presente. */
+  readonly contractedValueDecimal: string | null;
+  readonly certifiedAccumulatedQuantityDecimal: string;
+  readonly certifiedAccumulatedValueDecimal: string;
+  readonly quantityBalanceDecimal: string | null;
+  readonly financialBalanceDecimal: string | null;
+}
+
+export const listCertifiedItemBalances = async (
+  supabase: SupabaseClient,
+  params: { engineeringProjectId: string; companyId: string | null }
+): Promise<ReadonlyArray<CertifiedItemBalanceRecord>> => {
+  let query = supabase
+    .from("measurement_certified_item_balances")
+    .select(
+      "managed_service_item_id, contract_quantity, unit_price, contracted_value, certified_accumulated_quantity, quantity_balance, certified_accumulated_value, financial_balance"
+    )
+    .eq("engineering_project_id", params.engineeringProjectId);
+
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((row) => {
+    const record = row as Record<string, unknown>;
+    return {
+      managedServiceItemId: record.managed_service_item_id as string,
+      contractQuantityDecimal: record.contract_quantity === null ? "0" : String(record.contract_quantity),
+      unitPriceDecimal: record.unit_price === null ? "0" : String(record.unit_price),
+      contractedValueDecimal: record.contracted_value === null || record.contracted_value === undefined ? null : String(record.contracted_value),
+      certifiedAccumulatedQuantityDecimal: record.certified_accumulated_quantity === null ? "0" : String(record.certified_accumulated_quantity),
+      certifiedAccumulatedValueDecimal: record.certified_accumulated_value === null ? "0" : String(record.certified_accumulated_value),
+      quantityBalanceDecimal: record.quantity_balance === null || record.quantity_balance === undefined ? null : String(record.quantity_balance),
+      financialBalanceDecimal: record.financial_balance === null || record.financial_balance === undefined ? null : String(record.financial_balance)
+    };
+  });
+};
+
+/** Existe alguma certificação (cycle certificado/fechado) para o projeto? Usado para não interpretar "certificado = 0" como "sem execução". */
+export const projectHasAnyCertification = async (
+  supabase: SupabaseClient,
+  params: { engineeringProjectId: string; companyId: string | null }
+): Promise<boolean> => {
+  let query = supabase
+    .from("measurement_cycles")
+    .select("id", { count: "exact", head: true })
+    .eq("engineering_project_id", params.engineeringProjectId)
+    .in("status", CERTIFIED_OR_CLOSED_CYCLE_STATUSES);
+
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+
+  const { count, error } = await query;
+  if (error) {
+    throw error;
+  }
+  return (count ?? 0) > 0;
 };

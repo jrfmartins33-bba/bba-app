@@ -1,4 +1,4 @@
-import { isWorkspaceSubNavItemActive } from "./workspace-subnav-active";
+import { isWorkspaceActive, isWorkspaceSubNavItemActive } from "./workspace-subnav-active";
 
 /**
  * Epic 21, Sprint 21.4B.3 — o item "Orçamento" do menu contextual do
@@ -40,6 +40,22 @@ async function main(): Promise<void> {
 
   await runTest("nenhuma regressão em Medições: rota totalmente diferente não ativa", () => {
     assertEqual(isWorkspaceSubNavItemActive("/geoespacial", "/medicoes"), false);
+  });
+
+  const engenharia = {
+    basePath: "/workspaces/engenharia",
+    items: [{ href: "/orcamentos" }, { href: "/medicoes" }],
+  };
+  await runTest("Workspace Engenharia ativo em /orcamentos", () => {
+    assertEqual(isWorkspaceActive("/orcamentos", engenharia), true);
+  });
+  await runTest("Workspace Engenharia ativo em importação e cenários", () => {
+    assertEqual(isWorkspaceActive("/orcamentos/importar", engenharia), true);
+    assertEqual(isWorkspaceActive("/orcamentos/cenarios/novo", engenharia), true);
+    assertEqual(isWorkspaceActive("/orcamentos/cenarios/cenario-1", engenharia), true);
+  });
+  await runTest("prefixo parcial não ativa Workspace Engenharia", () => {
+    assertEqual(isWorkspaceActive("/orcamentos-extra", engenharia), false);
   });
 }
 

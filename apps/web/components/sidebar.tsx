@@ -30,8 +30,8 @@ import {
   FileDown,
   FlaskConical,
 } from 'lucide-react'
-import { WORKSPACE_NAV_CONFIG, type WorkspaceNavConfig } from './workspace-nav-config'
-import { isWorkspaceSubNavItemActive } from './workspace-subnav-active'
+import { WORKSPACE_NAV_CONFIG } from './workspace-nav-config'
+import { isWorkspaceActive, isWorkspaceSubNavItemActive } from './workspace-subnav-active'
 
 interface SidebarProps {
   userName?: string
@@ -86,6 +86,12 @@ const NAV_STUDIOS = [
     label: 'Medições',
     icon: Ruler,
     description: 'Boletins de Medição e Relatórios Executivos',
+  },
+  {
+    href: '/orcamentos',
+    label: 'Orçamento',
+    icon: Wallet,
+    description: 'Orçamentos oficiais e cenários de proposta',
   },
   {
     label: 'Studio de Finanças',
@@ -178,11 +184,6 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
   // nível superior (ex.: /bba-project, /geoespacial) — assim o grupo
   // "Engenharia" continua visível mesmo depois de abrir um Studio cuja
   // URL não vive sob /workspaces/engenharia.
-  const isWorkspaceActive = (workspace: WorkspaceNavConfig) => {
-    if (pathname.startsWith(workspace.basePath)) return true
-    return workspace.items.some((item) => item.href !== undefined && pathname.startsWith(item.href))
-  }
-
   const handleLogout = () => {
     signOut()
     router.push('/login')
@@ -290,7 +291,7 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
              (via usePathname) é a única fonte de verdade. Adicionar um
              novo Workspace nunca exige editar este componente — apenas
              WORKSPACE_NAV_CONFIG. */}
-        {WORKSPACE_NAV_CONFIG.filter((workspace) => isWorkspaceActive(workspace)).map(
+        {WORKSPACE_NAV_CONFIG.filter((workspace) => isWorkspaceActive(pathname, workspace)).map(
           (workspace) => {
             const WorkspaceIcon = workspace.icon
 
@@ -338,7 +339,7 @@ export function Sidebar({ userName, userEmail, isAdmin, alertCount }: SidebarPro
         {/* ── Divisor (só existe quando algum Workspace está aberto,
              evitando um divisor duplicado quando o grupo acima não
              renderiza nada) ── */}
-        {WORKSPACE_NAV_CONFIG.some((workspace) => isWorkspaceActive(workspace)) && (
+        {WORKSPACE_NAV_CONFIG.some((workspace) => isWorkspaceActive(pathname, workspace)) && (
           <div className="bba-sidebar__divider" />
         )}
 

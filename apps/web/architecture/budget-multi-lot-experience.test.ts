@@ -1,0 +1,61 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+const root = resolve(__dirname, "..", "..", "..");
+const serverCatalog = source("apps/web/lib/bdos/consolidated-budget-catalog-server.ts");
+const completeRead = source("apps/web/lib/bdos/supabase-complete-read.ts");
+const budgetRepository = source("apps/web/lib/bdos/procurement-engineering-server-repository.ts");
+const detailRoute = source("apps/web/app/api/orcamentos/consolidado/route.ts");
+const summaryRoute = source("apps/web/app/api/orcamentos/consolidado/resumo/route.ts");
+const budgetsPage = source("apps/web/app/(dashboard)/orcamentos/page.tsx");
+const individualBudgetPage = source("apps/web/app/(dashboard)/orcamentos/[budgetId]/page.tsx");
+const newScenarioPage = source("apps/web/app/(dashboard)/orcamentos/cenarios/novo/page.tsx");
+const comparePage = source("apps/web/app/(dashboard)/orcamentos/cenarios/comparar/page.tsx");
+const sidebar = source("apps/web/components/sidebar.tsx");
+const workspace = source("apps/web/app/(dashboard)/workspaces/engenharia/page.tsx");
+const reviewPage = source("apps/web/app/(dashboard)/admin/orcamentos/[sessionId]/revisao/page.tsx");
+
+const catalogCss = source("apps/web/components/budget/official-budget-catalog.module.css");
+
+assert("catálogo lista todas as versões consolidadas sem limit(1)", serverCatalog.includes('.eq("status", "Consolidated")') && !serverCatalog.includes(".limit(1)"));
+assert("resumo pagina todas as linhas por versão até página vazia", serverCatalog.includes("readAllSupabasePages<BudgetLineDbRow>") && serverCatalog.includes('.eq("budget_version_id", budgetVersionId)'));
+assert("detalhe pagina todas as linhas sem depender do limite de 1.000", budgetRepository.includes("readAllSupabasePages") && budgetRepository.includes(".range(from, to)"));
+assert("paginação avança pelo total realmente recebido e só termina em página vazia", completeRead.includes("const from = rows.length") && completeRead.includes("page.length === 0"));
+assert("identidade multi-lote usa colunas canônicas", serverCatalog.includes("procurement_case_id") && serverCatalog.includes("procurement_lot_id") && !serverCatalog.includes("lotReference"));
+assert("cadeia documental usa a origem persistida e a versão contratada", serverCatalog.includes("source_budget_version_id") && serverCatalog.includes("contract_baselines") && budgetsPage.includes('process.presentationKind === "Lots"'));
+assert("estado contratado vem do vínculo persistido", serverCatalog.includes("contract_number") && serverCatalog.includes("parseContractStatus(row.status)"));
+assert("classificação não contém regra especial pelo nome do caso", !serverCatalog.toLocaleLowerCase("pt-BR").includes("lagoa do arroz") && !budgetsPage.toLocaleLowerCase("pt-BR").includes("lagoa do arroz"));
+assert("todas as leituras são escopadas pela organização autenticada", (serverCatalog.match(/\.eq\("company_id", organizationId\)/g) ?? []).length >= 4);
+assert("read model não cria ou altera BudgetVersion", !/\.insert\(|\.update\(|createDraftBudgetVersion|persist_budget/.test(serverCatalog));
+assert("detalhe usa exatamente o orçamento solicitado", detailRoute.includes('searchParams.get("orcamento")') && detailRoute.includes("resolveBudgetVersionContext"));
+assert("detalhe exige contexto server-side de BudgetVersion consolidada", detailRoute.includes("resolveBudgetVersionContext") && detailRoute.includes("organizationId"));
+assert("resumo compatível retorna catálogo e seleção exata", summaryRoute.includes("loadConsolidatedBudgetCatalog") && summaryRoute.includes("requestedBudgetId"));
+assert("página oferece importação sempre visível", budgetsPage.includes('href="/orcamentos/importar"') && budgetsPage.includes("Importar outro orçamento"));
+assert("catálogo oferece navegação individual para cada lote", budgetsPage.includes("/orcamentos/${budget.id}") && budgetsPage.includes("Ver orçamento"));
+assert("árvore completa é carregada sob demanda na página individual", individualBudgetPage.includes("/api/orcamentos/consolidado?orcamento=") && individualBudgetPage.includes("OfficialBudgetDetail"));
+assert("cenários são agrupados pelo BudgetVersion do lote", budgetsPage.includes("scenariosByBudget.get(budget.id)"));
+assert("Criar cenário envia a origem do card", budgetsPage.includes("/orcamentos/cenarios/novo?orcamento=") && budgetsPage.includes("budget.id"));
+assert("proposta vencedora é protagonista da cadeia contratada", budgetsPage.includes("resolveContractedDocumentChain(process)") && budgetsPage.includes("Ver proposta e itens contratados") && budgetsPage.includes("Valor contratado"));
+assert("comparação contratual mostra origem, contratado e diferença", budgetsPage.includes("Orçamento oficial") && budgetsPage.includes("comparisonLabel") && budgetsPage.includes("differenceCents"));
+assert("percentual contratual é derivado e formatado sem constante de Lagoa", budgetsPage.includes("formatPercentageBasisPointsPtBr(differenceBasisPoints)") && !budgetsPage.includes("22,40%"));
+assert("comparação possui duas barras proporcionais e acessíveis", budgetsPage.includes("officialBarBasisPoints") && budgetsPage.includes("contractedBarBasisPoints") && budgetsPage.includes("Barras proporcionais do orçamento oficial e do valor contratado"));
+assert("barras diferenciam orçamento oficial dourado e valor contratado verde", catalogCss.includes(".officialComparisonFill") && catalogCss.includes("#d7b65e") && catalogCss.includes(".contractedComparisonFill") && catalogCss.includes("#36a178"));
+assert("processos consecutivos ganham respiro e contextos visualmente distintos", catalogCss.includes(".process + .process") && catalogCss.includes(".documentProcess") && catalogCss.includes(".lotsProcess"));
+assert("orçamento oficial contratado é referência secundária", budgetsPage.includes("Referência da licitação") && budgetsPage.includes("Consultar orçamento oficial"));
+assert("criação de cenário respeita a política calculada para o escopo", budgetsPage.includes("budget.scenarioCreationAllowed") && individualBudgetPage.includes("summary.scenarioCreationAllowed"));
+assert("experiência contratada exibe número e estado do contrato", budgetsPage.includes("Contrato nº") && budgetsPage.includes("contractStatusLabel(winningProposal.contractStatus)"));
+assert("ordenação visual dos lotes é determinística em ordem crescente", budgetsPage.includes("sortBudgetsByLotAscending(process.budgets)"));
+assert("grid de lotes usa layout padrão em grid LTR para posicionar Lote 01 na esquerda e Lote 02 na direita", catalogCss.includes(".lotGrid") && !catalogCss.includes("direction: rtl;"));
+assert("duplicação preserva sourceBudgetId", newScenarioPage.includes("duplicateScenario?.sourceBudgetId") && newScenarioPage.includes("duplicateBudget"));
+assert("acesso direto não substitui o id solicitado pela versão mais recente", newScenarioPage.includes("requestedBudgetId") && !newScenarioPage.includes("mais recente"));
+assert("comparação cross-lot tem mensagem humana", comparePage.includes("Compare cenários criados para o mesmo lote."));
+assert("Workspace aponta para a experiência real", workspace.includes('href: "/orcamentos"') && workspace.includes('status: "Pronto"'));
+assert("Admin possui acesso direto a Orçamento", sidebar.includes("Orçamentos oficiais e cenários de proposta"));
+assert("revisão confirmada não mostra falsa ação", reviewPage.includes("Revisado e confirmado") && !reviewPage.includes("Já consolidado"));
+assert("paginação inclui Última", reviewPage.includes("Última ⏭"));
+
+function source(path: string): string { return readFileSync(resolve(root, path), "utf8"); }
+function assert(name: string, condition: boolean) {
+  if (!condition) throw new Error(name);
+  console.log(`ok - ${name}`);
+}

@@ -16,15 +16,27 @@ const SAMPLE_ITEM: MeasurementImportListItem = {
 
 interface FakeReader extends MeasurementImportsListReader {
   readonly calls: Array<{ companyId: string }>;
+  readonly listAllCalls: number;
 }
 
-function createFakeReader(itemsByCompany: Record<string, ReadonlyArray<MeasurementImportListItem>>): FakeReader {
+function createFakeReader(
+  itemsByCompany: Record<string, ReadonlyArray<MeasurementImportListItem>>,
+  allItems: ReadonlyArray<MeasurementImportListItem> = []
+): FakeReader {
   const calls: Array<{ companyId: string }> = [];
+  let listAllCalls = 0;
   return {
     calls,
+    get listAllCalls() {
+      return listAllCalls;
+    },
     async listByCompany(input) {
       calls.push(input);
       return itemsByCompany[input.companyId] ?? [];
+    },
+    async listAll() {
+      listAllCalls += 1;
+      return allItems;
     }
   };
 }
@@ -33,7 +45,7 @@ async function main(): Promise<void> {
   await runTest("devolve os itens do reader para a company informada, sem transformação", async () => {
     const reader = createFakeReader({ [COMPANY_ID]: [SAMPLE_ITEM] });
 
-    const items = await listMeasurementImports({ companyId: COMPANY_ID }, { importsListReader: reader });
+    const items = await listMeasurementImports({ companyId: COMPANY_ID, isAdmin: false }, { importsListReader: reader });
 
     assertEqual(JSON.stringify(items), JSON.stringify([SAMPLE_ITEM]), "nenhuma interpretação -- passthrough exato do reader");
     assertEqual(reader.calls.length, 1, "reader chamado uma única vez");
@@ -43,7 +55,7 @@ async function main(): Promise<void> {
   await runTest("company sem registros devolve lista vazia, nunca erro", async () => {
     const reader = createFakeReader({});
 
-    const items = await listMeasurementImports({ companyId: COMPANY_ID }, { importsListReader: reader });
+    const items = await listMeasurementImports({ companyId: COMPANY_ID, isAdmin: false }, { importsListReader: reader });
 
     assertEqual(items.length, 0);
   });
@@ -56,7 +68,7 @@ async function main(): Promise<void> {
       ]
     });
 
-    const items = await listMeasurementImports({ companyId: COMPANY_ID }, { importsListReader: reader });
+    const items = await listMeasurementImports({ companyId: COMPANY_ID, isAdmin: false }, { importsListReader: reader });
 
     assertEqual(items.length, 2);
     assertEqual(items[0]!.status, "failed");
@@ -67,9 +79,20 @@ async function main(): Promise<void> {
   await runTest("ausência de label humano permanece null, nunca inventado", async () => {
     const reader = createFakeReader({ [COMPANY_ID]: [{ ...SAMPLE_ITEM, humanLabel: null }] });
 
-    const items = await listMeasurementImports({ companyId: COMPANY_ID }, { importsListReader: reader });
+    const items = await listMeasurementImports({ companyId: COMPANY_ID, isAdmin: false }, { importsListReader: reader });
 
     assertEqual(items[0]!.humanLabel, null);
+  });
+
+  await runTest("isAdmin=true chama listAll (todas as empresas), nunca listByCompany", async () => {
+    const crossTenantItem: MeasurementImportListItem = { ...SAMPLE_ITEM, companyName: "Hidromec Serviços e Locações Ltda" };
+    const reader = createFakeReader({ [COMPANY_ID]: [SAMPLE_ITEM] }, [crossTenantItem]);
+
+    const items = await listMeasurementImports({ companyId: null, isAdmin: true }, { importsListReader: reader });
+
+    assertEqual(JSON.stringify(items), JSON.stringify([crossTenantItem]), "isAdmin usa listAll, não listByCompany");
+    assertEqual(reader.calls.length, 0, "listByCompany nunca é chamado quando isAdmin=true");
+    assertEqual(reader.listAllCalls, 1, "listAll chamado exatamente uma vez");
   });
 }
 

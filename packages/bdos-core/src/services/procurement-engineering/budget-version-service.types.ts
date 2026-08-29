@@ -28,6 +28,7 @@ export interface CreateBudgetVersionDraftCommand {
   readonly scope: BudgetScopeCommand;
   readonly origin: BudgetVersionOrigin;
   readonly originLineageId?: string;
+  readonly sourceBudgetVersionId?: string | null;
   readonly metadata?: BudgetVersionMetadata;
 }
 
@@ -40,6 +41,10 @@ export interface AddBudgetLineCommand {
   readonly position: number;
   readonly scope: BudgetScopeCommand;
   readonly totalCents?: number | null;
+  readonly quantity?: string | null;
+  readonly unit?: string | null;
+  readonly unitPriceCents?: number | null;
+  readonly officialUnitPriceCents?: number | null;
   readonly metadata?: BudgetVersionMetadata;
 }
 
@@ -50,6 +55,10 @@ export interface UpdateBudgetLineCommand {
   readonly externalCode?: string | null;
   readonly scope?: BudgetScopeCommand;
   readonly totalCents?: number | null;
+  readonly quantity?: string | null;
+  readonly unit?: string | null;
+  readonly unitPriceCents?: number | null;
+  readonly officialUnitPriceCents?: number | null;
 }
 
 export interface RemoveBudgetLineCommand {
@@ -65,6 +74,7 @@ export interface ReorderBudgetLineCommand {
 
 export interface RegisterLineageRelationCommand {
   readonly budgetVersionId: string;
+  readonly sourceBudgetVersionId?: string | null;
 }
 
 export interface ConsolidateBudgetVersionCommand {

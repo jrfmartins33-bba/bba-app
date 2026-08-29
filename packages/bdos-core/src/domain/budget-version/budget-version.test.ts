@@ -800,6 +800,331 @@ runTest("consolidação repetida é um no-op de domínio, não um mecanismo fís
 });
 
 // ---------------------------------------------------------------------------
+// 18.14 — Preço Unitário Genérico, Rastreabilidade e Cenário Lagoa do Arroz
+// ---------------------------------------------------------------------------
+
+runTest("admite unitPriceCents genérico em Item de Serviço e preserva integridade econômica", () => {
+  let version = requireSuccess(createVersion());
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0)));
+  version = requireSuccess(addBudgetLine(subgroupInput(version, "subgroup-1", "group-1", 0)));
+
+  const lineResult = addBudgetLine({
+    budgetVersion: version,
+    id: "item-proposal-1",
+    kind: BudgetLineKind.ServiceItem,
+    description: { status: "Confirmed", text: "Serviço de Escavação com Preço de Proposta" },
+    parentLineId: "subgroup-1",
+    position: 0,
+    scope: wholeCaseScope,
+    quantity: "1250.5",
+    unit: "m3",
+    unitPriceCents: 4520,
+    totalCents: 5652260,
+  });
+
+  assertVersionSuccess(lineResult, "expected line with generic unitPriceCents to be accepted");
+  const line = lineResult.budgetVersion.lines.find((l) => l.id === "item-proposal-1");
+  assertEqual(line?.unitPriceCents, 4520, "unitPriceCents mismatch");
+  assertEqual(line?.officialUnitPriceCents, 4520, "officialUnitPriceCents compatibility fallback mismatch");
+  assertEqual(line?.quantity, "1250.5", "quantity mismatch");
+  assertEqual(line?.unit, "m3", "unit mismatch");
+  assertEqual(line?.totalCents, 5652260, "totalCents mismatch");
+});
+
+runTest("rejeita unitPriceCents em Grupo ou Subgrupo", () => {
+  const version = requireSuccess(createVersion());
+  const attempt = addBudgetLine({
+    ...groupInput(version, "group-1", 0),
+    unitPriceCents: 5000 as any,
+  });
+  assertVersionFailure(attempt, "expected failure adding unitPriceCents to Group");
+  assertEqual(attempt.errors[0]?.code, "invalid_unit_price_cents", "error code mismatch");
+});
+
+runTest("rejeita unitPriceCents negativo ou fracionário", () => {
+  let version = requireSuccess(createVersion());
+  version = requireSuccess(addBudgetLine(groupInput(version, "group-1", 0)));
+
+  const negAttempt = addBudgetLine({
+    budgetVersion: version,
+    id: "item-neg",
+    kind: BudgetLineKind.ServiceItem,
+    description: { status: "Confirmed", text: "Item Negativo" },
+    parentLineId: "group-1",
+    position: 0,
+    scope: wholeCaseScope,
+    unitPriceCents: -100,
+    totalCents: 100,
+  });
+  assertVersionFailure(negAttempt, "expected failure on negative unitPriceCents");
+  assertEqual(negAttempt.errors[0]?.code, "invalid_unit_price_cents", "error code mismatch");
+
+  const fracAttempt = addBudgetLine({
+    budgetVersion: version,
+    id: "item-frac",
+    kind: BudgetLineKind.ServiceItem,
+    description: { status: "Confirmed", text: "Item Fracionário" },
+    parentLineId: "group-1",
+    position: 1,
+    scope: wholeCaseScope,
+    unitPriceCents: 10.5 as any,
+    totalCents: 100,
+  });
+  assertVersionFailure(fracAttempt, "expected failure on fractional unitPriceCents");
+  assertEqual(fracAttempt.errors[0]?.code, "invalid_unit_price_cents", "error code mismatch");
+});
+
+runTest("admite BudgetVersion documental de proposta com referência à planilha", () => {
+  const proposalVersion = requireSuccess(
+    createBudgetVersion({
+      id: "version-lagoa-proposta-vencedora",
+      procurementCase,
+      scope: wholeCaseScope,
+      origin: {
+        kind: BudgetVersionOriginKind.DocumentaryOpaqueReference,
+        reference: "PLANILHA CORRIGIDA.xlsx",
+      },
+      originLineageId: "lineage-proposal-doc",
+    }),
+  );
+
+  assertEqual(proposalVersion.origin.kind, BudgetVersionOriginKind.DocumentaryOpaqueReference, "origin kind mismatch");
+  if (proposalVersion.origin.kind === BudgetVersionOriginKind.DocumentaryOpaqueReference) {
+    assertEqual(proposalVersion.origin.reference, "PLANILHA CORRIGIDA.xlsx", "origin reference mismatch");
+  }
+  assertEqual(proposalVersion.status, BudgetVersionStatus.Draft, "must start in draft");
+});
+
+runTest("lineage: official BudgetVersion -> proposal BudgetVersion com validações determinísticas", () => {
+  const officialVersion = requireSuccess(
+    createBudgetVersion({
+      id: "version-lagoa-oficial-consolidada",
+      procurementCase,
+      scope: wholeCaseScope,
+      origin: { kind: BudgetVersionOriginKind.Native },
+      originLineageId: "lineage-official",
+    }),
+  );
+
+  // Na criação da proposta com sourceBudgetVersion
+  const proposalResult = createBudgetVersion({
+    id: "version-lagoa-proposta",
+    procurementCase,
+    scope: wholeCaseScope,
+    origin: {
+      kind: BudgetVersionOriginKind.DocumentaryOpaqueReference,
+      reference: "PLANILHA CORRIGIDA.xlsx",
+    },
+    originLineageId: "lineage-proposal",
+    sourceBudgetVersion: officialVersion,
+  });
+  assertVersionSuccess(proposalResult, "expected proposal version creation with official source lineage");
+  assertEqual(proposalResult.budgetVersion.originLineage?.sourceBudgetVersionId, officialVersion.id, "source lineage id mismatch");
+
+  // No registro posterior de lineage
+  const proposalWithoutLineage = requireSuccess(
+    createBudgetVersion({
+      id: "version-lagoa-proposta-2",
+      procurementCase,
+      scope: wholeCaseScope,
+      origin: {
+        kind: BudgetVersionOriginKind.DocumentaryOpaqueReference,
+        reference: "PLANILHA CORRIGIDA.xlsx",
+      },
+    }),
+  );
+  const registered = requireSuccess(
+    registerLineageRelation({
+      budgetVersion: proposalWithoutLineage,
+      id: "lineage-registered-proposal",
+      sourceBudgetVersion: officialVersion,
+    }),
+  );
+  assertEqual(registered.originLineage?.sourceBudgetVersionId, officialVersion.id, "registered source lineage id mismatch");
+});
+
+runTest("lineage: rejeita self-link", () => {
+  // na criação
+  const attemptCreate = createBudgetVersion({
+    id: "ver-self-test",
+    procurementCase,
+    scope: wholeCaseScope,
+    origin: { kind: BudgetVersionOriginKind.Native },
+    sourceBudgetVersionId: "ver-self-test",
+  });
+  assertVersionFailure(attemptCreate, "expected failure linking version to itself on create");
+  assertEqual(attemptCreate.errors[0]?.code, "self_lineage_relation", "error code mismatch");
+
+  // no registro posterior
+  const version = requireSuccess(createVersion({ id: "ver-self-test-2", originLineageId: undefined }));
+  const attempt = registerLineageRelation({
+    budgetVersion: version,
+    id: "lineage-self",
+    sourceBudgetVersionId: "ver-self-test-2",
+  });
+  assertVersionFailure(attempt, "expected failure linking version to itself on register");
+  assertEqual(attempt.errors[0]?.code, "self_lineage_relation", "error code mismatch");
+});
+
+runTest("lineage: rejeita cross-tenant", () => {
+  const otherCase = requireCaseSuccess(
+    createProcurementCase({ id: "case-other-tenant", organizationId: "org-other-beta", title: "Outro Processo" }),
+  );
+  const otherOrgVersion = requireSuccess(
+    createBudgetVersion({
+      id: "ver-other-org",
+      procurementCase: otherCase,
+      scope: { kind: ProcurementScopeKind.WholeCase, procurementCaseId: otherCase.id },
+      origin: { kind: BudgetVersionOriginKind.Native },
+    }),
+  );
+
+  const localVersion = requireSuccess(createVersion({ id: "ver-local", originLineageId: undefined }));
+  const attempt = registerLineageRelation({
+    budgetVersion: localVersion,
+    id: "lineage-cross-tenant",
+    sourceBudgetVersion: otherOrgVersion,
+  });
+  assertVersionFailure(attempt, "expected failure on cross-tenant lineage");
+  assertEqual(attempt.errors[0]?.code, "lineage_organization_mismatch", "error code mismatch");
+});
+
+runTest("lineage: rejeita processo de licitação diferente dentro da mesma organização", () => {
+  const otherLocalCase = requireCaseSuccess(
+    createProcurementCase({ id: "case-other-local", organizationId, title: "Outro Processo Local" }),
+  );
+  const otherCaseVersion = requireSuccess(
+    createBudgetVersion({
+      id: "ver-other-case",
+      procurementCase: otherLocalCase,
+      scope: { kind: ProcurementScopeKind.WholeCase, procurementCaseId: otherLocalCase.id },
+      origin: { kind: BudgetVersionOriginKind.Native },
+    }),
+  );
+
+  const localVersion = requireSuccess(createVersion({ id: "ver-local-case", originLineageId: undefined }));
+  const attempt = registerLineageRelation({
+    budgetVersion: localVersion,
+    id: "lineage-diff-case",
+    sourceBudgetVersion: otherCaseVersion,
+  });
+  assertVersionFailure(attempt, "expected failure on different procurement case lineage");
+  assertEqual(attempt.errors[0]?.code, "lineage_procurement_case_mismatch", "error code mismatch");
+});
+
+runTest("lineage: rejeita lote diferente e escopo incompatível (WholeCase vs Lot)", () => {
+  const lotAVersion = requireSuccess(
+    createBudgetVersion({
+      id: "ver-lot-a",
+      procurementCase,
+      procurementLot: lotA,
+      scope: lotAScope,
+      origin: { kind: BudgetVersionOriginKind.Native },
+    }),
+  );
+  const lotBVersion = requireSuccess(
+    createBudgetVersion({
+      id: "ver-lot-b",
+      procurementCase,
+      procurementLot: lotB,
+      scope: lotBScope,
+      origin: { kind: BudgetVersionOriginKind.Native },
+    }),
+  );
+  const wholeCaseVersion = requireSuccess(
+    createBudgetVersion({
+      id: "ver-whole-case",
+      procurementCase,
+      scope: wholeCaseScope,
+      origin: { kind: BudgetVersionOriginKind.Native },
+    }),
+  );
+
+  // Lot A não cruza Lot B
+  const crossLotAttempt = registerLineageRelation({
+    budgetVersion: lotBVersion,
+    id: "lineage-lot-a-to-b",
+    sourceBudgetVersion: lotAVersion,
+  });
+  assertVersionFailure(crossLotAttempt, "expected failure on cross lot lineage");
+  assertEqual(crossLotAttempt.errors[0]?.code, "lineage_scope_mismatch", "error code mismatch");
+
+  // WholeCase e Lot não se conectam silenciosamente
+  const wholeToLotAttempt = registerLineageRelation({
+    budgetVersion: lotAVersion,
+    id: "lineage-whole-to-lot",
+    sourceBudgetVersion: wholeCaseVersion,
+  });
+  assertVersionFailure(wholeToLotAttempt, "expected failure on wholecase to lot lineage");
+  assertEqual(wholeToLotAttempt.errors[0]?.code, "lineage_scope_mismatch", "error code mismatch");
+});
+
+runTest("garante que Barragens Lote 01 e Lote 02 continuam independentes", () => {
+  const caseBarragens = requireCaseSuccess(
+    createProcurementCase({ id: "case-barragens-alagoas", organizationId, title: "Barragens de Alagoas" }),
+  );
+  const lot01 = requireLotSuccess(createProcurementLot({ id: "lot-01-barragens", procurementCase: caseBarragens, title: "Lote 01" }));
+  const lot02 = requireLotSuccess(createProcurementLot({ id: "lot-02-barragens", procurementCase: caseBarragens, title: "Lote 02" }));
+
+  const scopeLot01: ProcurementScope = { kind: ProcurementScopeKind.Lot, procurementCaseId: caseBarragens.id, procurementLotId: lot01.id };
+  const scopeLot02: ProcurementScope = { kind: ProcurementScopeKind.Lot, procurementCaseId: caseBarragens.id, procurementLotId: lot02.id };
+
+  const versionLot01 = requireSuccess(
+    createBudgetVersion({
+      id: "ver-barragens-lot-01",
+      procurementCase: caseBarragens,
+      procurementLot: lot01,
+      scope: scopeLot01,
+      origin: { kind: BudgetVersionOriginKind.Native },
+    }),
+  );
+
+  const versionLot02 = requireSuccess(
+    createBudgetVersion({
+      id: "ver-barragens-lot-02",
+      procurementCase: caseBarragens,
+      procurementLot: lot02,
+      scope: scopeLot02,
+      origin: { kind: BudgetVersionOriginKind.Native },
+    }),
+  );
+
+  assertEqual(versionLot01.scope.kind, ProcurementScopeKind.Lot, "scope kind must be Lot");
+  assertEqual(versionLot02.scope.kind, ProcurementScopeKind.Lot, "scope kind must be Lot");
+  if (versionLot01.scope.kind === ProcurementScopeKind.Lot && versionLot02.scope.kind === ProcurementScopeKind.Lot) {
+    assertEqual(versionLot01.scope.procurementLotId, lot01.id, "lot 01 id mismatch");
+    assertEqual(versionLot02.scope.procurementLotId, lot02.id, "lot 02 id mismatch");
+  }
+
+  // Cross lineage entre Lote 01 e Lote 02 deve ser estritamente rejeitado
+  const attempt = registerLineageRelation({
+    budgetVersion: versionLot02,
+    id: "lineage-barragens-cross",
+    sourceBudgetVersion: versionLot01,
+  });
+  assertVersionFailure(attempt, "expected rejection connecting Lot 01 to Lot 02");
+  assertEqual(attempt.errors[0]?.code, "lineage_scope_mismatch", "error code mismatch");
+});
+
+runTest("caso econômico Lagoa do Arroz: precisão e ajuste contratual determinísticos (7611852.11454550 - 0.46454550 = 7611851.65000000)", () => {
+  const contractedValue = "7611851.65";
+  const economicSum = "7611852.11454550";
+  const contractualAdjustment = "-0.46454550";
+
+  // Reconciliação em ponto fixo / aritmética determinística
+  const contractedCents = centsFromDecimalString(contractedValue);
+  assertEqual(contractedCents, 761185165, "contracted value cents mismatch");
+
+  // 7611852.11454550 - 0.46454550
+  const sumBigIntScaled = BigInt("761185211454550"); // 8 decimal places (x 10^8)
+  const adjBigIntScaled = BigInt("-46454550");
+  const resultBigIntScaled = sumBigIntScaled + adjBigIntScaled;
+  const expectedContractedScaled = BigInt("761185165000000");
+
+  assertEqual(resultBigIntScaled, expectedContractedScaled, "deterministic scaled economic sum equation failed");
+});
+
+// ---------------------------------------------------------------------------
 // Fixtures and local test helpers
 // ---------------------------------------------------------------------------
 

@@ -38,7 +38,8 @@ export interface MeasurementDecisionBriefImportRecord {
  * outra) fica inteiramente fora deste módulo.
  */
 export interface MeasurementDecisionBriefImportReader {
-  findById(input: { measurementBulletinImportId: string; companyId: string }): Promise<MeasurementDecisionBriefImportRecord | null>;
+  /** companyId null exclusivamente para bba_admin -- ver AuthenticatedActor em lib/supabase/server.ts. */
+  findById(input: { measurementBulletinImportId: string; companyId: string | null }): Promise<MeasurementDecisionBriefImportRecord | null>;
 }
 
 export interface GetMeasurementDecisionBriefDependencies {
@@ -47,7 +48,8 @@ export interface GetMeasurementDecisionBriefDependencies {
 
 export interface GetMeasurementDecisionBriefInput {
   readonly measurementBulletinImportId: string;
-  readonly companyId: string;
+  /** null exclusivamente para bba_admin -- ver AuthenticatedActor em lib/supabase/server.ts. */
+  readonly companyId: string | null;
   /** ISO 8601, injetado pelo chamador -- este serviço nunca chama new Date()/Date.now(). */
   readonly generatedAt: string;
 }

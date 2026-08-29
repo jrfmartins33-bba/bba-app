@@ -1,6 +1,7 @@
 export type {
   DecisionBrief,
   DecisionBriefCriticalItem,
+  DecisionBriefCriticalItemMateriality,
   DecisionBriefKeyDecision,
   DecisionBriefKeyMetric,
   DecisionBriefMetadata,
@@ -10,7 +11,11 @@ export type {
   DecisionBriefSourceReference,
 } from "./decision-brief.types";
 
-export { DECISION_BRIEF_READINESS_VALUES, DECISION_BRIEF_SCHEMA_VERSION } from "./decision-brief.types";
+export {
+  DECISION_BRIEF_CRITICAL_ITEM_MATERIALITY_VALUES,
+  DECISION_BRIEF_READINESS_VALUES,
+  DECISION_BRIEF_SCHEMA_VERSION,
+} from "./decision-brief.types";
 
 export type {
   ReliabilityFactor,

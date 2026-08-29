@@ -3,6 +3,7 @@ import type {
   FinalizeMeasurementBulletinInput,
   MeasurementBulletin,
   MeasurementBulletinError,
+  MeasurementBulletinDecimalContext,
   MeasurementBulletinFailure,
   MeasurementBulletinHeader,
   MeasurementBulletinLine,
@@ -17,6 +18,12 @@ import type {
   ValidateMeasurementBulletinInput,
 } from "./bulletin-generator.types";
 import {
+  addMeasurementDecimals,
+  calculateMeasurementLineValue,
+  canonicalizeMeasurementDecimal,
+  createMeasurementMonetaryPolicy,
+} from "../measurement-certification";
+import {
   MeasurementBulletinStatus,
   MeasurementBulletinValidationSeverity,
 } from "./bulletin-generator.types";
@@ -25,23 +32,25 @@ export function createMeasurementBulletin(
   input: CreateMeasurementBulletinInput,
 ): MeasurementBulletinResult {
   const metadata = createBulletinMetadata(input);
+  const decimalContext = cloneDecimalContext(input.decimalContext);
   const errors = [
     ...validateBulletinShell(input, metadata),
-    ...validateLineBatch(input.lines, metadata),
+    ...validateLineBatch(input.lines, decimalContext, metadata),
   ];
 
   if (errors.length > 0) {
     return failureResult(errors, metadata);
   }
 
-  const lines = buildLines(input.lines);
-  const totals = computeTotals(lines);
+  const lines = buildLines(input.lines, decimalContext);
+  const totals = computeTotals(lines, decimalContext);
 
   const bulletin: MeasurementBulletin = {
     id: input.id,
     organizationId: input.organizationId,
     reference: cloneReference(input.reference),
     header: cloneHeader(input.header),
+    decimalContext,
     lines,
     totals,
     status: MeasurementBulletinStatus.Draft,
@@ -194,7 +203,7 @@ export function finalizeMeasurementBulletin(
 export function summarizeMeasurementBulletin(
   bulletin: MeasurementBulletin,
 ): MeasurementBulletinTotals {
-  return computeTotals(bulletin.lines);
+  return computeTotals(bulletin.lines, bulletin.decimalContext);
 }
 
 function isTerminalStatus(status: MeasurementBulletinStatus): boolean {
@@ -337,6 +346,17 @@ function validateBulletinShell(
       );
     }
 
+    if (isBlank(input.header.issueDate)) {
+      errors.push(
+        createBulletinError(
+          "missing_header_issue_date",
+          "header.issueDate",
+          "Header issue date is required.",
+          metadata,
+        ),
+      );
+    }
+
     if (
       isBlank(input.header.technicalResponsibleId) ||
       isBlank(input.header.technicalResponsibleName)
@@ -357,6 +377,7 @@ function validateBulletinShell(
 
 function validateLineBatch(
   lines: ReadonlyArray<MeasurementBulletinLineInput> | null | undefined,
+  decimalContext: MeasurementBulletinDecimalContext,
   metadata: MeasurementBulletinMetadata,
 ): MeasurementBulletinError[] {
   const errors: MeasurementBulletinError[] = [];
@@ -409,24 +430,69 @@ function validateLineBatch(
       );
     }
 
-    if (line.quantity < 0) {
-      errors.push(
-        createBulletinError(
-          "negative_quantity",
-          `lines.${index}.quantity`,
-          "Quantity cannot be negative.",
-          metadata,
-        ),
+    try {
+      const canonicalQuantity = canonicalizeMeasurementDecimal(
+        line.quantity,
+        decimalContext.quantityScale,
       );
-    }
+      const canonicalUnitValue = canonicalizeMeasurementDecimal(
+        line.unitValue,
+        decimalContext.unitValueScale,
+      );
+      const canonicalTotalValue = canonicalizeMeasurementDecimal(
+        line.canonicalTotalValue,
+        decimalContext.monetaryPolicy.scale,
+      );
+      const calculatedTotalValue = calculateMeasurementLineValue({
+        quantity: canonicalQuantity,
+        unitValue: canonicalUnitValue,
+        policy: decimalContext.monetaryPolicy,
+      });
 
-    if (line.unitValue < 0) {
+      if (isNegativeCanonicalDecimal(canonicalQuantity)) {
+        errors.push(
+          createBulletinError(
+            "negative_quantity",
+            `lines.${index}.quantity`,
+            "Quantity cannot be negative.",
+            metadata,
+          ),
+        );
+      }
+
+      if (isNegativeCanonicalDecimal(canonicalUnitValue)) {
+        errors.push(
+          createBulletinError(
+            "negative_unit_value",
+            `lines.${index}.unitValue`,
+            "Unit value cannot be negative.",
+            metadata,
+          ),
+        );
+      }
+
+      if (canonicalTotalValue !== calculatedTotalValue) {
+        errors.push(
+          createBulletinError(
+            "canonical_total_mismatch",
+            `lines.${index}.canonicalTotalValue`,
+            "Canonical line total does not match the quantity, unit value and monetary policy.",
+            {
+              ...metadata,
+              suppliedCanonicalTotalValue: canonicalTotalValue,
+              calculatedCanonicalTotalValue: calculatedTotalValue,
+              monetaryPolicyKey: decimalContext.monetaryPolicy.key,
+            },
+          ),
+        );
+      }
+    } catch (error) {
       errors.push(
         createBulletinError(
-          "negative_unit_value",
-          `lines.${index}.unitValue`,
-          "Unit value cannot be negative.",
-          metadata,
+          "invalid_decimal_material",
+          `lines.${index}`,
+          "Line quantity, unit value and canonical total must be valid decimal values.",
+          { ...metadata, cause: error instanceof Error ? error.message : String(error) },
         ),
       );
     }
@@ -437,32 +503,77 @@ function validateLineBatch(
 
 function buildLines(
   lineInputs: ReadonlyArray<MeasurementBulletinLineInput>,
+  decimalContext: MeasurementBulletinDecimalContext,
 ): ReadonlyArray<MeasurementBulletinLine> {
-  return lineInputs.map((line) => ({
-    id: line.id,
-    serviceItemId: line.serviceItemId,
-    serviceItemCode: line.serviceItemCode,
-    description: line.description,
-    unit: line.unit,
-    quantity: line.quantity,
-    unitValue: line.unitValue,
-    totalValue: computeTotalValue(line.quantity, line.unitValue),
-    metadata: line.metadata ?? {},
-  }));
-}
+  return lineInputs.map((line) => {
+    const canonicalQuantity = canonicalizeMeasurementDecimal(
+      line.quantity,
+      decimalContext.quantityScale,
+    );
+    const canonicalUnitValue = canonicalizeMeasurementDecimal(
+      line.unitValue,
+      decimalContext.unitValueScale,
+    );
+    const canonicalTotalValue = canonicalizeMeasurementDecimal(
+      line.canonicalTotalValue,
+      decimalContext.monetaryPolicy.scale,
+    );
 
-function computeTotalValue(quantity: number, unitValue: number): number {
-  return quantity * unitValue;
+    return {
+      id: line.id,
+      serviceItemId: line.serviceItemId,
+      serviceItemCode: line.serviceItemCode,
+      description: line.description,
+      unit: line.unit,
+      quantity: Number(canonicalQuantity),
+      unitValue: Number(canonicalUnitValue),
+      totalValue: Number(canonicalTotalValue),
+      canonicalQuantity,
+      canonicalUnitValue,
+      canonicalTotalValue,
+      quantityScale: decimalContext.quantityScale,
+      unitValueScale: decimalContext.unitValueScale,
+      monetaryPolicyKey: decimalContext.monetaryPolicy.key,
+      monetaryScale: decimalContext.monetaryPolicy.scale,
+      metadata: line.metadata ?? {},
+    };
+  });
 }
 
 function computeTotals(
   lines: ReadonlyArray<MeasurementBulletinLine>,
+  decimalContext: MeasurementBulletinDecimalContext,
 ): MeasurementBulletinTotals {
+  const canonicalTotalQuantity = addMeasurementDecimals(
+    lines.map((line) => line.canonicalQuantity),
+    decimalContext.quantityScale,
+  );
+  const canonicalTotalValue = addMeasurementDecimals(
+    lines.map((line) => line.canonicalTotalValue),
+    decimalContext.monetaryPolicy.scale,
+  );
+
   return {
     totalLines: lines.length,
-    totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
-    totalValue: lines.reduce((sum, line) => sum + line.totalValue, 0),
+    totalQuantity: Number(canonicalTotalQuantity),
+    totalValue: Number(canonicalTotalValue),
+    canonicalTotalQuantity,
+    canonicalTotalValue,
   };
+}
+
+function cloneDecimalContext(
+  context: MeasurementBulletinDecimalContext,
+): MeasurementBulletinDecimalContext {
+  return {
+    quantityScale: context.quantityScale,
+    unitValueScale: context.unitValueScale,
+    monetaryPolicy: createMeasurementMonetaryPolicy(context.monetaryPolicy),
+  };
+}
+
+function isNegativeCanonicalDecimal(value: string): boolean {
+  return value.startsWith("-") && !/^-(?:0|0\.0+)$/.test(value);
 }
 
 function failureResult(
@@ -500,6 +611,7 @@ function cloneHeader(header: MeasurementBulletinHeader): MeasurementBulletinHead
     periodNumber: header.periodNumber,
     startDate: header.startDate,
     endDate: header.endDate,
+    issueDate: header.issueDate,
     technicalResponsibleId: header.technicalResponsibleId,
     technicalResponsibleName: header.technicalResponsibleName,
     metadata: header.metadata,
@@ -564,6 +676,7 @@ function createBulletinMetadata(
     contractId: input.header?.contractId ?? null,
     projectId: input.header?.projectId ?? null,
     measurementPeriodId: input.header?.measurementPeriodId ?? null,
+    issueDate: input.header?.issueDate ?? null,
     correlationId: input.correlationId,
     createdBy: input.createdBy,
     sourceSystem: input.sourceSystem,
@@ -584,6 +697,7 @@ function createMutationMetadata(
     contractId: bulletin.header.contractId,
     projectId: bulletin.header.projectId,
     measurementPeriodId: bulletin.header.measurementPeriodId,
+    issueDate: bulletin.header.issueDate,
   };
 }
 

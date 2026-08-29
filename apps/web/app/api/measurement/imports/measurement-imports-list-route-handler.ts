@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AuthenticatedCompany } from "@/lib/supabase/server";
-import { listMeasurementBulletinImportsByCompany } from "@/lib/bdos/measurement-repository";
+import type { AuthenticatedActor } from "@/lib/supabase/server";
+import { listAllMeasurementBulletinImportsForAdmin, listMeasurementBulletinImportsByCompany } from "@/lib/bdos/measurement-repository";
 import {
   listMeasurementImports,
   type MeasurementImportListItem,
@@ -35,12 +35,27 @@ export function buildMeasurementImportsListReader(supabase: SupabaseClient): Mea
           analysisAvailable: summary.hasAnalysisResult
         })
       );
+    },
+
+    async listAll() {
+      const summaries = await listAllMeasurementBulletinImportsForAdmin(supabase);
+      return summaries.map(
+        (summary): MeasurementImportListItem => ({
+          measurementBulletinImportId: summary.id,
+          humanLabel: summary.fileName,
+          status: summary.status,
+          createdAt: summary.uploadedAt,
+          updatedAt: summary.updatedAt,
+          analysisAvailable: summary.hasAnalysisResult,
+          companyName: summary.companyName
+        })
+      );
     }
   };
 }
 
 export interface HandleListMeasurementImportsInput {
-  readonly auth: AuthenticatedCompany | null;
+  readonly auth: AuthenticatedActor | null;
 }
 
 export interface HandleListMeasurementImportsDependencies {
@@ -60,7 +75,10 @@ export async function handleListMeasurementImports(
     return { status: 401, body: { error: "unauthenticated" } };
   }
 
-  const imports = await listMeasurementImports({ companyId: input.auth.companyId }, { importsListReader: dependencies.importsListReader });
+  const imports = await listMeasurementImports(
+    { companyId: input.auth.companyId, isAdmin: input.auth.isAdmin },
+    { importsListReader: dependencies.importsListReader }
+  );
 
   return { status: 200, body: { imports } };
 }

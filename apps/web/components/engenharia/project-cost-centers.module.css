@@ -1,0 +1,848 @@
+/* Centros de Custo — Camada Operacional. Padrão visual premium do projeto. */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.demoBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0c1f3f;
+  background: var(--bba-gold-soft, #d8bd85);
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+}
+
+.subtitle {
+  color: var(--text-secondary-strong);
+  font-size: 0.95rem;
+  margin-top: 0.35rem;
+}
+
+.demoNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 3px solid var(--bba-gold);
+  padding: 0.6rem 0.9rem;
+  border-radius: 0 4px 4px 0;
+  line-height: 1.5;
+}
+
+.periodPills {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.periodPill {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--app-card);
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+  transition: border-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.periodPillActive {
+  border-color: var(--bba-gold);
+  color: var(--text-primary);
+  background: rgba(185, 149, 79, 0.08);
+}
+
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1rem;
+}
+
+.kpiCard {
+  background: var(--app-card);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  padding: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+/* TOTAL / CONSOLIDADO — institucional NEUTRO. Nunca o código visual de um
+   Centro de Custo (o dourado agora é a identidade do 1º Centro de Custo). */
+.kpiCardPrimary {
+  border-color: var(--app-border);
+  border-left: 3px solid var(--text-secondary-strong);
+  background: linear-gradient(135deg, rgba(12, 31, 63, 0.85) 0%, rgba(18, 49, 95, 0.6) 100%);
+}
+
+.kpiLabel {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.kpiValue {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.kpiValuePrimary {
+  color: var(--bba-gold-soft);
+}
+
+.kpiSub {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.sectionGrid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 1.25rem;
+}
+
+.cardFull {
+  grid-column: span 12;
+}
+
+.cardHalf {
+  grid-column: span 6;
+}
+
+@media (max-width: 960px) {
+  .cardHalf {
+    grid-column: span 12;
+  }
+}
+
+/* Distribuição por Centro de Custo */
+.ccList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.ccCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--app-divider);
+  border-radius: 6px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.ccName {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ccCode {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--bba-gold-soft);
+}
+
+.ccMetricRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.ccMetricRow strong {
+  color: var(--text-primary);
+}
+
+.shareTrack {
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.shareFillSociety {
+  height: 100%;
+  background: #7c93b8;
+}
+
+.shareFillCost {
+  height: 100%;
+  background: var(--bba-gold-soft, #d8bd85);
+}
+
+.note {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 0.25rem;
+}
+
+/* Famílias */
+.familyRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 2fr minmax(120px, auto);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--app-divider);
+}
+
+.familyRow:last-child {
+  border-bottom: none;
+}
+
+.familyName {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.familyBarTrack {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.familyBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(185, 149, 79, 0.55), var(--bba-gold-soft, #d8bd85));
+}
+
+.familyValue {
+  text-align: right;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+.familyValue strong {
+  color: var(--text-primary);
+  display: block;
+}
+
+.familyBreakdown {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+/* Despesas */
+.expenseTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.expenseTable th {
+  text-align: left;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.expenseTable td {
+  padding: 0.6rem 0.6rem;
+  border-bottom: 1px solid var(--app-divider);
+  color: var(--text-secondary);
+  vertical-align: top;
+}
+
+.expenseTable tr:last-child td {
+  border-bottom: none;
+}
+
+.expenseDesc {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.expenseAmount {
+  color: var(--text-primary);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.methodTag {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary-strong);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--app-divider);
+  border-radius: 6px;
+  padding: 0.2rem 0.45rem;
+  white-space: nowrap;
+}
+
+.natureTag {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #0c1f3f;
+  background: var(--bba-gold-soft, #d8bd85);
+  border-radius: 6px;
+  padding: 0.18rem 0.42rem;
+}
+
+.distribCell {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.expandButton {
+  background: none;
+  border: none;
+  color: var(--bba-gold-soft);
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 0.35rem;
+}
+
+.allocationDetail {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.allocationDetail td {
+  padding-top: 0.4rem;
+  padding-bottom: 0.7rem;
+}
+
+.allocationLine {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) 80px 130px minmax(120px, auto);
+  gap: 0.6rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  padding: 0.25rem 0;
+}
+
+.allocationLine strong {
+  color: var(--text-primary);
+}
+
+/* Simulação gerencial — tratamento NEUTRO/AZUL, nunca verde */
+.simCard {
+  border: 1px solid rgba(90, 130, 200, 0.32);
+  border-radius: 8px;
+  padding: 1.2rem;
+  background: linear-gradient(135deg, rgba(40, 70, 130, 0.14), rgba(12, 31, 63, 0.1));
+}
+
+.simGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.9rem;
+  margin: 0.9rem 0;
+}
+
+.simMetric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(90, 130, 200, 0.25);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.simMetricLabel {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.simMetricValue {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.simMetricValueDiff {
+  color: #9db8e8;
+}
+
+.simDisclaimer {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+.emptyState {
+  padding: 1.25rem;
+  border: 1px dashed var(--app-border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+/* ---- Matriz Categoria × Centro de Custo ---- */
+.matrixScroll {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.matrixTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  min-width: 520px;
+}
+
+.matrixTable th {
+  text-align: left;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 0.6rem 0.7rem;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.matrixTable td {
+  padding: 0.6rem 0.7rem;
+  border-bottom: 1px solid var(--app-divider);
+  color: var(--text-secondary);
+}
+
+.matrixTable tr:last-child td {
+  border-bottom: none;
+}
+
+.matrixNum {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.matrixRowLabel {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.matrixStrong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.matrixTotalRow td {
+  border-top: 2px solid var(--app-border);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.matrixHeadCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.matrixToneValue {
+  color: var(--cc-tone, var(--text-secondary));
+  font-weight: 600;
+}
+
+.matrixCards {
+  display: none;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.matrixCard {
+  border: 1px solid var(--app-divider);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.matrixCardTotal {
+  border-color: rgba(185, 149, 79, 0.3);
+  background: rgba(185, 149, 79, 0.06);
+}
+
+.matrixCardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--app-divider);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.matrixCardRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  padding: 0.2rem 0;
+}
+
+@media (max-width: 720px) {
+  .matrixTable {
+    display: none;
+  }
+  .matrixCards {
+    display: flex;
+  }
+}
+
+/* ---- Composição por tipo de custo ---- */
+.familyBlock {
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--app-divider);
+}
+
+.familyBlock:last-child {
+  border-bottom: none;
+}
+
+.familyCenters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.familyCenterChip {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--app-divider);
+  border-radius: 6px;
+  padding: 0.25rem 0.55rem;
+}
+
+.familyCenterChip strong {
+  color: var(--text-primary);
+}
+
+/* ---- Como os custos foram distribuídos ---- */
+.blockIntro {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.distribList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  /* altura natural por conteúdo: cards simples ficam compactos, cards com
+     rateio/justificativa crescem sem esticar os vizinhos. */
+  align-items: start;
+}
+
+.distribCard {
+  border: 1px solid var(--app-divider);
+  border-radius: 8px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.distribCardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.distribCardTitle {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+}
+
+.distribCardType {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.distribCardAmount {
+  font-weight: 800;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.distribTargets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--app-divider);
+  border-bottom: 1px solid var(--app-divider);
+}
+
+.distribTargetRow {
+  display: grid;
+  grid-template-columns: 1fr auto 56px;
+  gap: 0.6rem;
+  font-size: 0.83rem;
+  color: var(--text-secondary);
+}
+
+.distribTargetPct {
+  text-align: right;
+  color: var(--bba-gold-soft, #d8bd85);
+  font-weight: 600;
+}
+
+.distribCardFoot {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.criterionTag {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary-strong);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--app-divider);
+  border-radius: 6px;
+  padding: 0.2rem 0.45rem;
+  white-space: nowrap;
+}
+
+.distribNote {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  font-style: italic;
+  border-left: 2px solid rgba(90, 130, 200, 0.4);
+  padding-left: 0.6rem;
+}
+
+/* ---- Participação societária × distribuição ---- */
+.compareGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+}
+
+.compareHeading {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.compareRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--app-divider);
+}
+
+.compareRow:last-child {
+  border-bottom: none;
+}
+
+.compareRow strong {
+  color: var(--text-primary);
+}
+
+/* ---- Notas ---- */
+.notesList {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.83rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+/* =====================================================================
+   IDENTIDADE VISUAL DOS CENTROS DE CUSTO
+   O tom (--cc-tone) é APENAS identidade do Centro de Custo.
+   Nunca positivo/negativo/lucro/prejuízo. Sem verde e sem vermelho.
+   ===================================================================== */
+.tone1 { --cc-tone: #e2b979; }  /* âmbar premium BBA */
+.tone2 { --cc-tone: #7cc4e8; }  /* azul-claro/ciano premium */
+.tone3 { --cc-tone: #b9a3d6; }  /* violeta suave */
+.tone4 { --cc-tone: #e0a878; }  /* areia quente (não é vermelho) */
+.tone5 { --cc-tone: #8fb4cf; }  /* azul-aço */
+.tone6 { --cc-tone: #c9b98f; }  /* dourado neutro */
+
+.toneDot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--cc-tone, var(--text-muted));
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--app-divider);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary-strong);
+}
+
+/* ---- Seletor de período ---- */
+.periodPicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.periodPicker label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.periodSelect {
+  background: var(--app-card);
+  color: var(--text-primary);
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.periodSelect:hover {
+  border-color: var(--bba-gold);
+}
+
+/* ---- KPI com acento de identidade ---- */
+.kpiCardTone {
+  border-top: 3px solid var(--cc-tone, var(--app-border));
+}
+
+/* ---- Barra empilhada por Centro de Custo ---- */
+.stackedBar {
+  display: flex;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 0.5rem 0;
+}
+
+.stackedSeg {
+  height: 100%;
+  background: var(--cc-tone, var(--text-muted));
+  min-width: 2px;
+}
+
+.familyHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.familyValueStrong {
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* "Participação no custo total: 53,72%" — % do tipo de custo no total geral. */
+.familySubShare {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 0.15rem;
+}
+
+/* Rótulo da barra empilhada — distribuição INTERNA entre Centros de Custo. */
+.stackedBarCaption {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+/* ---- Chip de distribuição na tabela detalhada ---- */
+.distribChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-right: 0.6rem;
+  white-space: nowrap;
+}
+
+.allocationFull {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.matrixCardTotalMobile {
+  border-color: var(--app-border);
+  background: rgba(255, 255, 255, 0.04);
+}

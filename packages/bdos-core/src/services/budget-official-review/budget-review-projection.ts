@@ -2,6 +2,7 @@ import { addBudgetLine, BudgetLineKind } from "../../domain/budget-version";
 import type { BudgetVersion, BudgetVersionResult } from "../../domain/budget-version";
 import { ACCEPTED_BUDGET_REVIEW_ROW_STATES, moneyCentsFromCanonicalDecimalText } from "../../domain/budget-official-review";
 import type { BudgetReviewRow, BudgetReviewSession } from "../../domain/budget-official-review";
+import type { ProcurementLot } from "../../domain/procurement-case";
 
 // Correção Sprint 21.5A (Bloqueador A) — projeta as Linhas de Revisão já
 // aprovadas (Confirmado/Corrigido/InseridoManualmente — nunca Pendente,
@@ -13,13 +14,11 @@ import type { BudgetReviewRow, BudgetReviewSession } from "../../domain/budget-o
 // `BudgetReviewRow.id` (ambos UUIDs já únicos por sessão) — preserva a
 // rastreabilidade sem precisar de uma tabela de mapeamento separada.
 //
-// Escopo de cada Linha projetada é sempre o mesmo Escopo da própria
-// BudgetVersion (tipicamente WholeCase) — nunca um Escopo de Lote fabricado
-// a partir de `lotReference` (que é apenas um rótulo textual da fonte, não
-// prova de existência de um ProcurementLot real). `lotReference` é
-// preservada em metadata, exatamente como a página já consumidora em
-// apps/web/app/(dashboard)/orcamentos/page.tsx já espera
-// (`line.metadata.lotReference`).
+// Escopo de cada Linha projetada é exatamente o Escopo canônico da própria
+// BudgetVersion. Quando esse Escopo é Lot, a projeção exige a prova de um
+// ProcurementLot real e a repassa ao domínio em todas as linhas. Nunca cria
+// um Lote a partir de `lotReference`: esse valor continua sendo apenas
+// evidência/rótulo documental, preservado em metadata para apresentação.
 //
 // Uma linha só é projetada quando toda a sua cadeia de pais também está
 // aprovada — um filho aprovado sob um pai Pendente/excluído nunca aparece
@@ -29,11 +28,12 @@ import type { BudgetReviewRow, BudgetReviewSession } from "../../domain/budget-o
 export function projectBudgetReviewSessionToBudgetVersion(
   session: BudgetReviewSession,
   budgetVersion: BudgetVersion,
+  procurementLot?: ProcurementLot,
 ): BudgetVersionResult {
   let current = budgetVersion;
 
   for (const row of orderedProjectableChildren(session, null)) {
-    const result = projectRowAndDescendants(session, row, current);
+    const result = projectRowAndDescendants(session, row, current, procurementLot);
     if (!result.success) {
       return result;
     }
@@ -43,7 +43,12 @@ export function projectBudgetReviewSessionToBudgetVersion(
   return { success: true, budgetVersion: current, errors: [], warnings: [], metadata: current.metadata };
 }
 
-function projectRowAndDescendants(session: BudgetReviewSession, row: BudgetReviewRow, budgetVersion: BudgetVersion): BudgetVersionResult {
+function projectRowAndDescendants(
+  session: BudgetReviewSession,
+  row: BudgetReviewRow,
+  budgetVersion: BudgetVersion,
+  procurementLot?: ProcurementLot,
+): BudgetVersionResult {
   const addResult = addBudgetLine({
     budgetVersion,
     id: row.id,
@@ -56,13 +61,21 @@ function projectRowAndDescendants(session: BudgetReviewSession, row: BudgetRevie
     parentLineId: row.parentRowId,
     position: row.position,
     scope: budgetVersion.scope,
+    procurementLot,
     totalCents: row.kind === BudgetLineKind.ServiceItem ? moneyCentsFromCanonicalDecimalText(row.revised.totalPriceText) : null,
+    quantity: row.kind === BudgetLineKind.ServiceItem ? row.revised.quantityText : null,
+    unit: row.kind === BudgetLineKind.ServiceItem ? row.revised.unit : null,
+    unitPriceCents:
+      row.kind === BudgetLineKind.ServiceItem ? moneyCentsFromCanonicalDecimalText(row.revised.unitPriceWithBdiText) : null,
     metadata: {
       lotReference: row.lotReference,
       sourcePage: row.page,
       reviewRowId: row.id,
       reviewSessionId: session.id,
       sourceEvidenceText: row.evidenceText,
+      sourceUnitCostWithoutBdiText: row.revised.unitCostWithoutBdiText,
+      sourceBdiPercentText: row.revised.bdiPercentText,
+      sourceCalculationRule: row.calculationRule ?? null,
     },
   });
 
@@ -73,7 +86,7 @@ function projectRowAndDescendants(session: BudgetReviewSession, row: BudgetRevie
   let current = addResult.budgetVersion;
 
   for (const child of orderedProjectableChildren(session, row.id)) {
-    const result = projectRowAndDescendants(session, child, current);
+    const result = projectRowAndDescendants(session, child, current, procurementLot);
     if (!result.success) {
       return result;
     }

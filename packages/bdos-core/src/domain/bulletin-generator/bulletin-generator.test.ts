@@ -11,6 +11,7 @@ import {
   type MeasurementBulletinLineInput,
   type MeasurementBulletinResult,
 } from "./index";
+import { MeasurementDecimalQuantizationMode } from "../measurement-certification";
 
 const bulletinId = "measurement-bulletin-lagoa-do-arroz-8";
 const organizationId = "organization-alpha-engenharia";
@@ -123,6 +124,17 @@ runTest("rejects missing header period id", () => {
   assertEqual(result.errors[0]?.code, "missing_header_period_id", "error code mismatch");
 });
 
+runTest("rejects missing header issue date", () => {
+  const input = createBulletinInputFixture();
+  const result = createMeasurementBulletin({
+    ...input,
+    header: { ...input.header, issueDate: "" },
+  });
+
+  assertFailure(result, "expected missing header issue date failure");
+  assertEqual(result.errors[0]?.code, "missing_header_issue_date", "error code mismatch");
+});
+
 runTest("rejects missing header technical responsible", () => {
   const input = createBulletinInputFixture();
   const result = createMeasurementBulletin({
@@ -204,6 +216,67 @@ runTest("computes deterministic line total value", () => {
   assertEqual(result.bulletin.lines[0]?.totalValue, 3006, "total value mismatch");
 });
 
+runTest("preserves the canonical total produced by a truncation policy", () => {
+  const result = createMeasurementBulletin(
+    createBulletinInputFixture({
+      decimalContext: {
+        quantityScale: 2,
+        unitValueScale: 2,
+        monetaryPolicy: {
+          key: "source-truncate-2",
+          scale: 2,
+          quantizationMode: MeasurementDecimalQuantizationMode.TruncateTowardZero,
+        },
+      },
+      lines: [
+        createLineInputFixture({
+          quantity: "3.32",
+          unitValue: "8170.05",
+          canonicalTotalValue: "27124.56",
+        }),
+      ],
+    }),
+  );
+
+  assertSuccess(result, "expected truncation-policy bulletin creation success");
+  assertEqual(result.bulletin.lines[0]?.canonicalTotalValue, "27124.56", "canonical truncation mismatch");
+  assertEqual(result.bulletin.lines[0]?.totalValue, 27124.56, "numeric compatibility value mismatch");
+});
+
+runTest("preserves the canonical total produced by a rounding policy", () => {
+  const result = createMeasurementBulletin(
+    createBulletinInputFixture({
+      lines: [
+        createLineInputFixture({
+          quantity: "3.32",
+          unitValue: "8170.05",
+          canonicalTotalValue: "27124.57",
+        }),
+      ],
+    }),
+  );
+
+  assertSuccess(result, "expected rounding-policy bulletin creation success");
+  assertEqual(result.bulletin.lines[0]?.canonicalTotalValue, "27124.57", "canonical rounding mismatch");
+});
+
+runTest("rejects a canonical workspace total that disagrees with its policy", () => {
+  const result = createMeasurementBulletin(
+    createBulletinInputFixture({
+      lines: [
+        createLineInputFixture({
+          quantity: "3.32",
+          unitValue: "8170.05",
+          canonicalTotalValue: "27124.56",
+        }),
+      ],
+    }),
+  );
+
+  assertFailure(result, "expected mismatched canonical total failure");
+  assertEqual(result.errors[0]?.code, "canonical_total_mismatch", "canonical mismatch error code");
+});
+
 runTest("computes deterministic totals across multiple lines", () => {
   const result = createMeasurementBulletin(
     createBulletinInputFixture({
@@ -218,6 +291,21 @@ runTest("computes deterministic totals across multiple lines", () => {
   assertEqual(result.bulletin.totals.totalLines, 2, "totalLines mismatch");
   assertEqual(result.bulletin.totals.totalQuantity, 15, "totalQuantity mismatch");
   assertEqual(result.bulletin.totals.totalValue, 1900, "totalValue mismatch");
+});
+
+runTest("sums canonical totals without binary floating-point drift", () => {
+  const result = createMeasurementBulletin(
+    createBulletinInputFixture({
+      lines: [
+        createLineInputFixture({ id: "line-001", quantity: "1.00", unitValue: "0.10", canonicalTotalValue: "0.10" }),
+        createLineInputFixture({ id: "line-002", quantity: "1.00", unitValue: "0.20", canonicalTotalValue: "0.20" }),
+      ],
+    }),
+  );
+
+  assertSuccess(result, "expected canonical sum success");
+  assertEqual(result.bulletin.totals.canonicalTotalValue, "0.30", "canonical total sum mismatch");
+  assertEqual(result.bulletin.totals.totalValue, 0.3, "numeric compatibility total mismatch");
 });
 
 runTest("validates without issues when bulletin content is sound", () => {
@@ -482,6 +570,86 @@ runTest(
   },
 );
 
+runTest("preserves complete formal envelope and enables deterministic reconstruction", () => {
+  const input = createBulletinInputFixture();
+  const created = createMeasurementBulletin(input);
+  assertSuccess(created, "expected bulletin creation success");
+
+  const validated = validateMeasurementBulletin({
+    bulletin: created.bulletin,
+    actor,
+    occurredAt: "2026-07-02T10:00:00Z",
+  });
+  assertSuccess(validated, "expected validation success");
+
+  const finalized = finalizeMeasurementBulletin({
+    bulletin: validated.bulletin,
+    actor,
+    occurredAt: "2026-07-03T10:00:00Z",
+  });
+  assertSuccess(finalized, "expected finalization success");
+
+  const bulletin = finalized.bulletin;
+
+  // Snapshot representation as would be stored in the database
+  const persistedEnvelope = {
+    id: bulletin.id,
+    organizationId: bulletin.organizationId,
+    reference: JSON.parse(JSON.stringify(bulletin.reference)),
+    header: JSON.parse(JSON.stringify(bulletin.header)),
+    decimalContext: JSON.parse(JSON.stringify(bulletin.decimalContext)),
+    lines: JSON.parse(JSON.stringify(bulletin.lines)),
+    totals: JSON.parse(JSON.stringify(bulletin.totals)),
+    status: bulletin.status,
+    validationIssues: JSON.parse(JSON.stringify(bulletin.validationIssues)),
+    trace: JSON.parse(JSON.stringify(bulletin.trace)),
+    metadata: JSON.parse(JSON.stringify(bulletin.metadata)),
+  };
+
+  // Reconstructed bulletin
+  const reconstructed: MeasurementBulletin = {
+    id: persistedEnvelope.id,
+    organizationId: persistedEnvelope.organizationId,
+    reference: persistedEnvelope.reference,
+    header: persistedEnvelope.header,
+    decimalContext: persistedEnvelope.decimalContext,
+    lines: persistedEnvelope.lines,
+    totals: persistedEnvelope.totals,
+    status: persistedEnvelope.status,
+    validationIssues: persistedEnvelope.validationIssues,
+    trace: persistedEnvelope.trace,
+    metadata: persistedEnvelope.metadata,
+  };
+
+  assertEqual(reconstructed.id, bulletin.id, "reconstructed id mismatch");
+  assertEqual(reconstructed.header.contractId, contractId, "reconstructed contractId mismatch");
+  assertEqual(reconstructed.header.issueDate, "2026-07-01", "reconstructed issueDate mismatch");
+  assertEqual(
+    reconstructed.header.technicalResponsibleId,
+    "engineer-marcos",
+    "reconstructed technicalResponsibleId mismatch",
+  );
+  assertEqual(
+    reconstructed.header.technicalResponsibleName,
+    "Marcos Ferreira",
+    "reconstructed technicalResponsibleName mismatch",
+  );
+  assertEqual(
+    reconstructed.decimalContext.monetaryPolicy.key,
+    "source-round-2",
+    "reconstructed monetary policy key mismatch",
+  );
+  assertEqual(reconstructed.trace.length, 3, "reconstructed trace count mismatch");
+  assertEqual(reconstructed.trace[0]?.action, "bulletin_created", "trace 0 action mismatch");
+  assertEqual(reconstructed.trace[1]?.action, "bulletin_validated", "trace 1 action mismatch");
+  assertEqual(reconstructed.trace[2]?.action, "bulletin_finalized", "trace 2 action mismatch");
+  assertEqual(
+    reconstructed.totals.canonicalTotalValue,
+    bulletin.totals.canonicalTotalValue,
+    "reconstructed totals mismatch",
+  );
+});
+
 function createBulletinFixture(
   overrides: Partial<CreateMeasurementBulletinInput> = {},
 ): MeasurementBulletin {
@@ -516,9 +684,21 @@ function createBulletinInputFixture(
         periodNumber: 8,
         startDate: "2026-06-01",
         endDate: "2026-06-30",
+        issueDate: "2026-07-01",
         technicalResponsibleId: "engineer-marcos",
         technicalResponsibleName: "Marcos Ferreira",
         metadata: { source: "engineer-workspace" },
+      },
+    decimalContext:
+      overrides.decimalContext ??
+      {
+        quantityScale: 2,
+        unitValueScale: 2,
+        monetaryPolicy: {
+          key: "source-round-2",
+          scale: 2,
+          quantizationMode: MeasurementDecimalQuantizationMode.RoundHalfAwayFromZero,
+        },
       },
     lines: overrides.lines ?? [createLineInputFixture()],
     actor: overrides.actor ?? actor,
@@ -541,6 +721,9 @@ function createLineInputFixture(
     unit: overrides.unit ?? "m3",
     quantity: overrides.quantity ?? 10,
     unitValue: overrides.unitValue ?? 150,
+    canonicalTotalValue:
+      overrides.canonicalTotalValue ??
+      Number(overrides.quantity ?? 10) * Number(overrides.unitValue ?? 150),
     metadata: overrides.metadata ?? { source: "measurement-workspace" },
   };
 }

@@ -19,6 +19,7 @@ import {
   validateMeasurementBulletin,
   type MeasurementBulletin,
 } from "../../../bulletin-generator";
+import { MeasurementDecimalQuantizationMode } from "../../../measurement-certification";
 import {
   EvidenceStatus,
   EvidenceType,
@@ -275,9 +276,19 @@ export function finalizedBulletinFixture(): MeasurementBulletin {
       periodNumber: 8,
       startDate: "2026-06-01",
       endDate: "2026-06-30",
+      issueDate: "2026-07-01",
       technicalResponsibleId: "engineer-marcos",
       technicalResponsibleName: "Marcos Ferreira",
       metadata: {},
+    },
+    decimalContext: {
+      quantityScale: 2,
+      unitValueScale: 2,
+      monetaryPolicy: {
+        key: "fixture-round-2",
+        scale: 2,
+        quantizationMode: MeasurementDecimalQuantizationMode.RoundHalfAwayFromZero,
+      },
     },
     lines: [
       {
@@ -288,6 +299,7 @@ export function finalizedBulletinFixture(): MeasurementBulletin {
         unit: "m3",
         quantity: 10,
         unitValue: 150,
+        canonicalTotalValue: 1500,
         metadata: {},
       },
     ],
@@ -337,9 +349,19 @@ export function draftBulletinFixture(): MeasurementBulletin {
       periodNumber: 9,
       startDate: "2026-07-01",
       endDate: "2026-07-31",
+      issueDate: "2026-08-01",
       technicalResponsibleId: "engineer-marcos",
       technicalResponsibleName: "Marcos Ferreira",
       metadata: {},
+    },
+    decimalContext: {
+      quantityScale: 2,
+      unitValueScale: 2,
+      monetaryPolicy: {
+        key: "fixture-round-2",
+        scale: 2,
+        quantizationMode: MeasurementDecimalQuantizationMode.RoundHalfAwayFromZero,
+      },
     },
     lines: [
       {
@@ -350,6 +372,7 @@ export function draftBulletinFixture(): MeasurementBulletin {
         unit: "m3",
         quantity: 5,
         unitValue: 150,
+        canonicalTotalValue: 750,
         metadata: {},
       },
     ],

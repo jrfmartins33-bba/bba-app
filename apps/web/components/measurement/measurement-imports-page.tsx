@@ -27,14 +27,30 @@ type ViewState =
 export function MeasurementImportsPage() {
   const router = useRouter();
   const signOut = useBbaStore((state) => state.signOut);
+  const hydrateSession = useBbaStore((state) => state.hydrateSession);
   const [state, setState] = useState<ViewState>({ phase: "loading" });
 
   const load = useCallback(async () => {
     setState({ phase: "loading" });
-    const outcome = await fetchMeasurementImports();
+    let outcome = await fetchMeasurementImports();
 
     if (outcome.kind === "unauthenticated") {
-      // Mesmo fluxo de BbaDashboardShell quando a sessão não é mais válida.
+      // Um único 401 desta chamada não é prova de que a sessão real
+      // expirou -- o usuário só chega a este componente porque
+      // BbaDashboardShell já confirmou uma sessão válida via
+      // hydrateSession(). Reconfirma contra essa mesma checagem
+      // autoritativa (nunca um bypass: continua sendo uma validação de
+      // sessão real) antes de forçar logout, para não derrubar uma
+      // sessão válida por causa de uma falha pontual desta única
+      // chamada. Se a sessão realmente caiu, a nova checagem confirma
+      // isso e o logout abaixo continua acontecendo normalmente.
+      const stillAuthenticated = await hydrateSession();
+      if (stillAuthenticated) {
+        outcome = await fetchMeasurementImports();
+      }
+    }
+
+    if (outcome.kind === "unauthenticated") {
       signOut();
       router.replace("/login");
       return;
@@ -46,7 +62,7 @@ export function MeasurementImportsPage() {
     }
 
     setState({ phase: "ready", imports: outcome.imports });
-  }, [router, signOut]);
+  }, [hydrateSession, router, signOut]);
 
   useEffect(() => {
     void load();
@@ -97,6 +113,12 @@ export function MeasurementImportsPage() {
         return (
           <Card className="workspace-card measurement-imports-item" key={item.measurementBulletinImportId} title={label}>
             <dl className="workspace-fact-list">
+              {item.companyName ? (
+                <div className="workspace-fact">
+                  <dt>Empresa</dt>
+                  <dd>{item.companyName}</dd>
+                </div>
+              ) : null}
               <div className="workspace-fact">
                 <dt>Status</dt>
                 <dd>

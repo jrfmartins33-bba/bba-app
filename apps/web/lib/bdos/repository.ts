@@ -249,6 +249,56 @@ export const insertPlanningDataset = async (
   return data;
 };
 
+export interface PlanningDatasetRow {
+  readonly id: string;
+  readonly datasetSchemaVersion: number;
+  readonly detectedType: string;
+  readonly createdAt: string;
+  /** `planning_datasets.dataset` verbatim (JSONB) -- este repository nunca interpreta sua forma. */
+  readonly dataset: unknown;
+  readonly fileName: string | null;
+}
+
+// Leitura somente-leitura da Camada 2 para um tipo de dataset e um
+// projeto -- usada pela tela "Revisar medição" para comparar a medição
+// ao Cronograma Físico-Financeiro já consolidado. Mais recente primeiro.
+// Nunca escreve; a seleção determinística entre linhas concorrentes é
+// responsabilidade do Application Service.
+export const listPlanningDatasetsByType = async (
+  supabase: SupabaseClient,
+  params: { companyId: string | null; engineeringProjectId: string; detectedType: string }
+): Promise<ReadonlyArray<PlanningDatasetRow>> => {
+  let query = supabase
+    .from("planning_datasets")
+    .select("id, dataset_schema_version, detected_type, created_at, dataset, planning_imports(file_name)")
+    .eq("engineering_project_id", params.engineeringProjectId)
+    .eq("detected_type", params.detectedType)
+    .order("created_at", { ascending: false });
+
+  if (params.companyId) {
+    query = query.eq("company_id", params.companyId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((row) => {
+    const record = row as Record<string, unknown>;
+    const linkedImport = record.planning_imports as { file_name?: unknown } | Array<{ file_name?: unknown }> | null;
+    const fileNameSource = Array.isArray(linkedImport) ? linkedImport[0] : linkedImport;
+    return {
+      id: record.id as string,
+      datasetSchemaVersion: record.dataset_schema_version as number,
+      detectedType: record.detected_type as string,
+      createdAt: record.created_at as string,
+      dataset: record.dataset,
+      fileName: typeof fileNameSource?.file_name === "string" ? fileNameSource.file_name : null
+    };
+  });
+};
+
 // Camada 3 do pipeline BDOS (Sprint 13.8) — Decision Snapshot, memória
 // técnica imutável (ver docs/BDOS_PERSISTENCE_ARCHITECTURE.md, seção
 // 5.3). `decisions`/`recommendations` são os arrays completos vindos

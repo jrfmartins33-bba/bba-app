@@ -9,6 +9,20 @@
  * `startsWith` cru sobre o `href`, que ativaria "/orcamentos" também em
  * uma rota não relacionada como "/orcamento-extra".
  */
+interface WorkspaceRouteConfig {
+  readonly basePath: string;
+  readonly items: ReadonlyArray<{ readonly href?: string }>;
+}
+
+function isRouteOrChild(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
 export function isWorkspaceSubNavItemActive(pathname: string, href: string): boolean {
-  return pathname === href || pathname.startsWith(`${href}/`);
+  return isRouteOrChild(pathname, href);
+}
+
+export function isWorkspaceActive(pathname: string, workspace: WorkspaceRouteConfig): boolean {
+  if (isRouteOrChild(pathname, workspace.basePath)) return true;
+  return workspace.items.some((item) => item.href !== undefined && isRouteOrChild(pathname, item.href));
 }

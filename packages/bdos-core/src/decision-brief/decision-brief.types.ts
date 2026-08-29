@@ -96,9 +96,28 @@ export type DecisionBriefSourceReference = {
   };
 };
 
+/**
+ * Peso material da ocorrência -- distinção genérica, domínio-agnóstica
+ * (qualquer domínio produtor pode ter ocorrências que estruturalmente
+ * nunca afetam o resultado, ao lado de ocorrências que afetam),
+ * separada de `severity`. `severity` vem do Engine (bloqueia ou não a
+ * formalização); `materiality` é a interpretação executiva de cada
+ * builder sobre se a ocorrência muda item medido, quantidade, preço
+ * unitário, valor, reconciliação ou rastreabilidade -- `blocking`
+ * sempre implica `"material"` (um impedimento nunca é só uma
+ * observação técnica), mas `warning` pode ser qualquer um dos dois.
+ */
+export type DecisionBriefCriticalItemMateriality = "material" | "technical_observation";
+
+export const DECISION_BRIEF_CRITICAL_ITEM_MATERIALITY_VALUES: ReadonlyArray<DecisionBriefCriticalItemMateriality> = [
+  "material",
+  "technical_observation",
+];
+
 export interface DecisionBriefCriticalItem {
   readonly id: string;
   readonly severity: "blocking" | "warning";
+  readonly materiality: DecisionBriefCriticalItemMateriality;
   readonly title: string;
   readonly body: string;
   readonly consequenceIfAddressed: string | null;

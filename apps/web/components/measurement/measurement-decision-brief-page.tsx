@@ -15,6 +15,7 @@ import { MeasurementCriticalItemsSection } from "./measurement-critical-items-se
 import { MeasurementRecommendedActionsSection } from "./measurement-recommended-actions-section";
 import { MeasurementSummarySection } from "./measurement-summary-section";
 import { MeasurementDetailsSection } from "./measurement-details-section";
+import { MeasurementBulletinFormalStatusCard } from "./measurement-bulletin-formal-status-card";
 
 /**
  * Epic 20 (Decision Experience), Sprint 20.1E.2 (page shell/estados) +
@@ -41,6 +42,7 @@ type PageState =
 export function MeasurementDecisionBriefPage({ measurementBulletinImportId }: { measurementBulletinImportId: string }) {
   const router = useRouter();
   const signOut = useBbaStore((state) => state.signOut);
+  const hydrateSession = useBbaStore((state) => state.hydrateSession);
   const [state, setState] = useState<PageState>({ status: "loading" });
   const requestInFlight = useRef(false);
 
@@ -51,11 +53,23 @@ export function MeasurementDecisionBriefPage({ measurementBulletinImportId }: { 
     requestInFlight.current = true;
     setState({ status: "loading" });
 
-    const outcome = await fetchMeasurementDecisionBrief(measurementBulletinImportId);
+    let outcome = await fetchMeasurementDecisionBrief(measurementBulletinImportId);
+
+    if (outcome.kind === "unauthenticated") {
+      // Mesmo raciocínio de MeasurementImportsPage: um único 401 não é
+      // prova de que a sessão real expirou -- reconfirma contra a
+      // mesma checagem autoritativa (hydrateSession) que já validou a
+      // sessão para o usuário chegar a esta página, antes de forçar
+      // logout.
+      const stillAuthenticated = await hydrateSession();
+      if (stillAuthenticated) {
+        outcome = await fetchMeasurementDecisionBrief(measurementBulletinImportId);
+      }
+    }
+
     requestInFlight.current = false;
 
     if (outcome.kind === "unauthenticated") {
-      // Mesmo fluxo de BbaDashboardShell/MeasurementImportsPage quando a sessão não é mais válida.
       signOut();
       router.replace("/login");
       return;
@@ -67,7 +81,7 @@ export function MeasurementDecisionBriefPage({ measurementBulletinImportId }: { 
     }
 
     setState({ status: outcome.kind });
-  }, [measurementBulletinImportId, router, signOut]);
+  }, [hydrateSession, measurementBulletinImportId, router, signOut]);
 
   useEffect(() => {
     void load();
@@ -92,11 +106,14 @@ export function MeasurementDecisionBriefPage({ measurementBulletinImportId }: { 
               confidence={state.brief.confidence}
               criticalItems={state.brief.criticalItems}
               executiveConclusion={state.brief.executiveConclusion}
+              measurementBulletinImportId={measurementBulletinImportId}
               nextActions={state.brief.nextActions}
               situation={state.brief.situation}
             />
+            <MeasurementBulletinFormalStatusCard measurementBulletinImportId={measurementBulletinImportId} />
             <MeasurementDecisionFlowSection
               criticalItems={state.brief.criticalItems}
+              measurementBulletinImportId={measurementBulletinImportId}
               nextActions={state.brief.nextActions}
               readiness={state.brief.executiveConclusion.readiness}
             />

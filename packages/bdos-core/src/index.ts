@@ -10,6 +10,7 @@ export * from "./domain/business-facts-generator";
 export * from "./domain/business-fact";
 export * from "./domain/measurement";
 export * from "./domain/measurement-engine";
+export * from "./domain/measurement-certification";
 export * from "./domain/measurement-entry";
 export * from "./domain/measurement-entry-processor";
 export * from "./domain/spatial-object";
@@ -322,6 +323,7 @@ export type {
   MeasurementBulletinActor,
   MeasurementBulletinCorrelationId,
   MeasurementBulletinCreatedBy,
+  MeasurementBulletinDecimalContext,
   MeasurementBulletinError,
   MeasurementBulletinErrorCode,
   MeasurementBulletinFailure,
@@ -905,3 +907,128 @@ export * from "./engines/decision/action-plan";
 export * from "./domain/procurement-case";
 export * from "./domain/budget-version";
 export * from "./domain/budget-table-reconstruction";
+export {
+  ConsortiumCompositionStatus,
+  ConsortiumValidationError,
+  TOTAL_SHARE_BASIS_POINTS,
+  calculateTotalSharesBasisPoints,
+  validateConsortiumMemberInput,
+  validateConsortiumComposition,
+  createConsortium,
+  addMemberToConsortium,
+  consolidateConsortiumComposition,
+  formatSharePercentagePtBr,
+  getConsortiumLeader,
+} from "./domain/consortium";
+export type {
+  Consortium,
+  ConsortiumId,
+  ConsortiumMember,
+  ConsortiumMemberId,
+  CreateConsortiumInput,
+  CreateConsortiumMemberInput,
+} from "./domain/consortium";
+
+export {
+  CostCenterStatus,
+  CostCenterValidationError,
+  validateCostCenterInput,
+  createProjectCostCenter,
+  getCostCenterPolicy,
+} from "./domain/cost-center";
+export type {
+  CostCenterId,
+  ProjectCostCenter,
+  CreateProjectCostCenterInput,
+  CostAllocationRule,
+  CostAttributionPolicy,
+} from "./domain/cost-center";
+
+// Camada operacional de Centros de Custo (Project Cost Entry + Allocation + Read Model)
+export {
+  CostDataNature,
+  CostEntrySourceKind,
+  CostEntryStatus,
+  CostFamily,
+  CostAllocationMethod,
+  CostAllocationValidationError,
+  ALLOCATION_BPS_TOTAL,
+  canonMoney,
+  moneyToCents,
+  sharePercent,
+  centsToMoney,
+  validateCostEntryAllocations,
+  validateCostEntryProvenance,
+  buildAllocations,
+  buildProjectCostCentersReadModel,
+  formatBasisPointsPercent,
+  formatBrlFromDecimal,
+  formatPercentPtBr,
+  costCenterToneKey,
+  deriveCostCenterDisplayLabel,
+  COST_CENTER_TONE_COUNT,
+  pickDefaultCostCenterPeriod,
+  buildAvailablePeriods,
+  formatCostCenterPeriodLabel,
+  isYearMonth,
+  COST_FAMILY_LABELS_PT_BR,
+  COST_ALLOCATION_METHOD_LABELS_PT_BR,
+  COST_DATA_NATURE_LABELS_PT_BR,
+  FORBIDDEN_COMPARISON_TERMS,
+} from "./domain/cost-center";
+export type {
+  ProjectCostEntry,
+  ProjectCostAllocation,
+  AllocatableCostCenter,
+  CostAllocationInvariantReport,
+  AllocationIntent,
+  DirectAllocationIntent,
+  EqualSplitAllocationIntent,
+  CustomSplitAllocationIntent,
+  BuiltAllocation,
+  BuildProjectCostCentersReadModelInput,
+  ProjectCostCentersReadModel,
+  ReadModelCostCenterInput,
+  ReadModelEntryInput,
+  ReadModelCostCenterView,
+  ReadModelFamilyView,
+  ReadModelFamilyCostCenterView,
+  ReadModelEntryView,
+  ReadModelAllocationView,
+  ReadModelMeasurementComparisonView,
+  ReadModelCostMatrix,
+  ReadModelMatrixRow,
+  ReadModelMatrixCell,
+  ReadModelMatrixColumn,
+  MeasurementComparisonInput,
+  AvailablePeriodOption,
+  PickDefaultCostCenterPeriodInput,
+} from "./domain/cost-center";
+
+export {
+  ContractBaselineStatus,
+  ContractBaselineValidationError,
+  parseToFixedBigInt,
+  formatFromFixedBigInt,
+  reconcileContractBaselineMath,
+  createContractBaseline as createProjectContractBaseline,
+  formatContractedValuePtBr,
+  formatRoundingAdjustmentPtBr,
+  formatDerivedItemsTotalPtBr,
+  formatHistoricalOfficialBudgetPtBr,
+} from "./domain/contract-baseline";
+export type {
+  ContractBaseline as ProjectContractBaseline,
+  ContractBaselineId as ProjectContractBaselineId,
+  CreateContractBaselineInput as CreateProjectContractBaselineInput,
+} from "./domain/contract-baseline";
+
+export {
+  getProjectContractualFoundationService,
+} from "./services/contract-baseline";
+export type {
+  ContractBaselineRepository,
+  ConsortiumRepository,
+  CostCenterRepository,
+  ProjectContractualFoundationDto,
+} from "./services/contract-baseline";

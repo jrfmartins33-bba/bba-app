@@ -181,7 +181,7 @@ function extractPeriodMatrix(sheet: ExcelSheetDto, detection: SheetDetectionResu
   const codeColumn = firstColumnOfKind(detection.columns, "code");
   const nameColumn = firstColumnOfKind(detection.columns, "name");
   const controlColumn = firstColumnOfKind(detection.columns, "control");
-  const periodColumns = detection.periodColumns;
+  const periodColumns = canonicalPeriodPrefix(detection.periodColumns);
 
   const warnings: PlanningImportWarning[] = [
     { code: "missing_dependencies", message: "Dependências não identificadas no Excel de origem." },
@@ -199,16 +199,34 @@ function extractPeriodMatrix(sheet: ExcelSheetDto, detection: SheetDetectionResu
 
   const activities: PlanningActivityRecord[] = [];
   const aggregatePoints = new Map<number, PeriodAccumulator>();
+  const perActivitySeries: PlanningPeriodSeries[] = [];
 
   let currentItem: { code: string; name: string; points: Map<number, PeriodAccumulator> } | null = null;
   let currentCategory: "planned" | "actual" | null = null;
 
   const flushCurrentItem = (): void => {
-    if (currentItem === null) {
+    const item = currentItem;
+    if (item === null) {
       return;
     }
 
-    activities.push(buildActivityFromPoints(currentItem.code, currentItem.name, activities.length, periodColumns, currentItem.points));
+    const sequence = activities.length;
+    activities.push(buildActivityFromPoints(item.code, item.name, sequence, periodColumns, item.points));
+
+    // Cronograma Físico-Financeiro oficial (Obra + Grupo): além do
+    // somatório escalar do item, preservamos a série MENSAL verbatim de
+    // cada grupo — os valores "no período" tal como estão nas células
+    // PREVISTO/REALIZADO (% da meta do grupo e R$). O acumulado NUNCA é
+    // gravado aqui: é derivado por soma decimal exata a jusante (read
+    // model), para não persistir artefato de ponto flutuante.
+    if (item.points.size > 0) {
+      perActivitySeries.push({
+        activityId: `excel-activity-${sequence}`,
+        label: item.name,
+        points: periodColumns.map((column) => toPeriodPoint(column, item.points.get(column.columnIndex))),
+      });
+    }
+
     currentItem = null;
   };
 
@@ -260,7 +278,10 @@ function extractPeriodMatrix(sheet: ExcelSheetDto, detection: SheetDetectionResu
 
   flushCurrentItem();
 
-  const periodSeries: PlanningPeriodSeries[] = [];
+  // Séries por grupo primeiro, agregado do projeto por último — os
+  // consumidores existentes localizam o agregado por `activityId === null`,
+  // nunca por posição.
+  const periodSeries: PlanningPeriodSeries[] = [...perActivitySeries];
   if (aggregatePoints.size > 0) {
     periodSeries.push({
       activityId: null,
@@ -274,6 +295,36 @@ function extractPeriodMatrix(sheet: ExcelSheetDto, detection: SheetDetectionResu
   }
 
   return { activities, periodSeries, warnings };
+}
+
+/**
+ * Períodos canônicos do cronograma: o maior PREFIXO de colunas de
+ * período cuja data resolvida é não-nula E estritamente crescente.
+ * Colunas de "mês" sem data, ou com data cronologicamente incoerente
+ * (ex.: 2025-08-01 depois de 2026-07-01), são resíduo de template da
+ * planilha e não entram no Planning Dataset — nem no payload, nem em
+ * nenhum read model a jusante. Sem nenhuma data em nenhuma coluna,
+ * não há como distinguir canônico de resíduo: mantém tudo (verbatim),
+ * comportamento anterior.
+ */
+function canonicalPeriodPrefix(columns: ReadonlyArray<DetectedPeriodColumn>): DetectedPeriodColumn[] {
+  if (!columns.some((column) => column.date !== null)) {
+    return [...columns];
+  }
+
+  const kept: DetectedPeriodColumn[] = [];
+  let previousDate: string | null = null;
+  for (const column of columns) {
+    if (column.date === null) {
+      break;
+    }
+    if (previousDate !== null && !(column.date > previousDate)) {
+      break;
+    }
+    previousDate = column.date;
+    kept.push(column);
+  }
+  return kept;
 }
 
 interface PeriodAccumulator {

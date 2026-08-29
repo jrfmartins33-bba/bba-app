@@ -16,6 +16,17 @@ import {
   type ReconciledOrNeedsReviewMeasurementAnalysisResult
 } from "@bba/bdos-core/services/measurement-bulletin-import";
 import {
+  MeasurementDecimalQuantizationMode,
+  addMeasurementDecimals,
+  calculateMeasurementLineValue,
+  canonicalizeMeasurementDecimal,
+  createMeasurementMonetaryPolicy,
+  isMeasurementDecimalWithinTolerance,
+  preserveMeasurementSourceDecimal,
+  subtractMeasurementDecimals,
+  type MeasurementMonetaryPolicy
+} from "@bba/bdos-core/domain/measurement-certification";
+import {
   claimMeasurementBulletinImportForProcessing,
   finalizeMeasurementBulletinImportWithResult,
   findMatchingManagedServiceItemOrCreate,
@@ -75,7 +86,21 @@ const STORAGE_BUCKET = "bdos-imports";
 // (não exportada de lá -- redeclarada aqui com o mesmo valor e o
 // mesmo raciocínio: nunca igualdade binária de ponto flutuante para
 // valores monetários).
-const TOTAL_DIFFERENCE_TOLERANCE = 0.01;
+const TOTAL_DIFFERENCE_TOLERANCE = "0.01";
+const CANONICAL_QUANTITY_SCALE = 8;
+const CANONICAL_UNIT_VALUE_SCALE = 8;
+
+// A política vem do contexto documental identificado pelo parser. O
+// domínio compartilhado só conhece modos genéricos de quantização; não
+// conhece órgão, obra, boletim ou template específico.
+const SOURCE_MONETARY_POLICY_BY_PARSER: Readonly<Record<string, MeasurementMonetaryPolicy>> =
+  Object.freeze({
+    [MEASUREMENT_ANALYSIS_PARSER_KEY]: createMeasurementMonetaryPolicy({
+      key: "source-document-truncation-to-cents",
+      scale: 2,
+      quantizationMode: MeasurementDecimalQuantizationMode.TruncateTowardZero
+    })
+  });
 
 export async function processMeasurementBulletinImport(
   supabase: SupabaseClient,
@@ -400,37 +425,25 @@ export async function processMeasurementBulletinImport(
       throw new Error(`ManagedServiceItem não encontrado para a linha "${parsedLine.serviceItemCode}".`);
     }
 
-    const quantity = parsedLine.declaredQuantity ?? 0;
-    const unitValue = serviceItem.unitPrice;
+    const quantitySource = preserveMeasurementSourceDecimal(
+      parsedLine.declaredQuantity ?? 0,
+      CANONICAL_QUANTITY_SCALE
+    );
+    const quantity = quantitySource.canonical;
+    const unitValue = canonicalizeMeasurementDecimal(
+      serviceItem.unitPriceDecimal,
+      CANONICAL_UNIT_VALUE_SCALE
+    );
     // SEMPRE quantity * unitValue -- nunca copiado de declaredTotalValue
     // (Invariante #4). unitValue vem do catálogo (preço de contrato já
     // resolvido), nunca de declaredUnitValue (o parser hoje sempre
     // grava null nesse campo -- gap conhecido, Parte X do desenho).
     //
-    // truncateDnocsLineTotalToCents, não multiplicação crua: rastreado
-    // contra a fórmula real do BM_08 (aba "BOLETIM FÍSICO FINANCEIRO",
-    // células M37 etc.): `=TRUNC(F37*I37,2)` -- o arquivo TRUNCA o
-    // produto quantidade×preço-unitário a 2 casas, nunca arredonda.
-    // Confirmado em 4 das 15 linhas reais do BM_08 (ex.: 01.04.01:
-    // 3,32 × 8170,05 = 27124,566 sem truncar; TRUNC(...,2) = 27124,56,
-    // batendo exatamente com o valor declarado). Sem isso, a diferença
-    // acumulada nessas 4 linhas era R$ 0,02 -- acima da tolerância de
-    // 1 centavo, mesmo com o cálculo aritmeticamente "correto".
-    //
-    // Escopo deliberado: TRUNC é uma regra comprovada do TEMPLATE
-    // DNOCS (parserKey "dnocs-measurement-bulletin-v1"), não uma
-    // política monetária universal do Measurement Studio -- outro
-    // órgão/contrato pode arredondar, usar mais casas, ou compor o
-    // valor de outra forma. Por isso o helper é privado a ESTE
-    // arquivo (o Application Service do pipeline DNOCS), nunca movido
-    // para measurement-workspace.ts, measurement-calculation/* ou
-    // bulletin-generator (código de domínio compartilhado por
-    // qualquer origem de medição, presente ou futura). Quando um
-    // segundo parser real chegar (R6 -- não construído agora sem
-    // evidência), essa regra deve virar parte do que o PARSER declara
-    // sobre si mesmo (ex.: um campo de política monetária no
-    // resultado do parser), não uma constante global.
-    const totalValue = truncateDnocsLineTotalToCents(quantity * unitValue);
+    // A quantização monetária é escolhida pelo contexto documental do
+    // parser e executada pelo motor decimal genérico. Assim, a regra
+    // comprovada desta origem não se torna uma regra universal do BDOS.
+    const monetaryPolicy = resolveSourceMonetaryPolicy(MEASUREMENT_ANALYSIS_PARSER_KEY);
+    const totalValue = calculateMeasurementLineValue({ quantity, unitValue, policy: monetaryPolicy });
 
     const sourcePhysicalColumn = parsedLine.sourceLocation.physicalColumn ?? null;
     const sourceFinancialColumn = parsedLine.sourceLocation.financialColumn ?? null;
@@ -454,23 +467,39 @@ export async function processMeasurementBulletinImport(
         sourceSheetName: parsedLine.sourceLocation.sheetName,
         sourceRowNumber: parsedLine.sourceLocation.rowNumber,
         sourcePhysicalColumn,
-        sourceFinancialColumn
+        sourceFinancialColumn,
+        sourceQuantityRaw: quantitySource.raw,
+        canonicalQuantityScale: CANONICAL_QUANTITY_SCALE,
+        monetaryPolicyKey: monetaryPolicy.key,
+        monetaryScale: monetaryPolicy.scale
       });
       linesImported += 1;
       continue;
     }
 
+    const hasCanonicalProvenance =
+      existingLine.sourceQuantityRaw !== null ||
+      existingLine.canonicalQuantityScale !== null ||
+      existingLine.monetaryPolicyKey !== null ||
+      existingLine.monetaryScale !== null;
+    const canonicalProvenanceMatches =
+      !hasCanonicalProvenance ||
+      (existingLine.sourceQuantityRaw === quantitySource.raw &&
+        existingLine.canonicalQuantityScale === CANONICAL_QUANTITY_SCALE &&
+        existingLine.monetaryPolicyKey === monetaryPolicy.key &&
+        existingLine.monetaryScale === monetaryPolicy.scale);
     const isIdentical =
-      existingLine.quantity === quantity &&
-      existingLine.unitValue === unitValue &&
-      existingLine.totalValue === totalValue &&
+      canonicalizeMeasurementDecimal(existingLine.quantityDecimal, CANONICAL_QUANTITY_SCALE) === quantity &&
+      canonicalizeMeasurementDecimal(existingLine.unitValueDecimal, CANONICAL_UNIT_VALUE_SCALE) === unitValue &&
+      canonicalizeMeasurementDecimal(existingLine.totalValueDecimal, monetaryPolicy.scale) === totalValue &&
       existingLine.declaredQuantity === parsedLine.declaredQuantity &&
       existingLine.declaredUnitValue === parsedLine.declaredUnitValue &&
       existingLine.declaredTotalValue === parsedLine.declaredTotalValue &&
       existingLine.sourceSheetName === parsedLine.sourceLocation.sheetName &&
       existingLine.sourceRowNumber === parsedLine.sourceLocation.rowNumber &&
       existingLine.sourcePhysicalColumn === sourcePhysicalColumn &&
-      existingLine.sourceFinancialColumn === sourceFinancialColumn;
+      existingLine.sourceFinancialColumn === sourceFinancialColumn &&
+      canonicalProvenanceMatches;
 
     if (isIdentical) {
       linesAlreadyPresent += 1;
@@ -491,7 +520,11 @@ export async function processMeasurementBulletinImport(
       sourceSheetName: parsedLine.sourceLocation.sheetName,
       sourceRowNumber: parsedLine.sourceLocation.rowNumber,
       sourcePhysicalColumn,
-      sourceFinancialColumn
+      sourceFinancialColumn,
+      sourceQuantityRaw: quantitySource.raw,
+      canonicalQuantityScale: CANONICAL_QUANTITY_SCALE,
+      monetaryPolicyKey: monetaryPolicy.key,
+      monetaryScale: monetaryPolicy.scale
     });
 
     if (!updated) {
@@ -529,12 +562,31 @@ export async function processMeasurementBulletinImport(
   // Passo 10 (releitura obrigatória, correção 2/5) -- nunca o DTO do
   // parser em memória.
   const persistedLines = await listMeasurementWorkspaceLines(supabase, { measurementWorkspaceId: workspace.id });
-  const recalculatedTotal = persistedLines.reduce((sum, line) => sum + line.totalValue, 0);
+  const monetaryPolicy = resolveSourceMonetaryPolicy(MEASUREMENT_ANALYSIS_PARSER_KEY);
+  const recalculatedTotalDecimal = addMeasurementDecimals(
+    persistedLines.map((line) => line.totalValueDecimal),
+    monetaryPolicy.scale
+  );
   const officialPeriodTotal = parsed.officialPeriodTotal;
-  const totalDifference = recalculatedTotal - officialPeriodTotal;
+  const officialPeriodTotalDecimal = canonicalizeMeasurementDecimal(
+    officialPeriodTotal,
+    monetaryPolicy.scale
+  );
+  const totalDifferenceDecimal = subtractMeasurementDecimals(
+    recalculatedTotalDecimal,
+    officialPeriodTotalDecimal,
+    monetaryPolicy.scale
+  );
+  const recalculatedTotal = Number(recalculatedTotalDecimal);
+  const totalDifference = Number(totalDifferenceDecimal);
 
   const hasWarning = issues.some((issue) => issue.severity === "warning");
-  const isReconciled = Math.abs(totalDifference) <= TOTAL_DIFFERENCE_TOLERANCE && !hasWarning;
+  const isReconciled =
+    isMeasurementDecimalWithinTolerance(
+      totalDifferenceDecimal,
+      TOTAL_DIFFERENCE_TOLERANCE,
+      monetaryPolicy.scale
+    ) && !hasWarning;
 
   const analysisResult: ReconciledOrNeedsReviewMeasurementAnalysisResult = {
     schemaVersion: MEASUREMENT_ANALYSIS_RESULT_SCHEMA_VERSION,
@@ -677,18 +729,18 @@ function toMeasurementAnalysisResult(value: unknown): MeasurementAnalysisResult 
   return (value ?? null) as MeasurementAnalysisResult | null;
 }
 
-// TRUNC(value, 2), replicando =TRUNC(F*I,2) do BM_08 real (ver comentário
-// no cálculo de totalValue). Nome deliberadamente escopado ("Dnocs",
-// não algo genérico como "truncateToCents") -- não é uma política
-// monetária universal do Measurement Studio, é a regra comprovada
-// para ESTE template/pipeline; nunca exportada, nunca movida para
-// código de domínio compartilhado. `+ 1e-9` compensa erro de
-// representação binária de ponto flutuante (ex.: 3.32 * 8170.05 pode
-// cair a 27124.565999999998 em vez de ...566 exato) sem arredondar
-// nenhum centavo genuíno para cima -- o epsilon é muitas ordens de
-// grandeza menor que 1 centavo.
-function truncateDnocsLineTotalToCents(value: number): number {
-  return Math.trunc(value * 100 + 1e-9) / 100;
+// A origem decide a política; o cálculo permanece genérico, exato e
+// independente de ponto flutuante. Uma origem sem configuração explícita
+// é recusada, nunca recebe uma regra monetária implícita escolhida por IA.
+function resolveSourceMonetaryPolicy(parserKey: string): MeasurementMonetaryPolicy {
+  const policy = SOURCE_MONETARY_POLICY_BY_PARSER[parserKey];
+  if (!policy) {
+    throw new Error(
+      `Nenhuma política monetária documental foi configurada para o parser '${parserKey}'.`
+    );
+  }
+
+  return policy;
 }
 
 function isUniqueViolation(error: unknown): boolean {
